@@ -15,20 +15,34 @@ import {
 export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     
-    // Intento 1: directo (por si 8chan añade CORS)
+    // Intento 1: Directo (por si 8chan relaja su seguridad)
     try {
-        const r = await fetch(jsonUrl, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(jsonUrl, { signal: AbortSignal.timeout(4000) });
         if (r.ok) return await r.json();
     } catch {}
 
-    // Intento 2: proxy allorigins
+    // Intento 2: CodeTabs (Suele saltarse muy bien Cloudflare)
     try {
-        const proxied = `${CORS_PROXY}${encodeURIComponent(jsonUrl)}`;
-        const r = await fetch(proxied, { signal: AbortSignal.timeout(10000) });
+        const proxied1 = `https://api.codetabs.com/v1/proxy/?quest=${jsonUrl}`;
+        const r = await fetch(proxied1, { signal: AbortSignal.timeout(8000) });
         if (r.ok) return await r.json();
     } catch {}
 
-    return null;
+    // Intento 3: CorsProxy.io (Excelente alternativa de respaldo)
+    try {
+        const proxied2 = `https://corsproxy.io/?${encodeURIComponent(jsonUrl)}`;
+        const r = await fetch(proxied2, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) return await r.json();
+    } catch {}
+
+    // Intento 4: AllOrigins (El original, por si los demás caen)
+    try {
+        const proxied3 = `https://api.allorigins.win/raw?url=${encodeURIComponent(jsonUrl)}`;
+        const r = await fetch(proxied3, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) return await r.json();
+    } catch {}
+
+    return null; // Si los 4 fallan, recién ahí tiramos el error
 }
 
 // ── Cargar hilos rastreados desde Supabase ───────────────────
