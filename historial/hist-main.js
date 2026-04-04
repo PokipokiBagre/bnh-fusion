@@ -18,21 +18,17 @@ import {
 
 // ── Inicialización ────────────────────────────────────────────
 async function init() {
-    // Badge de sesión
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
     await bnhAuth.init();
     estadoUI.esAdmin = bnhAuth.esAdmin();
 
-    // Mostrar/ocultar botón de config
     const btnCfg = document.getElementById('btn-config');
     if (btnCfg) btnCfg.style.display = estadoUI.esAdmin ? 'inline-block' : 'none';
 
-    // Cargar hilos rastreados
     await cargarHilos();
 
-    // Recuperar hilo activo de sessionStorage
     const guardado = sessionStorage.getItem('hist_hilo_activo');
     if (guardado) {
         try {
@@ -58,14 +54,10 @@ async function cargarHiloActivo() {
 // ── Navegación entre vistas ───────────────────────────────────
 function mostrarVista(vista) {
     estadoUI.vistaActual = vista;
-
-    // Highlight nav
     document.querySelectorAll('.nav-tab').forEach(b => {
         b.classList.toggle('active', b.dataset.vista === vista);
     });
-
     renderHeaderInfo();
-
     switch (vista) {
         case 'ranking':  renderRanking();  break;
         case 'timeline': renderTimeline(); break;
@@ -93,7 +85,7 @@ window.seleccionarHilo = async function(board, threadId) {
     mostrarVista('ranking');
 };
 
-// ── Scrape manual de un hilo ──────────────────────────────────
+// ── Scrape manual de un hilo (Automático) ─────────────────────
 window.scrapeManual = async function(board, threadId) {
     const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
     if (!hilo) return;
@@ -115,9 +107,46 @@ window.scrapeManual = async function(board, threadId) {
 
     await cargarHilos();
     toast(resultado.nuevos > 0
-        ? `✅ ${resultado.nuevos} post${resultado.nuevos > 1 ? 's' : ''} nuevo${resultado.nuevos > 1 ? 's' : ''}!`
+        ? `✅ ${resultado.nuevos} post(s) nuevo(s)!`
         : '✓ Sin posts nuevos', 'ok');
     renderHeaderInfo();
+};
+
+// ── Actualización Manual (Bypass definitivo de Cloudflare/TOS) 
+window.actualizarManual = async function(board, threadId) {
+    const url = `https://8chan.moe/${board}/res/${threadId}.json`;
+    const input = prompt(`CLOUDFLARE/TOS BYPASS:\n\n1. Abre una nueva pestaña y entra a:\n${url}\n\n2. Si te sale la advertencia de 8chan, dale a "I AGREE AND WISH TO PROCEED".\n3. Copia TODO el texto del JSON que aparece.\n4. Pégalo aquí abajo:`);
+    
+    if (!input) return;
+    
+    try {
+        const manualJson = JSON.parse(input);
+        const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
+        if (!hilo) return;
+
+        toast('⏳ Procesando JSON manual…', 'info');
+        renderHeaderInfo();
+
+        const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson);
+
+        if (!resultado.ok) {
+            toast('❌ ' + resultado.error, 'error');
+            return;
+        }
+
+        if (estadoUI.hiloActivo?.thread_id == threadId) {
+            await cargarHiloActivo();
+            mostrarVista(estadoUI.vistaActual);
+        }
+
+        await cargarHilos();
+        toast(resultado.nuevos > 0 ? `✅ ${resultado.nuevos} post(s) nuevo(s)!` : '✓ Sin posts nuevos', 'ok');
+        renderHeaderInfo();
+        mostrarVista('hilos');
+    } catch (e) {
+        toast('❌ Error: El texto pegado no es un JSON válido.', 'error');
+        console.error(e);
+    }
 };
 
 // ── Actualizar hilo activo ────────────────────────────────────
@@ -190,14 +219,13 @@ window.toggleAutoRefresh = function() {
             if (r.ok && r.nuevos > 0) {
                 await cargarHiloActivo();
                 mostrarVista(estadoUI.vistaActual);
-                toast(`🆕 ${r.nuevos} post${r.nuevos > 1 ? 's' : ''} nuevo${r.nuevos > 1 ? 's' : ''}!`, 'ok');
+                toast(`🆕 ${r.nuevos} post(s) nuevo(s)!`, 'ok');
             }
             renderHeaderInfo();
         }, estadoUI.refreshRate);
 
         toast(`▶ Auto-refresh cada ${estadoUI.refreshRate / 1000}s`, 'ok');
     }
-
     renderHeaderInfo();
     renderConfig();
 };
@@ -219,7 +247,7 @@ window.guardarConfig = async function() {
     toast('⏳ Recalculando puntos…', 'info');
     const ok = await recalcularPuntos(estadoUI.hiloActivo.board, estadoUI.hiloActivo.thread_id);
     if (ok) {
-        toast('✅ Puntos recalculados con la nueva configuración', 'ok');
+        toast('✅ Puntos recalculados', 'ok');
         mostrarVista(estadoUI.vistaActual);
     } else {
         toast('❌ Error al recalcular', 'error');
@@ -235,16 +263,11 @@ window.recalcularActual = async function() {
     if (ok) mostrarVista(estadoUI.vistaActual);
 };
 
-// ── Acceso rápido desde vista ranking ────────────────────────
 window.irAHilos = function() { mostrarVista('hilos'); };
-
-// ── Exponer navegación globalmente ────────────────────────────
 window.mostrarVista = mostrarVista;
 
-// ── Tabs del nav ──────────────────────────────────────────────
 document.querySelectorAll('.nav-tab').forEach(btn => {
     btn.addEventListener('click', () => mostrarVista(btn.dataset.vista));
 });
 
-// ── Arranque ──────────────────────────────────────────────────
 init().catch(console.error);
