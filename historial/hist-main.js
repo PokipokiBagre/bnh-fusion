@@ -16,7 +16,24 @@ import {
     renderHeaderInfo, toast
 } from './hist-ui.js';
 
-// ── Inicialización ────────────────────────────────────────────
+// ── Bridge con extensión de Chrome (si está instalada) ────────
+// La extensión inyecta window.__BNH_EXT_ID__ con su chrome.runtime ID.
+// Aquí creamos el puente window.__BNH_EXT_FETCH__ que hist-data.js usará.
+(function setupExtensionBridge() {
+    if (typeof chrome === 'undefined' || !chrome.runtime) return;
+    const extId = window.__BNH_EXT_ID__;
+    if (!extId) return;
+
+    window.__BNH_EXT_FETCH__ = function(url, callback) {
+        chrome.runtime.sendMessage(extId, { type: 'FETCH_8CHAN_JSON', url }, (response) => {
+            if (chrome.runtime.lastError) { callback(null); return; }
+            callback(response?.text ?? null);
+        });
+    };
+    console.log('[BNH] Extensión de Chrome detectada ✅');
+})();
+
+
 async function init() {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
