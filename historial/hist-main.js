@@ -1,7 +1,7 @@
 // ============================================================
 // hist-main.js — Punto de Entrada y Controladores
 // ============================================================
-import { bnhAuth, supabase } from '../../bnh-auth.js';
+import { bnhAuth, supabase } from '../bnh-auth.js';
 import {
     hilosState, postsState, puntosState, rankingState,
     estadoUI, CONFIG_PUNTOS
