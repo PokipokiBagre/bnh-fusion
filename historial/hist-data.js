@@ -215,13 +215,13 @@ export async function agregarHilo(url, titulo) {
 
     const { board, thread_id } = parsed;
 
-    // Verificar si ya existe
+    // Verificar si ya existe (Corregido con maybeSingle)
     const { data: existe } = await supabase
         .from('historial_hilos')
         .select('id')
         .eq('board', board)
         .eq('thread_id', thread_id)
-        .single();
+        .maybeSingle();
 
     if (existe) return { ok: false, error: 'Este hilo ya está siendo rastreado.' };
 
