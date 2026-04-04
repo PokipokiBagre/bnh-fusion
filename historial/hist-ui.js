@@ -9,7 +9,6 @@ import { formatearMinutos, limpiarHTML } from './hist-logic.js';
 
 const $ = (id) => document.getElementById(id);
 
-// ── Medalla por posición ──────────────────────────────────────
 function medalla(pos) {
     if (pos === 1) return '🥇';
     if (pos === 2) return '🥈';
@@ -17,7 +16,6 @@ function medalla(pos) {
     return `#${pos}`;
 }
 
-// ── Badge de tipo de bonus ────────────────────────────────────
 function badgeBonus(tipo, puntos) {
     const conf = {
         rapido: { cls: 'badge-rapido', icon: '⚡', label: 'Rápido' },
@@ -28,7 +26,6 @@ function badgeBonus(tipo, puntos) {
     return `<span class="badge ${b.cls}">${b.icon} ${puntos}pts</span>`;
 }
 
-// ── Tiempo relativo ───────────────────────────────────────────
 function tiempoRelativo(isoString) {
     if (!isoString) return '';
     const diff = (Date.now() - new Date(isoString)) / 60000;
@@ -38,7 +35,6 @@ function tiempoRelativo(isoString) {
     return `hace ${Math.round(diff/1440)}d`;
 }
 
-// ── Fecha formateada ──────────────────────────────────────────
 function fmtFecha(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -90,7 +86,6 @@ export function renderRanking() {
 
     <div class="ranking-podio">`;
 
-    // Podio top 3
     const top3 = rankingState.slice(0, 3);
     const podioOrder = top3.length >= 3 ? [top3[1], top3[0], top3[2]] : top3;
 
@@ -108,7 +103,6 @@ export function renderRanking() {
     });
 
     html += `</div>
-
     <table class="tabla-ranking">
         <thead>
             <tr>
@@ -127,8 +121,7 @@ export function renderRanking() {
     rankingState.forEach((r, i) => {
         const pos = i + 1;
         const pct = rankingState[0]?.total_puntos > 0
-            ? Math.round((r.total_puntos / rankingState[0].total_puntos) * 100)
-            : 0;
+            ? Math.round((r.total_puntos / rankingState[0].total_puntos) * 100) : 0;
 
         html += `
         <tr class="${pos <= 3 ? 'top-row top-' + pos : ''}">
@@ -167,7 +160,6 @@ export function renderTimeline() {
         return;
     }
 
-    // Unir posts con sus puntos
     const puntosMap = {};
     puntosState.forEach(p => { puntosMap[p.post_no] = p; });
 
@@ -219,10 +211,8 @@ export function renderHilos() {
     if (!cont) return;
 
     const esAdmin = estadoUI.esAdmin;
-
     let html = ``;
 
-    // Formulario para agregar hilo (solo admin)
     if (esAdmin) {
         html += `
         <div class="card-form">
@@ -234,7 +224,7 @@ export function renderHilos() {
                     class="inp" style="flex:2;">
                 <button class="btn btn-green" onclick="window.agregarNuevoHilo()">Agregar</button>
             </div>
-            <p style="font-size:0.8em; color:#888; margin:6px 0 0 0;">El primer scrape puede tardar unos segundos.</p>
+            <p style="font-size:0.8em; color:#888; margin:6px 0 0 0;">El primer scrape puede tardar unos segundos. Si falla, usa "📥 Pega JSON" luego de agregarlo.</p>
         </div>`;
     }
 
@@ -270,6 +260,7 @@ export function renderHilos() {
                     ${isActivo ? '✓ Seleccionado' : 'Seleccionar'}
                 </button>
                 <button class="btn btn-outline btn-sm" onclick="window.scrapeManual('${h.board}', ${h.thread_id})">🔄 Actualizar</button>
+                ${esAdmin ? `<button class="btn btn-outline btn-sm" style="border-color:var(--orange); color:var(--orange);" onclick="window.actualizarManual('${h.board}', ${h.thread_id})">📥 Pega JSON</button>` : ''}
                 ${esAdmin ? `
                 <button class="btn btn-outline btn-sm" onclick="window.toggleActivo('${h.board}', ${h.thread_id}, ${!h.activo})">
                     ${h.activo ? '⏸ Pausar' : '▶ Activar'}
