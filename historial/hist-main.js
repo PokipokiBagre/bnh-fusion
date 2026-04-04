@@ -113,40 +113,78 @@ window.scrapeManual = async function(board, threadId) {
 };
 
 // ── Actualización Manual (Bypass definitivo de Cloudflare/TOS) 
+// ── Actualización Manual (Bypass definitivo con Modal Personalizado) ──
 window.actualizarManual = async function(board, threadId) {
     const url = `https://8chan.moe/${board}/res/${threadId}.json`;
-    const input = prompt(`CLOUDFLARE/TOS BYPASS:\n\n1. Abre una nueva pestaña y entra a:\n${url}\n\n2. Si te sale la advertencia de 8chan, dale a "I AGREE AND WISH TO PROCEED".\n3. Copia TODO el texto del JSON que aparece.\n4. Pégalo aquí abajo:`);
     
-    if (!input) return;
-    
-    try {
-        const manualJson = JSON.parse(input);
-        const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
-        if (!hilo) return;
+    // 1. Eliminar modal anterior si existe
+    const existingModal = document.getElementById('modal-pegar-json');
+    if (existingModal) existingModal.remove();
 
-        toast('⏳ Procesando JSON manual…', 'info');
-        renderHeaderInfo();
+    // 2. Crear el nuevo modal
+    const modal = document.createElement('div');
+    modal.id = 'modal-pegar-json';
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);';
 
-        const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson);
+    modal.innerHTML = `
+        <div style="background:white; padding:24px; border-radius:12px; width:90%; max-width:700px; box-shadow:0 8px 24px rgba(0,0,0,0.2); border: 2px solid var(--orange);">
+            <h3 style="color:var(--green-dark); margin-bottom:12px; font-family:'Cinzel',serif; font-size:1.4em;">📥 Bypass de Cloudflare / TOS</h3>
+            <p style="font-size:0.9em; color:var(--gray-700); margin-bottom:16px; line-height:1.5;">
+                1. Abre una nueva pestaña y entra a: <br>
+                <a href="${url}" target="_blank" style="color:var(--green); word-break:break-all; font-weight:bold;">${url}</a><br>
+                2. Si te sale la advertencia de 8chan, dale a "I AGREE AND WISH TO PROCEED".<br>
+                3. Presiona <b>Ctrl+A</b> para seleccionar todo, <b>Ctrl+C</b> para copiar y pega aquí abajo:
+            </p>
+            <textarea id="json-textarea" rows="12" placeholder="Pega aquí todo el código JSON..." style="width:100%; box-sizing:border-box; padding:12px; border:1px solid var(--gray-300); border-radius:8px; margin-bottom:16px; font-family:monospace; font-size:0.85em; resize:vertical;"></textarea>
+            <div style="display:flex; justify-content:flex-end; gap:12px;">
+                <button id="btn-cancelar-json" class="btn btn-outline">Cancelar</button>
+                <button id="btn-procesar-json" class="btn btn-green" style="background:var(--orange); border-color:var(--orange);">Procesar JSON</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
 
-        if (!resultado.ok) {
-            toast('❌ ' + resultado.error, 'error');
+    // 3. Funciones de los botones del modal
+    document.getElementById('btn-cancelar-json').onclick = () => modal.remove();
+
+    document.getElementById('btn-procesar-json').onclick = async () => {
+        const input = document.getElementById('json-textarea').value.trim();
+        if (!input) {
+            toast('El campo está vacío', 'error');
             return;
         }
 
-        if (estadoUI.hiloActivo?.thread_id == threadId) {
-            await cargarHiloActivo();
-            mostrarVista(estadoUI.vistaActual);
-        }
+        try {
+            const manualJson = JSON.parse(input);
+            modal.remove(); // Cerramos la ventana si se pudo parsear bien
 
-        await cargarHilos();
-        toast(resultado.nuevos > 0 ? `✅ ${resultado.nuevos} post(s) nuevo(s)!` : '✓ Sin posts nuevos', 'ok');
-        renderHeaderInfo();
-        mostrarVista('hilos');
-    } catch (e) {
-        toast('❌ Error: El texto pegado no es un JSON válido.', 'error');
-        console.error(e);
-    }
+            const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
+            if (!hilo) return;
+
+            toast('⏳ Procesando JSON manual…', 'info');
+            renderHeaderInfo();
+
+            const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson);
+
+            if (!resultado.ok) {
+                toast('❌ ' + resultado.error, 'error');
+                return;
+            }
+
+            if (estadoUI.hiloActivo?.thread_id == threadId) {
+                await cargarHiloActivo();
+                mostrarVista(estadoUI.vistaActual);
+            }
+
+            await cargarHilos();
+            toast(resultado.nuevos > 0 ? `✅ ${resultado.nuevos} post(s) nuevo(s)!` : '✓ Sin posts nuevos', 'ok');
+            renderHeaderInfo();
+            mostrarVista('hilos');
+        } catch (e) {
+            toast('❌ Error: El texto pegado no está completo o no es un JSON válido.', 'error');
+            console.error(e);
+        }
+    };
 };
 
 // ── Actualizar hilo activo ────────────────────────────────────
