@@ -11,51 +11,197 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
-// ── Fetch JSON del hilo con proxy CORS ───────────────────────
-export async function fetchHiloJSON(board, threadId) {
-    const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
-    console.log('Buscando JSON en:', jsonUrl);
-    
-    // INTENTO 1: Directo (Por si la extensión CORS envía tu cookie de "I Agree")
+// ── Utilidad: intentar parsear texto como JSON de 8chan ───────
+function tryParseJSON(texto) {
+    if (!texto || texto.trimStart().startsWith('<')) return null; // Es HTML
     try {
-        console.log("Intento 1 (Directo con credenciales)...");
-        const r = await fetch(jsonUrl, { 
-            signal: AbortSignal.timeout(8000),
+        const json = JSON.parse(texto);
+        return (json && json.posts && json.posts.length > 0) ? json : null;
+    } catch { return null; }
+}
+
+// ── Intentar aceptar TOS de 8chan via fetch (para sesión actual) ──
+async function intentarAceptarTOS(board, threadId) {
+    try {
+        // 8chan usa un formulario POST para aceptar los TOS y setear la cookie
+        const tosUrl = `https://8chan.moe/disclaimer.js`;
+        await fetch(tosUrl, {
+            method: 'GET',
             credentials: 'include',
-            headers: { 'Accept': 'application/json' }
+            signal: AbortSignal.timeout(5000)
         });
-        
-        if (r.ok) {
-            const texto = await r.text(); 
-            try {
-                const json = JSON.parse(texto);
-                if (json && json.posts) return json;
-            } catch (e) {
-                console.warn("El intento 1 devolvió HTML (Splash TOS / Cloudflare).");
+    } catch { /* silencioso */ }
+}
+
+// ── Método: extensión de Chrome BNH (si está instalada) ──────
+async function fetchViaExtension(jsonUrl) {
+    return new Promise(resolve => {
+        if (!window.__BNH_EXT_FETCH__) { resolve(null); return; }
+        const tid = setTimeout(() => resolve(null), 10000);
+        window.__BNH_EXT_FETCH__(jsonUrl, (result) => {
+            clearTimeout(tid);
+            resolve(tryParseJSON(result));
+        });
+    });
+}
+
+// ── Método: fetch directo con credenciales ────────────────────
+async function fetchDirecto(jsonUrl) {
+    try {
+        const r = await fetch(jsonUrl, {
+            signal: AbortSignal.timeout(10000),
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json, text/plain, */*',
+                'Cache-Control': 'no-cache'
+            }
+        });
+        if (!r.ok) return null;
+        return tryParseJSON(await r.text());
+    } catch { return null; }
+}
+
+// ── Método: iframe silencioso (acepta TOS y extrae JSON) ──────
+async function fetchViaIframe(jsonUrl) {
+    return new Promise(resolve => {
+        let resuelto = false;
+        const timeout = setTimeout(() => { cleanup(); resolve(null); }, 15000);
+
+        function cleanup() {
+            window.removeEventListener('message', onMessage);
+            if (iframe && iframe.parentNode) iframe.parentNode.removeChild(iframe);
+        }
+
+        // Escuchar postMessage del iframe con el JSON
+        function onMessage(e) {
+            if (e.origin !== 'https://8chan.moe') return;
+            if (resuelto) return;
+            const parsed = tryParseJSON(
+                typeof e.data === 'string' ? e.data : JSON.stringify(e.data)
+            );
+            if (parsed) {
+                resuelto = true;
+                clearTimeout(timeout);
+                cleanup();
+                resolve(parsed);
             }
         }
-    } catch (e) { console.warn("Intento 1 falló por red."); }
+        window.addEventListener('message', onMessage);
 
-    // Intentos de respaldo con proxies
+        // Crear iframe apuntando al hilo (no al .json, para manejar TOS)
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'display:none;width:0;height:0;position:fixed;top:-9999px';
+        iframe.src = jsonUrl;
+        iframe.onload = () => {
+            // Intentar leer el contenido si mismo origen (fallará cross-origin, pero vale el intento)
+            try {
+                const text = iframe.contentDocument?.body?.innerText;
+                const parsed = tryParseJSON(text);
+                if (parsed && !resuelto) {
+                    resuelto = true;
+                    clearTimeout(timeout);
+                    cleanup();
+                    resolve(parsed);
+                }
+            } catch { /* cross-origin bloqueado, esperamos postMessage */ }
+        };
+        document.body.appendChild(iframe);
+    });
+}
+
+// ── Método: proxies con headers de browser real ───────────────
+async function fetchViaProxies(jsonUrl) {
+    const encoded = encodeURIComponent(jsonUrl);
+
+    // Ordenados por fiabilidad conocida con sitios con Cloudflare
     const proxies = [
-        `https://corsproxy.io/?${encodeURIComponent(jsonUrl)}`,
-        `https://api.allorigins.win/raw?url=${encodeURIComponent(jsonUrl)}`,
-        `https://api.codetabs.com/v1/proxy/?quest=${jsonUrl}`
+        // Workers de Cloudflare (ironicamente los más rápidos)
+        { url: `https://corsproxy.io/?${encoded}`,                    nombre: 'corsproxy.io' },
+        // Heroku-style
+        { url: `https://thingproxy.freeboard.io/fetch/${jsonUrl}`,    nombre: 'thingproxy' },
+        // AllOrigins — puede devolver HTML de TOS
+        { url: `https://api.allorigins.win/raw?url=${encoded}`,       nombre: 'allorigins/raw' },
+        // AllOrigins con wrapper — a veces tiene más éxito
+        { url: `https://api.allorigins.win/get?url=${encoded}`,       nombre: 'allorigins/get', esWrapper: true },
+        // CodeTabs
+        { url: `https://api.codetabs.com/v1/proxy/?quest=${jsonUrl}`, nombre: 'codetabs' },
+        // htmldriven — especializado en JSON APIs
+        { url: `https://cors-proxy.htmldriven.com/?url=${encoded}`,   nombre: 'htmldriven' },
+        // workers.dev público
+        { url: `https://worker-shy-hat-5ea9.workers.dev/?url=${encoded}`, nombre: 'worker-shy-hat' },
+        // Crossorigin.me
+        { url: `https://crossorigin.me/${jsonUrl}`,                   nombre: 'crossorigin.me' },
     ];
 
-    for (let i = 0; i < proxies.length; i++) {
+    for (const proxy of proxies) {
         try {
-            console.log(`Intento proxy ${i + 1}...`);
-            const r = await fetch(proxies[i], { signal: AbortSignal.timeout(8000) });
-            if (r.ok) {
-                const texto = await r.text(); 
-                try {
-                    const json = JSON.parse(texto);
-                    if (json && json.posts) return json;
-                } catch (e) {}
+            console.log(`[8chan-fetch] Probando proxy: ${proxy.nombre}`);
+            const r = await fetch(proxy.url, {
+                signal: AbortSignal.timeout(9000),
+                headers: {
+                    'Accept': 'application/json, text/plain, */*',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+            if (!r.ok) { console.warn(`  → HTTP ${r.status}`); continue; }
+
+            let texto = await r.text();
+
+            // AllOrigins /get envuelve la respuesta en { contents: "..." }
+            if (proxy.esWrapper) {
+                try { texto = JSON.parse(texto).contents || ''; } catch { continue; }
             }
-        } catch (e) {}
+
+            const json = tryParseJSON(texto);
+            if (json) {
+                console.log(`  ✅ Éxito con: ${proxy.nombre}`);
+                return json;
+            } else {
+                console.warn(`  → Devolvió HTML/TOS (bloqueado por CF)`);
+            }
+        } catch (e) {
+            console.warn(`  → Error de red: ${e.message}`);
+        }
     }
+    return null;
+}
+
+// ── Método: Supabase Edge Function (si se despliega) ─────────
+// Descomentar si tienes una Edge Function "fetch-8chan" en tu proyecto
+// async function fetchViaEdgeFunction(board, threadId) {
+//     const { data, error } = await supabase.functions.invoke('fetch-8chan', {
+//         body: { board, threadId }
+//     });
+//     if (error || !data?.posts) return null;
+//     return data;
+// }
+
+// ── ORQUESTADOR PRINCIPAL ─────────────────────────────────────
+export async function fetchHiloJSON(board, threadId) {
+    const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
+    console.log(`[8chan-fetch] Iniciando fetch: ${jsonUrl}`);
+
+    // Capa 0: Extensión de Chrome BNH (acceso nativo con cookies del usuario)
+    console.log('[8chan-fetch] Capa 0: Extensión BNH...');
+    const ext = await fetchViaExtension(jsonUrl);
+    if (ext) { console.log('[8chan-fetch] ✅ Extensión BNH'); return ext; }
+
+    // Capa 1: Fetch directo (funciona si el usuario ya aceptó TOS en 8chan)
+    console.log('[8chan-fetch] Capa 1: Fetch directo con credenciales...');
+    const directo = await fetchDirecto(jsonUrl);
+    if (directo) { console.log('[8chan-fetch] ✅ Directo'); return directo; }
+
+    // Capa 2: Proxies externos (múltiples, con headers de browser real)
+    console.log('[8chan-fetch] Capa 2: Proxies externos...');
+    const proxy = await fetchViaProxies(jsonUrl);
+    if (proxy) { console.log('[8chan-fetch] ✅ Proxy'); return proxy; }
+
+    // Capa 3: Iframe silencioso (último recurso, puede capturar post-TOS)
+    console.log('[8chan-fetch] Capa 3: Iframe silencioso...');
+    const iframe = await fetchViaIframe(jsonUrl);
+    if (iframe) { console.log('[8chan-fetch] ✅ Iframe'); return iframe; }
+
+    console.warn('[8chan-fetch] ❌ Todos los métodos fallaron. Requiere JSON manual.');
     return null;
 }
 
@@ -120,7 +266,7 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
     const json = manualJson ? manualJson : await fetchHiloJSON(board, threadId);
     if (!json) {
         estadoUI.cargando = false;
-        return { ok: false, error: 'TOS/Cloudflare bloqueó la petición. Usa el botón "📥 Pega JSON".' };
+        return { ok: false, error: '4 métodos automáticos fallaron (extensión, directo, 8 proxies, iframe). 8chan requiere TOS manual. Usa "📥 Pega JSON".' };
     }
 
     // 2. Parsear posts
