@@ -1,7 +1,7 @@
 // ============================================================
 // hist-data.js — Fetch de 8chan + CRUD Supabase
 // ============================================================
-import { supabase }  from '../../bnh-auth.js';
+import { supabase }  from '../bnh-auth.js';
 import {
     hilosState, postsState, puntosState, rankingState,
     estadoUI, CORS_PROXY
