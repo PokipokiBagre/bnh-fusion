@@ -11,17 +11,17 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
-// ── Fetch JSON del hilo con proxy CORS (VERSIÓN OP BYPASS) ────
+// ── Fetch JSON del hilo con proxy CORS ───────────────────────
 export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     console.log('Buscando JSON en:', jsonUrl);
     
-    // INTENTO 1: Directo enviando tu "Pase Humano" de Cloudflare (Cookies)
+    // INTENTO 1: Directo (Por si la extensión CORS envía tu cookie de "I Agree")
     try {
         console.log("Intento 1 (Directo con credenciales)...");
         const r = await fetch(jsonUrl, { 
             signal: AbortSignal.timeout(8000),
-            credentials: 'include', // <-- ESTO ENVÍA TUS COOKIES DE 8CHAN
+            credentials: 'include',
             headers: { 'Accept': 'application/json' }
         });
         
@@ -29,19 +29,14 @@ export async function fetchHiloJSON(board, threadId) {
             const texto = await r.text(); 
             try {
                 const json = JSON.parse(texto);
-                if (json && json.posts) {
-                    console.log("¡Éxito en el Intento 1!");
-                    return json;
-                }
+                if (json && json.posts) return json;
             } catch (e) {
-                console.warn("El intento 1 devolvió HTML.");
+                console.warn("El intento 1 devolvió HTML (Splash TOS / Cloudflare).");
             }
         }
-    } catch (e) {
-        console.warn("Intento 1 falló por red.");
-    }
+    } catch (e) { console.warn("Intento 1 falló por red."); }
 
-    // Intentos de respaldo con proxies (por si fallan las cookies)
+    // Intentos de respaldo con proxies
     const proxies = [
         `https://corsproxy.io/?${encodeURIComponent(jsonUrl)}`,
         `https://api.allorigins.win/raw?url=${encodeURIComponent(jsonUrl)}`,
@@ -56,16 +51,11 @@ export async function fetchHiloJSON(board, threadId) {
                 const texto = await r.text(); 
                 try {
                     const json = JSON.parse(texto);
-                    if (json && json.posts) {
-                        console.log(`¡Éxito en proxy ${i + 1}!`);
-                        return json;
-                    }
+                    if (json && json.posts) return json;
                 } catch (e) {}
             }
         } catch (e) {}
     }
-
-    console.error("Cloudflare bloqueó todas las peticiones.");
     return null;
 }
 
@@ -75,7 +65,6 @@ export async function cargarHilos() {
         .from('historial_hilos')
         .select('*')
         .order('creado_en', { ascending: false });
-
     if (error) { console.error('cargarHilos:', error); return; }
     hilosState.length = 0;
     hilosState.push(...(data || []));
@@ -89,7 +78,6 @@ export async function cargarPostsDB(board, threadId) {
         .eq('board', board)
         .eq('thread_id', threadId)
         .order('post_no');
-
     if (error) { console.error('cargarPostsDB:', error); return []; }
     postsState.length = 0;
     postsState.push(...(data || []));
@@ -104,7 +92,6 @@ export async function cargarPuntosDB(board, threadId) {
         .eq('board', board)
         .eq('thread_id', threadId)
         .order('post_no');
-
     if (error) { console.error('cargarPuntosDB:', error); return []; }
     puntosState.length = 0;
     puntosState.push(...(data || []));
@@ -119,7 +106,6 @@ export async function cargarRankingDB(board, threadId) {
         .eq('board', board)
         .eq('thread_id', threadId)
         .order('total_puntos', { ascending: false });
-
     if (error) { console.error('cargarRankingDB:', error); return []; }
     rankingState.length = 0;
     rankingState.push(...(data || []));
@@ -127,14 +113,14 @@ export async function cargarRankingDB(board, threadId) {
 }
 
 // ── Scrape completo: fetch 8chan → calcular → guardar ────────
-export async function scrapearHilo(board, threadId, threadUrl) {
+export async function scrapearHilo(board, threadId, threadUrl, manualJson = null) {
     estadoUI.cargando = true;
 
-    // 1. Obtener JSON de 8chan
-    const json = await fetchHiloJSON(board, threadId);
+    // 1. Obtener JSON de 8chan (o usar el manual provisto)
+    const json = manualJson ? manualJson : await fetchHiloJSON(board, threadId);
     if (!json) {
         estadoUI.cargando = false;
-        return { ok: false, error: 'No se pudo obtener el JSON del hilo (CORS o hilo no existe)' };
+        return { ok: false, error: 'TOS/Cloudflare bloqueó la petición. Usa el botón "📥 Pega JSON".' };
     }
 
     // 2. Parsear posts
@@ -156,7 +142,6 @@ export async function scrapearHilo(board, threadId, threadUrl) {
     estadoUI.nuevosPosts = soloNuevos.length;
 
     if (soloNuevos.length === 0) {
-        // Actualizar timestamp del último check
         await supabase.from('historial_hilos').update({ ultimo_check: new Date().toISOString() }).eq('board', board).eq('thread_id', threadId);
         estadoUI.cargando = false;
         estadoUI.ultimaActualizacion = new Date();
@@ -173,11 +158,9 @@ export async function scrapearHilo(board, threadId, threadUrl) {
         return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
     }
 
-    // 5. Recalcular puntos para TODO el hilo (para que los posts nuevos
-    //    hereden el contexto temporal correcto)
-    const todosOrdenados = postsNuevos; // ya ordenados por post_no
+    // 5. Recalcular puntos
+    const todosOrdenados = postsNuevos;
     const puntos = calcularPuntosLista(todosOrdenados, threadId, board);
-
     const { error: errPuntos } = await supabase
         .from('historial_puntos')
         .upsert(puntos, { onConflict: 'board,post_no' });
@@ -215,7 +198,6 @@ export async function agregarHilo(url, titulo) {
 
     const { board, thread_id } = parsed;
 
-    // Verificar si ya existe (Corregido con maybeSingle)
     const { data: existe } = await supabase
         .from('historial_hilos')
         .select('id')
@@ -225,7 +207,6 @@ export async function agregarHilo(url, titulo) {
 
     if (existe) return { ok: false, error: 'Este hilo ya está siendo rastreado.' };
 
-    // Insertar hilo
     const { error } = await supabase.from('historial_hilos').insert([{
         board,
         thread_id,
@@ -235,7 +216,7 @@ export async function agregarHilo(url, titulo) {
 
     if (error) return { ok: false, error: error.message };
 
-    // Hacer el primer scrape
+    // Primer scrape
     const resultado = await scrapearHilo(board, thread_id, url);
     await cargarHilos();
 
@@ -259,7 +240,7 @@ export async function toggleHiloActivo(board, threadId, activo) {
     await cargarHilos();
 }
 
-// ── Recalcular puntos de un hilo (si se cambian parámetros) ──
+// ── Recalcular puntos de un hilo ──────────────────────────────
 export async function recalcularPuntos(board, threadId) {
     const posts = await cargarPostsDB(board, threadId);
     if (!posts.length) return false;
