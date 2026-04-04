@@ -1,58 +1,510 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <script src="../hex-guard.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracking de Posts — HEX</title>
-    <link rel="icon" type="image/png" href="../img/icon.png">
-    <link rel="stylesheet" href="style.css">
+    <title>BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Bebas+Neue&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold:    #e8c940;
+            --blue:    #00b4d8;
+            --green:   #06d6a0;
+            --red:     #ef233c;
+            --bg:      #050a14;
+            --bg2:     #080f1c;
+            --border:  #0d2035;
+            --text:    #c8d8e8;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ── Top bar ── */
+        .top-bar {
+            background: rgba(5,10,20,0.95);
+            border-bottom: 1px solid var(--border);
+            padding: 10px 32px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+        .top-bar-logo {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.5em;
+            color: var(--blue);
+            letter-spacing: 4px;
+            text-decoration: none;
+        }
+        .top-bar-right { display: flex; gap: 12px; align-items: center; }
+        .btn-change-campaign {
+            background: transparent;
+            border: 1px solid #1a3050;
+            color: #4a7090;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.82em;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .btn-change-campaign:hover { border-color: var(--blue); color: var(--blue); }
+
+        /* ── Hero ── */
+        .hero {
+            position: relative;
+            min-height: 340px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 60px 32px 48px;
+            overflow: hidden;
+        }
+        .hero-bg {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0.18;
+            z-index: 0;
+        }
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, transparent 40%, var(--bg) 100%);
+            z-index: 1;
+        }
+        .hero-content { position: relative; z-index: 2; max-width: 720px; }
+        .hero-title {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: clamp(2.8em, 7vw, 5.5em);
+            color: var(--blue);
+            letter-spacing: 8px;
+            line-height: 1;
+            text-shadow: 0 0 40px rgba(0,180,216,0.4);
+        }
+        .hero-subtitle {
+            font-size: 1em;
+            color: #6a9ab8;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin: 10px 0 20px;
+        }
+        .hero-lore {
+            font-size: 0.95em;
+            color: #8ab0c8;
+            line-height: 1.7;
+            font-style: italic;
+            max-width: 580px;
+            margin: 0 auto;
+        }
+
+        /* ── Hilos activos ── */
+        .threads-row {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            padding: 0 32px 48px;
+            flex-wrap: wrap;
+        }
+        .thread-card {
+            position: relative;
+            width: 260px;
+            height: 80px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            text-decoration: none;
+            transition: transform 0.2s, border-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .thread-card:hover { transform: translateY(-3px); border-color: var(--blue); }
+        .thread-card-bg {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            opacity: 0.35;
+        }
+        .thread-card-label {
+            position: relative;
+            z-index: 1;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.2em;
+            color: var(--gold);
+            letter-spacing: 3px;
+            text-shadow: 0 0 8px #000;
+        }
+
+        /* ── Sección principal ── */
+        .section-title {
+            text-align: center;
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1em;
+            letter-spacing: 5px;
+            color: #3a6080;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        /* ── Grid de tarjetas ── */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+            padding: 0 32px;
+            max-width: 1300px;
+            margin: 0 auto 56px;
+        }
+
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s, border-color 0.25s, box-shadow 0.25s;
+            cursor: pointer;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: var(--blue);
+            box-shadow: 0 8px 32px rgba(0,180,216,0.12);
+        }
+        .card.disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+        .card.coming-soon { cursor: default; }
+        .card.coming-soon:hover {
+            transform: translateY(-2px);
+            border-color: #1a3050;
+            box-shadow: none;
+        }
+
+        .card-img-wrap {
+            position: relative;
+            height: 130px;
+            overflow: hidden;
+            background: #080f1c;
+        }
+        .card-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.7;
+            transition: opacity 0.3s;
+        }
+        .card:hover .card-img { opacity: 0.9; }
+
+        .card-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            font-size: 0.65em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+        .badge-live    { background: rgba(6,214,160,0.2); color: var(--green); border: 1px solid var(--green); }
+        .badge-soon    { background: rgba(0,0,0,0.5);     color: #3a5a70;      border: 1px solid #1a3050; }
+        .badge-admin   { background: rgba(232,201,64,0.15); color: var(--gold); border: 1px solid var(--gold); }
+
+        .card-body {
+            padding: 16px 18px 18px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        .card-icon { font-size: 1.4em; margin-bottom: 6px; }
+        .card-name {
+            font-family: 'Bebas Neue', sans-serif;
+            font-size: 1.25em;
+            letter-spacing: 2px;
+            color: #d8eaf8;
+            margin-bottom: 6px;
+        }
+        .card-desc {
+            font-size: 0.82em;
+            color: #4a7090;
+            line-height: 1.5;
+            flex: 1;
+        }
+        .card-arrow {
+            margin-top: 12px;
+            font-size: 0.75em;
+            color: var(--blue);
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        .card.coming-soon .card-arrow { color: #1a3050; }
+
+        /* ── Footer ── */
+        footer {
+            text-align: center;
+            padding: 32px;
+            color: #1a3050;
+            font-size: 0.75em;
+            letter-spacing: 2px;
+            border-top: 1px solid #0a1828;
+        }
+
+        /* ── Admin edit overlay ── */
+        .edit-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+        }
+        .edit-overlay.visible { display: flex; }
+    </style>
 </head>
 <body>
 
-<!-- ── Header ──────────────────────────────────────────────── -->
-<header class="app-header">
-    <div class="header-top">
-        <a href="../index.html" class="header-logo">
-            ◀ <span>HEX</span>&nbsp;Tracking
-        </a>
+<!-- ── Top bar ── -->
+<nav class="top-bar">
+    <span class="top-bar-logo" id="nav-titulo">BNH</span>
+    <div class="top-bar-right">
+        <button class="btn-change-campaign" onclick="localStorage.removeItem('bnh_selected'); location.reload();">
+            🔄 Cambiar Campaña
+        </button>
+        <div id="bnh-session-badge"></div>
+    </div>
+</nav>
 
-        <!-- Info del hilo activo -->
-        <div id="hilo-activo-info" class="hilo-badge">
-            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
+<!-- ── Hero ── -->
+<section class="hero">
+    <div class="hero-bg" id="hero-bg"></div>
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+        <h1 class="hero-title" id="hero-title">BNH</h1>
+        <p class="hero-subtitle" id="hero-subtitle">Sistema de Rol</p>
+        <p class="hero-lore" id="hero-lore">Cargando descripción de la campaña…</p>
+    </div>
+</section>
+
+<!-- ── Hilos activos ── -->
+<div class="threads-row" id="threads-row">
+    <a class="thread-card" id="thread-rol" href="#" target="_blank">
+        <div class="thread-card-bg" id="thread-rol-bg"></div>
+        <span class="thread-card-label" id="thread-rol-label">ROL ACTUAL</span>
+    </a>
+    <a class="thread-card" id="thread-meta" href="#" target="_blank">
+        <div class="thread-card-bg" id="thread-meta-bg"></div>
+        <span class="thread-card-label" id="thread-meta-label">META</span>
+    </a>
+</div>
+
+<!-- ── Grid de sistemas ── -->
+<p class="section-title">Sistemas</p>
+<div class="cards-grid" id="cards-grid">
+
+    <!-- HISTORIAL — funcional -->
+    <a class="card" href="historial/index.html">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-historial"
+                 src="" alt="Historial"
+                 onerror="this.src=''">
+            <span class="card-badge badge-live">LIVE</span>
         </div>
+        <div class="card-body">
+            <div class="card-icon">🏆</div>
+            <div class="card-name">Historial de Posts</div>
+            <div class="card-desc">Ranking de participación, timeline de posts y scraping en tiempo real del hilo activo.</div>
+            <div class="card-arrow">ABRIR →</div>
+        </div>
+    </a>
 
-        <!-- Controles rápidos -->
-        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
-            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button>
-            <div id="hex-session-badge"></div>
+    <!-- PERSONAJES — próximamente -->
+    <div class="card coming-soon">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-personajes" src="" alt="">
+            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+        </div>
+        <div class="card-body">
+            <div class="card-icon">⚔️</div>
+            <div class="card-name">Personajes</div>
+            <div class="card-desc">Fichas de personajes jugadores y NPCs con estadísticas, inventario y habilidades.</div>
+            <div class="card-arrow">EN DESARROLLO</div>
         </div>
     </div>
 
-    <!-- Tabs de navegación -->
-    <nav class="app-nav">
-        <button class="nav-tab active" data-vista="ranking">🏆 Ranking</button>
-        <button class="nav-tab"        data-vista="timeline">📜 Timeline</button>
-        <button class="nav-tab"        data-vista="hilos">🧵 Hilos</button>
-        <button class="nav-tab"        data-vista="config" id="btn-config" style="display:none;">⚙️ Config</button>
-    </nav>
-</header>
-
-<!-- ── Contenido Principal ──────────────────────────────────── -->
-<main class="app-main">
-    <div id="contenido-principal">
-        <!-- Renderizado por hist-ui.js -->
-        <div class="empty-state">
-            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
-            <p>Cargando sistema…</p>
+    <!-- MISIONES — próximamente -->
+    <div class="card coming-soon">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-misiones" src="" alt="">
+            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+        </div>
+        <div class="card-body">
+            <div class="card-icon">📋</div>
+            <div class="card-name">Misiones</div>
+            <div class="card-desc">Board de misiones activas, completadas y disponibles con detalles y recompensas.</div>
+            <div class="card-arrow">EN DESARROLLO</div>
         </div>
     </div>
-</main>
 
-<!-- ── Toast de notificaciones ──────────────────────────────── -->
-<div id="toast-msg" class="toast"></div>
+    <!-- ESTADÍSTICAS — próximamente -->
+    <div class="card coming-soon">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-estadisticas" src="" alt="">
+            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+        </div>
+        <div class="card-body">
+            <div class="card-icon">📊</div>
+            <div class="card-name">Estadísticas</div>
+            <div class="card-desc">Resumen global de stats, afinidades y progresión de todos los personajes de la campaña.</div>
+            <div class="card-arrow">EN DESARROLLO</div>
+        </div>
+    </div>
 
-<!-- ── JS (módulo) ──────────────────────────────────────────── -->
-<script type="module" src="historial/hist-main.js"></script>
+    <!-- IMÁGENES — próximamente -->
+    <div class="card coming-soon">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-extra" src="" alt="">
+            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+        </div>
+        <div class="card-body">
+            <div class="card-icon">🖼️</div>
+            <div class="card-name">Imágenes</div>
+            <div class="card-desc">Galería de ilustraciones, mapas y arte de la campaña.</div>
+            <div class="card-arrow">EN DESARROLLO</div>
+        </div>
+    </div>
+
+    <!-- PANEL DEV — solo admin -->
+    <div class="card" id="card-panel-dev" style="display:none;">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-panel-dev" src="" alt="">
+            <span class="card-badge badge-admin">⚡ OP</span>
+        </div>
+        <div class="card-body">
+            <div class="card-icon">🛠️</div>
+            <div class="card-name">Panel Máster</div>
+            <div class="card-desc">Gestión completa: personajes, inventarios, hechizos, mapa y configuración de página.</div>
+            <div class="card-arrow" onclick="location.href='panel-de-desarrollo/index.html'">ABRIR →</div>
+        </div>
+    </div>
+
+</div>
+
+<footer>BNH · SISTEMA DE ROL</footer>
+
+<!-- ── Scripts ── -->
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { bnhAuth, supabase, currentConfig } from './bnh-auth.js';
+
+const STORAGE_URL = currentConfig.storageUrl;
+
+// ── Helpers ──────────────────────────────────────────────────
+function imgUrl(nombre) {
+    return `${STORAGE_URL}/imginterfaz/${nombre}?v=${Date.now()}`;
+}
+function setImgSrc(id, nombre, fallback = '') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.src = imgUrl(nombre);
+    el.onerror = () => { el.src = fallback; };
+}
+
+// ── Auth ─────────────────────────────────────────────────────
+await bnhAuth.init();
+const badge = document.getElementById('bnh-session-badge');
+if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
+
+// Mostrar card panel dev solo a admins
+if (bnhAuth.esAdmin()) {
+    document.getElementById('card-panel-dev').style.display = 'flex';
+}
+
+// ── Imágenes de tarjetas ──────────────────────────────────────
+const fb = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+setImgSrc('card-img-historial',    'historial.png',    fb);
+setImgSrc('card-img-personajes',   'personajes.png',   fb);
+setImgSrc('card-img-misiones',     'misiones.png',     fb);
+setImgSrc('card-img-estadisticas', 'estadisticas.png', fb);
+setImgSrc('card-img-extra',        'extra.png',        fb);
+setImgSrc('card-img-panel-dev',    'panel-dev.png',    fb);
+
+// Fondo hero
+document.getElementById('hero-bg').style.backgroundImage = `url('${imgUrl('bnh-hero.png')}')`;
+// Fondo tarjetas de hilos
+document.getElementById('thread-rol-bg').style.backgroundImage  = `url('${imgUrl('thread-rol.png')}')`;
+document.getElementById('thread-meta-bg').style.backgroundImage = `url('${imgUrl('thread-meta.png')}')`;
+
+// ── Config UI desde Supabase ──────────────────────────────────
+async function cargarConfigUI() {
+    try {
+        const { data } = await supabase
+            .from('config_ui')
+            .select('*')
+            .eq('hex_id', 'default')
+            .single();
+        if (!data) return;
+
+        // Favicon dinámico
+        const favicon = document.getElementById('dynamic-favicon');
+        if (favicon) favicon.href = imgUrl('icon.png');
+
+        // Hero
+        if (data.titulo) {
+            document.getElementById('hero-title').textContent  = data.titulo;
+            document.getElementById('nav-titulo').textContent  = data.titulo;
+            document.title = data.titulo;
+        }
+        if (data.subtitulo) document.getElementById('hero-subtitle').textContent = data.subtitulo;
+        if (data.lore)      document.getElementById('hero-lore').textContent     = data.lore;
+
+        // Hilos
+        if (data.link_rol) {
+            const el = document.getElementById('thread-rol');
+            if (el) el.href = data.link_rol;
+        }
+        if (data.nombre_rol) {
+            const el = document.getElementById('thread-rol-label');
+            if (el) el.textContent = data.nombre_rol;
+        }
+        if (data.link_meta) {
+            const el = document.getElementById('thread-meta');
+            if (el) el.href = data.link_meta;
+        }
+        if (data.nombre_meta) {
+            const el = document.getElementById('thread-meta-label');
+            if (el) el.textContent = data.nombre_meta;
+        }
+    } catch (e) {
+        console.warn('config_ui no disponible:', e.message);
+    }
+}
+
+await cargarConfigUI();
+</script>
+
 </body>
 </html>
