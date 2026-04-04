@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../hex-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking de Posts — HEX</title>
+    <link rel="icon" type="image/png" href="../img/icon.png">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────── -->
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">
+            ◀ <span>HEX</span>&nbsp;Tracking
+        </a>
+
+        <!-- Info del hilo activo -->
+        <div id="hilo-activo-info" class="hilo-badge">
+            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
+        </div>
+
+        <!-- Controles rápidos -->
+        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button>
+            <div id="hex-session-badge"></div>
+        </div>
+    </div>
+
+    <!-- Tabs de navegación -->
+    <nav class="app-nav">
+        <button class="nav-tab active" data-vista="ranking">🏆 Ranking</button>
+        <button class="nav-tab"        data-vista="timeline">📜 Timeline</button>
+        <button class="nav-tab"        data-vista="hilos">🧵 Hilos</button>
+        <button class="nav-tab"        data-vista="config" id="btn-config" style="display:none;">⚙️ Config</button>
+    </nav>
+</header>
+
+<!-- ── Contenido Principal ──────────────────────────────────── -->
+<main class="app-main">
+    <div id="contenido-principal">
+        <!-- Renderizado por hist-ui.js -->
+        <div class="empty-state">
+            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+            <p>Cargando sistema…</p>
+        </div>
+    </div>
+</main>
+
+<!-- ── Toast de notificaciones ──────────────────────────────── -->
+<div id="toast-msg" class="toast"></div>
+
+<!-- ── JS (módulo) ──────────────────────────────────────────── -->
+<script type="module" src="historial/hist-main.js"></script>
+</body>
+</html>
