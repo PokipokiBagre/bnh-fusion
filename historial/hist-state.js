@@ -1,7 +1,7 @@
 // ============================================================
 // hist-state.js — Estado Global del Tracking de Posts
 // ============================================================
-import { currentConfig } from '../../hex-auth.js';
+import { currentConfig } from '../../bnh-auth.js';
 
 export let hilosState    = [];   // Hilos rastreados
 export let postsState    = [];   // Posts del hilo activo
