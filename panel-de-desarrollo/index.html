@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Máster — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="../stylepanel.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">
+            ◀ <span>BNH</span>&nbsp;Panel Máster
+        </a>
+        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+            <div id="bnh-session-badge"></div>
+        </div>
+    </div>
+</header>
+
+<main class="app-main">
+    <div id="pantalla-carga" class="empty-state">
+        <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+        <p>Conectando a la base de datos...</p>
+    </div>
+
+    <div id="access-denied" class="oculto empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>ACCESO DENEGADO</h3>
+        <p>Este panel es de uso exclusivo para la administración (OP).</p>
+        <button class="btn btn-outline" onclick="location.href='../index.html'">Volver al inicio</button>
+    </div>
+
+    <div id="interfaz-master" class="oculto">
+        <section class="card-form" style="margin-bottom: 24px; border-color: var(--gray-200);">
+            <div class="selector-controls" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <button class="btn btn-green active-jugadores" id="tab-jugadores" onclick="window.cambiarFiltroRol('jugadores')">⚔️ Jugadores</button>
+                <button class="btn btn-outline" id="tab-npcs" onclick="window.cambiarFiltroRol('npcs')">🎭 NPCs</button>
+                <input type="text" id="dev-search" class="inp" style="flex: 1; min-width: 200px;" 
+                       placeholder="🔍 Buscar personaje..." oninput="window.filtrarPorNombre(this.value)">
+            </div>
+            <div class="character-selector" id="dev-character-list" style="margin-top: 16px; display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;"></div>
+        </section>
+
+        <div id="dev-workspace" class="oculto" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 24px;">
+            <div class="config-card">
+                <h3 class="config-title">❤️ Estadísticas</h3>
+                <div id="content-stats"></div>
+            </div>
+            <div class="config-card">
+                <h3 class="config-title">🎒 Inventario</h3>
+                <div id="content-items"></div>
+            </div>
+            <div class="config-card">
+                <h3 class="config-title">📖 Hechizos</h3>
+                <div id="content-spells"></div>
+            </div>
+        </div>
+
+        <div class="config-card" style="margin-bottom: 24px; border-left: 4px solid var(--green);">
+            <h3 class="config-title">📋 Portapapeles de Sesión</h3>
+            <textarea id="log-global-textarea" readonly class="inp" style="height: 120px; font-family: monospace; margin-bottom: 12px; background: var(--gray-100);" placeholder="Los cambios aparecerán aquí..."></textarea>
+            <button class="btn btn-green" onclick="window.copiarLogGlobal()">📄 Copiar al Portapapeles</button>
+        </div>
+
+        <nav class="app-nav" style="border-top: 1px solid var(--gray-200);">
+            <button id="tab-inf-mapa" class="nav-tab active" onclick="window.cambiarPanelInferior('mapa')">🗺️ Mapa</button>
+            <button id="tab-inf-personaje" class="nav-tab" onclick="window.cambiarPanelInferior('personaje')">👤 Crear PJ</button>
+            <button id="tab-inf-acciones" class="nav-tab" onclick="window.cambiarPanelInferior('acciones')">⚡ Acciones</button>
+            <button id="tab-inf-pagina" class="nav-tab" onclick="window.cambiarPanelInferior('pagina')">🌐 Editar Web</button>
+        </nav>
+
+        <div class="config-card" style="border-top: none; border-radius: 0 0 12px 12px;">
+            <div id="content-mapa"></div>
+            <div id="content-personaje" class="oculto"></div>
+            <div id="content-acciones" class="oculto"></div>
+            <div id="content-pagina" class="oculto"></div>
+        </div>
+    </div>
+</main>
+
+<button id="btn-sync-global" class="oculto" onclick="window.ejecutarGuardadoGlobal()"
+    style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+           background: var(--red); color: white; border:2px solid white; border-radius:30px;
+           padding:15px 40px; font-family:'Cinzel',serif; font-size:1.1em;
+           font-weight:bold; cursor:pointer; box-shadow: var(--shadow-lg); z-index:1000;">
+    🔥 GUARDAR CAMBIOS AL SERVIDOR 🔥
+</button>
+
+<script type="module" src="dev-main.js"></script>
+</body>
+</html>
