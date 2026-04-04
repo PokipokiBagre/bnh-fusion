@@ -1,7 +1,7 @@
 // ============================================================
 // hist-main.js — Punto de Entrada y Controladores
 // ============================================================
-import { hexAuth, supabase } from '../../hex-auth.js';
+import { bnhAuth, supabase } from '../../bnh-auth.js';
 import {
     hilosState, postsState, puntosState, rankingState,
     estadoUI, CONFIG_PUNTOS
@@ -19,11 +19,11 @@ import {
 // ── Inicialización ────────────────────────────────────────────
 async function init() {
     // Badge de sesión
-    const badge = document.getElementById('hex-session-badge');
-    if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
+    const badge = document.getElementById('bnh-session-badge');
+    if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
-    await hexAuth.init();
-    estadoUI.esAdmin = hexAuth.esAdmin();
+    await bnhAuth.init();
+    estadoUI.esAdmin = bnhAuth.esAdmin();
 
     // Mostrar/ocultar botón de config
     const btnCfg = document.getElementById('btn-config');
