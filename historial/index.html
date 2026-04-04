@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking de Posts — BNH</title>
+    <link rel="icon" type="image/png" href="../img/icon.png">
+    <link rel="stylesheet" href="../stylehistorial.css">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">
+            ◀ <span>BNH</span>&nbsp;Tracking
+        </a>
+
+        <div id="hilo-activo-info" class="hilo-badge">
+            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()">Actualizar</button>
+            <div id="bnh-session-badge"></div>
+        </div>
+    </div>
+
+    <nav class="app-nav">
+        <button class="nav-tab active" data-vista="ranking">Ranking</button>
+        <button class="nav-tab"        data-vista="timeline">Timeline</button>
+        <button class="nav-tab"        data-vista="hilos">Hilos</button>
+        <button class="nav-tab"        data-vista="config" id="btn-config" style="display:none;">Config</button>
+    </nav>
+</header>
+
+<main class="app-main">
+    <div id="contenido-principal">
+        <div class="empty-state">
+            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+            <p>Cargando sistema…</p>
+        </div>
+    </div>
+</main>
+
+<div id="toast-msg" class="toast"></div>
+
+<script type="module" src="hist-main.js"></script>
+</body>
+</html>
