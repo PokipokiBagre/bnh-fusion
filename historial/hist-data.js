@@ -11,38 +11,62 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
-// ── Fetch JSON del hilo con proxy CORS ───────────────────────
+// ── Fetch JSON del hilo con proxy CORS (VERSIÓN BLINDADA) ────
 export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
+    console.log('Buscando JSON en:', jsonUrl);
     
-    // Intento 1: Directo (por si 8chan relaja su seguridad)
-    try {
-        const r = await fetch(jsonUrl, { signal: AbortSignal.timeout(4000) });
-        if (r.ok) return await r.json();
-    } catch {}
+    const proxies = [
+        jsonUrl, // 1. Directo
+        `https://corsproxy.io/?${encodeURIComponent(jsonUrl)}`, // 2. Corsproxy
+        `https://api.allorigins.win/raw?url=${encodeURIComponent(jsonUrl)}`, // 3. AllOrigins Raw
+        `https://api.codetabs.com/v1/proxy/?quest=${jsonUrl}`, // 4. CodeTabs
+        `https://thingproxy.freeboard.io/fetch/${jsonUrl}` // 5. ThingProxy
+    ];
 
-    // Intento 2: CodeTabs (Suele saltarse muy bien Cloudflare)
-    try {
-        const proxied1 = `https://api.codetabs.com/v1/proxy/?quest=${jsonUrl}`;
-        const r = await fetch(proxied1, { signal: AbortSignal.timeout(8000) });
-        if (r.ok) return await r.json();
-    } catch {}
+    for (let i = 0; i < proxies.length; i++) {
+        try {
+            console.log(`Intento ${i + 1} de ${proxies.length}...`);
+            const r = await fetch(proxies[i], { signal: AbortSignal.timeout(8000) });
+            
+            if (r.ok) {
+                // Leemos como texto primero para ver si Cloudflare nos metió un HTML falso
+                const texto = await r.text(); 
+                try {
+                    const json = JSON.parse(texto);
+                    if (json && json.posts) {
+                        console.log(`¡Éxito en el intento ${i + 1}!`);
+                        return json;
+                    }
+                } catch (e) {
+                    console.warn(`El intento ${i + 1} devolvió HTML de Cloudflare en vez de JSON.`);
+                }
+            }
+        } catch (e) {
+            console.warn(`El intento ${i + 1} falló por timeout o red.`);
+        }
+    }
 
-    // Intento 3: CorsProxy.io (Excelente alternativa de respaldo)
+    // 6. Intento especial: AllOrigins GET (Bypassea bloqueos envolviendo en su propio JSON)
     try {
-        const proxied2 = `https://corsproxy.io/?${encodeURIComponent(jsonUrl)}`;
-        const r = await fetch(proxied2, { signal: AbortSignal.timeout(8000) });
-        if (r.ok) return await r.json();
-    } catch {}
+        console.log("Iniciando intento especial final...");
+        const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(jsonUrl)}`, { signal: AbortSignal.timeout(8000) });
+        if (r.ok) {
+            const data = await r.json();
+            if (data && data.contents) {
+                const jsonReal = JSON.parse(data.contents);
+                if (jsonReal && jsonReal.posts) {
+                    console.log("¡Éxito con el intento especial!");
+                    return jsonReal;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("Intento especial fallido.");
+    }
 
-    // Intento 4: AllOrigins (El original, por si los demás caen)
-    try {
-        const proxied3 = `https://api.allorigins.win/raw?url=${encodeURIComponent(jsonUrl)}`;
-        const r = await fetch(proxied3, { signal: AbortSignal.timeout(8000) });
-        if (r.ok) return await r.json();
-    } catch {}
-
-    return null; // Si los 4 fallan, recién ahí tiramos el error
+    console.error("Todos los proxies fueron bloqueados por 8chan.");
+    return null;
 }
 
 // ── Cargar hilos rastreados desde Supabase ───────────────────
