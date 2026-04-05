@@ -6,19 +6,22 @@ import { bnhAuth, supabase } from '../bnh-auth.js';
 import { db } from '../bnh-db.js';
 import { devState, norm, STORAGE_URL } from './dev-state.js';
 import { revisarCambiosPendientes, actualizarLogGlobal, ejecutarGuardadoGlobal } from './dev-logic.js';
-import { initObjetosDev } from './objetos/panel-objetos-logic.js';
-import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
+
+// --- MÓDULOS ACTIVOS ---
 import { initStatsDev } from './estadisticas/panel-stats-logic.js';
 import { renderColumnaStats } from './estadisticas/panel-stats-ui.js';
-import { initHechizosDev } from './hechizos/panel-hechizos-logic.js';
-import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
-import { initMapaDev } from './mapa/panel-mapa-logic.js';
-import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
-import { renderColumnaPersonaje } from './personajes/panel-personaje-ui.js';
-import { renderColumnaClonar }    from './clonar/panel-clonar-ui.js';
-import { initPaginaDev }           from './pagina/panel-pagina-ui.js';
-import { renderColumnaPagina }     from './pagina/panel-pagina-ui.js';
-import { haycambiosPagina }        from './pagina/panel-pagina-logic.js';
+import { initPaginaDev, renderColumnaPagina } from './pagina/panel-pagina-ui.js';
+import { haycambiosPagina } from './pagina/panel-pagina-logic.js';
+
+// --- [PENDIENTE] MÓDULOS EN CONSTRUCCIÓN ---
+// import { initObjetosDev } from './objetos/panel-objetos-logic.js';
+// import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
+// import { initHechizosDev } from './hechizos/panel-hechizos-logic.js';
+// import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
+// import { initMapaDev } from './mapa/panel-mapa-logic.js';
+// import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
+// import { renderColumnaPersonaje } from './personajes/panel-personaje-ui.js';
+// import { renderColumnaClonar }    from './clonar/panel-clonar-ui.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
@@ -43,13 +46,10 @@ window.onload = async () => {
     }
 
     try {
-        const [{data: personajesBD}, catalogoObj, {data: invObj}, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
+        // [PENDIENTE] Limitamos las llamadas a la BD a lo que existe por ahora
+        const [{data: personajesBD}, estadosArr] = await Promise.all([
             supabase.from('personajes').select('*'),
-            db.objetos.getCatalogo(),
-            supabase.from('inventario_objetos').select('*').limit(5000),
-            db.estadosConfig.getAll(),
-            db.hechizos.getDataCompleta(),
-            supabase.from('hechizos_inventario').select('*').limit(5000)
+            db.estadosConfig.getAll()
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -75,32 +75,9 @@ window.onload = async () => {
                     fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
                     mando: Number(p.af_mando) || 0, psiquica: Number(p.af_psiquica) || 0, oscura: Number(p.af_oscura) || 0
                 },
-                hechizos: {
-                    fisica:            Number(p.hz_fisica)          || 0,
-                    energetica:        Number(p.hz_energetica)      || 0,
-                    espiritual:        Number(p.hz_espiritual)      || 0,
-                    mando:             Number(p.hz_mando)           || 0,
-                    psiquica:          Number(p.hz_psiquica)        || 0,
-                    oscura:            Number(p.hz_oscura)          || 0,
-                    danoRojo:          Number(p.hechizo_dano_rojo)  || 0,
-                    danoAzul:          Number(p.hechizo_dano_azul)  || 0,
-                    elimDorada:        Number(p.hechizo_elim)       || 0,
-                    vidaRojaMaxExtra:  Number(p.hechizo_vida_roja)  || 0,
-                    vidaAzulExtra:     Number(p.hechizo_vida_azul)  || 0,
-                    guardaDoradaExtra: Number(p.hechizo_guarda)     || 0
-                },
-                hechizosEfecto: {
-                    fisica: Number(p.ef_fisica) || 0, energetica: Number(p.ef_energetica) || 0, espiritual: Number(p.ef_espiritual) || 0,
-                    mando: Number(p.ef_mando) || 0, psiquica: Number(p.ef_psiquica) || 0, oscura: Number(p.ef_oscura) || 0,
-                    danoRojo: Number(p.efecto_dano_rojo) || 0, danoAzul: Number(p.efecto_dano_azul) || 0, elimDorada: Number(p.efecto_elim) || 0,
-                    vidaRojaMaxExtra: Number(p.efecto_vida_roja) || 0, vidaAzulExtra: Number(p.efecto_vida_azul) || 0, guardaDoradaExtra: Number(p.efecto_guarda) || 0
-                },
-                buffs: {
-                    fisica: Number(p.bf_fisica) || 0, energetica: Number(p.bf_energetica) || 0, espiritual: Number(p.bf_espiritual) || 0,
-                    mando: Number(p.bf_mando) || 0, psiquica: Number(p.bf_psiquica) || 0, oscura: Number(p.bf_oscura) || 0,
-                    danoRojo: Number(p.buff_dano_rojo) || 0, danoAzul: Number(p.buff_dano_azul) || 0, elimDorada: Number(p.buff_elim) || 0,
-                    vidaRojaMaxExtra: Number(p.buff_vida_roja) || 0, vidaAzulExtra: Number(p.buff_vida_azul) || 0, guardaDoradaExtra: Number(p.buff_guarda) || 0
-                },
+                hechizos: { /* ... mock info ... */ },
+                hechizosEfecto: { /* ... mock info ... */ },
+                buffs: { /* ... mock info ... */ },
                 estados: p.estados || {},
                 notasAfinidad: p.notas_afinidad || {},
                 iconoOverride: p.icono_override || ''
@@ -111,68 +88,15 @@ window.onload = async () => {
             id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
         }));
 
-        const catalogoHz = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
-
-        initObjetosDev(catalogoObj, invObj);
-        initStatsDev(statsGlobalMock, estadosListMock);
-        initHechizosDev(catalogoHz, invHz || []);
-
-        const nodosParaMapa = catalogoHz.map(n => ({
-            id:             n.ID,
-            nombreOriginal: n.Nombre || n.ID,
-            nombre:         `${n.Nombre || n.ID} (${n.HEX || 0})`,
-            afinidad:       n.Afinidad || '-',
-            clase:          n.Clase || 'Clase 1',
-            hex:            parseInt(n.HEX) || 0,
-            resumen:        n.Resumen || '',
-            efecto:         n.Efecto || '',
-            overcast:       n['Overcast 100%'] || '',
-            undercast:      n['Undercast 50%'] || '',
-            especial:       n.Especial || '',
-            esConocido:     n.Conocido === 'si',
-            x:              parseFloat(n.X) || 0,
-            y:              parseFloat(n.Y) || 0,
-        }));
-
-        const coloresParaMapa = {};
-        if (hechizosData.afinidades) {
-            hechizosData.afinidades.forEach(row => {
-                if (row[0]) {
-                    coloresParaMapa[row[0].trim()] = {
-                        t: row[1] ? row[1].toString().trim() : '#ffffff',
-                        b: row[2] ? row[2].toString().trim() : '#555555'
-                    };
-                }
-            });
-        }
-
-        const findNodoDev = (str) => {
-            if (!str) return null;
-            const strNorm = String(str).trim().toLowerCase();
-            const strNum  = strNorm.replace(/^hechizo\s+/i, '').trim();
-            return nodosParaMapa.find(n => {
-                const nid  = String(n.id).trim().toLowerCase();
-                const nnom = String(n.nombreOriginal).trim().toLowerCase();
-                return nid === strNorm || nnom === strNorm
-                    || nid.replace(/^hechizo\s+/i,'').trim() === strNum
-                    || nnom.replace(/^hechizo\s+/i,'').trim() === strNum;
-            });
-        };
-
-        const enlacesParaMapa = [];
-        if (hechizosData.string) {
-            hechizosData.string.forEach(rel => {
-                if (!rel || !rel.Source || !rel.Target) return;
-                const src = findNodoDev(rel.Source);
-                const tgt = findNodoDev(rel.Target);
-                if (src && tgt && src !== tgt) enlacesParaMapa.push({ source: src, target: tgt });
-            });
-        }
-
-        initMapaDev(nodosParaMapa, enlacesParaMapa, coloresParaMapa);
+        // Inicializamos los módulos activos
+        await initStatsDev(statsGlobalMock, estadosListMock);
         await initPaginaDev();
 
-        renderColumnaMapa();
+        // [PENDIENTE] Inicialización de módulos desactivados
+        // initObjetosDev(catalogoObj, invObj);
+        // initHechizosDev(catalogoHz, invHz || []);
+        // initMapaDev(nodosParaMapa, enlacesParaMapa, coloresParaMapa);
+        // renderColumnaMapa();
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
@@ -181,9 +105,10 @@ window.onload = async () => {
 
         window.addEventListener('devUIUpdate', () => {
             if (devState.pjSeleccionado) {
-                renderColumnaObjetos(devState.pjSeleccionado);
                 renderColumnaStats(devState.pjSeleccionado);
-                renderColumnaHechizos(devState.pjSeleccionado);
+                // [PENDIENTE]
+                // renderColumnaObjetos(devState.pjSeleccionado);
+                // renderColumnaHechizos(devState.pjSeleccionado);
             }
             revisarCambiosPendientes();
             actualizarLogGlobal();
@@ -194,9 +119,8 @@ window.onload = async () => {
             actualizarLogGlobal();
         });
 
-        window.addEventListener('devMapaUpdate', () => {
-            renderColumnaMapa();
-        });
+        // [PENDIENTE]
+        // window.addEventListener('devMapaUpdate', () => { renderColumnaMapa(); });
 
         window.addEventListener('devPersonajesUpdate', () => {
             renderSelectorPersonajes();
@@ -266,9 +190,10 @@ function seleccionarPersonajeDev(nombre) {
 
     document.getElementById('dev-workspace').classList.remove('oculto');
 
-    renderColumnaObjetos(devState.pjSeleccionado);
     renderColumnaStats(devState.pjSeleccionado);
-    renderColumnaHechizos(devState.pjSeleccionado);
+    // [PENDIENTE]
+    // renderColumnaObjetos(devState.pjSeleccionado);
+    // renderColumnaHechizos(devState.pjSeleccionado);
 }
 
 function cambiarPanelInferior(panel) {
@@ -291,10 +216,11 @@ function cambiarPanelInferior(panel) {
         tabActivo.style.borderBottom = '2px solid #05050a';
     }
 
-    if (panel === 'mapa')      renderColumnaMapa();
-    if (panel === 'personaje') renderColumnaPersonaje();
-    if (panel === 'acciones')  renderColumnaClonar();
     if (panel === 'pagina')    renderColumnaPagina();
+    // [PENDIENTE]
+    // if (panel === 'mapa')      renderColumnaMapa();
+    // if (panel === 'personaje') renderColumnaPersonaje();
+    // if (panel === 'acciones')  renderColumnaClonar();
 }
 
 function copiarLogGlobal() {
