@@ -46,42 +46,64 @@ export async function cargarAgrupaciones() {
 }
 
 export async function crearGrupoRefinado(nombre) {
-    if (!nombre) return;
-    const { data, error } = await supabase.from('personajes_refinados')
-        .insert({ nombre_refinado: nombre }).select('id').single();
-    
-    if (data && !error) {
-        stState.grupoActivoId = data.id;
-        await cargarAgrupaciones();
-        return { ok: true };
+    if (!nombre) return { ok: false, msg: "Escribe un nombre." };
+    try {
+        const { data, error } = await supabase.from('personajes_refinados')
+            .insert({ nombre_refinado: nombre }).select('id').single();
+        
+        if (error) {
+            if (error.message.includes('Failed to fetch')) return { ok: false, msg: "Conexión bloqueada por tu navegador. Desactiva tu AdBlocker o los Escudos de Brave." };
+            return { ok: false, msg: error.message };
+        }
+        if (data) {
+            stState.grupoActivoId = data.id;
+            await cargarAgrupaciones();
+            return { ok: true };
+        }
+    } catch (e) {
+        return { ok: false, msg: "Error crítico: " + e.message };
     }
-    return { ok: false, msg: error?.message };
 }
 
 export async function eliminarGrupoRefinado(refId) {
-    await supabase.from('personajes_refinados').delete().eq('id', refId);
-    if (stState.grupoActivoId === refId) stState.grupoActivoId = null;
-    await cargarAgrupaciones();
+    try {
+        await supabase.from('personajes_refinados').delete().eq('id', refId);
+        if (stState.grupoActivoId === refId) stState.grupoActivoId = null;
+        await cargarAgrupaciones();
+    } catch(e) { console.error(e); }
 }
 
 export async function asignarPersonajeAGrupoActivo(personajeId) {
     const refId = stState.grupoActivoId;
     if (!refId) return { ok: false, msg: "Haz clic sobre un grupo a la derecha para seleccionarlo antes de asignar." };
 
-    // Validar límite de 6 slots
     const miembrosActuales = stState.personajesRaw.filter(p => p.refinado_id === refId).length;
     if (miembrosActuales >= 6) {
         return { ok: false, msg: "Este grupo ya está lleno (Límite de 6 personajes)." };
     }
 
-    const { error } = await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);
-    if (error) return { ok: false, msg: "Error al guardar: " + error.message };
-
-    await cargarAgrupaciones();
-    return { ok: true };
+    try {
+        const { error } = await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);
+        
+        if (error) {
+            // Aquí atrapamos a los bloqueadores de anuncios
+            if (error.message.includes('Failed to fetch')) return { ok: false, msg: "Conexión bloqueada por tu navegador. Desactiva tu AdBlocker o los Escudos de Brave." };
+            return { ok: false, msg: "Error al guardar: " + error.message };
+        }
+        
+        await cargarAgrupaciones();
+        return { ok: true };
+    } catch (e) {
+        return { ok: false, msg: "Error crítico: " + e.message };
+    }
 }
 
 export async function desvincularPersonaje(personajeId) {
-    await supabase.from('personajes').update({ refinado_id: null }).eq('id', personajeId);
-    await cargarAgrupaciones();
+    try {
+        const { error } = await supabase.from('personajes').update({ refinado_id: null }).eq('id', personajeId);
+        if (error && error.message.includes('Failed to fetch')) {
+            alert("Conexión bloqueada por AdBlocker.");
+        }
+        await cargarAgrupaciones();
+    } catch(e) { console.error(e); }
 }
