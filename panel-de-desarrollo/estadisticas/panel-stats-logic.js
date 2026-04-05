@@ -3,7 +3,7 @@
 // ============================================================
 
 import { stState } from './panel-stats-state.js';
-import { supabase } from '../../bnh-auth.js';
+import { supabase } from '../bnh-auth.js';
 
 export async function initStatsDev(statsMock, estadosMock) {
     stState.statsDB = statsMock || {};
