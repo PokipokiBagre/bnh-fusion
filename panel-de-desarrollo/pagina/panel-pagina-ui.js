@@ -4,7 +4,7 @@
 
 import { paginaState }    from './panel-pagina-state.js';
 import { cargarConfigUI, guardarConfigUI, marcarCambioPagina, haycambiosPagina } from './panel-pagina-logic.js';
-import { supabase, currentConfig } from '../../bnh-auth.js';
+import { supabase, currentConfig } from '../bnh-auth.js';
 
 const BUCKET      = 'imagenes-bnh';
 const STORAGE_URL = currentConfig.storageUrl;
