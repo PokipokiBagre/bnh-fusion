@@ -9,10 +9,10 @@
     <link rel="stylesheet" href="../stylepanel.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
     <style>
-        .top-tabs { background: #050a14; border-bottom: 1px solid #0d2035; display: flex; gap: 20px; padding: 0 20px; }
-        .top-tab { padding: 15px 10px; cursor: pointer; color: #888; text-transform: uppercase; font-family: 'Rajdhani', sans-serif; letter-spacing: 1px; font-size: 0.9em; border-bottom: 2px solid transparent; transition: 0.2s; }
-        .top-tab:hover { color: #c8d8e8; }
-        .top-tab.active { color: #00b4d8; border-bottom: 2px solid #00b4d8; font-weight: bold; }
+        .top-tabs { background: var(--white); border-bottom: 2px solid var(--gray-200); display: flex; gap: 20px; padding: 0 24px; box-shadow: var(--shadow-sm); }
+        .top-tab { padding: 16px 12px; cursor: pointer; color: var(--gray-500); text-transform: uppercase; font-family: 'Cinzel', serif; letter-spacing: 1px; font-size: 0.95em; font-weight: 700; border-bottom: 3px solid transparent; transition: 0.2s; }
+        .top-tab:hover { color: var(--green); }
+        .top-tab.active { color: var(--green-dark); border-bottom: 3px solid var(--green); }
     </style>
 </head>
 <body>
@@ -24,7 +24,7 @@
     </div>
 </header>
 
-<main class="app-main" style="padding: 0;">
+<main class="app-main" style="padding: 0; max-width: 1600px;">
     <div id="pantalla-carga" class="empty-state" style="padding-top: 50px;">
         <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
         <p>Cargando sistema...</p>
@@ -42,17 +42,7 @@
         </div>
 
         <div id="vista-stats" style="padding: 24px;">
-            <div class="selector-controls" style="display: flex; gap: 12px; align-items: center; margin-bottom: 20px;">
-                <button class="btn btn-green" id="btn-filtro-sueltos" onclick="window.cambiarFiltro('sueltos')">Sueltos (Sin Refinar)</button>
-                <button class="btn btn-outline" id="btn-filtro-agrupados" onclick="window.cambiarFiltro('agrupados')">Agrupados</button>
-                <input type="text" id="dev-search" class="inp" style="flex: 1; max-width: 300px;" placeholder="🔍 Buscar personaje..." oninput="window.filtrarPorNombre(this.value)">
-            </div>
-            
-            <div class="character-selector" id="dev-character-list" style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px;"></div>
-            
-            <div id="content-stats" style="margin-top: 24px; max-width: 600px;">
-                <div style="color:#666; font-style:italic;">Selecciona un personaje de la lista para agruparlo.</div>
-            </div>
+            <div id="content-stats"></div>
         </div>
 
         <div id="vista-pagina" class="oculto" style="padding: 24px;">
