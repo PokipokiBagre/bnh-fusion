@@ -184,7 +184,6 @@ function _renderImgCard(img) {
     </div>`;
 }
 
-// Preview Reconstruido Fiel a tu Index (Blanco, Cinzel, Verde)
 function _renderPreviewCompleto(c) {
     const v        = Date.now();
     const bgUrl    = `${STORAGE_URL}/imginterfaz/bnh-hero.png?v=${v}`;
