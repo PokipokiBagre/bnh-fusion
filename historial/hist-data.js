@@ -247,7 +247,7 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
     }
 
-    // 5. Recalcular puntos
+    // 5. lar puntos
     const todosOrdenados = postsNuevos;
     const puntos = calcularPuntosLista(todosOrdenados, threadId, board);
     const { error: errPuntos } = await supabase
@@ -337,8 +337,13 @@ export async function recalcularPuntos(board, threadId) {
     const puntos  = calcularPuntosLista(posts, threadId, board);
     const ranking = construirRanking(puntos, threadId, board);
 
-    await supabase.from('historial_puntos').upsert(puntos,  { onConflict: 'board,post_no' });
-    await supabase.from('historial_ranking').upsert(ranking, { onConflict: 'board,thread_id,poster_name' });
+    await Promise.all([
+        supabase.from('historial_puntos').upsert(puntos, { onConflict: 'board,post_no' }),
+        supabase.from('historial_ranking').upsert(ranking, { onConflict: 'board,thread_id,poster_name' }),
+        // Actualiza el contador para que la UI no muestre 0 posts
+        supabase.from('historial_hilos').update({ total_posts: posts.length }).eq('board', board).eq('thread_id', threadId)
+    ]);
+
     await cargarPuntosDB(board, threadId);
     await cargarRankingDB(board, threadId);
     return true;
