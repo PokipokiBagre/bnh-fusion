@@ -4,53 +4,47 @@
     <script src="../bnh-guard.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Máster — BNH</title>
+    <title>Tracking de Posts — BNH</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
-    <link rel="stylesheet" href="../stylepanel.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
-    <style>
-        .top-tabs { background: var(--white); border-bottom: 2px solid var(--gray-200); display: flex; gap: 20px; padding: 0 24px; box-shadow: var(--shadow-sm); }
-        .top-tab { padding: 16px 12px; cursor: pointer; color: var(--gray-500); text-transform: uppercase; font-family: 'Cinzel', serif; letter-spacing: 1px; font-size: 0.95em; font-weight: 700; border-bottom: 3px solid transparent; transition: 0.2s; }
-        .top-tab:hover { color: var(--green); }
-        .top-tab.active { color: var(--green-dark); border-bottom: 3px solid var(--green); }
-    </style>
+    <link rel="stylesheet" href="../stylehistorial.css">
 </head>
 <body>
 
 <header class="app-header">
     <div class="header-top">
-        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Panel Máster</a>
-        <div id="bnh-session-badge"></div>
+        <a href="../index.html" class="header-logo">
+            ◀ <span>BNH</span>&nbsp;Tracking
+        </a>
+
+        <div id="hilo-activo-info" class="hilo-badge">
+            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()">Actualizar</button>
+            <div id="bnh-session-badge"></div>
+        </div>
     </div>
+
+    <nav class="app-nav">
+        <button class="nav-tab active" data-vista="ranking">Ranking</button>
+        <button class="nav-tab"        data-vista="timeline">Timeline</button>
+        <button class="nav-tab"        data-vista="hilos">Hilos</button>
+        <button class="nav-tab"        data-vista="config" id="btn-config" style="display:none;">Config</button>
+    </nav>
 </header>
 
-<main class="app-main" style="padding: 0; max-width: 1600px;">
-    <div id="pantalla-carga" class="empty-state" style="padding-top: 50px;">
-        <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
-        <p>Cargando sistema...</p>
-    </div>
-
-    <div id="access-denied" class="oculto empty-state" style="padding-top: 50px;">
-        <h3>ACCESO DENEGADO</h3>
-        <p>Este panel es de uso exclusivo para la administración (OP).</p>
-    </div>
-
-    <div id="interfaz-master" class="oculto">
-        <div class="top-tabs">
-            <div class="top-tab active" id="tab-stats" onclick="window.cambiarPestana('stats')">Agrupación de Cuentas</div>
-            <div class="top-tab" id="tab-pagina" onclick="window.cambiarPestana('pagina')">Editar Web</div>
-        </div>
-
-        <div id="vista-stats" style="padding: 24px;">
-            <div id="content-stats"></div>
-        </div>
-
-        <div id="vista-pagina" class="oculto" style="padding: 24px;">
-            <div id="content-pagina"></div>
+<main class="app-main">
+    <div id="contenido-principal">
+        <div class="empty-state">
+            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+            <p>Cargando sistema…</p>
         </div>
     </div>
 </main>
 
-<script type="module" src="dev-main.js"></script>
+<div id="toast-msg" class="toast"></div>
+
+<script type="module" src="hist-main.js"></script>
 </body>
 </html>
