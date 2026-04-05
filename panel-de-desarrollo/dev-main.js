@@ -46,17 +46,17 @@ window.onload = async () => {
     }
 
     try {
-        // [PENDIENTE] Limitamos las llamadas a la BD a lo que existe por ahora
-        const [{data: personajesBD}, estadosArr] = await Promise.all([
+        // Hacemos las llamadas directo a Supabase para evitar errores si bnh-db.js está incompleto
+        const [{data: personajesBD}, {data: estadosArr}] = await Promise.all([
             supabase.from('personajes').select('*'),
-            db.estadosConfig.getAll()
+            supabase.from('estados_config').select('*')
         ]);
 
-        devState.listaPersonajes = personajesBD.filter(p => p.is_active);
+        devState.listaPersonajes = (personajesBD || []).filter(p => p.is_active);
         window.__devListaPersonajes = devState.listaPersonajes;
 
         const statsGlobalMock = {};
-        personajesBD.forEach(p => {
+        (personajesBD || []).forEach(p => {
             statsGlobalMock[p.nombre] = {
                 isPlayer: p.is_player,
                 isActive: p.is_active,
@@ -84,7 +84,7 @@ window.onload = async () => {
             };
         });
 
-        const estadosListMock = estadosArr.map(e => ({
+        const estadosListMock = (estadosArr || []).map(e => ({
             id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
         }));
 
@@ -128,7 +128,7 @@ window.onload = async () => {
 
     } catch (error) {
         console.error("Error crítico cargando DB:", error);
-        document.getElementById('pantalla-carga').innerHTML = `<h2 style="color:#ff4444;">Error de conexión a la Base de Datos.</h2>`;
+        document.getElementById('pantalla-carga').innerHTML = `<h2 style="color:#ff4444;">Error de conexión a la Base de Datos: ${error.message}</h2>`;
     }
 };
 
