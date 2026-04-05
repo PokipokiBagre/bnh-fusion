@@ -14,6 +14,10 @@ window.seleccionarPersonajeDev = seleccionarPersonajeDev;
 window.cambiarPestana = cambiarPestana;
 
 window.onload = async () => {
+    // 🌟 Solución al caché del Favicon
+    const favicon = document.getElementById("dynamic-favicon");
+    if (favicon) favicon.href = `${STORAGE_URL}/imginterfaz/icon.png?v=${Date.now()}`;
+
     await bnhAuth.init();
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
@@ -25,14 +29,12 @@ window.onload = async () => {
     }
 
     try {
-        // Carga SOLO lo necesario de Supabase. Tolerante a fallos si no hay datos aún.
         const { data: personajesBD } = await supabase.from('personajes').select('*');
         
         devState.listaPersonajes = personajesBD || [];
-        devState.filtroActual = 'sueltos'; // Por defecto vemos los que faltan agrupar
+        devState.filtroActual = 'sueltos'; 
         devState.busquedaTexto = '';
 
-        // Inicializamos tus dos únicos módulos reales
         await initStatsDev({}, []); 
         await initPaginaDev();
 
@@ -49,7 +51,6 @@ window.onload = async () => {
 };
 
 function cambiarPestana(id) {
-    // Control de pestañas superiores
     document.querySelectorAll('.top-tab').forEach(t => t.classList.remove('active'));
     document.getElementById(`tab-${id}`).classList.add('active');
 
@@ -95,7 +96,7 @@ function renderSelectorPersonajes() {
     filtrados.sort((a,b) => a.nombre.localeCompare(b.nombre)).forEach(p => {
         const imgUrl = `${STORAGE_URL}/imgpersonajes/${norm(p.nombre)}icon.png`;
         const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
-        const borderColor = p.refinado_id ? '#00b4d8' : '#ff4444'; // Azul = Agrupado, Rojo = Suelto
+        const borderColor = p.refinado_id ? '#00b4d8' : '#ff4444';
         const claseActiva = (devState.pjSeleccionado === p.nombre) ? 'active' : '';
 
         html += `
@@ -110,7 +111,6 @@ function renderSelectorPersonajes() {
 
 function seleccionarPersonajeDev(nombre) {
     devState.pjSeleccionado = nombre;
-
     document.querySelectorAll('.char-portrait-container').forEach(el => el.classList.remove('active'));
     const portrait = document.getElementById(`portrait-${norm(nombre)}`);
     if (portrait) portrait.classList.add('active');
