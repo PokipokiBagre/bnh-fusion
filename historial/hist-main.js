@@ -31,6 +31,7 @@ import {
     console.log('[BNH] Extensión de Chrome detectada ✅');
 })();
 
+
 async function init() {
     // 🌟 Solución al caché del Favicon en el Historial
     const favicon = document.getElementById("dynamic-favicon");
