@@ -36,7 +36,6 @@ export async function cargarAgrupaciones() {
         if (pts) {
             pts.forEach(p => {
                 const nombre = p.nombre || p.personaje_nombre;
-                // 🌟 CORRECCIÓN: Toma el valor de la columna puntos_total de tu base de datos
                 const total = p.puntos_total || p.puntos_manual || 0;
                 stState.puntosPorPersonaje[nombre] = Number(total);
             });
@@ -46,31 +45,37 @@ export async function cargarAgrupaciones() {
     }
 }
 
-export async function crearGrupoRefinado(nombre, slotIndex) {
+export async function crearGrupoRefinado(nombre) {
     if (!nombre) return;
     const { data, error } = await supabase.from('personajes_refinados')
         .insert({ nombre_refinado: nombre }).select('id').single();
     
     if (data && !error) {
-        stState.slots[slotIndex] = data.id;
+        stState.grupoActivoId = data.id;
         await cargarAgrupaciones();
+        return { ok: true };
     }
+    return { ok: false, msg: error?.message };
 }
 
-export async function cargarGrupoEnSlot(refinadoId, slotIndex) {
-    stState.slots[slotIndex] = refinadoId;
+export async function eliminarGrupoRefinado(refId) {
+    await supabase.from('personajes_refinados').delete().eq('id', refId);
+    if (stState.grupoActivoId === refId) stState.grupoActivoId = null;
+    await cargarAgrupaciones();
 }
 
-export async function vaciarSlot(slotIndex) {
-    stState.slots[slotIndex] = null;
-}
+export async function asignarPersonajeAGrupoActivo(personajeId) {
+    const refId = stState.grupoActivoId;
+    if (!refId) return { ok: false, msg: "Haz clic sobre un grupo a la derecha para seleccionarlo antes de asignar." };
 
-export async function asignarPersonajeASlotActivo(personajeId) {
-    const refId = stState.slots[stState.slotActivoIndex];
-    if (!refId) return { ok: false, msg: "Selecciona o crea un grupo en el slot activo (el del borde verde) primero." };
+    // Validar límite de 6 slots
+    const miembrosActuales = stState.personajesRaw.filter(p => p.refinado_id === refId).length;
+    if (miembrosActuales >= 6) {
+        return { ok: false, msg: "Este grupo ya está lleno (Límite de 6 personajes)." };
+    }
 
     const { error } = await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);
-    if (error) return { ok: false, msg: "Error al guardar en base de datos: " + error.message };
+    if (error) return { ok: false, msg: "Error al guardar: " + error.message };
 
     await cargarAgrupaciones();
     return { ok: true };
