@@ -1,7 +1,7 @@
 // ============================================================
 // hist-main.js — Punto de Entrada y Controladores
 // ============================================================
-import { bnhAuth, supabase } from '../bnh-auth.js';
+import { bnhAuth, supabase, currentConfig } from '../bnh-auth.js';
 import {
     hilosState, postsState, puntosState, rankingState,
     estadoUI, CONFIG_PUNTOS
@@ -17,8 +17,6 @@ import {
 } from './hist-ui.js';
 
 // ── Bridge con extensión de Chrome (si está instalada) ────────
-// La extensión inyecta window.__BNH_EXT_ID__ con su chrome.runtime ID.
-// Aquí creamos el puente window.__BNH_EXT_FETCH__ que hist-data.js usará.
 (function setupExtensionBridge() {
     if (typeof chrome === 'undefined' || !chrome.runtime) return;
     const extId = window.__BNH_EXT_ID__;
@@ -33,8 +31,13 @@ import {
     console.log('[BNH] Extensión de Chrome detectada ✅');
 })();
 
-
 async function init() {
+    // 🌟 Solución al caché del Favicon en el Historial
+    const favicon = document.getElementById("dynamic-favicon");
+    if (favicon && currentConfig) {
+        favicon.href = `${currentConfig.storageUrl}/imginterfaz/icon.png?v=${Date.now()}`;
+    }
+
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
@@ -129,16 +132,13 @@ window.scrapeManual = async function(board, threadId) {
     renderHeaderInfo();
 };
 
-// ── Actualización Manual (Bypass definitivo de Cloudflare/TOS) 
 // ── Actualización Manual (Bypass definitivo con Modal Personalizado) ──
 window.actualizarManual = async function(board, threadId) {
     const url = `https://8chan.moe/${board}/res/${threadId}.json`;
     
-    // 1. Eliminar modal anterior si existe
     const existingModal = document.getElementById('modal-pegar-json');
     if (existingModal) existingModal.remove();
 
-    // 2. Crear el nuevo modal
     const modal = document.createElement('div');
     modal.id = 'modal-pegar-json';
     modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);';
@@ -161,7 +161,6 @@ window.actualizarManual = async function(board, threadId) {
     `;
     document.body.appendChild(modal);
 
-    // 3. Funciones de los botones del modal
     document.getElementById('btn-cancelar-json').onclick = () => modal.remove();
 
     document.getElementById('btn-procesar-json').onclick = async () => {
@@ -173,7 +172,7 @@ window.actualizarManual = async function(board, threadId) {
 
         try {
             const manualJson = JSON.parse(input);
-            modal.remove(); // Cerramos la ventana si se pudo parsear bien
+            modal.remove();
 
             const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
             if (!hilo) return;
@@ -204,14 +203,12 @@ window.actualizarManual = async function(board, threadId) {
     };
 };
 
-// ── Actualizar hilo activo ────────────────────────────────────
 window.actualizarHiloActivo = async function() {
     if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
     const { board, thread_id } = estadoUI.hiloActivo;
     await window.scrapeManual(board, thread_id);
 };
 
-// ── Agregar nuevo hilo ────────────────────────────────────────
 window.agregarNuevoHilo = async function() {
     const url    = document.getElementById('inp-url')?.value?.trim();
     const titulo = document.getElementById('inp-titulo')?.value?.trim();
@@ -231,7 +228,6 @@ window.agregarNuevoHilo = async function() {
     mostrarVista('hilos');
 };
 
-// ── Eliminar hilo ─────────────────────────────────────────────
 window.pedirEliminarHilo = async function(board, threadId, titulo) {
     if (!confirm(`¿Eliminar el hilo "${titulo}" y todos sus datos?\nEsta acción no se puede deshacer.`)) return;
     await eliminarHilo(board, threadId);
@@ -246,14 +242,12 @@ window.pedirEliminarHilo = async function(board, threadId, titulo) {
     mostrarVista('hilos');
 };
 
-// ── Toggle activo/inactivo ────────────────────────────────────
 window.toggleActivo = async function(board, threadId, nuevoEstado) {
     await toggleHiloActivo(board, threadId, nuevoEstado);
     toast(nuevoEstado ? '▶ Hilo activado' : '⏸ Hilo pausado', 'ok');
     mostrarVista('hilos');
 };
 
-// ── Auto-Refresh ──────────────────────────────────────────────
 window.toggleAutoRefresh = function() {
     if (estadoUI.autoRefresh) {
         clearInterval(estadoUI.refreshInterval);
@@ -285,7 +279,6 @@ window.toggleAutoRefresh = function() {
     renderConfig();
 };
 
-// ── Guardar configuración de puntos ──────────────────────────
 window.guardarConfig = async function() {
     CONFIG_PUNTOS.rapido         = parseInt(document.getElementById('cfg-rapido')?.value)          || CONFIG_PUNTOS.rapido;
     CONFIG_PUNTOS.medio          = parseInt(document.getElementById('cfg-medio')?.value)           || CONFIG_PUNTOS.medio;
@@ -309,7 +302,6 @@ window.guardarConfig = async function() {
     }
 };
 
-// ── Recalcular hilo activo ────────────────────────────────────
 window.recalcularActual = async function() {
     if (!estadoUI.hiloActivo) return;
     toast('⏳ Recalculando…', 'info');
