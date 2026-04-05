@@ -10,9 +10,55 @@ export function renderPanelStats() {
     const contenedor = document.getElementById('content-stats');
     if (!contenedor) return;
 
+    // Solo construimos el esqueleto la primera vez, así no se pierde el foco al escribir
+    if (!document.getElementById('stats-layout')) {
+        _buildSkeleton(contenedor);
+        _exponerGlobalesStats();
+    }
+
+    _actualizarListado();
+    _actualizarSlots();
+}
+
+function _buildSkeleton(contenedor) {
     const todosLosHilos = new Set();
     Object.values(stState.hilosPorPersonaje).forEach(set => set.forEach(h => todosLosHilos.add(h)));
     const hilosArray = Array.from(todosLosHilos).sort((a,b) => b - a);
+
+    contenedor.innerHTML = `
+        <div id="stats-layout" style="display: grid; grid-template-columns: 450px 1fr; gap: 24px; align-items: start;">
+            
+            <div style="background: var(--white); border: 1.5px solid var(--gray-200); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm);">
+                <div style="background: var(--gray-100); padding: 16px; border-bottom: 1.5px solid var(--gray-200);">
+                    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+                        <button id="btn-st-sueltos" class="btn ${stState.filtroActual === 'sueltos' ? 'btn-green' : 'btn-outline'}" style="flex:1" onclick="window._stFiltro('sueltos')">Sueltos</button>
+                        <button id="btn-st-agrupados" class="btn ${stState.filtroActual === 'agrupados' ? 'btn-green' : 'btn-outline'}" style="flex:1" onclick="window._stFiltro('agrupados')">Agrupados</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="stats-search" class="inp" placeholder="🔍 Buscar personaje..." value="${stState.busquedaTexto}" oninput="window._stBuscar(this.value)" style="flex: 2;">
+                        <select id="stats-hilo" class="inp" onchange="window._stHilo(this.value)" style="flex: 1; cursor:pointer;">
+                            <option value="todos">Todos los hilos</option>
+                            ${hilosArray.map(h => `<option value="${h}" ${stState.filtroHilo == h ? 'selected' : ''}>Hilo ${h}</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="stats-list-container" style="height: 65vh; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+                    </div>
+            </div>
+
+            <div>
+                <h3 style="color: var(--green-dark); font-family: 'Cinzel', serif; font-size: 1.4em; margin-bottom: 16px;">Mesa de Agrupación</h3>
+                <div id="stats-slots-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+                    </div>
+            </div>
+        </div>
+    `;
+}
+
+function _actualizarListado() {
+    const listContainer = document.getElementById('stats-list-container');
+    if (!listContainer) return;
 
     let filtrados = stState.personajesRaw.filter(p => {
         const coincideFiltro = stState.filtroActual === 'sueltos' ? !p.refinado_id : !!p.refinado_id;
@@ -27,45 +73,15 @@ export function renderPanelStats() {
 
     filtrados.sort((a, b) => a.nombre.localeCompare(b.nombre));
 
-    const htmlLista = filtrados.length === 0 
+    listContainer.innerHTML = filtrados.length === 0 
         ? `<div class="empty-state">No hay personajes en esta vista.</div>` 
         : filtrados.map(p => _renderRowPersonaje(p)).join('');
+}
 
-    const htmlSlots = stState.slots.map((refId, i) => _renderSlot(refId, i)).join('');
-
-    contenedor.innerHTML = `
-        <div style="display: grid; grid-template-columns: 450px 1fr; gap: 24px; align-items: start;">
-            
-            <div style="background: var(--white); border: 1.5px solid var(--gray-200); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm);">
-                <div style="background: var(--gray-100); padding: 16px; border-bottom: 1.5px solid var(--gray-200);">
-                    <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-                        <button class="btn ${stState.filtroActual === 'sueltos' ? 'btn-green' : 'btn-outline'}" style="flex:1" onclick="window._stFiltro('sueltos')">Sueltos</button>
-                        <button class="btn ${stState.filtroActual === 'agrupados' ? 'btn-green' : 'btn-outline'}" style="flex:1" onclick="window._stFiltro('agrupados')">Agrupados</button>
-                    </div>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" class="inp" placeholder="🔍 Buscar..." value="${stState.busquedaTexto}" oninput="window._stBuscar(this.value)" style="flex: 2;">
-                        <select class="inp" onchange="window._stHilo(this.value)" style="flex: 1; cursor:pointer;">
-                            <option value="todos">Todos los hilos</option>
-                            ${hilosArray.map(h => `<option value="${h}" ${stState.filtroHilo == h ? 'selected' : ''}>Hilo ${h}</option>`).join('')}
-                        </select>
-                    </div>
-                </div>
-                
-                <div style="max-height: 65vh; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
-                    ${htmlLista}
-                </div>
-            </div>
-
-            <div>
-                <h3 style="color: var(--green-dark); font-family: 'Cinzel', serif; font-size: 1.4em; margin-bottom: 16px;">Mesa de Agrupación</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
-                    ${htmlSlots}
-                </div>
-            </div>
-        </div>
-    `;
-
-    _exponerGlobalesStats();
+function _actualizarSlots() {
+    const slotsContainer = document.getElementById('stats-slots-container');
+    if (!slotsContainer) return;
+    slotsContainer.innerHTML = stState.slots.map((refId, i) => _renderSlot(refId, i)).join('');
 }
 
 function _renderRowPersonaje(p) {
@@ -76,14 +92,14 @@ function _renderRowPersonaje(p) {
 
     let actionBtn = '';
     if (stState.filtroActual === 'sueltos') {
-        actionBtn = `<button class="btn btn-outline" style="padding: 6px 10px; font-size: 0.75em; border-color:var(--green); color:var(--green);" onclick="window._stAsignar('${p.id}')">➕ Asignar</button>`;
+        actionBtn = `<button class="btn btn-outline" style="padding: 6px 10px; font-size: 0.75em; border-color:var(--green); color:var(--green);" onclick="window._stAsignar('${p.id}', event)">➕ Asignar</button>`;
     } else {
         const refInfo = stState.personajesRefinados.find(r => r.id === p.refinado_id);
         const refName = refInfo ? refInfo.nombre_refinado : 'Grupo';
         actionBtn = `
             <div style="text-align:right;">
                 <div style="font-size:0.65em; color:var(--gray-500); margin-bottom:4px;">En: ${refName}</div>
-                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.7em; border-color:var(--red); color:var(--red);" onclick="window._stDesvincular('${p.id}')">✖ Desvincular</button>
+                <button class="btn btn-outline" style="padding: 4px 8px; font-size: 0.7em; border-color:var(--red); color:var(--red);" onclick="window._stDesvincular('${p.id}', event)">✖ Desvincular</button>
             </div>
         `;
     }
@@ -111,7 +127,7 @@ function _renderSlot(refId, index) {
             <div style="${borderStyle} ${bgStyle} border-radius: var(--radius-lg); padding: 16px; cursor: pointer; transition: 0.2s;" onclick="window._stActivarSlot(${index})">
                 <div style="color: var(--gray-500); font-weight: 600; font-size: 0.85em; margin-bottom: 12px; text-transform: uppercase;">Slot ${index + 1} Vacío</div>
                 <input type="text" id="inp-crear-${index}" class="inp" placeholder="Nombre de nuevo grupo" style="margin-bottom: 8px; font-size:0.8em;" onclick="event.stopPropagation()">
-                <button class="btn btn-green" style="width: 100%; font-size: 0.8em; justify-content: center;" onclick="event.stopPropagation(); window._stCrearGrupo(${index})">✨ Crear y Cargar</button>
+                <button class="btn btn-green" style="width: 100%; font-size: 0.8em; justify-content: center;" onclick="event.stopPropagation(); window._stCrearGrupo(${index}, event)">✨ Crear y Cargar</button>
                 
                 <div style="margin: 12px 0; border-top: 1px solid var(--gray-300);"></div>
                 
@@ -148,7 +164,7 @@ function _renderSlot(refId, index) {
                 ${miembros.map(m => `
                     <div style="background: var(--white); border: 1px solid var(--gray-300); font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
                         <span style="color:var(--gray-900); font-weight:600;">${m.nombre}</span>
-                        <span style="color:var(--red); cursor:pointer; font-weight:bold;" onclick="event.stopPropagation(); window._stDesvincular('${m.id}')">×</span>
+                        <span style="color:var(--red); cursor:pointer; font-weight:bold;" onclick="event.stopPropagation(); window._stDesvincular('${m.id}', event)">×</span>
                     </div>
                 `).join('')}
             </div>
@@ -161,20 +177,32 @@ function _renderSlot(refId, index) {
 }
 
 function _exponerGlobalesStats() {
-    window._stFiltro = (f) => { stState.filtroActual = f; renderPanelStats(); };
-    window._stBuscar = (t) => { stState.busquedaTexto = t; renderPanelStats(); };
-    window._stHilo   = (h) => { stState.filtroHilo = h; renderPanelStats(); };
+    window._stFiltro = (f) => { 
+        stState.filtroActual = f; 
+        document.getElementById('btn-st-sueltos').className = f === 'sueltos' ? 'btn btn-green' : 'btn btn-outline';
+        document.getElementById('btn-st-agrupados').className = f === 'agrupados' ? 'btn btn-green' : 'btn btn-outline';
+        _actualizarListado(); 
+    };
+    window._stBuscar = (t) => { stState.busquedaTexto = t; _actualizarListado(); };
+    window._stHilo   = (h) => { stState.filtroHilo = h; _actualizarListado(); };
     
     window._stActivarSlot = (index) => {
         stState.slotActivoIndex = index;
-        renderPanelStats();
+        _actualizarSlots();
     };
 
-    window._stCrearGrupo = async (index) => {
+    window._stCrearGrupo = async (index, event) => {
         const inp = document.getElementById(`inp-crear-${index}`);
         if (!inp || !inp.value.trim()) return;
+        
+        const btn = event.target;
+        const btnTxt = btn.innerText;
+        btn.innerText = "⏳...";
+        btn.disabled = true;
+
         stState.slotActivoIndex = index;
         await crearGrupoRefinado(inp.value.trim(), index);
+        _actualizarSlots();
     };
 
     window._stCargarGrupo = async (index) => {
@@ -182,20 +210,37 @@ function _exponerGlobalesStats() {
         if (!sel || !sel.value) return;
         stState.slotActivoIndex = index;
         await cargarGrupoEnSlot(sel.value, index);
+        _actualizarSlots();
     };
 
     window._stVaciarSlot = async (index) => {
         await vaciarSlot(index);
+        _actualizarSlots();
     };
 
-    window._stAsignar = async (personajeId) => {
+    window._stAsignar = async (personajeId, event) => {
+        const btn = event.target;
+        const btnTxt = btn.innerText;
+        btn.innerText = "⏳...";
+        btn.disabled = true;
+
         const res = await asignarPersonajeASlotActivo(personajeId);
-        if (!res.ok) alert(res.msg); 
-        else renderPanelStats();
+        if (!res.ok) {
+            alert(res.msg);
+            btn.innerText = btnTxt;
+            btn.disabled = false;
+        } else {
+            _actualizarListado();
+            _actualizarSlots();
+        }
     };
 
-    window._stDesvincular = async (personajeId) => {
+    window._stDesvincular = async (personajeId, event) => {
+        const btn = event.target;
+        btn.innerText = "⏳...";
+        btn.disabled = true;
         await desvincularPersonaje(personajeId);
-        renderPanelStats();
+        _actualizarListado();
+        _actualizarSlots();
     };
 }
