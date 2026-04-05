@@ -4,20 +4,19 @@
 
 import { stState } from './panel-stats-state.js';
 import { norm, STORAGE_URL } from '../dev-state.js';
-import { cargarGrupoEnSlot, crearGrupoRefinado, vaciarSlot, asignarPersonajeASlotActivo, desvincularPersonaje } from './panel-stats-logic.js';
+import { crearGrupoRefinado, eliminarGrupoRefinado, asignarPersonajeAGrupoActivo, desvincularPersonaje } from './panel-stats-logic.js';
 
 export function renderPanelStats() {
     const contenedor = document.getElementById('content-stats');
     if (!contenedor) return;
 
-    // Solo construimos el esqueleto la primera vez, así no se pierde el foco al escribir
     if (!document.getElementById('stats-layout')) {
         _buildSkeleton(contenedor);
         _exponerGlobalesStats();
     }
 
     _actualizarListado();
-    _actualizarSlots();
+    _actualizarGrupos();
 }
 
 function _buildSkeleton(contenedor) {
@@ -47,9 +46,16 @@ function _buildSkeleton(contenedor) {
                     </div>
             </div>
 
-            <div>
-                <h3 style="color: var(--green-dark); font-family: 'Cinzel', serif; font-size: 1.4em; margin-bottom: 16px;">Mesa de Agrupación</h3>
-                <div id="stats-slots-container" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;">
+            <div style="display: flex; flex-direction: column; height: 75vh;">
+                
+                <div style="margin-bottom: 16px; background: var(--white); padding: 16px; border-radius: var(--radius-lg); border: 1.5px solid var(--gray-200); display: flex; gap: 10px; box-shadow: var(--shadow-sm);">
+                    <input type="text" id="inp-nuevo-grupo" class="inp" placeholder="Escribe el nombre para crear un nuevo grupo..." style="flex: 1;">
+                    <button class="btn btn-green" onclick="window._stCrearGrupo(event)">✨ Crear Grupo</button>
+                </div>
+
+                <h3 style="color: var(--green-dark); font-family: 'Cinzel', serif; font-size: 1.2em; margin-bottom: 12px;">Todos los Grupos (${stState.personajesRefinados.length})</h3>
+                
+                <div id="stats-groups-container" style="flex: 1; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; align-content: start; padding-bottom: 20px; padding-right: 8px;">
                     </div>
             </div>
         </div>
@@ -78,10 +84,15 @@ function _actualizarListado() {
         : filtrados.map(p => _renderRowPersonaje(p)).join('');
 }
 
-function _actualizarSlots() {
-    const slotsContainer = document.getElementById('stats-slots-container');
-    if (!slotsContainer) return;
-    slotsContainer.innerHTML = stState.slots.map((refId, i) => _renderSlot(refId, i)).join('');
+function _actualizarGrupos() {
+    const container = document.getElementById('stats-groups-container');
+    if (!container) return;
+    
+    const gruposOrdenados = [...stState.personajesRefinados].sort((a,b) => a.nombre_refinado.localeCompare(b.nombre_refinado));
+    
+    container.innerHTML = gruposOrdenados.length === 0 
+        ? `<div class="empty-state" style="grid-column: 1 / -1;">No hay grupos creados. Crea uno arriba.</div>` 
+        : gruposOrdenados.map(g => _renderGrupo(g)).join('');
 }
 
 function _renderRowPersonaje(p) {
@@ -117,61 +128,60 @@ function _renderRowPersonaje(p) {
     `;
 }
 
-function _renderSlot(refId, index) {
-    const isActivo = stState.slotActivoIndex === index;
-    const borderStyle = isActivo ? 'border: 3px solid var(--green); box-shadow: 0 0 0 4px var(--green-pale);' : 'border: 2px dashed var(--gray-300);';
-    const bgStyle = isActivo ? 'background: var(--white);' : 'background: var(--gray-100); opacity: 0.8;';
+function _renderGrupo(grupo) {
+    const isActivo = stState.grupoActivoId === grupo.id;
+    const borderStyle = isActivo ? 'border: 3px solid var(--green); box-shadow: 0 0 0 4px var(--green-pale);' : 'border: 1.5px solid var(--gray-300);';
+    
+    const miembros = stState.personajesRaw.filter(p => p.refinado_id === grupo.id);
+    let totalPts = grupo.puntos_manual || 0;
+    miembros.forEach(m => totalPts += (stState.puntosPorPersonaje[m.nombre] || 0));
 
-    if (!refId) {
-        return `
-            <div style="${borderStyle} ${bgStyle} border-radius: var(--radius-lg); padding: 16px; cursor: pointer; transition: 0.2s;" onclick="window._stActivarSlot(${index})">
-                <div style="color: var(--gray-500); font-weight: 600; font-size: 0.85em; margin-bottom: 12px; text-transform: uppercase;">Slot ${index + 1} Vacío</div>
-                <input type="text" id="inp-crear-${index}" class="inp" placeholder="Nombre de nuevo grupo" style="margin-bottom: 8px; font-size:0.8em;" onclick="event.stopPropagation()">
-                <button class="btn btn-green" style="width: 100%; font-size: 0.8em; justify-content: center;" onclick="event.stopPropagation(); window._stCrearGrupo(${index}, event)">✨ Crear y Cargar</button>
-                
-                <div style="margin: 12px 0; border-top: 1px solid var(--gray-300);"></div>
-                
-                <select id="sel-cargar-${index}" class="inp" style="margin-bottom: 8px; font-size:0.8em;" onclick="event.stopPropagation()">
-                    <option value="">Cargar grupo existente...</option>
-                    ${stState.personajesRefinados.sort((a,b)=>a.nombre_refinado.localeCompare(b.nombre_refinado)).map(r => `<option value="${r.id}">${r.nombre_refinado} (${r.id.split('-')[0]})</option>`).join('')}
-                </select>
-                <button class="btn btn-outline" style="width: 100%; font-size: 0.8em; justify-content: center;" onclick="event.stopPropagation(); window._stCargarGrupo(${index})">📂 Cargar al Slot</button>
+    let slotsHtml = '';
+    // Exactamente 6 espacios (Slots) visuales
+    for(let i=0; i<6; i++) {
+        if (i < miembros.length) {
+            const m = miembros[i];
+            slotsHtml += `
+                <div style="background: var(--white); border: 1px solid var(--gray-300); font-size: 0.75em; padding: 4px 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color:var(--gray-900); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${m.nombre}">${m.nombre}</span>
+                    <span style="color:var(--red); cursor:pointer; font-weight:bold; padding-left:8px;" onclick="event.stopPropagation(); window._stDesvincular('${m.id}', event)">×</span>
+                </div>
+            `;
+        } else {
+            slotsHtml += `
+                <div style="background: var(--gray-100); border: 1px dashed var(--gray-300); font-size: 0.7em; padding: 4px 8px; border-radius: 4px; color: var(--gray-400); display: flex; align-items: center; justify-content: center; height: 26px;">
+                    Slot ${i+1} vacío
+                </div>
+            `;
+        }
+    }
+
+    let deleteBtn = '';
+    if (miembros.length === 0) {
+        deleteBtn = `
+            <div style="margin-top: 10px; border-top: 1px solid var(--gray-200); padding-top: 10px;">
+                <button class="btn btn-outline" style="padding: 4px 6px; font-size: 0.7em; border-color:var(--red); color:var(--red); width:100%; justify-content:center;" onclick="event.stopPropagation(); window._stEliminarGrupo('${grupo.id}', event)">🗑️ Eliminar Grupo Vacío</button>
             </div>
         `;
     }
 
-    const refInfo = stState.personajesRefinados.find(r => r.id === refId);
-    if (!refInfo) return `<div style="${borderStyle} ${bgStyle} padding:16px;">Error de ID</div>`;
-
-    const miembros = stState.personajesRaw.filter(p => p.refinado_id === refId);
-    let totalPts = refInfo.puntos_manual || 0;
-    miembros.forEach(m => totalPts += (stState.puntosPorPersonaje[m.nombre] || 0));
-
     return `
-        <div style="${borderStyle} background: var(--white); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; cursor: pointer; transition: 0.2s;" onclick="window._stActivarSlot(${index})">
+        <div style="${borderStyle} background: var(--gray-50); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; cursor: pointer; transition: 0.2s;" onclick="window._stActivarGrupo('${grupo.id}')">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div>
-                    <div style="font-weight: 700; font-size: 1.1em; color: var(--green-dark);">${refInfo.nombre_refinado}</div>
-                    <div style="font-family: monospace; font-size: 0.7em; color: var(--gray-500);">ID: ${refInfo.id.split('-')[0]}</div>
+                <div style="overflow: hidden; padding-right: 10px;">
+                    <div style="font-weight: 700; font-size: 1.1em; color: var(--green-dark); white-space: nowrap; text-overflow: ellipsis; overflow: hidden;" title="${grupo.nombre_refinado}">${grupo.nombre_refinado}</div>
+                    <div style="font-family: monospace; font-size: 0.7em; color: var(--gray-500);">ID: ${grupo.id.split('-')[0]}</div>
                 </div>
-                <div style="background: var(--green-pale); color: var(--green-dark); font-weight: 800; font-size: 0.9em; padding: 4px 8px; border-radius: 6px;">
+                <div style="background: var(--green-pale); color: var(--green-dark); font-weight: 800; font-size: 0.9em; padding: 4px 8px; border-radius: 6px; flex-shrink: 0;">
                     ${totalPts} Pts
                 </div>
             </div>
             
-            <div style="flex: 1; background: var(--gray-100); border: 1px solid var(--gray-200); border-radius: 6px; padding: 8px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; min-height: 80px;">
-                ${miembros.length === 0 ? `<span style="font-size:0.75em; color:var(--gray-500); font-style:italic;">Sin miembros asignados.</span>` : ''}
-                ${miembros.map(m => `
-                    <div style="background: var(--white); border: 1px solid var(--gray-300); font-size: 0.7em; padding: 2px 6px; border-radius: 4px; display: flex; align-items: center; gap: 6px;">
-                        <span style="color:var(--gray-900); font-weight:600;">${m.nombre}</span>
-                        <span style="color:var(--red); cursor:pointer; font-weight:bold;" onclick="event.stopPropagation(); window._stDesvincular('${m.id}', event)">×</span>
-                    </div>
-                `).join('')}
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+                ${slotsHtml}
             </div>
 
-            <button class="btn btn-outline" style="width: 100%; font-size: 0.75em; justify-content: center; color: var(--gray-500);" onclick="event.stopPropagation(); window._stVaciarSlot(${index})">
-                🧹 Retirar del Slot
-            </button>
+            ${deleteBtn}
         </div>
     `;
 }
@@ -186,13 +196,13 @@ function _exponerGlobalesStats() {
     window._stBuscar = (t) => { stState.busquedaTexto = t; _actualizarListado(); };
     window._stHilo   = (h) => { stState.filtroHilo = h; _actualizarListado(); };
     
-    window._stActivarSlot = (index) => {
-        stState.slotActivoIndex = index;
-        _actualizarSlots();
+    window._stActivarGrupo = (grupoId) => {
+        stState.grupoActivoId = grupoId;
+        _actualizarGrupos();
     };
 
-    window._stCrearGrupo = async (index, event) => {
-        const inp = document.getElementById(`inp-crear-${index}`);
+    window._stCrearGrupo = async (event) => {
+        const inp = document.getElementById(`inp-nuevo-grupo`);
         if (!inp || !inp.value.trim()) return;
         
         const btn = event.target;
@@ -200,22 +210,25 @@ function _exponerGlobalesStats() {
         btn.innerText = "⏳...";
         btn.disabled = true;
 
-        stState.slotActivoIndex = index;
-        await crearGrupoRefinado(inp.value.trim(), index);
-        _actualizarSlots();
+        const res = await crearGrupoRefinado(inp.value.trim());
+        if (!res.ok) alert("Error al crear: " + res.msg);
+        
+        inp.value = '';
+        btn.innerText = btnTxt;
+        btn.disabled = false;
+        
+        _actualizarListado();
+        _actualizarGrupos();
     };
 
-    window._stCargarGrupo = async (index) => {
-        const sel = document.getElementById(`sel-cargar-${index}`);
-        if (!sel || !sel.value) return;
-        stState.slotActivoIndex = index;
-        await cargarGrupoEnSlot(sel.value, index);
-        _actualizarSlots();
-    };
-
-    window._stVaciarSlot = async (index) => {
-        await vaciarSlot(index);
-        _actualizarSlots();
+    window._stEliminarGrupo = async (grupoId, event) => {
+        if (!confirm("¿Seguro que quieres eliminar este grupo?")) return;
+        const btn = event.target;
+        btn.innerText = "⏳...";
+        btn.disabled = true;
+        await eliminarGrupoRefinado(grupoId);
+        _actualizarListado();
+        _actualizarGrupos();
     };
 
     window._stAsignar = async (personajeId, event) => {
@@ -224,14 +237,14 @@ function _exponerGlobalesStats() {
         btn.innerText = "⏳...";
         btn.disabled = true;
 
-        const res = await asignarPersonajeASlotActivo(personajeId);
+        const res = await asignarPersonajeAGrupoActivo(personajeId);
         if (!res.ok) {
             alert(res.msg);
             btn.innerText = btnTxt;
             btn.disabled = false;
         } else {
             _actualizarListado();
-            _actualizarSlots();
+            _actualizarGrupos();
         }
     };
 
@@ -241,6 +254,6 @@ function _exponerGlobalesStats() {
         btn.disabled = true;
         await desvincularPersonaje(personajeId);
         _actualizarListado();
-        _actualizarSlots();
+        _actualizarGrupos();
     };
 }
