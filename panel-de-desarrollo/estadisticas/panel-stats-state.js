@@ -12,6 +12,6 @@ export const stState = {
     busquedaTexto: '',
     filtroHilo: 'todos',
 
-    slots: [null, null, null, null, null, null], 
-    slotActivoIndex: 0 
+    // ID del grupo al que se le están asignando los personajes
+    grupoActivoId: null 
 };
