@@ -2,7 +2,7 @@
 // panel-pagina-logic.js — Lógica de carga y guardado de config_ui
 // ============================================================
 
-import { supabase } from '../../bnh-auth.js';
+import { supabase } from '../bnh-auth.js';
 import { paginaState } from './panel-pagina-state.js';
 
 export async function cargarConfigUI() {
