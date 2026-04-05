@@ -4,7 +4,6 @@
 
 import { stState } from './panel-stats-state.js';
 import { supabase } from '../../bnh-auth.js';
-import { renderPanelStats } from './panel-stats-ui.js';
 
 export async function initStatsDev() {
     await cargarAgrupaciones();
@@ -37,7 +36,8 @@ export async function cargarAgrupaciones() {
         if (pts) {
             pts.forEach(p => {
                 const nombre = p.nombre || p.personaje_nombre;
-                const total = p.total || p.puntos_totales || p.puntos_manual || 0;
+                // 🌟 CORRECCIÓN: Toma el valor de la columna puntos_total de tu base de datos
+                const total = p.puntos_total || p.puntos_manual || 0;
                 stState.puntosPorPersonaje[nombre] = Number(total);
             });
         }
@@ -54,25 +54,24 @@ export async function crearGrupoRefinado(nombre, slotIndex) {
     if (data && !error) {
         stState.slots[slotIndex] = data.id;
         await cargarAgrupaciones();
-        renderPanelStats();
     }
 }
 
 export async function cargarGrupoEnSlot(refinadoId, slotIndex) {
     stState.slots[slotIndex] = refinadoId;
-    renderPanelStats();
 }
 
 export async function vaciarSlot(slotIndex) {
     stState.slots[slotIndex] = null;
-    renderPanelStats();
 }
 
 export async function asignarPersonajeASlotActivo(personajeId) {
     const refId = stState.slots[stState.slotActivoIndex];
-    if (!refId) return { ok: false, msg: "Selecciona o crea un grupo en el slot activo primero." };
+    if (!refId) return { ok: false, msg: "Selecciona o crea un grupo en el slot activo (el del borde verde) primero." };
 
-    await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);
+    const { error } = await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);
+    if (error) return { ok: false, msg: "Error al guardar en base de datos: " + error.message };
+
     await cargarAgrupaciones();
     return { ok: true };
 }
