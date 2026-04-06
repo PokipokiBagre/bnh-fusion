@@ -11,109 +11,36 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
-// ── Utilidad: intentar parsear texto como JSON de 8chan ───────
-function tryParseJSON(texto) {
-    if (!texto || texto.trimStart().startsWith('<')) return null;
-    try {
-        const json = JSON.parse(texto);
-        return (json && json.posts && json.posts.length > 0) ? json : null;
-    } catch { return null; }
-}
-
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-// ── Capa 1: fetch directo (si el browser ya tiene cookie de bypass) ──
-async function fetchDirecto(jsonUrl) {
-    try {
-        const r = await fetch(jsonUrl, {
-            signal: AbortSignal.timeout(8000),
-            credentials: 'include',
-            headers: { 'Accept': 'application/json, text/plain, */*' }
-        });
-        if (!r.ok) return null;
-        return tryParseJSON(await r.text());
-    } catch { return null; }
-}
-
-// ── Capa 2: Proxies públicos en paralelo ──────────────────────
-async function fetchViaProxies(jsonUrl) {
-    const encoded = encodeURIComponent(jsonUrl);
-    const proxies = [
-        { url: `https://corsproxy.io/?${encoded}`,              nombre: 'corsproxy.io' },
-        { url: `https://api.allorigins.win/raw?url=${encoded}`,  nombre: 'allorigins/raw' },
-        { url: `https://api.allorigins.win/get?url=${encoded}`,  nombre: 'allorigins/get', esWrapper: true },
-    ];
-    const results = await Promise.allSettled(proxies.map(async proxy => {
-        const r = await fetch(proxy.url, { signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json, */*' } });
-        if (!r.ok) return null;
-        let texto = await r.text();
-        if (proxy.esWrapper) { try { texto = JSON.parse(texto).contents || ''; } catch { return null; } }
-        return tryParseJSON(texto);
-    }));
-    for (const r of results) if (r.status === 'fulfilled' && r.value) return r.value;
-    return null;
-}
-
-// ── Capa 3: Iframe resuelve PoW → reintenta Fetch Directo ────
-async function fetchViaIframePow(board, threadId, jsonUrl) {
-    const hiloHtml = `https://8chan.moe/${board}/res/${threadId}.html`;
-
-    return new Promise(resolve => {
-        let resuelto = false;
-        const TIMEOUT_TOTAL = 35000;
-        let pollInterval;
-
-        function cleanup() {
-            clearInterval(pollInterval);
-            if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
-        }
-
-        const timeout = setTimeout(() => { cleanup(); resolve(null); }, TIMEOUT_TOTAL);
-
-        async function intentarFetch(label) {
-            if (resuelto) return;
-            console.log(`[8chan-fetch] ${label}`);
-
-            // Solo usamos fetch directo aquí. Si el Iframe ya limpió la IP, esto funcionará.
-            const directo = await fetchDirecto(jsonUrl);
-            if (directo && !resuelto) {
-                resuelto = true; clearTimeout(timeout); cleanup(); resolve(directo); return;
-            }
-            
-            // Si el directo falla por CORS, intentamos proxy público como respaldo
-            if (!resuelto) {
-                const proxy = await fetchViaProxies(jsonUrl);
-                if (proxy && !resuelto) {
-                    resuelto = true; clearTimeout(timeout); cleanup(); resolve(proxy); return;
+// ── Utilidad: Función puente que habla con Tampermonkey ──────
+async function fetchViaTampermonkey(jsonUrl) {
+    return new Promise((resolve) => {
+        // Función que escuchará la respuesta
+        const listener = function(e) {
+            if (e.detail.url === jsonUrl) {
+                window.removeEventListener('RespuestaFetch8chan', listener);
+                
+                if (e.detail.htmlStatus) {
+                    console.warn('[8chan-fetch] Tampermonkey recibió HTML (PoW activo). Debes visitar 8chan.moe en otra pestaña para resolverlo.');
+                    resolve(null);
+                } else {
+                    resolve(e.detail.data); // Retorna el JSON si tuvo éxito
                 }
-            }
-        }
-
-        const iframe = document.createElement('iframe');
-        iframe.style.cssText = 'display:none;width:1px;height:1px;position:fixed;top:-9999px;left:-9999px';
-        iframe.src = hiloHtml;
-
-        let loadCount = 0;
-        iframe.onload = async () => {
-            loadCount++;
-            if (loadCount === 1) {
-                console.log('[8chan-fetch] Iframe cargó (carga #1). Esperando resolución PoW...');
-                await sleep(2000); // Darle tiempo extra al script de 8chan para minar el PoW
-                await intentarFetch('Intento tras carga #1');
-            } else {
-                console.log(`[8chan-fetch] Iframe cargó (carga #${loadCount}). PoW completado y redirigido.`);
-                await sleep(1500); // Esperar que la cookie se asiente en el navegador
-                await intentarFetch(`Intento tras carga #${loadCount}`);
             }
         };
 
-        document.body.appendChild(iframe);
+        // Ponemos a escuchar a tu web
+        window.addEventListener('RespuestaFetch8chan', listener);
 
-        // Aumentamos el intervalo a 5s para no causar error 429 (Too Many Submissions)
-        pollInterval = setInterval(async () => {
-            if (resuelto) { clearInterval(pollInterval); return; }
-            await intentarFetch('Poll periódico');
-        }, 5000);
+        // Desparamos el evento para que Tampermonkey haga la petición
+        window.dispatchEvent(new CustomEvent('PeticionFetch8chan', { 
+            detail: { url: jsonUrl } 
+        }));
+
+        // Timeout de seguridad de 10 segundos por si Tampermonkey no responde
+        setTimeout(() => {
+            window.removeEventListener('RespuestaFetch8chan', listener);
+            resolve(null);
+        }, 10000);
     });
 }
 
@@ -122,22 +49,16 @@ export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     console.log(`[8chan-fetch] Iniciando: ${jsonUrl}`);
 
-    // Capa 1: fetch directo
-    console.log('[8chan-fetch] Capa 1: Fetch directo...');
-    const directo = await fetchDirecto(jsonUrl);
-    if (directo) { console.log('[8chan-fetch] ✅ Directo'); return directo; }
+    // Intentamos usar el puente de Tampermonkey
+    console.log('[8chan-fetch] Intentando vía Tampermonkey...');
+    const tmData = await fetchViaTampermonkey(jsonUrl);
+    
+    if (tmData && tmData.posts) {
+        console.log('[8chan-fetch] ✅ Éxito vía Tampermonkey');
+        return tmData;
+    }
 
-    // Capa 2: Proxies públicos
-    console.log('[8chan-fetch] Capa 2: Proxies...');
-    const proxy = await fetchViaProxies(jsonUrl);
-    if (proxy) { console.log('[8chan-fetch] ✅ Proxy'); return proxy; }
-
-    // Capa 3: Iframe PoW + reintento
-    console.log('[8chan-fetch] Capa 3: Iframe PoW + reintento (~15-30s)...');
-    const powResult = await fetchViaIframePow(board, threadId, jsonUrl);
-    if (powResult) { console.log('[8chan-fetch] ✅ Iframe PoW'); return powResult; }
-
-    console.warn('[8chan-fetch] ❌ Todos los métodos fallaron.');
+    console.warn('[8chan-fetch] ❌ Falló. Si tienes el PoW activo, abre 8chan.moe en una pestaña para que el navegador lo resuelva, y luego vuelve a intentar.');
     return null;
 }
 
