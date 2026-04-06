@@ -35,22 +35,7 @@ async function fetchDirecto(jsonUrl) {
     } catch { return null; }
 }
 
-// ── Capa 2: Cloudflare Worker proxy ──────────────────────────
-async function fetchViaCloudflare(jsonUrl) {
-    try {
-        const url = `${CF_WORKER_URL}?url=${encodeURIComponent(jsonUrl)}`;
-        const r = await fetch(url, {
-            signal: AbortSignal.timeout(12000),
-            headers: { 'Accept': 'application/json' }
-        });
-        const data = await r.json();
-        if (data?.error) return null;
-        if (data?.posts?.length > 0) return data;
-        return null;
-    } catch { return null; }
-}
-
-// ── Capa 3: Proxies públicos en paralelo ──────────────────────
+// ── Capa 2: Proxies públicos en paralelo ──────────────────────
 async function fetchViaProxies(jsonUrl) {
     const encoded = encodeURIComponent(jsonUrl);
     const proxies = [
@@ -69,7 +54,7 @@ async function fetchViaProxies(jsonUrl) {
     return null;
 }
 
-// ── Capa 4: Iframe resuelve PoW → reintenta Cloudflare ───────
+// ── Capa 3: Iframe resuelve PoW → reintenta Fetch Directo ────
 async function fetchViaIframePow(board, threadId, jsonUrl) {
     const hiloHtml = `https://8chan.moe/${board}/res/${threadId}.html`;
 
@@ -89,17 +74,17 @@ async function fetchViaIframePow(board, threadId, jsonUrl) {
             if (resuelto) return;
             console.log(`[8chan-fetch] ${label}`);
 
-            // Primero directo (si la IP del browser quedó autorizada)
+            // Solo usamos fetch directo aquí. Si el Iframe ya limpió la IP, esto funcionará.
             const directo = await fetchDirecto(jsonUrl);
             if (directo && !resuelto) {
                 resuelto = true; clearTimeout(timeout); cleanup(); resolve(directo); return;
             }
-
-            // Luego via Cloudflare Worker
+            
+            // Si el directo falla por CORS, intentamos proxy público como respaldo
             if (!resuelto) {
-                const cf = await fetchViaCloudflare(jsonUrl);
-                if (cf && !resuelto) {
-                    resuelto = true; clearTimeout(timeout); cleanup(); resolve(cf); return;
+                const proxy = await fetchViaProxies(jsonUrl);
+                if (proxy && !resuelto) {
+                    resuelto = true; clearTimeout(timeout); cleanup(); resolve(proxy); return;
                 }
             }
         }
@@ -113,21 +98,22 @@ async function fetchViaIframePow(board, threadId, jsonUrl) {
             loadCount++;
             if (loadCount === 1) {
                 console.log('[8chan-fetch] Iframe cargó (carga #1). Esperando resolución PoW...');
-                await sleep(1500);
+                await sleep(2000); // Darle tiempo extra al script de 8chan para minar el PoW
                 await intentarFetch('Intento tras carga #1');
             } else {
-                console.log(`[8chan-fetch] Iframe cargó (carga #${loadCount}). PoW completado.`);
-                await sleep(800);
+                console.log(`[8chan-fetch] Iframe cargó (carga #${loadCount}). PoW completado y redirigido.`);
+                await sleep(1500); // Esperar que la cookie se asiente en el navegador
                 await intentarFetch(`Intento tras carga #${loadCount}`);
             }
         };
 
         document.body.appendChild(iframe);
 
+        // Aumentamos el intervalo a 5s para no causar error 429 (Too Many Submissions)
         pollInterval = setInterval(async () => {
             if (resuelto) { clearInterval(pollInterval); return; }
             await intentarFetch('Poll periódico');
-        }, 4000);
+        }, 5000);
     });
 }
 
@@ -136,21 +122,18 @@ export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     console.log(`[8chan-fetch] Iniciando: ${jsonUrl}`);
 
-    // Capa 1: fetch directo (Si el usuario ya tiene la cookie nativa)
+    // Capa 1: fetch directo
     console.log('[8chan-fetch] Capa 1: Fetch directo...');
     const directo = await fetchDirecto(jsonUrl);
     if (directo) { console.log('[8chan-fetch] ✅ Directo'); return directo; }
 
-    // ❌ CAPA 2 (Worker) ELIMINADA: La IP del datacenter está bloqueada por 8chan.
-
-    // Capa 3: Proxies públicos (Corsproxy, etc.) - Probablemente también fallen por la misma razón, pero son rápidos de intentar.
-    console.log('[8chan-fetch] Capa 3: Proxies...');
+    // Capa 2: Proxies públicos
+    console.log('[8chan-fetch] Capa 2: Proxies...');
     const proxy = await fetchViaProxies(jsonUrl);
     if (proxy) { console.log('[8chan-fetch] ✅ Proxy'); return proxy; }
 
-    // Capa 4: Iframe PoW (LA SOLUCIÓN REAL)
-    // Esto usa la IP residencial del usuario, que 8chan SÍ aceptará.
-    console.log('[8chan-fetch] Capa 4: Iframe PoW + reintento (~15-30s)...');
+    // Capa 3: Iframe PoW + reintento
+    console.log('[8chan-fetch] Capa 3: Iframe PoW + reintento (~15-30s)...');
     const powResult = await fetchViaIframePow(board, threadId, jsonUrl);
     if (powResult) { console.log('[8chan-fetch] ✅ Iframe PoW'); return powResult; }
 
