@@ -11,6 +11,9 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
+// ── CAMBIA ESTA URL POR LA DE TU WORKER ──────────────────────
+const CF_WORKER_URL = 'https://proxy-8chan.exterrenator240.workers.dev/';
+
 // ── Utilidad: intentar parsear texto como JSON de 8chan ───────
 function tryParseJSON(texto) {
     if (!texto || texto.trimStart().startsWith('<')) return null;
@@ -26,7 +29,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function fetchDirecto(jsonUrl) {
     try {
         const r = await fetch(jsonUrl, {
-            signal: AbortSignal.timeout(10000),
+            signal: AbortSignal.timeout(8000),
             credentials: 'include',
             headers: { 'Accept': 'application/json, text/plain, */*' }
         });
@@ -35,109 +38,22 @@ async function fetchDirecto(jsonUrl) {
     } catch { return null; }
 }
 
-// ── Capa 2: Edge Function como relay con cookies del browser ──
-// Flujo: iframe resuelve el PoW → browser obtiene cookie → 
-//        fetch directo funciona → si no, Edge Function con cookies
-async function fetchViaEdgeConCookies(board, threadId, jsonUrl) {
+// ── Capa 2: Cloudflare Worker proxy ──────────────────────────
+async function fetchViaCloudflare(jsonUrl) {
     try {
-        // Leer cookies del dominio 8chan que el browser tiene
-        // (solo funciona si el iframe ya las seteó via document.cookie cross-site)
-        // En la práctica, las cookies de 8chan.moe no son accesibles desde
-        // pokipokibagre.github.io (SameSite), pero el fetch con credentials:include
-        // las envía automáticamente — así que primero intentamos fetchDirecto.
-        // La Edge Function como relay es útil si el browser tiene las cookies
-        // pero hay CORS bloqueado en el fetch directo.
-        const { data, error } = await supabase.functions.invoke('fetch-8chan', {
-            body: { board, threadId, cookies: '' }
+        const url = `${CF_WORKER_URL}?url=${encodeURIComponent(jsonUrl)}`;
+        const r = await fetch(url, {
+            signal: AbortSignal.timeout(12000),
+            headers: { 'Accept': 'application/json' }
         });
-        if (error) return null;
+        const data = await r.json();
+        if (data?.error) return null;
         if (data?.posts?.length > 0) return data;
-        if (data?.error === 'pow_required') return null; // necesita PoW primero
         return null;
     } catch { return null; }
 }
 
-// ── Capa 3: Iframe resuelve el PoW → browser autorizado → fetch ──
-// POWBlock autoriza la IP del browser, no cookies.
-// El iframe carga el .html, corre el JS de PoW, y cuando termina
-// el browser queda autorizado. Luego hacemos fetch del .json.
-// Para maximizar probabilidad, hacemos fetch tanto directo como via Edge.
-async function fetchViaIframePow(board, threadId, jsonUrl) {
-    const hiloHtml = `https://8chan.moe/${board}/res/${threadId}.html`;
-
-    return new Promise(resolve => {
-        let resuelto = false;
-        const TIMEOUT_TOTAL = 30000; // 30s máximo
-        const timeout = setTimeout(() => { cleanup(); resolve(null); }, TIMEOUT_TOTAL);
-
-        function cleanup() {
-            if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
-        }
-
-        async function intentarFetch(label) {
-            if (resuelto) return;
-            console.log(`[8chan-fetch] ${label}`);
-
-            // Intento A: fetch directo (browser autorizado por IP tras PoW)
-            const directo = await fetchDirecto(jsonUrl);
-            if (directo && !resuelto) {
-                resuelto = true; clearTimeout(timeout); cleanup(); resolve(directo); return;
-            }
-
-            // Intento B: Edge Function relay (para salvar el CORS)
-            if (!resuelto) {
-                try {
-                    const { data } = await supabase.functions.invoke('fetch-8chan', {
-                        body: { board, threadId, cookies: '' }
-                    });
-                    if (data?.posts?.length > 0 && !resuelto) {
-                        resuelto = true; clearTimeout(timeout); cleanup(); resolve(data); return;
-                    }
-                } catch { /* ignorar */ }
-            }
-        }
-
-        const iframe = document.createElement('iframe');
-        iframe.style.cssText = 'display:none;width:1px;height:1px;position:fixed;top:-9999px;left:-9999px';
-        iframe.src = hiloHtml;
-
-        // Cuando el iframe carga la primera vez (página HTML del hilo o PoW page)
-        let loadCount = 0;
-        iframe.onload = async () => {
-            loadCount++;
-            if (loadCount === 1) {
-                // Primera carga: puede ser la página de PoW o el hilo directamente
-                console.log('[8chan-fetch] Iframe cargó (carga #1). Esperando resolución PoW...');
-                // El PoW JS corre y luego redirige. Esperamos a la segunda carga.
-                // Si ya está autorizado, el iframe carga directo el hilo.
-                await sleep(1500);
-                await intentarFetch('Intento tras carga #1');
-            } else {
-                // Segunda carga: el iframe completó el redirect post-PoW
-                console.log(`[8chan-fetch] Iframe cargó (carga #${loadCount}). PoW completado.`);
-                await sleep(800);
-                await intentarFetch(`Intento tras carga #${loadCount}`);
-            }
-        };
-
-        document.body.appendChild(iframe);
-
-        // Polling de respaldo: intentar cada 4s aunque no haya onload
-        const pollInterval = setInterval(async () => {
-            if (resuelto) { clearInterval(pollInterval); return; }
-            await intentarFetch('Poll periódico');
-        }, 4000);
-
-        // Limpiar interval cuando se resuelva o timeout
-        const origCleanup = cleanup;
-        function cleanup() {
-            clearInterval(pollInterval);
-            if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
-        }
-    });
-}
-
-// ── Capa 4: Proxies en paralelo (último recurso) ──────────────
+// ── Capa 3: Proxies públicos en paralelo ──────────────────────
 async function fetchViaProxies(jsonUrl) {
     const encoded = encodeURIComponent(jsonUrl);
     const proxies = [
@@ -156,28 +72,89 @@ async function fetchViaProxies(jsonUrl) {
     return null;
 }
 
+// ── Capa 4: Iframe resuelve PoW → reintenta Cloudflare ───────
+async function fetchViaIframePow(board, threadId, jsonUrl) {
+    const hiloHtml = `https://8chan.moe/${board}/res/${threadId}.html`;
+
+    return new Promise(resolve => {
+        let resuelto = false;
+        const TIMEOUT_TOTAL = 35000;
+        let pollInterval;
+
+        function cleanup() {
+            clearInterval(pollInterval);
+            if (iframe?.parentNode) iframe.parentNode.removeChild(iframe);
+        }
+
+        const timeout = setTimeout(() => { cleanup(); resolve(null); }, TIMEOUT_TOTAL);
+
+        async function intentarFetch(label) {
+            if (resuelto) return;
+            console.log(`[8chan-fetch] ${label}`);
+
+            // Primero directo (si la IP del browser quedó autorizada)
+            const directo = await fetchDirecto(jsonUrl);
+            if (directo && !resuelto) {
+                resuelto = true; clearTimeout(timeout); cleanup(); resolve(directo); return;
+            }
+
+            // Luego via Cloudflare Worker
+            if (!resuelto) {
+                const cf = await fetchViaCloudflare(jsonUrl);
+                if (cf && !resuelto) {
+                    resuelto = true; clearTimeout(timeout); cleanup(); resolve(cf); return;
+                }
+            }
+        }
+
+        const iframe = document.createElement('iframe');
+        iframe.style.cssText = 'display:none;width:1px;height:1px;position:fixed;top:-9999px;left:-9999px';
+        iframe.src = hiloHtml;
+
+        let loadCount = 0;
+        iframe.onload = async () => {
+            loadCount++;
+            if (loadCount === 1) {
+                console.log('[8chan-fetch] Iframe cargó (carga #1). Esperando resolución PoW...');
+                await sleep(1500);
+                await intentarFetch('Intento tras carga #1');
+            } else {
+                console.log(`[8chan-fetch] Iframe cargó (carga #${loadCount}). PoW completado.`);
+                await sleep(800);
+                await intentarFetch(`Intento tras carga #${loadCount}`);
+            }
+        };
+
+        document.body.appendChild(iframe);
+
+        pollInterval = setInterval(async () => {
+            if (resuelto) { clearInterval(pollInterval); return; }
+            await intentarFetch('Poll periódico');
+        }, 4000);
+    });
+}
+
 // ── ORQUESTADOR PRINCIPAL ─────────────────────────────────────
 export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     console.log(`[8chan-fetch] Iniciando: ${jsonUrl}`);
 
-    // Capa 1: fetch directo (si ya hay cookie de sesión activa)
+    // Capa 1: fetch directo
     console.log('[8chan-fetch] Capa 1: Fetch directo...');
     const directo = await fetchDirecto(jsonUrl);
     if (directo) { console.log('[8chan-fetch] ✅ Directo'); return directo; }
 
-    // Capa 2: Edge Function sin cookies (puede funcionar si la IP del servidor no está bloqueada ese momento)
-    console.log('[8chan-fetch] Capa 2: Edge Function...');
-    const edge = await fetchViaEdgeConCookies(board, threadId, jsonUrl);
-    if (edge) { console.log('[8chan-fetch] ✅ Edge Function'); return edge; }
+    // Capa 2: Cloudflare Worker (sin CORS, IP fresca de CF)
+    console.log('[8chan-fetch] Capa 2: Cloudflare Worker...');
+    const cf = await fetchViaCloudflare(jsonUrl);
+    if (cf) { console.log('[8chan-fetch] ✅ Cloudflare Worker'); return cf; }
 
-    // Capa 3: Proxies rápidos en paralelo
+    // Capa 3: Proxies públicos
     console.log('[8chan-fetch] Capa 3: Proxies...');
     const proxy = await fetchViaProxies(jsonUrl);
     if (proxy) { console.log('[8chan-fetch] ✅ Proxy'); return proxy; }
 
-    // Capa 4: Iframe resuelve el PoW (el browser obtiene autorización de IP)
-    //         luego reintenta fetch directo y via Edge Function
+    // Capa 4: Iframe PoW + reintento
     console.log('[8chan-fetch] Capa 4: Iframe PoW + reintento (~15-30s)...');
     const powResult = await fetchViaIframePow(board, threadId, jsonUrl);
     if (powResult) { console.log('[8chan-fetch] ✅ Iframe PoW'); return powResult; }
@@ -185,6 +162,7 @@ export async function fetchHiloJSON(board, threadId) {
     console.warn('[8chan-fetch] ❌ Todos los métodos fallaron.');
     return null;
 }
+
 // ── Cargar hilos rastreados desde Supabase ───────────────────
 export async function cargarHilos() {
     const { data, error } = await supabase
@@ -242,21 +220,18 @@ export async function cargarRankingDB(board, threadId) {
 export async function scrapearHilo(board, threadId, threadUrl, manualJson = null) {
     estadoUI.cargando = true;
 
-    // 1. Obtener JSON de 8chan (o usar el manual provisto)
     const json = manualJson ? manualJson : await fetchHiloJSON(board, threadId);
     if (!json) {
         estadoUI.cargando = false;
-        return { ok: false, error: 'Los 3 métodos automáticos fallaron (directo, proxies, iframe PoW). El PoW de 8chan bloqueó todo. Usa "📥 Pega JSON" manualmente.' };
+        return { ok: false, error: 'Todos los métodos fallaron. Usa "📥 Pega JSON" manualmente.' };
     }
 
-    // 2. Parsear posts
     const postsNuevos = parsearPostsLynxChan(json, threadId, board);
     if (!postsNuevos.length) {
         estadoUI.cargando = false;
         return { ok: false, error: 'No se encontraron posts en el JSON' };
     }
 
-    // 3. Obtener posts ya conocidos en DB para detectar nuevos
     const { data: existentes } = await supabase
         .from('historial_posts')
         .select('post_no')
@@ -274,7 +249,6 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: true, nuevos: 0 };
     }
 
-    // 4. Insertar posts nuevos en DB
     const { error: errPosts } = await supabase
         .from('historial_posts')
         .upsert(soloNuevos, { onConflict: 'board,post_no' });
@@ -284,7 +258,6 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
     }
 
-    // 5. Recalcular puntos
     const todosOrdenados = postsNuevos;
     const puntos = calcularPuntosLista(todosOrdenados, threadId, board);
     const { error: errPuntos } = await supabase
@@ -293,7 +266,6 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 
     if (errPuntos) console.warn('Error actualizando puntos:', errPuntos.message);
 
-    // 6. Recalcular ranking
     const ranking = construirRanking(puntos, threadId, board);
     const { error: errRanking } = await supabase
         .from('historial_ranking')
@@ -301,13 +273,11 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 
     if (errRanking) console.warn('Error actualizando ranking:', errRanking.message);
 
-    // 7. Actualizar metadatos del hilo
     await supabase.from('historial_hilos').update({
         ultimo_check: new Date().toISOString(),
         total_posts:  todosOrdenados.length
     }).eq('board', board).eq('thread_id', threadId);
 
-    // 8. Refrescar estado local
     await cargarPostsDB(board, threadId);
     await cargarPuntosDB(board, threadId);
     await cargarRankingDB(board, threadId);
@@ -342,7 +312,6 @@ export async function agregarHilo(url, titulo) {
 
     if (error) return { ok: false, error: error.message };
 
-    // Primer scrape
     const resultado = await scrapearHilo(board, thread_id, url);
     await cargarHilos();
 
