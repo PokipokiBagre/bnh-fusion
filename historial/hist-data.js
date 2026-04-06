@@ -11,9 +11,6 @@ import {
     construirRanking, parsearURL
 } from './hist-logic.js';
 
-// ── CAMBIA ESTA URL POR LA DE TU WORKER ──────────────────────
-const CF_WORKER_URL = 'https://proxy-8chan.exterrenator240.workers.dev/';
-
 // ── Utilidad: intentar parsear texto como JSON de 8chan ───────
 function tryParseJSON(texto) {
     if (!texto || texto.trimStart().startsWith('<')) return null;
@@ -139,22 +136,20 @@ export async function fetchHiloJSON(board, threadId) {
     const jsonUrl = `https://8chan.moe/${board}/res/${threadId}.json`;
     console.log(`[8chan-fetch] Iniciando: ${jsonUrl}`);
 
-    // Capa 1: fetch directo
+    // Capa 1: fetch directo (Si el usuario ya tiene la cookie nativa)
     console.log('[8chan-fetch] Capa 1: Fetch directo...');
     const directo = await fetchDirecto(jsonUrl);
     if (directo) { console.log('[8chan-fetch] ✅ Directo'); return directo; }
 
-    // Capa 2: Cloudflare Worker (sin CORS, IP fresca de CF)
-    console.log('[8chan-fetch] Capa 2: Cloudflare Worker...');
-    const cf = await fetchViaCloudflare(jsonUrl);
-    if (cf) { console.log('[8chan-fetch] ✅ Cloudflare Worker'); return cf; }
+    // ❌ CAPA 2 (Worker) ELIMINADA: La IP del datacenter está bloqueada por 8chan.
 
-    // Capa 3: Proxies públicos
+    // Capa 3: Proxies públicos (Corsproxy, etc.) - Probablemente también fallen por la misma razón, pero son rápidos de intentar.
     console.log('[8chan-fetch] Capa 3: Proxies...');
     const proxy = await fetchViaProxies(jsonUrl);
     if (proxy) { console.log('[8chan-fetch] ✅ Proxy'); return proxy; }
 
-    // Capa 4: Iframe PoW + reintento
+    // Capa 4: Iframe PoW (LA SOLUCIÓN REAL)
+    // Esto usa la IP residencial del usuario, que 8chan SÍ aceptará.
     console.log('[8chan-fetch] Capa 4: Iframe PoW + reintento (~15-30s)...');
     const powResult = await fetchViaIframePow(board, threadId, jsonUrl);
     if (powResult) { console.log('[8chan-fetch] ✅ Iframe PoW'); return powResult; }
