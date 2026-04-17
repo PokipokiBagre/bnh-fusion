@@ -122,7 +122,9 @@ export async function cargarPTTagDelHilo(threadId) {
     try {
         const mapaNombres = await db.historial.getMapaNombres();
         Object.entries(mapaNombres).forEach(([alias, pj]) => {
-            mapaAliasAGrupo[alias] = pj.nombre;
+            // Solo incluir aliases con grupo real (refinado_id)
+            // Los aliases sueltos NO deben aparecer en el ranking de grupos
+            if (pj.tieneGrupo) mapaAliasAGrupo[alias] = pj.nombre;
         });
     } catch (e) {
         console.warn('[PT] No se pudo construir mapaAliasAGrupo:', e);

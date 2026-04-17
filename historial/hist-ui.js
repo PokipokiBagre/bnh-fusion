@@ -71,8 +71,16 @@ export function renderRanking() {
 
     // Construir ranking de GRUPOS (agrupando aliases)
     // poster_name puede ser "LinOP, Test, Test el Personaje" → dividir por coma
-    // Cada parte se resuelve individualmente en mapaAliasAGrupo
-    const grupoData = {}; // nombre_refinado → { total_posts, aliases: [], ultimo_post }
+    // Solo las partes que existen en mapaAliasAGrupo (alias registrados con grupo real) cuentan.
+    const grupoData = {}; // nombre_refinado → { total_posts, aliasesRegistrados: Set, ultimo_post }
+
+    // Índice inverso: grupo → Set de aliases registrados que pertenecen a él
+    // (para la columna Aliases en la tabla, mostramos solo aliases registrados)
+    const aliasesPorGrupo = {};
+    Object.entries(mapaAliasAGrupo).forEach(([alias, grupo]) => {
+        if (!aliasesPorGrupo[grupo]) aliasesPorGrupo[grupo] = new Set();
+        aliasesPorGrupo[grupo].add(alias);
+    });
 
     function resolverGrupos(posterName) {
         const partes = posterName.split(',').map(s => s.trim()).filter(Boolean);
@@ -89,10 +97,8 @@ export function renderRanking() {
     rankingState.forEach(r => {
         const grupos = resolverGrupos(r.poster_name);
         grupos.forEach(grupo => {
-            if (!grupoData[grupo]) grupoData[grupo] = { total_posts: 0, aliases: [], ultimo_post: null };
+            if (!grupoData[grupo]) grupoData[grupo] = { total_posts: 0, ultimo_post: null };
             grupoData[grupo].total_posts += r.total_posts;
-            if (!grupoData[grupo].aliases.includes(r.poster_name))
-                grupoData[grupo].aliases.push(r.poster_name);
             if (!grupoData[grupo].ultimo_post || r.ultimo_post > grupoData[grupo].ultimo_post)
                 grupoData[grupo].ultimo_post = r.ultimo_post;
         });
@@ -152,7 +158,7 @@ export function renderRanking() {
                 <td class="col-nombre"><div class="poster-nombre">${r.nombre}</div></td>
                 <td class="col-puntos">${r.total_posts}</td>
                 <td style="min-width:200px">${ptHtml}</td>
-                <td class="hide-sm" style="font-size:0.78em;color:#888;">${r.aliases.join(', ')}</td>
+                <td class="hide-sm" style="font-size:0.78em;color:#888;">${[...(aliasesPorGrupo[r.nombre] || [])].join(', ')}</td>
             </tr>`;
         });
         html += `</tbody></table>`;
