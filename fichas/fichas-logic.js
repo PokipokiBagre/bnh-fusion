@@ -1,26 +1,33 @@
 // ============================================================
-// fichas-logic.js — Cálculos derivados usando bnh-pac.js
+// fichas-logic.js
 // ============================================================
-export { calcTier, calcPVMax, calcCambios, resumenPJ, fmtTag, normTag } from '../bnh-pac.js';
+export { calcTier, calcPVMax, calcCambios, fmtTag, normTag } from '../bnh-pac.js';
 
-// Colores por Tier para la UI
 export function colorTier(tier) {
-    switch (tier) {
-        case 4: return { bg: '#2d1b00', border: '#f59e0b', text: '#fbbf24' };
-        case 3: return { bg: '#1a0030', border: '#a855f7', text: '#c084fc' };
-        case 2: return { bg: '#001a30', border: '#3b82f6', text: '#60a5fa' };
-        default: return { bg: '#0f1f0f', border: '#22c55e', text: '#4ade80' };
-    }
+    const t = {
+        4: { bg:'#7d3c00', border:'#f39c12', text:'#f8c471', label:'TIER 4' },
+        3: { bg:'#4a235a', border:'#8e44ad', text:'#c39bd3', label:'TIER 3' },
+        2: { bg:'#1a4a80', border:'#2980b9', text:'#7fb3d3', label:'TIER 2' },
+        1: { bg:'#1e5631', border:'#27ae60', text:'#82e0aa', label:'TIER 1' }
+    };
+    return t[tier] || t[1];
 }
 
-// Total de PT de un personaje en todos sus tags
-export function totalPT(ptDePersonaje) {
-    if (!ptDePersonaje) return 0;
-    return Object.values(ptDePersonaje).reduce((a, b) => a + b, 0);
+// Construye mapa { '#Tag': count } de todos los personajes visibles
+export function buildTagIndex(personajes) {
+    const map = {};
+    personajes.forEach(p => {
+        (p.tags || []).forEach(t => {
+            const k = t.startsWith('#') ? t : '#'+t;
+            map[k] = (map[k] || 0) + 1;
+        });
+    });
+    return map;
 }
 
-// ¿Puede canjearse un tag? (Regla de Pureza)
-export const COSTOS = { stat: 50, medalla: 75, mutacion: 100 };
-export function puedeCanjear(ptDelTag, tipo) {
-    return (ptDelTag || 0) >= (COSTOS[tipo] || Infinity);
+export function totalPT(ptDePJ) {
+    if (!ptDePJ) return 0;
+    return Object.values(ptDePJ).reduce((a,b)=>a+b, 0);
 }
+
+export const COSTOS = { stat:50, medalla:75, mutacion:100 };

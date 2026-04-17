@@ -1,50 +1,60 @@
 // ============================================================
-// fichas-main.js — Orquestador
+// fichas-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { fichasUI }                from './fichas-state.js';
-import { cargarTodo }              from './fichas-data.js';
+import { fichasUI, fichasGlobal }  from './fichas-state.js';
+import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones }          from '../bnh-fusion.js';
-import { renderCatalogo, renderDetalle } from './fichas-ui.js';
+import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle } from './fichas-ui.js';
 import { abrirPanelOP, abrirCrearPersonaje, exponerGlobalesOP } from './fichas-op.js';
 
-async function init() {
-    // Favicon
-    const favicon = document.getElementById('dynamic-favicon');
-    if (favicon && currentConfig) {
-        favicon.href = `${currentConfig.storageUrl}/imginterfaz/icon.png?v=${Date.now()}`;
-    }
+let postersDelHilo = null;
 
-    // Auth
+async function init() {
+    const favicon = document.getElementById('dynamic-favicon');
+    if (favicon && currentConfig) favicon.href = `${currentConfig.storageUrl}/imginterfaz/icon.png?v=${Date.now()}`;
+
     await bnhAuth.init();
     fichasUI.esAdmin = bnhAuth.esAdmin();
 
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
-    // Botón crear: solo admins
-    const btnCrear = document.getElementById('btn-crear-pj');
-    if (btnCrear) btnCrear.style.display = fichasUI.esAdmin ? 'inline-block' : 'none';
-
-    // Cargar datos
     await Promise.all([cargarTodo(), cargarFusiones()]);
-
-    // Exponer funciones globales del panel OP
     exponerGlobalesOP();
+    exponerGlobalesFichas();
 
-    // Funciones globales de navegación
+    sincronizarVista();
+}
+
+function sincronizarVista() {
+    if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
+        document.getElementById('fichas-layout').style.display = 'none';
+        document.getElementById('fichas-detalle-wrap').style.display = 'block';
+        renderDetalle(fichasUI.seleccionado);
+    } else {
+        document.getElementById('fichas-layout').style.display = 'grid';
+        document.getElementById('fichas-detalle-wrap').style.display = 'none';
+        renderSidebar();
+        renderActiveTagsBar();
+        renderCatalogo(postersDelHilo);
+    }
+}
+
+function exponerGlobalesFichas() {
+
     window.abrirFicha = (nombre) => {
         fichasUI.vistaActual  = 'detalle';
         fichasUI.seleccionado = nombre;
-        renderDetalle(nombre);
-        window.scrollTo(0, 0);
+        sincronizarVista();
+        window.scrollTo(0,0);
     };
 
     window.volverCatalogo = () => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
-        renderCatalogo();
-        window.scrollTo(0, 0);
+        sincronizarVista();
+        window.scrollTo(0,0);
     };
 
     window.abrirPanelOP = (nombre) => {
@@ -56,33 +66,64 @@ async function init() {
 
     window.borrarPersonaje = async (nombre) => {
         if (!fichasUI.esAdmin) return;
-        if (!confirm(`¿Eliminar a ${nombre}? Esta acción no se puede deshacer.`)) return;
+        if (!confirm(`¿Eliminar a ${nombre}?`)) return;
         const { eliminarPersonaje } = await import('./fichas-data.js');
         await eliminarPersonaje(nombre);
-        window.sincronizarVista();
+        sincronizarVista();
     };
 
-    // Búsqueda
-    const buscador = document.getElementById('fichas-buscar');
-    if (buscador) {
-        buscador.addEventListener('input', e => {
-            fichasUI.filtroTexto = e.target.value;
-            if (fichasUI.vistaActual === 'catalogo') renderCatalogo();
-        });
-    }
-
-    // sincronizarVista: recarga datos y re-renderiza la vista actual
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
-        if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
-            renderDetalle(fichasUI.seleccionado);
-        } else {
-            renderCatalogo();
-        }
+        sincronizarVista();
     };
 
-    // Renderizado inicial
-    renderCatalogo();
+    // Filtros booru
+    window._fichaToggleTag = (tag) => {
+        const idx = fichasUI.tagsFiltro.indexOf(tag);
+        if (idx === -1) fichasUI.tagsFiltro.push(tag);
+        else fichasUI.tagsFiltro.splice(idx, 1);
+        sincronizarVista();
+    };
+
+    window._fichaToggleTagYVolver = (tag) => {
+        fichasUI.vistaActual = 'catalogo';
+        fichasUI.seleccionado = null;
+        const idx = fichasUI.tagsFiltro.indexOf(tag);
+        if (idx === -1) fichasUI.tagsFiltro.push(tag);
+        sincronizarVista();
+        window.scrollTo(0,0);
+    };
+
+    window._fichaClearTags = () => {
+        fichasUI.tagsFiltro = [];
+        sincronizarVista();
+    };
+
+    window._fichaTagSearch = (v) => {
+        fichasUI.tagBusqueda = v;
+        renderSidebar();
+    };
+
+    window._fichaSetHilo = async (val) => {
+        fichasUI.hiloFiltro = val;
+        if (val === 'todos') {
+            postersDelHilo = null;
+        } else {
+            postersDelHilo = await getPosterNamesDelHilo(val);
+        }
+        sincronizarVista();
+    };
 }
+
+function toast(msg, tipo='ok') {
+    let el = document.getElementById('fichas-toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = `toast-${tipo}`;
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.className = ''; }, 3000);
+}
+
+window._fichasToast = toast;
 
 init().catch(console.error);

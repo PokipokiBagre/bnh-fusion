@@ -1,286 +1,335 @@
 // ============================================================
-// fichas-ui.js — Catálogo + Vista Detalle (solo lectura)
+// fichas-ui.js — Vista Catálogo (booru) + Detalle
 // ============================================================
-import { fichasGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { calcTier, calcPVMax, calcCambios, totalPT, colorTier, fmtTag } from './fichas-logic.js';
+import { fichasGlobal, gruposGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
+import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, totalPT, fmtTag } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 
 const $ = id => document.getElementById(id);
 
-// ── Imagen de personaje con fallback ─────────────────────────
+// ── Imagen ────────────────────────────────────────────────────
 function imgPJ(nombre) {
-    // Usa el PRIMER nombre si hay comas (grupo nombre)
     const clave = nombre.includes(',') ? nombre.split(',')[0].trim() : nombre;
     return `${STORAGE_URL}/imgpersonajes/${norm(clave)}icon.png`;
 }
-const fallbackImg = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-const onErr = `this.onerror=null;this.src='${fallbackImg}'`;
+const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+const onErr = `this.onerror=null;this.src='${fallback}'`;
 
-// ── Barra de stat (visual) ────────────────────────────────────
-function statBar(actual, max, color) {
-    const pct = max > 0 ? Math.min(100, Math.round((actual / max) * 100)) : 0;
-    return `<div style="background:#1a1a1a; border-radius:4px; height:6px; overflow:hidden;">
-        <div style="width:${pct}%; height:100%; background:${color}; border-radius:4px;"></div>
-    </div>`;
-}
-
-// ============================================================
-// VISTA: CATÁLOGO
-// ============================================================
-export function renderCatalogo() {
-    const cont = $('fichas-contenido');
-    if (!cont) return;
-
+// ── Filtrar personajes según estado de fichasUI ───────────────
+// Regla de visibilidad:
+//   - Público: solo ve personajes que tienen refinado_id (grupo nombre asignado)
+//   - Admin:   ve todos, incluyendo los "sueltos"
+// Además filtra por tags activos y por hilo
+export function getPersonajesFiltrados(postersDelHilo) {
     let lista = [...fichasGlobal];
-    if (fichasUI.filtroTexto) {
-        const q = fichasUI.filtroTexto.toLowerCase();
-        lista = lista.filter(p =>
-            p.nombre.toLowerCase().includes(q) ||
-            (p.tags || []).some(t => t.toLowerCase().includes(q))
-        );
+
+    // Visibilidad: no-admin solo ve los que tienen grupo nombre
+    if (!fichasUI.esAdmin) {
+        lista = lista.filter(p => p.refinado_id);
     }
 
+    // Filtro de hilo (si hay hilo seleccionado)
+    if (postersDelHilo && fichasUI.hiloFiltro !== 'todos') {
+        // Cruzar el nombre del personaje contra los aliases del grupo nombre
+        // Un personaje aparece si cualquiera de sus aliases está en postersDelHilo
+        lista = lista.filter(p => {
+            const aliases = p.nombre.split(',').map(a => a.trim());
+            return aliases.some(a => postersDelHilo.has(a));
+        });
+    }
+
+    // Filtro por tags activos (AND — debe tener todos)
+    if (fichasUI.tagsFiltro.length > 0) {
+        lista = lista.filter(p => {
+            const tagsNorm = (p.tags || []).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+            return fichasUI.tagsFiltro.every(tf =>
+                tagsNorm.includes(tf.toLowerCase())
+            );
+        });
+    }
+
+    return lista;
+}
+
+// ── Render del sidebar de tags ────────────────────────────────
+export function renderSidebar() {
+    const sidebar = $('fichas-sidebar');
+    if (!sidebar) return;
+
+    // Construir índice de tags sobre los personajes visibles (sin filtro de tags)
+    let base = fichasAdmin => fichasAdmin
+        ? fichasGlobal
+        : fichasGlobal.filter(p => p.refinado_id);
+    const personajesBase = fichasUI.esAdmin ? fichasGlobal : fichasGlobal.filter(p => p.refinado_id);
+    const tagIndex = buildTagIndex(personajesBase);
+
+    // Filtrar tags por búsqueda en sidebar
+    let tagEntries = Object.entries(tagIndex)
+        .sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+    if (fichasUI.tagBusqueda) {
+        const q = fichasUI.tagBusqueda.toLowerCase();
+        tagEntries = tagEntries.filter(([t]) => t.toLowerCase().includes(q));
+    }
+
+    // Filtro de hilo
+    const hilosOpts = hilosGlobal.map(h =>
+        `<option value="${h.thread_id}" ${fichasUI.hiloFiltro==h.thread_id?'selected':''}>
+            ${h.titulo || 'Hilo #'+h.thread_id}
+        </option>`
+    ).join('');
+
+    sidebar.innerHTML = `
+    <!-- Filtro de hilo -->
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Hilo</div>
+        <select onchange="window._fichaSetHilo(this.value)"
+            style="width:100%; padding:5px 8px; border:1px solid var(--booru-border);
+                   border-radius:var(--radius); font-size:0.85em; background:var(--white);">
+            <option value="todos" ${fichasUI.hiloFiltro==='todos'?'selected':''}>Todos los hilos</option>
+            ${hilosOpts}
+        </select>
+    </div>
+
+    <!-- Tags -->
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Tags <span style="color:var(--gray-500); font-weight:400;">(${tagEntries.length})</span></div>
+        <input type="text" class="sidebar-search" placeholder="Buscar tag..."
+            value="${fichasUI.tagBusqueda}"
+            oninput="window._fichaTagSearch(this.value)">
+        <ul class="tag-list">
+            ${tagEntries.map(([tag, cnt]) => {
+                const activo = fichasUI.tagsFiltro.includes(tag);
+                return `<li class="${activo?'active':''}" onclick="window._fichaToggleTag('${tag.replace(/'/g,"\\'")}')">
+                    <span class="tag-link" style="${activo?'color:var(--red);font-weight:700;':''}">${tag}</span>
+                    <span class="tag-count">${cnt}</span>
+                </li>`;
+            }).join('')}
+            ${tagEntries.length === 0 ? `<li style="color:var(--gray-500); font-size:0.82em; padding:4px;">Sin tags</li>` : ''}
+        </ul>
+    </div>
+
+    ${fichasUI.esAdmin ? `
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Admin</div>
+        <button class="btn btn-green btn-sm" style="width:100%;"
+            onclick="window.abrirCrearPersonaje()">+ Nuevo Personaje</button>
+    </div>` : ''}`;
+}
+
+// ── Tags activos bar ──────────────────────────────────────────
+export function renderActiveTagsBar() {
+    const bar = $('active-tags-bar');
+    if (!bar) return;
+    if (fichasUI.tagsFiltro.length === 0) {
+        bar.style.display = 'none'; return;
+    }
+    bar.style.display = 'flex';
+    bar.innerHTML = `
+    <span style="font-size:0.8em; color:var(--gray-500);">Filtros:</span>
+    ${fichasUI.tagsFiltro.map(t => `
+        <span class="active-tag-chip">
+            ${t}
+            <button onclick="window._fichaToggleTag('${t.replace(/'/g,"\\'")}')">×</button>
+        </span>`).join('')}
+    <button onclick="window._fichaClearTags()"
+        style="background:none; border:none; color:var(--red); font-size:0.82em;
+               cursor:pointer; text-decoration:underline; margin-left:4px;">Limpiar</button>`;
+}
+
+// ── CATÁLOGO BOORU ────────────────────────────────────────────
+export function renderCatalogo(postersDelHilo) {
+    const cont = $('fichas-grid-area');
+    if (!cont) return;
+
+    const lista = getPersonajesFiltrados(postersDelHilo);
+
+    // Actualizar info de conteo
+    const infoEl = $('fichas-count-info');
+    if (infoEl) infoEl.textContent = `${lista.length} personaje${lista.length!==1?'s':''}`;
+
     if (!lista.length) {
-        cont.innerHTML = `<div class="empty-state">
+        cont.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-icon">👤</div>
-            <h3>${fichasGlobal.length ? 'Sin resultados' : 'No hay personajes registrados'}</h3>
-            ${fichasUI.esAdmin ? `<button class="btn btn-green" onclick="window.abrirCrearPersonaje()">+ Crear Personaje</button>` : ''}
+            <h3>${fichasUI.tagsFiltro.length ? 'Sin coincidencias con esos tags' : 'No hay personajes'}</h3>
+            ${fichasUI.tagsFiltro.length ? `<p><a href="#" onclick="window._fichaClearTags();return false;" style="color:var(--booru-link);">Limpiar filtros</a></p>` : ''}
         </div>`;
         return;
     }
 
-    let html = `<div class="fichas-grid">`;
-
-    lista.forEach(p => {
-        const { tier, tierLabel } = calcTier(p.pot || 0, p.agi || 0, p.ctl || 0);
-        const pvMax    = calcPVMax(p.pot || 0, p.agi || 0, p.ctl || 0);
-        const pac      = (p.pot || 0) + (p.agi || 0) + (p.ctl || 0);
+    cont.innerHTML = lista.map(p => {
+        const { tier } = calcTier(p.pot||0, p.agi||0, p.ctl||0);
+        const pvMax    = calcPVMax(p.pot||0, p.agi||0, p.ctl||0);
         const tc       = colorTier(tier);
+        const pac      = (p.pot||0)+(p.agi||0)+(p.ctl||0);
+        const pvA      = p.pv_actual ?? pvMax;
+        const pvPct    = pvMax > 0 ? Math.round((pvA/pvMax)*100) : 100;
+        const pvClass  = pvPct < 25 ? 'pv-crit' : pvPct < 60 ? 'pv-warn' : '';
         const enFusion = estaEnFusion(p.nombre);
-        const ptTotal  = totalPT(ptGlobal[p.nombre]);
-        const safeNom  = p.nombre.replace(/'/g, "\\'");
+        const safeNom  = p.nombre.replace(/'/g,"\\'");
 
-        html += `
-        <div class="ficha-card" onclick="window.abrirFicha('${safeNom}')"
-             style="border-color:${tc.border}; background:${tc.bg};">
-            <div style="position:relative;">
-                <img src="${imgPJ(p.nombre)}" onerror="${onErr}"
-                    style="width:80px; height:80px; border-radius:50%; border:3px solid ${tc.border};
-                           object-fit:cover; display:block; margin:0 auto;">
-                ${enFusion ? `<div style="position:absolute; bottom:-4px; left:50%; transform:translateX(-50%);">
-                    ${renderFusionBadge(p.nombre, STORAGE_URL, norm)}
-                </div>` : ''}
+        // Mostrar el nombre del grupo si existe
+        const grupo = gruposGlobal.find(g => g.id === p.refinado_id);
+        const displayName = grupo ? grupo.nombre_refinado : p.nombre;
+
+        const tagsPreview = (p.tags||[]).slice(0,5)
+            .map(t => `<span class="ficha-tag-mini">${t.replace(/^#/,'')}</span>`)
+            .join('');
+
+        return `
+        <div class="ficha-card" onclick="window.abrirFicha('${safeNom}')">
+            <div class="ficha-img-wrap">
+                <img class="ficha-img" src="${imgPJ(p.nombre)}" onerror="${onErr}" loading="lazy">
+                <div class="ficha-tier-badge"
+                    style="background:${tc.bg}; color:${tc.text}; border:1px solid ${tc.border};">
+                    T${tier}
+                </div>
+                ${enFusion ? `<div style="position:absolute;bottom:4px;right:4px;">${renderFusionBadge(p.nombre,STORAGE_URL,norm)}</div>` : ''}
+                ${fichasUI.esAdmin && !p.refinado_id ? `<div style="position:absolute;top:4px;right:4px;background:rgba(192,57,43,0.85);color:#fff;padding:1px 5px;border-radius:3px;font-size:0.65em;font-weight:700;">SUELTO</div>` : ''}
             </div>
-            <h3 style="color:${tc.text}; margin:10px 0 4px 0; font-size:1em; text-align:center;
-                        font-family:'Cinzel',serif; white-space:nowrap; overflow:hidden;
-                        text-overflow:ellipsis;">${p.nombre}</h3>
-            <div style="text-align:center; margin-bottom:8px;">
-                <span style="background:${tc.bg}; border:1px solid ${tc.border}; color:${tc.text};
-                              padding:2px 8px; border-radius:10px; font-size:0.7em; font-weight:700;">
-                    ${tierLabel} · PAC ${pac}
-                </span>
-            </div>
-            <div style="font-size:0.75em; color:#aaa; margin-bottom:6px;">
-                PV ${p.pv_actual ?? pvMax}/${pvMax}
-                ${statBar(p.pv_actual ?? pvMax, pvMax, '#ef4444')}
-            </div>
-            <div style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:6px; min-height:22px;">
-                ${(p.tags || []).slice(0, 4).map(t =>
-                    `<span style="background:#111; border:1px solid #333; color:#aaa;
-                                  padding:1px 6px; border-radius:8px; font-size:0.65em;">${fmtTag(t)}</span>`
-                ).join('')}
-                ${(p.tags || []).length > 4 ? `<span style="color:#666; font-size:0.65em;">+${(p.tags||[]).length-4}</span>` : ''}
-            </div>
-            <div style="font-size:0.7em; color:#555; text-align:right;">
-                PT acum: <b style="color:#00b4d8;">${ptTotal}</b>
+            <div class="ficha-info">
+                <div class="ficha-name" title="${displayName}">${displayName}</div>
+                <div class="ficha-pac">PAC ${pac} · PV ${pvA}/${pvMax}</div>
+                <div class="pv-bar"><div class="pv-fill ${pvClass}" style="width:${pvPct}%"></div></div>
+                <div class="ficha-tags-preview" style="margin-top:4px;">${tagsPreview}</div>
             </div>
             ${fichasUI.esAdmin ? `
-            <button onclick="event.stopPropagation(); window.borrarPersonaje('${safeNom}')"
-                style="position:absolute; top:8px; right:8px; background:rgba(239,68,68,0.1);
-                       border:1px solid rgba(239,68,68,0.3); color:#ef4444; border-radius:4px;
-                       width:26px; height:26px; cursor:pointer; font-size:0.9em; line-height:1;">🗑</button>` : ''}
+            <button onclick="event.stopPropagation();window.abrirPanelOP('${safeNom}')"
+                style="position:absolute;bottom:6px;right:5px;background:rgba(30,132,73,0.85);
+                       color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
+                       cursor:pointer;font-weight:700;">OP</button>` : ''}
         </div>`;
-    });
-
-    html += `</div>`;
-    cont.innerHTML = html;
+    }).join('');
 }
 
-// ============================================================
-// VISTA: DETALLE (ficha completa tipo wiki)
-// ============================================================
+// ── VISTA DETALLE ─────────────────────────────────────────────
 export function renderDetalle(nombre) {
     const cont = $('fichas-contenido');
     if (!cont) return;
 
     const p = fichasGlobal.find(x => x.nombre === nombre);
-    if (!p) { renderCatalogo(); return; }
+    if (!p) { window.volverCatalogo(); return; }
 
-    const { tier, tierLabel } = calcTier(p.pot || 0, p.agi || 0, p.ctl || 0);
-    const pvMax    = calcPVMax(p.pot || 0, p.agi || 0, p.ctl || 0);
-    const pac      = (p.pot || 0) + (p.agi || 0) + (p.ctl || 0);
-    const cambios  = calcCambios(p.agi || 0);
+    const { tier } = calcTier(p.pot||0, p.agi||0, p.ctl||0);
+    const pvMax    = calcPVMax(p.pot||0, p.agi||0, p.ctl||0);
+    const pac      = (p.pot||0)+(p.agi||0)+(p.ctl||0);
+    const cambios  = calcCambios(p.agi||0);
     const tc       = colorTier(tier);
     const fusion   = getFusionDe(nombre);
     const ptPJ     = ptGlobal[nombre] || {};
-    const safeNom  = nombre.replace(/'/g, "\\'");
+    const safeNom  = nombre.replace(/'/g,"\\'");
+    const grupo    = gruposGlobal.find(g => g.id === p.refinado_id);
+    const displayName = grupo ? grupo.nombre_refinado : nombre;
 
-    // Tags ordenados por PT desc
-    const tagsOrdenados = [...(p.tags || [])].sort((a, b) =>
-        (ptPJ[b] || 0) - (ptPJ[a] || 0)
-    );
-
-    // Sidebar de información (estilo wiki)
-    const sidebarRows = [
-        ['PAC Total',   `<b style="color:${tc.text}">${pac}</b>`],
-        ['Tier',        `<span style="color:${tc.text}; font-weight:700;">${tierLabel}</span>`],
-        ['POT',         `${p.pot || 0}`],
-        ['AGI',         `${p.agi || 0}`],
-        ['CTL',         `${p.ctl || 0}`],
-        ['PV',          `${p.pv_actual ?? pvMax} / ${pvMax}`],
-        ['Cambios/turno', `${cambios}`],
-    ].map(([k, v]) => `
-        <tr>
-            <td style="padding:5px 10px; color:#888; font-size:0.82em; white-space:nowrap;">${k}</td>
-            <td style="padding:5px 10px; font-size:0.82em;">${v}</td>
-        </tr>`).join('');
+    const tagsOrdenados = [...(p.tags||[])].sort((a,b)=>(ptPJ[b]||0)-(ptPJ[a]||0));
 
     cont.innerHTML = `
-    <div style="display:grid; grid-template-columns:1fr 260px; gap:24px; align-items:start; max-width:1100px;">
+    <div class="detalle-layout">
 
-        <!-- COLUMNA IZQUIERDA: wiki -->
-        <div>
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; flex-wrap:wrap;">
-                <button onclick="window.volverCatalogo()"
-                    style="background:#111; border:1px solid #333; color:#aaa; padding:6px 14px;
-                           border-radius:6px; cursor:pointer; font-size:0.85em;">← Volver</button>
-                <h1 style="margin:0; font-family:'Cinzel',serif; font-size:2em; color:${tc.text};">${nombre}</h1>
-                ${fusion ? renderFusionBadge(nombre, STORAGE_URL, norm) : ''}
-                ${fichasUI.esAdmin ? `
-                <button onclick="window.abrirPanelOP('${safeNom}')"
-                    style="background:#1a0040; border:1px solid #a855f7; color:#c084fc;
-                           padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:700;
-                           font-size:0.85em; margin-left:auto;">⚙️ PANEL OP</button>` : ''}
+      <!-- Columna wiki -->
+      <div>
+        <a class="detalle-back" onclick="window.volverCatalogo()">← Volver</a>
+
+        <div class="detalle-titulo">
+            ${displayName}
+            ${fusion ? renderFusionBadge(nombre, STORAGE_URL, norm) : ''}
+            ${fichasUI.esAdmin ? `
+            <button onclick="window.abrirPanelOP('${safeNom}')"
+                class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>` : ''}
+        </div>
+
+        <!-- Tags -->
+        <div class="wiki-section">
+            <div class="wiki-section-header">Tags del Quirk</div>
+            <div class="tags-detalle">
+                ${tagsOrdenados.map(t => {
+                    const pts = ptPJ[t]||0;
+                    const tf  = t.startsWith('#') ? t : '#'+t;
+                    return `<span class="tag-detalle"
+                        onclick="window._fichaToggleTagYVolver('${tf.replace(/'/g,"\\'")}')"
+                        title="Filtrar por ${tf} — ${pts} PT">
+                        ${tf}<span class="tag-detalle-pts">${pts}pt</span>
+                    </span>`;
+                }).join('') || '<span style="color:var(--gray-500);">Sin tags</span>'}
             </div>
+        </div>
 
-            <!-- TAGS -->
-            <div style="margin-bottom:24px;">
-                <h3 style="color:#aaa; font-size:0.85em; text-transform:uppercase; letter-spacing:1px;
-                            border-bottom:1px solid #222; padding-bottom:6px; margin-bottom:10px;">Tags del Quirk</h3>
-                <div style="display:flex; flex-wrap:wrap; gap:6px;">
-                    ${tagsOrdenados.map(t => {
-                        const pts = ptPJ[t] || 0;
-                        const color = pts >= 50 ? '#f59e0b' : pts >= 20 ? '#a855f7' : pts >= 5 ? '#00b4d8' : '#555';
-                        return `<span style="background:#111; border:1px solid ${color}; color:${color};
-                                            padding:4px 10px; border-radius:12px; font-size:0.8em; font-weight:600;">
-                                    ${fmtTag(t)} <span style="opacity:0.7; font-size:0.85em;">${pts}pt</span>
-                                </span>`;
-                    }).join('') || '<span style="color:#444; font-size:0.85em;">Sin tags asignados</span>'}
-                </div>
-            </div>
-
-            <!-- LORE -->
-            ${p.lore ? `
-            <div style="margin-bottom:24px;">
-                <h2 style="font-family:'Cinzel',serif; font-size:1.3em; color:#ddd;
-                            border-bottom:1px solid #222; padding-bottom:8px; margin-bottom:12px;">Historia</h2>
-                <div style="color:#bbb; line-height:1.7; font-size:0.92em; white-space:pre-wrap;">${escHTML(p.lore)}</div>
-            </div>` : ''}
-
-            <!-- QUIRK -->
-            ${p.quirk ? `
-            <div style="margin-bottom:24px;">
-                <h2 style="font-family:'Cinzel',serif; font-size:1.3em; color:#ddd;
-                            border-bottom:1px solid #222; padding-bottom:8px; margin-bottom:12px;">Quirk</h2>
-                <div style="color:#bbb; line-height:1.7; font-size:0.92em; white-space:pre-wrap;">${escHTML(p.quirk)}</div>
-            </div>` : ''}
-
-            <!-- FUSION INFO si activa -->
-            ${fusion ? `
-            <div style="background:#1a0040; border:1px solid #a855f7; border-radius:10px;
-                        padding:16px; margin-bottom:24px;">
-                <h3 style="color:#c084fc; margin:0 0 8px 0; font-family:'Cinzel',serif;">⚡ Fusión Activa</h3>
-                <p style="color:#aaa; font-size:0.88em; margin:0 0 6px 0;">
-                    Fusionado con: <b style="color:#e9d5ff;">${fusion.pj_a === nombre ? fusion.pj_b : fusion.pj_a}</b>
+        ${fusion ? `
+        <div class="wiki-section">
+            <div class="wiki-section-header" style="background:#6c3483;">⚡ Fusión Activa</div>
+            <div style="padding:12px 14px;">
+                <p style="color:#6c3483; font-weight:600; margin-bottom:8px;">
+                    Fusionado con: <b>${fusion.pj_a===nombre?fusion.pj_b:fusion.pj_a}</b>
                 </p>
-                <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:8px;">
-                    ${(fusion.tags_fusionados || []).map(t =>
-                        `<span style="background:#2d1b69; border:1px solid #7c3aed; color:#c084fc;
-                                      padding:2px 8px; border-radius:8px; font-size:0.75em;">${fmtTag(t)}</span>`
+                <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                    ${(fusion.tags_fusionados||[]).map(t =>
+                        `<span style="background:#f5eeff;border:1px solid #9b59b6;color:#6c3483;padding:2px 8px;border-radius:8px;font-size:0.78em;">${t.startsWith('#')?t:'#'+t}</span>`
                     ).join('')}
                 </div>
-                ${fichasUI.esAdmin ? `
-                <button onclick="window.terminarFusionUI('${fusion.id}')"
-                    style="margin-top:12px; background:#3b0764; border:1px solid #7c3aed; color:#e9d5ff;
-                           padding:6px 14px; border-radius:6px; cursor:pointer; font-size:0.82em;">
-                    ✕ Terminar Fusión
-                </button>` : ''}
-            </div>` : ''}
+                ${fichasUI.esAdmin ? `<button onclick="window._opTerminarFusion('${fusion.id}')"
+                    class="op-btn op-btn-red" style="margin-top:10px; font-size:0.78em;">✕ Terminar Fusión</button>` : ''}
+            </div>
+        </div>` : ''}
 
-            <!-- PT por tag tabla -->
-            ${Object.keys(ptPJ).length ? `
-            <div>
-                <h2 style="font-family:'Cinzel',serif; font-size:1.3em; color:#ddd;
-                            border-bottom:1px solid #222; padding-bottom:8px; margin-bottom:12px;">Progresión (PT)</h2>
-                <table style="width:100%; border-collapse:collapse; font-size:0.85em;">
-                    <thead>
-                        <tr style="color:#666; font-size:0.8em; text-transform:uppercase;">
-                            <th style="text-align:left; padding:4px 8px;">Tag</th>
-                            <th style="text-align:right; padding:4px 8px;">PT</th>
-                            <th style="text-align:right; padding:4px 8px;">Para stat (+1)</th>
-                            <th style="text-align:right; padding:4px 8px;">Para medalla</th>
-                            <th style="text-align:right; padding:4px 8px;">Para mutación</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${Object.entries(ptPJ).sort((a,b) => b[1]-a[1]).map(([tag, pts]) => `
-                        <tr style="border-top:1px solid #1a1a1a;">
-                            <td style="padding:5px 8px; color:#00b4d8;">${fmtTag(tag)}</td>
-                            <td style="padding:5px 8px; text-align:right; font-weight:700; color:${pts>=50?'#f59e0b':pts>=20?'#a855f7':'#ddd'};">${pts}</td>
-                            <td style="padding:5px 8px; text-align:right; color:${pts>=50?'#4ade80':'#555'};">${pts >= 50 ? '✓' : `${50-pts} faltan`}</td>
-                            <td style="padding:5px 8px; text-align:right; color:${pts>=75?'#4ade80':'#555'};">${pts >= 75 ? '✓' : `${75-pts} faltan`}</td>
-                            <td style="padding:5px 8px; text-align:right; color:${pts>=100?'#4ade80':'#555'};">${pts >= 100 ? '✓' : `${100-pts} faltan`}</td>
-                        </tr>`).join('')}
-                    </tbody>
-                </table>
-            </div>` : ''}
-        </div>
+        ${p.lore ? `
+        <div class="wiki-section">
+            <div class="wiki-section-header">Historia</div>
+            <div class="wiki-section-body">${escHTML(p.lore)}</div>
+        </div>` : ''}
 
-        <!-- COLUMNA DERECHA: infobox -->
-        <div>
-            <div style="background:#0d0d0d; border:1.5px solid ${tc.border}; border-radius:10px; overflow:hidden; position:sticky; top:80px;">
-                <!-- Header del infobox -->
-                <div style="background:${tc.border}; padding:8px; text-align:center;">
-                    <span style="color:#000; font-weight:700; font-size:0.9em; font-family:'Cinzel',serif;">${nombre}</span>
-                </div>
-                <!-- Imagen principal -->
-                <div style="text-align:center; padding:12px 12px 0;">
-                    <img src="${imgPJ(nombre)}" onerror="${onErr}"
-                        style="width:180px; height:180px; border-radius:8px; border:2px solid ${tc.border};
-                               object-fit:cover;">
-                </div>
-                <!-- Stats -->
-                <table style="width:100%; border-collapse:collapse; margin-top:8px;">
-                    <tbody style="font-family:sans-serif;">${sidebarRows}</tbody>
-                </table>
-                <!-- Tags en infobox -->
-                <div style="padding:8px 10px 12px;">
-                    <div style="color:#666; font-size:0.72em; text-transform:uppercase; margin-bottom:6px;">Tags</div>
-                    <div style="display:flex; flex-wrap:wrap; gap:3px;">
-                        ${(p.tags || []).map(t =>
-                            `<span style="background:#1a1a1a; border:1px solid #333; color:#888;
-                                          padding:2px 6px; border-radius:6px; font-size:0.68em;">${fmtTag(t)}</span>`
-                        ).join('') || '<span style="color:#444; font-size:0.75em;">—</span>'}
-                    </div>
-                </div>
+        ${p.quirk ? `
+        <div class="wiki-section">
+            <div class="wiki-section-header">Quirk</div>
+            <div class="wiki-section-body">${escHTML(p.quirk)}</div>
+        </div>` : ''}
+
+        ${Object.keys(ptPJ).length ? `
+        <div class="wiki-section">
+            <div class="wiki-section-header">Progresión — Puntos de Tag</div>
+            <table class="pt-table">
+                <thead><tr>
+                    <th>Tag</th><th>PT</th>
+                    <th>Stat (50)</th><th>Medalla (75)</th><th>Mutación (100)</th>
+                </tr></thead>
+                <tbody>
+                ${Object.entries(ptPJ).sort((a,b)=>b[1]-a[1]).map(([tag,pts]) => `
+                <tr>
+                    <td style="color:var(--booru-link); font-weight:600;">${tag.startsWith('#')?tag:'#'+tag}</td>
+                    <td style="font-weight:700; color:${pts>=50?'#d68910':pts>=20?'#8e44ad':'var(--gray-900)'};">${pts}</td>
+                    <td style="color:${pts>=50?'var(--green)':'var(--gray-400)'};">${pts>=50?'✓':`${50-pts}↑`}</td>
+                    <td style="color:${pts>=75?'var(--green)':'var(--gray-400)'};">${pts>=75?'✓':`${75-pts}↑`}</td>
+                    <td style="color:${pts>=100?'var(--green)':'var(--gray-400)'};">${pts>=100?'✓':`${100-pts}↑`}</td>
+                </tr>`).join('')}
+                </tbody>
+            </table>
+        </div>` : ''}
+      </div>
+
+      <!-- Infobox lateral -->
+      <div>
+        <div class="infobox">
+            <div class="infobox-header" style="background:${tc.border};">${displayName}</div>
+            <img src="${imgPJ(nombre)}" onerror="${onErr}">
+            <table>
+                <tr><td>PAC Total</td><td style="color:${tc.text}; font-weight:700;">${pac}</td></tr>
+                <tr><td>Tier</td><td style="color:${tc.text}; font-weight:700;">${tc.label}</td></tr>
+                <tr><td>POT</td><td>${p.pot||0}</td></tr>
+                <tr><td>AGI</td><td>${p.agi||0}</td></tr>
+                <tr><td>CTL</td><td>${p.ctl||0}</td></tr>
+                <tr><td>PV</td><td>${p.pv_actual??pvMax} / ${pvMax}</td></tr>
+                <tr><td>Cambios/turno</td><td>${cambios}</td></tr>
+                <tr><td>PT Total</td><td style="color:#2980b9; font-weight:700;">${Object.values(ptPJ).reduce((a,b)=>a+b,0)}</td></tr>
+            </table>
+            <div style="padding:6px 10px 4px; font-size:0.72em; font-weight:700; color:var(--gray-700); text-transform:uppercase;">Tags</div>
+            <div class="infobox-tags">
+                ${(p.tags||[]).map(t =>
+                    `<span style="background:var(--gray-100);border:1px solid var(--booru-border);color:var(--booru-link);padding:2px 6px;border-radius:3px;font-size:0.72em;">${t.startsWith('#')?t:'#'+t}</span>`
+                ).join('') || '<span style="color:var(--gray-400); font-size:0.78em;">—</span>'}
             </div>
         </div>
-
+      </div>
     </div>`;
 }
 
-function escHTML(str) {
-    return String(str || '')
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function escHTML(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
