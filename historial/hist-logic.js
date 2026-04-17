@@ -62,8 +62,6 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
     const transacciones = [];
 
     // Índice rápido: post_no → poster_name
-    // Primero cargamos el índice completo (posts viejos de la DB) y luego sobreescribimos
-    // con los nuevos por si hubiera duplicados (los nuevos tienen precedencia)
     const postAutor = {};
     indiceCompleto.forEach(p => { postAutor[p.post_no] = p.poster_name; });
     posts.forEach(p => { postAutor[p.post_no] = p.poster_name; });
@@ -71,41 +69,55 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
     posts.forEach(post => {
         if (!post.reply_to || post.reply_to.length === 0) return;
 
-        // Buscar el personaje del poster (quién hace la reply)
-        // Intentar con nombre completo primero, luego sin tripcode
+        // El REPLIER debe ser un personaje registrado
         const pjReplier = mapaNombres[post.poster_name]
                        ?? mapaNombres[normPosterName(post.poster_name)];
-        if (!pjReplier) return; // poster no registrado como personaje
+        if (!pjReplier) return;
 
-        const tagsReplier = pjReplier.tags || [];
+        const tagsReplier = (pjReplier.tags || []).map(t => t.toLowerCase());
+        if (tagsReplier.length === 0) return;
 
-        // Para cada post al que responde
+        // Acumular tags únicos de todos los replyados en este post
+        const tagsReplyados = new Set();
+
         post.reply_to.forEach(replyPostNo => {
             const autorReplyado = postAutor[replyPostNo];
             if (!autorReplyado) return;
             if (autorReplyado === post.poster_name) return; // no se puntúa a sí mismo
 
-            // Buscar el personaje del replyado (también con fallback sin tripcode)
             const pjReplyado = mapaNombres[autorReplyado]
                             ?? mapaNombres[normPosterName(autorReplyado)];
-            if (!pjReplyado) return; // replyado no es personaje registrado
+            if (!pjReplyado) return;
 
-            const tagsReplyado = pjReplyado.tags || [];
-            if (tagsReplyado.length === 0) return;
+            (pjReplyado.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
+        });
 
-            // Tags de contraste: los del REPLYADO que el REPLIER no tiene
-            const tagsReplierNorm = new Set(tagsReplier.map(t => t.toLowerCase()));
-            const tagsContraste   = tagsReplyado.filter(t => !tagsReplierNorm.has(t.toLowerCase()));
+        if (tagsReplyados.size === 0) return;
 
-            if (tagsContraste.length === 0) return;
+        // LÓGICA CORRECTA:
+        // Tags elegibles = tags PROPIOS del REPLIER que el/los REPLYADO/s NO tienen
+        // (el REPLIER suma puntos en sus propios tags únicos)
+        const tagsElegibles = tagsReplier.filter(t => !tagsReplyados.has(t));
+        if (tagsElegibles.length === 0) return;
 
-            // Elige 1 tag aleatorio de los de contraste
-            const tagElegido = tagsContraste[Math.floor(Math.random() * tagsContraste.length)];
+        // Máximo 5 PT por post, distribuidos aleatoriamente entre los tags elegibles
+        const maxPT = Math.min(5, tagsElegibles.length);
+        const ptTotal = Math.floor(Math.random() * maxPT) + 1; // entre 1 y maxPT
 
-            // El PT va al REPLIER (quien interactuó), no al replyado
+        // Mezclar los tags elegibles y tomar ptTotal de ellos
+        const mezclados = [...tagsElegibles].sort(() => Math.random() - 0.5);
+        const elegidos = mezclados.slice(0, ptTotal);
+
+        // Buscar el nombre original del tag (con capitalización correcta)
+        const tagsOriginales = pjReplier.tags || [];
+        const tagMap = {};
+        tagsOriginales.forEach(t => { tagMap[t.toLowerCase()] = t; });
+
+        elegidos.forEach(tagLower => {
+            const tagOriginal = tagMap[tagLower] || tagLower;
             transacciones.push({
                 personaje_nombre:  pjReplier.nombre,
-                tag:               tagElegido,
+                tag:               tagOriginal.startsWith('#') ? tagOriginal : '#' + tagOriginal,
                 delta:             1,
                 motivo:            'interaccion',
                 origen_post_no:    post.post_no,
@@ -116,6 +128,7 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
 
     return transacciones;
 }
+
 
 // ── Construye el ranking de posts (sin puntos de velocidad) ───
 // Solo cuenta posts por persona para el historial
