@@ -1,34 +1,13 @@
 // ============================================================
-// hist-logic.js — Lógica de Puntos y Parsing
+// hist-logic.js — Lógica de Parsing y PT por Tags
 // ============================================================
-import { CONFIG_PUNTOS } from './hist-state.js';
-
-// ── Cálculo de puntos por post ──────────────────────────────
-// Regla: el total de puntos depende de cuánto tardó el post
-// respecto al post ANTERIOR en el hilo (de cualquier persona)
-export function calcularPuntos(postTime, anteriorPostTime) {
-    if (!anteriorPostTime) {
-        return { puntos: CONFIG_PUNTOS.base, tipo: 'base', minutos: null };
-    }
-
-    const minutos = (new Date(postTime) - new Date(anteriorPostTime)) / 60000;
-
-    if (minutos <= CONFIG_PUNTOS.umbral_rapido) {
-        return { puntos: CONFIG_PUNTOS.rapido, tipo: 'rapido', minutos };
-    } else if (minutos <= CONFIG_PUNTOS.umbral_medio) {
-        return { puntos: CONFIG_PUNTOS.medio, tipo: 'medio', minutos };
-    } else {
-        return { puntos: CONFIG_PUNTOS.base, tipo: 'base', minutos };
-    }
-}
 
 // ── Parser de JSON de LynxChan (8chan.moe) ───────────────────
+// Ahora también extrae reply_to: los >>NNN que aparecen en el mensaje
 export function parsearPostsLynxChan(json, threadId, board) {
     const posts = [];
     if (!json) return posts;
 
-    // LynxChan retorna { posts: [...] }
-    // Cada post: { postId, creation, name, id, message, markdown, files }
     const rawPosts = json.posts || [];
 
     rawPosts.forEach(p => {
@@ -41,6 +20,10 @@ export function parsearPostsLynxChan(json, threadId, board) {
 
         if (!postId || !creation) return;
 
+        // Extraer todos los >>NNN del mensaje (replies)
+        const replyMatches = message.matchAll(/>>(\d+)/g);
+        const replyTo = [...replyMatches].map(m => Number(m[1]));
+
         posts.push({
             board,
             thread_id:    threadId,
@@ -52,63 +35,103 @@ export function parsearPostsLynxChan(json, threadId, board) {
                             : new Date(creation).toISOString(),
             contenido:    limpiarHTML(message).substring(0, 600),
             tiene_imagen: files.length > 0,
-            num_imagenes: files.length
+            num_imagenes: files.length,
+            reply_to:     replyTo.length > 0 ? replyTo : null
         });
     });
 
-    // Ordenar por post_no ascendente (cronológico)
     return posts.sort((a, b) => a.post_no - b.post_no);
 }
 
-// ── Calcula puntos para una lista de posts ya ordenados ───────
-export function calcularPuntosLista(posts, threadId, board) {
-    const resultado = [];
-    let anteriorTime = null;
+// ── Calcula las transacciones de PT para una lista de posts ──
+// Regla: cuando el post A hace reply al post B,
+//   se busca el personaje dueño de B (el replyado)
+//   se buscan los tags que tiene ese personaje y que NO tiene A
+//   se asigna +1 PT en 1 tag aleatorio de esos (Contraste)
+//
+// mapaNombres     = { 'NombreEnHilo': { nombre, tags: ['#Eldritch',...] } }
+// indiceCompleto  = [{ post_no, poster_name }] — todos los posts del hilo (incluye viejos)
+//                   opcional; si se omite solo resuelve replies dentro del array posts
+// Devuelve: [{personaje_nombre, tag, delta, motivo, origen_post_no, origen_thread_id}]
+export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceCompleto = []) {
+    const transacciones = [];
+
+    // Índice rápido: post_no → poster_name
+    // Primero cargamos el índice completo (posts viejos de la DB) y luego sobreescribimos
+    // con los nuevos por si hubiera duplicados (los nuevos tienen precedencia)
+    const postAutor = {};
+    indiceCompleto.forEach(p => { postAutor[p.post_no] = p.poster_name; });
+    posts.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
     posts.forEach(post => {
-        const { puntos, tipo, minutos } = calcularPuntos(post.post_time, anteriorTime);
-        resultado.push({
-            board,
-            thread_id:               threadId,
-            post_no:                 post.post_no,
-            poster_name:             post.poster_name,
-            puntos,
-            bonus_tipo:              tipo,
-            minutos_desde_anterior:  minutos !== null ? Math.round(minutos * 100) / 100 : null
+        if (!post.reply_to || post.reply_to.length === 0) return;
+
+        // Buscar el personaje del poster (quién hace la reply)
+        const pjReplier = mapaNombres[post.poster_name];
+        if (!pjReplier) return; // poster no registrado como personaje
+
+        const tagsReplier = pjReplier.tags || [];
+
+        // Para cada post al que responde
+        post.reply_to.forEach(replyPostNo => {
+            const autorReplyado = postAutor[replyPostNo];
+            if (!autorReplyado) return;
+            if (autorReplyado === post.poster_name) return; // no se puntúa a sí mismo
+
+            // Buscar el personaje del replyado
+            const pjReplyado = mapaNombres[autorReplyado];
+            if (!pjReplyado) return; // replyado no es personaje registrado
+
+            const tagsReplyado = pjReplyado.tags || [];
+            if (tagsReplyado.length === 0) return;
+
+            // Tags de contraste: los del REPLYADO que el REPLIER no tiene
+            const tagsReplierNorm = new Set(tagsReplier.map(t => t.toLowerCase()));
+            const tagsContraste   = tagsReplyado.filter(t => !tagsReplierNorm.has(t.toLowerCase()));
+
+            if (tagsContraste.length === 0) return;
+
+            // Elige 1 tag aleatorio de los de contraste
+            const tagElegido = tagsContraste[Math.floor(Math.random() * tagsContraste.length)];
+
+            // El PT va al REPLIER (quien interactuó), no al replyado
+            transacciones.push({
+                personaje_nombre:  pjReplier.nombre,
+                tag:               tagElegido,
+                delta:             1,
+                motivo:            'interaccion',
+                origen_post_no:    post.post_no,
+                origen_thread_id:  threadId
+            });
         });
-        anteriorTime = post.post_time;
     });
 
-    return resultado;
+    return transacciones;
 }
 
-// ── Construye el ranking desde la lista de puntos ─────────────
-export function construirRanking(puntos, threadId, board) {
+// ── Construye el ranking de posts (sin puntos de velocidad) ───
+// Solo cuenta posts por persona para el historial
+export function construirRankingPosts(posts, threadId, board) {
     const map = {};
 
-    puntos.forEach(p => {
-        const key = p.poster_name;
-        if (!map[key]) {
-            map[key] = {
+    posts.forEach(p => {
+        if (!map[p.poster_name]) {
+            map[p.poster_name] = {
                 board,
-                thread_id:     threadId,
-                poster_name:   key,
-                total_posts:   0,
-                total_puntos:  0,
-                posts_rapidos: 0,
-                posts_medios:  0,
-                posts_base:    0,
-                ultimo_post:   null
+                thread_id:   threadId,
+                poster_name: p.poster_name,
+                total_posts: 0,
+                ultimo_post: null
             };
         }
-        map[key].total_posts   += 1;
-        map[key].total_puntos  += p.puntos;
-        if (p.bonus_tipo === 'rapido') map[key].posts_rapidos++;
-        else if (p.bonus_tipo === 'medio') map[key].posts_medios++;
-        else map[key].posts_base++;
+        map[p.poster_name].total_posts++;
+        if (!map[p.poster_name].ultimo_post ||
+            p.post_time > map[p.poster_name].ultimo_post) {
+            map[p.poster_name].ultimo_post = p.post_time;
+        }
     });
 
-    return Object.values(map).sort((a, b) => b.total_puntos - a.total_puntos);
+    return Object.values(map).sort((a, b) => b.total_posts - a.total_posts);
 }
 
 // ── Limpiar HTML del mensaje ──────────────────────────────────
@@ -134,13 +157,20 @@ export function formatearMinutos(minutos) {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
+// ── Formatea fecha ISO a string legible ───────────────────────
+export function fmtFecha(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleString('es-ES', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
+}
+
 // ── Obtiene thread_id y board de una URL de 8chan ─────────────
 export function parsearURL(url) {
-    // Ej: https://8chan.moe/hisrol/res/125542.html
     try {
-        const u = new URL(url);
+        const u     = new URL(url);
         const parts = u.pathname.split('/').filter(Boolean);
-        // parts = ['hisrol', 'res', '125542.html']
         const board    = parts[0] || 'hisrol';
         const threadId = parseInt((parts[2] || '').replace(/\D/g, ''));
         if (!threadId) return null;
