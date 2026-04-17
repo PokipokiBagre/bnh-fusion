@@ -368,3 +368,4 @@ export const db = {
             });
             return mapa;
         }
+  }
