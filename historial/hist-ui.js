@@ -6,6 +6,7 @@ import {
     ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI
 } from './hist-state.js';
 import { formatearMinutos, fmtFecha, limpiarHTML } from './hist-logic.js';
+import { renderOpcionesPanel, guardarOpcion } from '../bnh-opciones-tags.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -442,3 +443,13 @@ function escHTML(str) {
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Panel de Opciones Tags ────────────────────────────────────
+export function renderOpcionesModal(esAdmin) {
+    return renderOpcionesPanel(esAdmin);
+}
+
+window._opcionTagChange = async function(clave, valor) {
+    const { ok, msg } = await guardarOpcion(clave, valor);
+    if (!ok) alert('Error: ' + msg);
+};
