@@ -1,8 +1,10 @@
 // ============================================================
 // hist-data.js — Fetch de 8chan + CRUD Supabase + PT por Tags
 // ============================================================
-import { supabase }   from '../bnh-auth.js';
-import { db }         from '../bnh-db.js';
+import { supabase }        from '../bnh-auth.js';
+import { db }             from '../bnh-db.js';
+import { initOpciones }   from '../bnh-opciones-tags.js';
+import { cargarFusiones, fusionState } from '../bnh-fusion.js';
 import {
     hilosState, postsState, rankingState,
     ptTagState, estadoUI, CORS_PROXY
@@ -176,67 +178,63 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 // ── Procesar PT para un array de posts nuevos ─────────────────
 // Solo procesa posts que aún no tienen pt_procesado = true
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
+    // Cargar opciones y personajes
+    await initOpciones();
+    await cargarFusiones();
+
     const mapaNombres = await db.historial.getMapaNombres();
     if (!Object.keys(mapaNombres).length) {
-        console.warn('[PT] mapa vacío — sin aliases en DB');
+        console.warn('[PT] mapa vacío');
         return;
     }
 
-    // Índice cross-board para resolver replies entre hilos
+    // Índice cross-board para replies entre hilos
     const { data: indiceDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
         .eq('board', board);
     const postsParaIndice = indiceDB || [];
 
-    // Leer contenido de la DB para los posts a procesar
-    // (más confiable que el JSON parseado, que puede tener el campo incorrecto)
+    // Leer contenido de DB para los posts a procesar
     const postNos = postsNuevos.map(p => p.post_no);
     const { data: contenidosDB } = await supabase
         .from('historial_posts')
-        .select('post_no, poster_name, contenido, reply_to')
+        .select('post_no, contenido')
         .eq('board', board)
         .eq('thread_id', threadId)
         .in('post_no', postNos);
-
     const contenidoMap = {};
-    (contenidosDB || []).forEach(p => { contenidoMap[p.post_no] = p; });
+    (contenidosDB || []).forEach(p => { contenidoMap[p.post_no] = p.contenido; });
 
-    // Reconstruir reply_to desde contenido para cada post
-    const postsConReplies = postsNuevos.map(post => {
-        const dbPost = contenidoMap[post.post_no] || post;
+    // Enriquecer posts con contenido de DB (más confiable)
+    const postsEnriquecidos = postsNuevos.map(p => ({
+        ...p,
+        contenido: contenidoMap[p.post_no] ?? p.contenido ?? ''
+    }));
 
-        // Si ya tiene reply_to válido, usarlo
-        if (dbPost.reply_to && dbPost.reply_to.length > 0) return { ...post, reply_to: dbPost.reply_to };
-
-        // Extraer >>NNN del contenido guardado en DB
-        const texto = dbPost.contenido || post.contenido || '';
-        const nums = [];
-        let m;
-        const re = />>(\d+)/g;
-        while ((m = re.exec(texto)) !== null) nums.push(Number(m[1]));
-        const uniq = [...new Set(nums)];
-
-        return { ...post, reply_to: uniq.length > 0 ? uniq : null };
-    });
-
-    const conReplies = postsConReplies.filter(p => p.reply_to && p.reply_to.length > 0);
-    console.log('[PT] posts:', postsConReplies.length,
-        '| con replies:', conReplies.length,
-        '| mapa:', Object.keys(mapaNombres).length,
-        '| índice:', postsParaIndice.length);
-
-    if (conReplies.length > 0) {
-        console.log('[PT] muestra:', conReplies.slice(0,3)
-            .map(p => `${p.poster_name} No.${p.post_no}→[${p.reply_to?.slice(0,3)}]`).join(' | '));
+    // Personajes en fusión activa
+    const fusionados = new Set();
+    for (const [, f] of fusionState) {
+        if (f.activa) { fusionados.add(f.pj_a); fusionados.add(f.pj_b); }
     }
 
-    const transacciones = calcularTransaccionesPT(postsConReplies, mapaNombres, threadId, postsParaIndice);
+    // Posts ya procesados en este thread (idempotencia)
+    const { data: yaEnLog } = await supabase
+        .from('log_puntos_tag')
+        .select('origen_post_no')
+        .eq('origen_thread_id', threadId)
+        .in('motivo', ['interaccion', 'compartido', 'lectura']);
+    const yaProcessados = new Set((yaEnLog || []).map(r => r.origen_post_no));
 
-    console.log('[PT] transacciones:', transacciones.length);
-    transacciones.slice(0,5).forEach(t =>
-        console.log(`  [PT] ${t.personaje_nombre} +${t.delta} ${t.tag} post:${t.origen_post_no}`)
+    const transacciones = calcularTransaccionesPT(
+        postsEnriquecidos, mapaNombres, threadId,
+        postsParaIndice, fusionados, yaProcessados
     );
+
+    console.log('[PT] posts:', postsEnriquecidos.length,
+        '| ya procesados:', yaProcessados.size,
+        '| nuevos a procesar:', postsEnriquecidos.filter(p => !yaProcessados.has(p.post_no)).length,
+        '| transacciones:', transacciones.length);
 
     if (transacciones.length > 0) {
         await db.progresion.aplicarTransacciones(transacciones);

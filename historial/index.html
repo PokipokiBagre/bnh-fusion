@@ -19,37 +19,41 @@
         </div>
 
         <div style="display:flex; gap:6px; align-items:center; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+
+            <!-- Opciones PT — visible para todos, editable solo OP -->
+            <button class="btn btn-sm" onclick="window.abrirOpcionesTags()"
+                style="background:#2c3e50; border-color:#34495e; color:white;"
+                title="Opciones del sistema de PT">
+                ⚙ Opciones PT
+            </button>
+
             <!-- Actualizar posts -->
-            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()" title="Solo scrapea posts nuevos, no recalcula PT">
+            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()"
+                title="Scrapea posts nuevos y calcula PT">
                 🔄 Actualizar
             </button>
 
             <!-- Dropdown Calcular PT -->
             <div style="position:relative;" id="pt-dropdown-wrap">
                 <button class="btn btn-sm" onclick="document.getElementById('pt-menu').classList.toggle('open')"
-                    style="background:#1a4a80; border-color:#2980b9; color:white;"
-                    title="Recalcular PT para los posts del período seleccionado">
+                    style="background:#1a4a80; border-color:#2980b9; color:white;">
                     ⚡ Calcular PT ▾
                 </button>
                 <div id="pt-menu" style="
                     display:none; position:absolute; right:0; top:calc(100% + 4px);
                     background:white; border:1.5px solid #2980b9; border-radius:8px;
-                    box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:999; min-width:180px;
+                    box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:999; min-width:190px;
                     overflow:hidden;">
-                    <div class="pt-menu-item" onclick="window.calcularPT('todo'); document.getElementById('pt-menu').classList.remove('open')"
-                        title="Reprocesa TODOS los posts del hilo. Borra PT anteriores de interacción y recalcula desde cero.">
+                    <div class="pt-menu-item" onclick="window.calcularPT('todo'); document.getElementById('pt-menu').classList.remove('open')">
                         📋 Completo (todo el hilo)
                     </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('7d'); document.getElementById('pt-menu').classList.remove('open')"
-                        title="Reprocesa posts de los últimos 7 días">
+                    <div class="pt-menu-item" onclick="window.calcularPT('7d'); document.getElementById('pt-menu').classList.remove('open')">
                         📅 Última semana
                     </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('3d'); document.getElementById('pt-menu').classList.remove('open')"
-                        title="Reprocesa posts de los últimos 3 días">
+                    <div class="pt-menu-item" onclick="window.calcularPT('3d'); document.getElementById('pt-menu').classList.remove('open')">
                         📅 Últimos 3 días
                     </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('1d'); document.getElementById('pt-menu').classList.remove('open')"
-                        title="Reprocesa posts del último día">
+                    <div class="pt-menu-item" onclick="window.calcularPT('1d'); document.getElementById('pt-menu').classList.remove('open')">
                         📅 Último día
                     </div>
                 </div>
@@ -79,12 +83,8 @@
 
 <style>
 .pt-menu-item {
-    padding: 10px 16px;
-    font-size: 0.85em;
-    cursor: pointer;
-    color: #1a4a80;
-    font-weight: 500;
-    transition: background 0.15s;
+    padding: 10px 16px; font-size: 0.85em; cursor: pointer;
+    color: #1a4a80; font-weight: 500; transition: background 0.15s;
     border-bottom: 1px solid #e9ecef;
 }
 .pt-menu-item:last-child { border-bottom: none; }
@@ -93,14 +93,11 @@
 </style>
 
 <script type="module" src="hist-main.js"></script>
-
 <script>
-// Cerrar dropdown al hacer click fuera
 document.addEventListener('click', (e) => {
     const wrap = document.getElementById('pt-dropdown-wrap');
-    if (wrap && !wrap.contains(e.target)) {
+    if (wrap && !wrap.contains(e.target))
         document.getElementById('pt-menu')?.classList.remove('open');
-    }
 });
 </script>
 </body>

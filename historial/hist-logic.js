@@ -1,161 +1,163 @@
 // ============================================================
 // hist-logic.js — Lógica de Parsing y PT por Tags
 // ============================================================
+import { OPCIONES } from '../bnh-opciones-tags.js';
 
-// ── Parser de JSON de LynxChan (8chan.moe) ───────────────────
-// Ahora también extrae reply_to: los >>NNN que aparecen en el mensaje
+// ── Parser de JSON de LynxChan (8chan.moe) ────────────────────
 export function parsearPostsLynxChan(json, threadId, board) {
     const posts = [];
     if (!json) return posts;
-
     const rawPosts = json.posts || [];
-
     rawPosts.forEach(p => {
         const postId   = p.postId ?? p.no;
         const creation = p.creation ?? p.dateTime ?? p.time;
         const name     = (p.name?.trim() || 'Anónimo');
         const posterId = p.id || '';
-        const message  = p.message ?? p.markdown ?? '';  // message = texto plano con >>NNN
+        const message  = p.message ?? p.markdown ?? ''; // message=texto plano con >>NNN
         const files    = Array.isArray(p.files) ? p.files : (p.files ? [p.files] : []);
-
         if (!postId || !creation) return;
-
-        // Extraer todos los >>NNN del mensaje (replies)
-        const replyMatches = message.matchAll(/>>(\d+)/g);
-        const replyTo = [...replyMatches].map(m => Number(m[1]));
-
+        const replyNums = [];
+        let m; const reR = />>(\d+)/g;
+        while ((m = reR.exec(message)) !== null) replyNums.push(Number(m[1]));
         posts.push({
-            board,
-            thread_id:    threadId,
-            post_no:      Number(postId),
-            poster_name:  name,
-            poster_id:    posterId,
-            post_time:    typeof creation === 'number'
-                            ? new Date(creation * 1000).toISOString()
-                            : new Date(creation).toISOString(),
+            board, thread_id: threadId, post_no: Number(postId),
+            poster_name: name, poster_id: posterId,
+            post_time: typeof creation === 'number'
+                ? new Date(creation * 1000).toISOString()
+                : new Date(creation).toISOString(),
             contenido:    limpiarHTML(message).substring(0, 600),
             tiene_imagen: files.length > 0,
             num_imagenes: files.length,
-            reply_to:     replyTo.length > 0 ? replyTo : null
+            reply_to:     replyNums.length > 0 ? [...new Set(replyNums)] : null
         });
     });
-
     return posts.sort((a, b) => a.post_no - b.post_no);
 }
 
-// ── Calcula las transacciones de PT para una lista de posts ──
-// Regla: cuando el post A hace reply al post B,
-//   se busca el personaje dueño de B (el replyado)
-//   se buscan los tags que tiene ese personaje y que NO tiene A
-//   se asigna +1 PT en 1 tag aleatorio de esos (Contraste)
-//
-// mapaNombres     = { 'NombreEnHilo': { nombre, tags: ['#Eldritch',...] } }
-// indiceCompleto  = [{ post_no, poster_name }] — todos los posts del hilo (incluye viejos)
-//                   opcional; si se omite solo resuelve replies dentro del array posts
-// Devuelve: [{personaje_nombre, tag, delta, motivo, origen_post_no, origen_thread_id}]
-// Quita el tripcode (##xxx o #xxx) del poster_name para poder matchear con aliases
-function normPosterName(name) {
+export function normPosterName(name) {
     return (name || '').replace(/##?\S+/, '').trim();
 }
 
-export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceCompleto = []) {
-    const transacciones = [];
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
 
-    // Índice rápido: post_no → poster_name
+function extraerTagsDeLectura(contenido) {
+    if (!contenido) return [];
+    const found = []; let m;
+    const re = /#([A-Za-zÀ-ɏ][A-Za-zÀ-ɏ0-9_.]*)/g;
+    while ((m = re.exec(contenido)) !== null) found.push('#' + m[1]);
+    return [...new Set(found)];
+}
+
+// ── Calcula transacciones de PT ───────────────────────────────
+// 3 fuentes: NO_COMPARTIDOS, COMPARTIDOS, LECTURA
+// yaProcessados = Set<post_no> ya en log para este thread (idempotencia)
+export function calcularTransaccionesPT(
+    posts, mapaNombres, threadId,
+    indiceCompleto = [], fusionados = new Set(), yaProcessados = new Set()
+) {
+    const transacciones = [];
     const postAutor = {};
     indiceCompleto.forEach(p => { postAutor[p.post_no] = p.poster_name; });
     posts.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
     posts.forEach(post => {
-        if (!post.reply_to || post.reply_to.length === 0) return;
+        if (yaProcessados.has(post.post_no)) return; // idempotencia
 
-        // El REPLIER debe ser un personaje registrado
+        const texto = post.contenido || '';
+
+        // Extraer replies del contenido
+        const replyNums = [];
+        let m; const reR = />>(\d+)/g;
+        while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
+        const misReplies = [...new Set(replyNums)];
+
+        // El REPLIER debe ser personaje
         const pjReplier = mapaNombres[post.poster_name]
                        ?? mapaNombres[normPosterName(post.poster_name)];
         if (!pjReplier) return;
 
-        const tagsReplier = (pjReplier.tags || []).map(t => t.toLowerCase());
-        if (tagsReplier.length === 0) return;
-
-        // Acumular tags únicos de todos los replyados en este post
-        const tagsReplyados = new Set();
-
-        post.reply_to.forEach(replyPostNo => {
-            const autorReplyado = postAutor[replyPostNo];
-            if (!autorReplyado) return;
-            if (autorReplyado === post.poster_name) return; // no se puntúa a sí mismo
-
-            const pjReplyado = mapaNombres[autorReplyado]
-                            ?? mapaNombres[normPosterName(autorReplyado)];
-            if (!pjReplyado) return;
-
-            (pjReplyado.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
+        const tagsReplierLow = new Set((pjReplier.tags || []).map(t => t.toLowerCase()));
+        const tagOrig = {}; // lowercase → tag original con formato correcto
+        (pjReplier.tags || []).forEach(t => {
+            const norm = t.toLowerCase();
+            tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
         });
 
-        if (tagsReplyados.size === 0) return;
+        // Multiplicador fusión: divide el delta
+        const enFusion = fusionados.has(pjReplier.nombre);
+        const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
 
-        // LÓGICA CORRECTA:
-        // Tags elegibles = tags PROPIOS del REPLIER que el/los REPLYADO/s NO tienen
-        // (el REPLIER suma puntos en sus propios tags únicos)
-        const tagsElegibles = tagsReplier.filter(t => !tagsReplyados.has(t));
-        if (tagsElegibles.length === 0) return;
-
-        // Máximo 5 PT por post, distribuidos aleatoriamente entre los tags elegibles
-        const maxPT = Math.min(5, tagsElegibles.length);
-        const ptTotal = Math.floor(Math.random() * maxPT) + 1; // entre 1 y maxPT
-
-        // Mezclar los tags elegibles y tomar ptTotal de ellos
-        const mezclados = [...tagsElegibles].sort(() => Math.random() - 0.5);
-        const elegidos = mezclados.slice(0, ptTotal);
-
-        // Buscar el nombre original del tag (con capitalización correcta)
-        const tagsOriginales = pjReplier.tags || [];
-        const tagMap = {};
-        tagsOriginales.forEach(t => { tagMap[t.toLowerCase()] = t; });
-
-        elegidos.forEach(tagLower => {
-            const tagOriginal = tagMap[tagLower] || tagLower;
+        const empujar = (tagLow, delta, motivo) => {
             transacciones.push({
-                personaje_nombre:  pjReplier.nombre,
-                tag:               tagOriginal.startsWith('#') ? tagOriginal : '#' + tagOriginal,
-                delta:             1,
-                motivo:            'interaccion',
-                origen_post_no:    post.post_no,
-                origen_thread_id:  threadId
+                personaje_nombre: pjReplier.nombre,
+                tag:              tagOrig[tagLow] || ('#' + tagLow),
+                delta:            Math.max(1, Math.round(delta / divFusion)),
+                motivo,
+                origen_post_no:   post.post_no,
+                origen_thread_id: threadId
             });
+        };
+
+        // ── FUENTE 3: LECTURA ─────────────────────────────────
+        const leidos = extraerTagsDeLectura(texto)
+            .map(t => t.toLowerCase())
+            .filter(t => tagsReplierLow.has(t));
+        shuffle(leidos).slice(0, OPCIONES.max_lectura).forEach(t =>
+            empujar(t, OPCIONES.delta_lectura, 'lectura')
+        );
+
+        // Fuentes 1 y 2 requieren replies a personajes
+        if (misReplies.length === 0) return;
+
+        const tagsReplyados = new Set();
+        let hayPJ = false;
+        misReplies.forEach(rno => {
+            const autor = postAutor[rno];
+            if (!autor || autor === post.poster_name) return;
+            const pjR = mapaNombres[autor] ?? mapaNombres[normPosterName(autor)];
+            if (!pjR) return;
+            hayPJ = true;
+            (pjR.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
         });
+        if (!hayPJ) return;
+
+        // ── FUENTE 1: NO COMPARTIDOS ──────────────────────────
+        const noComp = [...tagsReplierLow].filter(t => !tagsReplyados.has(t));
+        shuffle(noComp).slice(0, OPCIONES.max_no_compartidos).forEach(t =>
+            empujar(t, OPCIONES.delta_no_compartido, 'interaccion')
+        );
+
+        // ── FUENTE 2: COMPARTIDOS ─────────────────────────────
+        const comp = [...tagsReplierLow].filter(t => tagsReplyados.has(t));
+        shuffle(comp).slice(0, OPCIONES.max_compartidos).forEach(t =>
+            empujar(t, OPCIONES.delta_compartido, 'compartido')
+        );
     });
 
     return transacciones;
 }
 
-
-// ── Construye el ranking de posts (sin puntos de velocidad) ───
-// Solo cuenta posts por persona para el historial
 export function construirRankingPosts(posts, threadId, board) {
     const map = {};
-
     posts.forEach(p => {
-        if (!map[p.poster_name]) {
-            map[p.poster_name] = {
-                board,
-                thread_id:   threadId,
-                poster_name: p.poster_name,
-                total_posts: 0,
-                ultimo_post: null
-            };
-        }
+        if (!map[p.poster_name]) map[p.poster_name] = {
+            board, thread_id: threadId, poster_name: p.poster_name,
+            total_posts: 0, ultimo_post: null
+        };
         map[p.poster_name].total_posts++;
-        if (!map[p.poster_name].ultimo_post ||
-            p.post_time > map[p.poster_name].ultimo_post) {
+        if (!map[p.poster_name].ultimo_post || p.post_time > map[p.poster_name].ultimo_post)
             map[p.poster_name].ultimo_post = p.post_time;
-        }
     });
-
     return Object.values(map).sort((a, b) => b.total_posts - a.total_posts);
 }
 
-// ── Limpiar HTML del mensaje ──────────────────────────────────
 export function limpiarHTML(html) {
     if (!html) return '';
     return html
@@ -163,12 +165,11 @@ export function limpiarHTML(html) {
         .replace(/<a[^>]*>(.*?)<\/a>/gi, '$1')
         .replace(/<[^>]+>/g, '')
         .replace(/&gt;/g, '>').replace(/&lt;/g, '<')
-        .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&').replace(/&quot;/g, '"'  )
         .replace(/&#039;/g, "'").replace(/\s+/g, ' ')
         .trim();
 }
 
-// ── Formatea duración en texto legible ────────────────────────
 export function formatearMinutos(minutos) {
     if (minutos === null || minutos === undefined) return 'primer post';
     if (minutos < 1)   return `${Math.round(minutos * 60)}s`;
@@ -178,7 +179,6 @@ export function formatearMinutos(minutos) {
     return m > 0 ? `${h}h ${m}m` : `${h}h`;
 }
 
-// ── Formatea fecha ISO a string legible ───────────────────────
 export function fmtFecha(iso) {
     if (!iso) return '';
     return new Date(iso).toLocaleString('es-ES', {
@@ -187,7 +187,6 @@ export function fmtFecha(iso) {
     });
 }
 
-// ── Obtiene thread_id y board de una URL de 8chan ─────────────
 export function parsearURL(url) {
     try {
         const u     = new URL(url);
@@ -196,7 +195,5 @@ export function parsearURL(url) {
         const threadId = parseInt((parts[2] || '').replace(/\D/g, ''));
         if (!threadId) return null;
         return { board, thread_id: threadId, host: u.host };
-    } catch {
-        return null;
-    }
+    } catch { return null; }
 }

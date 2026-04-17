@@ -13,8 +13,9 @@ import {
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
-    renderHeaderInfo, toast
+    renderHeaderInfo, renderOpcionesModal, toast
 } from './hist-ui.js';
+import { initOpciones, OPCIONES } from '../bnh-opciones-tags.js';
 
 // ── Bridge con Tampermonkey ───────────────────────────────────
 (function setupExtensionBridge() {
@@ -47,6 +48,7 @@ async function init() {
     const btnCfg = document.getElementById('btn-config');
     if (btnCfg) btnCfg.style.display = estadoUI.esAdmin ? 'inline-block' : 'none';
 
+    await initOpciones();
     await cargarHilos();
 
     // Restaurar hilo activo de sesión anterior
@@ -115,7 +117,7 @@ window.scrapeManual = async function(board, threadId) {
     toast('⏳ Obteniendo posts…', 'info');
     renderHeaderInfo();
 
-    const resultado = await scrapearHilo(board, threadId, hilo.thread_url, null, true); // calcPT=true siempre
+    const resultado = await scrapearHilo(board, threadId, hilo.thread_url, null, false);
 
     if (!resultado.ok) {
         toast('❌ ' + resultado.error, 'error');
@@ -129,7 +131,7 @@ window.scrapeManual = async function(board, threadId) {
 
     await cargarHilos();
     toast(resultado.nuevos > 0
-        ? `✅ ${resultado.nuevos} post(s) nuevo(s) · PT calculados`
+        ? `✅ ${resultado.nuevos} post(s) nuevo(s)${resultado.nuevos > 0 ? ' · PT calculados' : ''}`
         : '✓ Sin posts nuevos', 'ok');
     renderHeaderInfo();
 };
@@ -177,7 +179,7 @@ window.actualizarManual = async function(board, threadId) {
             toast('⏳ Procesando JSON y calculando PT…', 'info');
             renderHeaderInfo();
 
-            const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson, true); // calcPT=true
+            const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson);
 
             if (!resultado.ok) { toast('❌ ' + resultado.error, 'error'); return; }
 
@@ -275,7 +277,7 @@ window.toggleAutoRefresh = function() {
         estadoUI.refreshInterval = setInterval(async () => {
             if (!estadoUI.hiloActivo) return;
             const { board, thread_id, thread_url } = estadoUI.hiloActivo;
-            const r = await scrapearHilo(board, thread_id, thread_url, null, true); // calcPT=true
+            const r = await scrapearHilo(board, thread_id, thread_url);
             if (r.ok && r.nuevos > 0) {
                 await cargarHiloActivo();
                 mostrarVista(estadoUI.vistaActual);
@@ -289,6 +291,31 @@ window.toggleAutoRefresh = function() {
 };
 
 window.irAHilos     = function() { mostrarVista('hilos'); };
+
+// ── Panel Opciones Tags ───────────────────────────────────────
+window.abrirOpcionesTags = function() {
+    const existing = document.getElementById('modal-opciones-tags');
+    if (existing) { existing.remove(); return; }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'modal-opciones-tags';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);';
+    overlay.innerHTML = `
+        <div style="background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);
+            min-width:320px;max-width:540px;width:90%;border:2px solid var(--green);">
+            <div style="display:flex;justify-content:space-between;align-items:center;
+                padding:12px 16px;border-bottom:1px solid #e9ecef;">
+                <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;">Opciones de PT</span>
+                <button onclick="document.getElementById('modal-opciones-tags').remove()"
+                    style="background:none;border:none;font-size:1.3em;cursor:pointer;color:#aaa;">×</button>
+            </div>
+            <div id="opciones-tags-body">
+                ${renderOpcionesModal(estadoUI.esAdmin)}
+            </div>
+        </div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
 window.mostrarVista = mostrarVista;
 
 document.querySelectorAll('.nav-tab').forEach(btn => {

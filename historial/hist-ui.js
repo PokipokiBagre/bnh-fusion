@@ -6,6 +6,7 @@ import {
     ptTagState, estadoUI
 } from './hist-state.js';
 import { formatearMinutos, fmtFecha, limpiarHTML } from './hist-logic.js';
+import { OPCIONES, renderOpcionesPanel, guardarOpcion } from '../bnh-opciones-tags.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -145,98 +146,102 @@ export function renderRanking() {
 export function renderTimeline() {
     const cont = $('contenido-principal');
     if (!cont) return;
-
     if (!estadoUI.hiloActivo) {
         cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📜</div><h3>Selecciona un hilo primero</h3></div>`;
         return;
     }
     if (!postsState.length) {
-        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📜</div><h3>Sin posts registrados</h3><button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button></div>`;
+        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📜</div><h3>Sin posts registrados</h3>
+            <button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button></div>`;
         return;
     }
 
-    let html = `
-    <div class="timeline-controles">
-        <span style="font-size:0.85em; color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
-        <a href="${estadoUI.hiloActivo.thread_url}" target="_blank" class="btn btn-outline" style="font-size:0.8em; padding:4px 12px;">↗ Ver en 8chan</a>
-    </div>
-    <div class="timeline">`;
-
-    // Índice post_no → poster_name para resolver replies visualmente
+    // Índice post_no → poster_name
     const postAutor = {};
     postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
-    // Backlinks: índice post_no → [post_nos que lo citan]
+    // Backlinks: post_no → [post_nos que lo citan]
     const backlinks = {};
     postsState.forEach(post => {
-        const replies = [...((post.contenido||'').matchAll(/>>(\d+)/g))].map(m=>Number(m[1]));
-        replies.forEach(rno => {
+        const nums = []; let m; const re = />>(\d+)/g;
+        while ((m = re.exec(post.contenido || '')) !== null) nums.push(Number(m[1]));
+        [...new Set(nums)].forEach(rno => {
             if (!backlinks[rno]) backlinks[rno] = [];
             backlinks[rno].push(post.post_no);
         });
     });
 
+    // PT por post: post_no → [{tag, delta, motivo}]
+    // Leído desde log_puntos_tag via ptPorPost (cargado aparte)
+    // Por ahora usamos ptTagState como indicador visual (acumulado)
+
+    let html = `
+    <div style="padding:8px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:0.85em; color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
+        <a href="${estadoUI.hiloActivo.thread_url}" target="_blank" class="btn btn-outline" style="font-size:0.8em; padding:4px 12px;">↗ Ver en 8chan</a>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:12px; padding:4px 0;">`;
+
     [...postsState].reverse().forEach(post => {
-        // SECCIÓN 1: replies salientes extraídas del contenido
-        const misReplies = [...new Set([...((post.contenido||'').matchAll(/>>(\d+)/g))].map(m=>Number(m[1])))];
+        const nums = []; let m; const re = />>(\d+)/g;
+        while ((m = re.exec(post.contenido || '')) !== null) nums.push(Number(m[1]));
+        const misReplies = [...new Set(nums)];
+
+        // Replies salientes
         const repliesHtml = misReplies.map(rno => {
             const autor = postAutor[rno] || '';
             const existe = !!postAutor[rno];
             return `<a href="#post-${rno}" onclick="tlScrollTo(${rno},${post.post_no});return false;"
-                style="color:#00b4d8;font-size:0.8em;margin-right:8px;text-decoration:none;cursor:pointer;${existe?'':'opacity:0.5;'}"
-                title="${autor?'Post de '+autor:''}">&gt;&gt;${rno}${autor?' <span style=\"color:#7ecfb3;font-size:0.85em;\">('+autor+')</span>':''} ↑</a>`;
+                style="color:#00b4d8;font-size:0.75em;margin-right:6px;text-decoration:none;${existe?'':'opacity:0.5;'}"
+                >&gt;&gt;${rno}${autor?` <span style="color:#7ecfb3">(${autor})</span>`:''} ↑</a>`;
         }).join('');
 
-        // SECCIÓN 2: contenido con >>NNN convertidos a links y greentext
-        const contenidoHtml = renderContenido(post.contenido || '', postAutor, post.post_no);
+        // Backlinks
+        const backHtml = (backlinks[post.post_no]||[]).map(bno => {
+            const autor = postAutor[bno]||'';
+            return `<a href="#post-${bno}" onclick="tlScrollTo(${bno},${post.post_no});return false;"
+                style="color:#7ecfb3;font-size:0.75em;margin-right:6px;text-decoration:none;"
+                >&gt;&gt;${bno}${autor?` (${autor})`:''} ↓</a>`;
+        }).join('');
 
-        // SECCIÓN 3: PT generados por este post (desde ptTagState por poster_name)
-        const ptPoster = ptTagState[post.poster_name];
-        const ptBadge = (misReplies.length > 0 && ptPoster && Object.keys(ptPoster).length > 0)
-            ? Object.entries(ptPoster).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([tag,pts]) =>
-                `<span style="background:rgba(0,180,216,0.1);border:1px solid #00b4d8;color:#00b4d8;
-                    padding:2px 8px;border-radius:10px;font-size:0.75em;font-weight:700;margin-right:4px;">
-                    ${tag} <b>${pts}</b></span>`
-              ).join('')
+        // PT acumulados del personaje (visual indicativo)
+        const ptPoster = ptTagState[post.poster_name] || {};
+        const ptBadges = misReplies.length > 0 && Object.keys(ptPoster).length > 0
+            ? Object.entries(ptPoster).sort((a,b)=>b[1]-a[1]).slice(0,4)
+                .map(([tag,pts]) => `<span style="background:rgba(0,180,216,0.1);border:1px solid #00b4d8;
+                    color:#00b4d8;padding:1px 6px;border-radius:8px;font-size:0.7em;font-weight:700;
+                    margin-right:3px;">${tag} ${pts}</span>`).join('')
             : '';
 
-        // SECCIÓN 4: backlinks (quién cita este post)
-        const backHtml = (backlinks[post.post_no]||[]).map(bno => {
-            const autor = postAutor[bno] || '';
-            return `<a href="#post-${bno}" onclick="tlScrollTo(${bno},${post.post_no});return false;"
-                style="color:#7ecfb3;font-size:0.75em;margin-right:8px;text-decoration:none;cursor:pointer;"
-                title="${autor?'Post de '+autor:''}">&gt;&gt;${bno}${autor?' <span style=\"opacity:0.8;\">('+autor+')</span>':''} ↓</a>`;
-        }).join('');
-
         html += `
-        <div class="timeline-item" id="post-${post.post_no}">
+        <div id="post-${post.post_no}" style="background:white;border:1px solid #e9ecef;border-radius:10px;
+            padding:12px;display:flex;flex-direction:column;gap:6px;font-size:0.88em;
+            box-shadow:0 1px 4px rgba(0,0,0,0.06);">
 
-            <div class="tl-header">
-                <div class="tl-meta">
-                    <span class="tl-name">${post.poster_name}</span>
-                    ${post.poster_id ? `<span class="tl-id">${post.poster_id}</span>` : ''}
-                    <span class="tl-num" style="cursor:pointer;" onclick="tlCopyLink(${post.post_no})" title="Copiar No.${post.post_no}">No.${post.post_no}</span>
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-weight:700;color:#1e8449;">${post.poster_name}</span>
+                    ${post.poster_id?`<span style="background:#f1f3f4;color:#888;font-size:0.75em;padding:1px 5px;border-radius:4px;">${post.poster_id}</span>`:''}
+                    <span style="color:#aaa;font-size:0.75em;cursor:pointer;" onclick="tlCopyLink(${post.post_no})" title="Copiar">No.${post.post_no}</span>
                 </div>
-                <span class="tl-time">${fmtFecha(post.post_time)}</span>
+                <span style="color:#999;font-size:0.75em;">${fmtFecha(post.post_time)}</span>
             </div>
 
-            ${repliesHtml ? `<div style="padding:5px 0 4px;border-bottom:1px solid rgba(0,180,216,0.12);">
-                <span style="font-size:0.7em;color:#aaa;margin-right:4px;">cita →</span>${repliesHtml}
-            </div>` : ''}
+            ${repliesHtml?`<div style="border-bottom:1px solid rgba(0,180,216,0.15);padding-bottom:5px;">
+                <span style="font-size:0.68em;color:#bbb;margin-right:4px;">cita →</span>${repliesHtml}</div>`:''}
 
-            <div class="tl-body" style="padding:8px 0 6px;">
-                ${post.contenido ? `<p class="tl-texto">${contenidoHtml}</p>` : ''}
-                ${post.tiene_imagen ? `<span class="tl-img-badge">🖼 ${post.num_imagenes} imagen${post.num_imagenes>1?'es':''}</span>` : ''}
+            <div style="color:#333;line-height:1.5;word-break:break-word;">
+                ${renderContenido(post.contenido||'', postAutor, post.post_no)}
+                ${post.tiene_imagen?`<span style="display:inline-block;background:#f8f9fa;border:1px solid #e9ecef;
+                    border-radius:4px;padding:2px 7px;font-size:0.75em;color:#666;margin-top:4px;">
+                    🖼 ${post.num_imagenes} imagen${post.num_imagenes>1?'es':''}</span>`:''}
             </div>
 
-            ${ptBadge ? `<div style="padding:4px 0;border-top:1px solid rgba(0,180,216,0.12);border-bottom:1px solid rgba(0,180,216,0.12);">
-                <span style="font-size:0.7em;color:#aaa;margin-right:4px;">PT acumulados →</span>${ptBadge}
-            </div>` : ''}
+            ${ptBadges?`<div style="border-top:1px solid rgba(0,180,216,0.12);padding-top:5px;">
+                <span style="font-size:0.68em;color:#bbb;margin-right:4px;">PT acum →</span>${ptBadges}</div>`:''}
 
-            ${backHtml ? `<div style="padding:4px 0 2px;">
-                <span style="font-size:0.7em;color:#aaa;margin-right:4px;">citado por →</span>${backHtml}
-            </div>` : ''}
-
+            ${backHtml?`<div style="border-top:1px solid rgba(126,207,179,0.2);padding-top:4px;">
+                <span style="font-size:0.68em;color:#bbb;margin-right:4px;">citado →</span>${backHtml}</div>`:''}
         </div>`;
     });
 
@@ -244,19 +249,7 @@ export function renderTimeline() {
     cont.innerHTML = html;
 }
 
-// Devuelve el tag que ganó PT en un post (si fue procesado y generó PT)
-function obtenerPTDePost(post) {
-    // Buscamos en ptTagState si algún personaje tiene PT de este post_no
-    // Como no guardamos por post_no en memoria, solo mostramos si hay replies
-    if (!post.reply_to || post.reply_to.length === 0) return null;
-    // El badge visual es suficiente con saber que tiene replies válidas
-    // El detalle exacto del tag está en el log de la DB
-    return ''; // badge vacío: solo indica que generó PT
-}
 
-// ============================================================
-// VISTA: HILOS
-// ============================================================
 export function renderHilos() {
     const cont    = $('contenido-principal');
     if (!cont) return;
@@ -364,36 +357,39 @@ export function toast(msg, tipo = 'ok') {
 
 window.tlScrollTo = function(postNo, fromPostNo) {
     const el = document.getElementById('post-' + postNo);
-    if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.style.transition = 'background 0.3s';
-        el.style.background = 'rgba(0,180,216,0.1)';
-        setTimeout(() => { el.style.background = ''; }, 1500);
-    }
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const orig = el.style.background;
+    el.style.transition = 'background 0.3s';
+    el.style.background = 'rgba(0,180,216,0.1)';
+    setTimeout(() => { el.style.background = orig; }, 1500);
 };
-
 window.tlCopyLink = function(postNo) {
     navigator.clipboard?.writeText('No.' + postNo);
 };
-
 function renderContenido(texto, postAutor, thisPostNo) {
-    let s = String(texto)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-    // >>NNN a links
+    let s = String(texto).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     s = s.replace(/&gt;&gt;(\d+)/g, (_, rno) => {
-        const n = Number(rno);
-        const autor = postAutor[n] || '';
+        const n = Number(rno); const autor = postAutor[n]||'';
         return `<a href="#post-${n}" onclick="tlScrollTo(${n},${thisPostNo});return false;"
             style="color:#00b4d8;font-weight:600;text-decoration:none;cursor:pointer;"
-            >&gt;&gt;${rno}${autor ? ' <span style=\"color:#7ecfb3;font-size:0.85em;\">('+autor+')</span>' : ''}</a>`;
+            >&gt;&gt;${rno}${autor?` <span style="color:#7ecfb3;font-size:0.85em;">(${autor})</span>`:''}</a>`;
     });
-    // Greentext
     s = s.replace(/(^|\n)(&gt;(?!&gt;)[^\n]*)/g, '$1<span style="color:#789922;">$2</span>');
     return s;
 }
-
 function escHTML(str) {
     return String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ── Panel de Opciones Tags ────────────────────────────────────
+export function renderOpcionesModal(esAdmin) {
+    return renderOpcionesPanel(esAdmin);
+}
+
+window._opcionTagChange = async function(clave, valor) {
+    const { ok, msg } = await guardarOpcion(clave, valor);
+    if (!ok) alert('Error: ' + msg);
+};
