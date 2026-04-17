@@ -68,11 +68,22 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
     indiceCompleto.forEach(p => { postAutor[p.post_no] = p.poster_name; });
     posts.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
+    // Log diagnóstico: mostrar qué posts tienen reply_to
+    const conReplies = posts.filter(p => p.reply_to && p.reply_to.length > 0);
+    console.log(`[calcPT] ${posts.length} posts, ${conReplies.length} con replies`);
+    conReplies.slice(0, 5).forEach(p => {
+        const enMapa = !!(mapaNombres[p.poster_name] ?? mapaNombres[normPosterName(p.poster_name)]);
+        const replyResueltas = (p.reply_to || []).map(rno => ({
+            rno,
+            autor: postAutor[rno] || '❌ NO EN ÍNDICE',
+            enMapa: !!(mapaNombres[postAutor[rno]] ?? mapaNombres[normPosterName(postAutor[rno] || '')])
+        }));
+        console.log(`  Post ${p.post_no} de "${p.poster_name}" (enMapa:${enMapa}) → replies:`, JSON.stringify(replyResueltas));
+    });
+
     posts.forEach(post => {
         if (!post.reply_to || post.reply_to.length === 0) return;
 
-        // Buscar el personaje del poster (quién hace la reply)
-        // Intentar con nombre completo primero, luego sin tripcode
         const pjReplier = mapaNombres[post.poster_name]
                        ?? mapaNombres[normPosterName(post.poster_name)];
         if (!pjReplier) return; // poster no registrado como personaje
