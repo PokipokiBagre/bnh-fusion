@@ -53,6 +53,11 @@ export function parsearPostsLynxChan(json, threadId, board) {
 // indiceCompleto  = [{ post_no, poster_name }] — todos los posts del hilo (incluye viejos)
 //                   opcional; si se omite solo resuelve replies dentro del array posts
 // Devuelve: [{personaje_nombre, tag, delta, motivo, origen_post_no, origen_thread_id}]
+// Quita el tripcode (##xxx o #xxx) del poster_name para poder matchear con aliases
+function normPosterName(name) {
+    return (name || '').replace(/##?\S+/, '').trim();
+}
+
 export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceCompleto = []) {
     const transacciones = [];
 
@@ -67,7 +72,9 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
         if (!post.reply_to || post.reply_to.length === 0) return;
 
         // Buscar el personaje del poster (quién hace la reply)
-        const pjReplier = mapaNombres[post.poster_name];
+        // Intentar con nombre completo primero, luego sin tripcode
+        const pjReplier = mapaNombres[post.poster_name]
+                       ?? mapaNombres[normPosterName(post.poster_name)];
         if (!pjReplier) return; // poster no registrado como personaje
 
         const tagsReplier = pjReplier.tags || [];
@@ -78,8 +85,9 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
             if (!autorReplyado) return;
             if (autorReplyado === post.poster_name) return; // no se puntúa a sí mismo
 
-            // Buscar el personaje del replyado
-            const pjReplyado = mapaNombres[autorReplyado];
+            // Buscar el personaje del replyado (también con fallback sin tripcode)
+            const pjReplyado = mapaNombres[autorReplyado]
+                            ?? mapaNombres[normPosterName(autorReplyado)];
             if (!pjReplyado) return; // replyado no es personaje registrado
 
             const tagsReplyado = pjReplyado.tags || [];
