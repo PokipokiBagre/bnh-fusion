@@ -74,6 +74,15 @@ export function renderSidebar() {
     ).join('');
 
     sidebar.innerHTML = `
+    ${fichasUI.esAdmin ? `
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Admin</div>
+        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
+            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;"
+            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
+    </div>` : ''}
+
     <div class="sidebar-section">
         <div class="sidebar-section-title">Hilo</div>
         <select onchange="window._fichaSetHilo(this.value)"
@@ -96,7 +105,7 @@ export function renderSidebar() {
         <div class="sidebar-section-title">Tags <span style="color:var(--gray-500);font-weight:400;">(${tagEntries.length})</span></div>
         <input type="text" class="sidebar-search" placeholder="Buscar tag..."
             value="${fichasUI.tagBusqueda}" oninput="window._fichaTagSearch(this.value)">
-        <ul class="tag-list">
+        <ul class="tag-list" style="max-height:55vh;overflow-y:auto;">
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
                 return `<li class="${activo?'active':''}" onclick="window._fichaToggleTag('${tag.replace(/'/g,"\\'")}')")>
@@ -106,16 +115,7 @@ export function renderSidebar() {
             }).join('')}
             ${!tagEntries.length ? `<li style="color:var(--gray-500);font-size:0.82em;padding:4px;">Sin tags</li>` : ''}
         </ul>
-    </div>
-
-    ${fichasUI.esAdmin ? `
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Admin</div>
-        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
-            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;"
-            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
-    </div>` : ''}`;
+    </div>`;
 }
 
 export function renderActiveTagsBar() {

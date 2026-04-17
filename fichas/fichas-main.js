@@ -82,11 +82,14 @@ function exponerGlobales() {
 
     window._fichaClearTags = () => { fichasUI.tagsFiltro = []; sincronizarVista(); };
 
-    // Buscador de nombre/alias
+    // Buscador de nombre/alias — debounced para no rerenderizar en cada letra
+    let _nombreSearchTimer = null;
     window._fichaNombreSearch = (v) => {
         fichasUI.nombreBusqueda = v;
-        renderSidebar();
-        renderCatalogo(postersDelHilo);
+        clearTimeout(_nombreSearchTimer);
+        _nombreSearchTimer = setTimeout(() => {
+            renderCatalogo(postersDelHilo);
+        }, 180);
     };
 
     // Limpia todos los filtros (tags + nombre)
