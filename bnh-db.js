@@ -371,8 +371,9 @@ export const db = {
             aliases.forEach(alias => {
                 const grupo = alias.refinado_id ? grupoById[alias.refinado_id] : null;
                 const entry = {
-                    nombre: grupo?.nombre_refinado ?? alias.nombre,
-                    tags:   grupo?.tags ?? []
+                    nombre:     grupo?.nombre_refinado ?? alias.nombre,
+                    tags:       grupo?.tags ?? [],
+                    tieneGrupo: !!grupo  // true solo si tiene refinado_id real
                 };
 
                 // Registrar por nombre exacto del alias (ej: "Kumiko##eULHjo")
