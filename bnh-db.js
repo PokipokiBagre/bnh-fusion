@@ -395,6 +395,19 @@ export const db = {
             });
 
             return mapa;
+        },
+
+        // Registrar tags nuevos en tags_catalogo (idempotente por UNIQUE nombre)
+        async registrarTagsNuevos(tags) {
+            if (!tags || !tags.length) return;
+            // Normalizar: asegurarse de que empiecen con #
+            const rows = [...new Set(tags)]
+                .map(t => t.startsWith('#') ? t : '#' + t)
+                .map(nombre => ({ nombre }));
+            if (!rows.length) return;
+            // onConflict ignore duplicados (nombre es UNIQUE)
+            await supabase.from('tags_catalogo')
+                .upsert(rows, { onConflict: 'nombre', ignoreDuplicates: true });
         }
   }
 }
