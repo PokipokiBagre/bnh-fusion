@@ -1,26 +1,29 @@
 // ============================================================
-// fichas-data.js
+// fichas-data.js — Todo opera sobre grupos, no sobre aliases
 // ============================================================
-import { supabase }   from '../bnh-auth.js';
-import { db }         from '../bnh-db.js';
-import { fichasGlobal, gruposGlobal, ptGlobal, hilosGlobal } from './fichas-state.js';
+import { supabase }  from '../bnh-auth.js';
+import { db }        from '../bnh-db.js';
+import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal } from './fichas-state.js';
 
 export async function cargarTodo() {
-    const [pjs, grupos, ptRows, hilos] = await Promise.all([
-        supabase.from('personajes').select('*').order('nombre'),
+    const [grupos, aliases, ptRows, hilos] = await Promise.all([
+        // Grupos con todos sus campos (stats, tags, lore, quirk)
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
+        // Aliases: solo nombre e id de grupo
+        supabase.from('personajes').select('id, nombre, refinado_id').order('nombre'),
+        // PT por grupo (personaje_nombre = nombre_refinado del grupo)
         db.progresion.getPuntosAll(),
         supabase.from('historial_hilos').select('thread_id, titulo').order('creado_en', { ascending: false })
     ]);
 
-    fichasGlobal.length = 0;
-    fichasGlobal.push(...(pjs.data || []));
+    gruposGlobal.length  = 0;
+    gruposGlobal.push(...(grupos.data  || []));
 
-    gruposGlobal.length = 0;
-    gruposGlobal.push(...(grupos.data || []));
+    aliasesGlobal.length = 0;
+    aliasesGlobal.push(...(aliases.data || []));
 
-    hilosGlobal.length = 0;
-    hilosGlobal.push(...(hilos.data || []));
+    hilosGlobal.length   = 0;
+    hilosGlobal.push(...(hilos.data    || []));
 
     Object.keys(ptGlobal).forEach(k => delete ptGlobal[k]);
     (ptRows || []).forEach(row => {
@@ -29,8 +32,7 @@ export async function cargarTodo() {
     });
 }
 
-// Devuelve los personajes del hilo filtrando por poster_name
-// (solo los que tienen grupo nombre asignado para el público)
+// Devuelve Set de poster_names del hilo dado
 export async function getPosterNamesDelHilo(threadId) {
     if (!threadId || threadId === 'todos') return null;
     const { data } = await supabase
@@ -40,59 +42,115 @@ export async function getPosterNamesDelHilo(threadId) {
     return new Set((data || []).map(p => p.poster_name));
 }
 
-export async function crearPersonaje({ nombre, pot, agi, ctl, tags, lore, quirk }) {
+// ── CRUD Grupos ───────────────────────────────────────────────
+
+export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
     if (!nombre?.trim()) return { ok: false, msg: 'El nombre es obligatorio.' };
+    const existe = gruposGlobal.find(g => g.nombre_refinado.toLowerCase() === nombre.trim().toLowerCase());
+    if (existe) return { ok: false, msg: 'Ya existe un grupo con ese nombre.' };
+
     const pv = calcPVSimple(pot, agi, ctl);
-    const { error } = await supabase.from('personajes').insert({
-        nombre: nombre.trim(), pot: pot||0, agi: agi||0, ctl: ctl||0,
-        pv_actual: pv, tags: tags||[], lore: lore||'', quirk: quirk||''
-    });
+    const { data, error } = await supabase.from('personajes_refinados').insert({
+        nombre_refinado: nombre.trim(),
+        pot: pot||0, agi: agi||0, ctl: ctl||0,
+        pv_actual: pv,
+        tags: tags||[], lore: lore||'', quirk: quirk||''
+    }).select('*').single();
+
     if (error) return { ok: false, msg: error.message };
-    await cargarTodo();
+    gruposGlobal.push(data);
+    return { ok: true, grupo: data };
+}
+
+export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, ctl_actual, pv_actual }) {
+    const pvMax = calcPVSimple(pot, agi, ctl);
+    const payload = {
+        pot, agi, ctl,
+        pot_actual: pot_actual ?? null,
+        agi_actual: agi_actual ?? null,
+        ctl_actual: ctl_actual ?? null,
+        pv_actual:  Math.min(pv_actual ?? pvMax, pvMax)
+    };
+    const { error } = await supabase.from('personajes_refinados').update(payload).eq('id', grupoId);
+    if (error) return { ok: false, msg: error.message };
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    if (g) Object.assign(g, payload);
     return { ok: true };
 }
 
-export async function guardarStats(nombre, { pot, agi, ctl, pv_actual }) {
+export async function guardarLoreGrupo(grupoId, { lore, quirk }) {
+    const { error } = await supabase.from('personajes_refinados')
+        .update({ lore, quirk }).eq('id', grupoId);
+    if (error) return { ok: false, msg: error.message };
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    if (g) { g.lore = lore; g.quirk = quirk; }
+    return { ok: true };
+}
+
+export async function guardarTagsGrupo(grupoId, tags) {
+    const { error } = await supabase.from('personajes_refinados')
+        .update({ tags }).eq('id', grupoId);
+    if (error) return { ok: false, msg: error.message };
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    if (g) g.tags = tags;
+    return { ok: true };
+}
+
+export async function renombrarGrupo(grupoId, nuevoNombre) {
+    if (!nuevoNombre?.trim()) return { ok: false, msg: 'Nombre vacío.' };
+    const { error } = await supabase.from('personajes_refinados')
+        .update({ nombre_refinado: nuevoNombre.trim() }).eq('id', grupoId);
+    if (error) return { ok: false, msg: error.message };
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    if (g) g.nombre_refinado = nuevoNombre.trim();
+    return { ok: true };
+}
+
+export async function eliminarGrupo(grupoId) {
+    // Desasignar aliases primero
+    await supabase.from('personajes').update({ refinado_id: null }).eq('refinado_id', grupoId);
+    await supabase.from('personajes_refinados').delete().eq('id', grupoId);
+    const idx = gruposGlobal.findIndex(g => g.id === grupoId);
+    if (idx !== -1) gruposGlobal.splice(idx, 1);
+}
+
+// ── CRUD Aliases ──────────────────────────────────────────────
+
+export async function crearAlias(nombre) {
+    if (!nombre?.trim()) return { ok: false, msg: 'Nombre vacío.' };
+    const { data, error } = await supabase.from('personajes')
+        .insert({ nombre: nombre.trim(), refinado_id: null })
+        .select('*').single();
+    if (error) return { ok: false, msg: error.message };
+    aliasesGlobal.push(data);
+    return { ok: true, alias: data };
+}
+
+export async function asignarAlias(aliasId, grupoId) {
     const { error } = await supabase.from('personajes')
-        .update({ pot, agi, ctl, pv_actual }).eq('nombre', nombre);
+        .update({ refinado_id: grupoId || null }).eq('id', aliasId);
     if (error) return { ok: false, msg: error.message };
-    const p = fichasGlobal.find(x => x.nombre === nombre);
-    if (p) Object.assign(p, { pot, agi, ctl, pv_actual });
+    const a = aliasesGlobal.find(x => x.id === aliasId);
+    if (a) a.refinado_id = grupoId || null;
     return { ok: true };
 }
 
-export async function guardarLore(nombre, { lore, quirk }) {
-    const { error } = await supabase.from('personajes')
-        .update({ lore, quirk }).eq('nombre', nombre);
-    if (error) return { ok: false, msg: error.message };
-    const p = fichasGlobal.find(x => x.nombre === nombre);
-    if (p) { p.lore = lore; p.quirk = quirk; }
-    return { ok: true };
+export async function eliminarAlias(aliasId) {
+    await supabase.from('personajes').delete().eq('id', aliasId);
+    const idx = aliasesGlobal.findIndex(a => a.id === aliasId);
+    if (idx !== -1) aliasesGlobal.splice(idx, 1);
 }
 
-export async function guardarTags(nombre, tags) {
-    const { error } = await supabase.from('personajes')
-        .update({ tags }).eq('nombre', nombre);
-    if (error) return { ok: false, msg: error.message };
-    const p = fichasGlobal.find(x => x.nombre === nombre);
-    if (p) p.tags = tags;
-    return { ok: true };
-}
+// ── PT (opera sobre nombre_refinado del grupo) ────────────────
 
-export async function aplicarDeltaPT(personajeNombre, tag, delta, motivo) {
+export async function aplicarDeltaPT(nombreGrupo, tag, delta, motivo) {
     const res = await db.progresion.aplicarTransacciones([{
-        personaje_nombre: personajeNombre, tag, delta, motivo
+        personaje_nombre: nombreGrupo, tag, delta, motivo
     }]);
     if (!res.ok) return res;
-    if (!ptGlobal[personajeNombre]) ptGlobal[personajeNombre] = {};
-    ptGlobal[personajeNombre][tag] = (ptGlobal[personajeNombre][tag] || 0) + delta;
+    if (!ptGlobal[nombreGrupo]) ptGlobal[nombreGrupo] = {};
+    ptGlobal[nombreGrupo][tag] = (ptGlobal[nombreGrupo][tag] || 0) + delta;
     return { ok: true };
-}
-
-export async function eliminarPersonaje(nombre) {
-    await supabase.from('personajes').delete().eq('nombre', nombre);
-    const idx = fichasGlobal.findIndex(p => p.nombre === nombre);
-    if (idx !== -1) fichasGlobal.splice(idx, 1);
 }
 
 function calcPVSimple(pot, agi, ctl) {

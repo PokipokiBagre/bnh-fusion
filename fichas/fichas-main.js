@@ -2,11 +2,11 @@
 // fichas-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { fichasUI, fichasGlobal }  from './fichas-state.js';
+import { fichasUI, gruposGlobal }  from './fichas-state.js';
 import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
-import { cargarFusiones }          from '../bnh-fusion.js';
+import { cargarFusiones } from '../bnh-fusion.js';
 import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle } from './fichas-ui.js';
-import { abrirPanelOP, abrirCrearPersonaje, exponerGlobalesOP } from './fichas-op.js';
+import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP } from './fichas-op.js';
 
 let postersDelHilo = null;
 
@@ -22,8 +22,7 @@ async function init() {
 
     await Promise.all([cargarTodo(), cargarFusiones()]);
     exponerGlobalesOP();
-    exponerGlobalesFichas();
-
+    exponerGlobales();
     sincronizarVista();
 }
 
@@ -41,89 +40,55 @@ function sincronizarVista() {
     }
 }
 
-function exponerGlobalesFichas() {
-
-    window.abrirFicha = (nombre) => {
+function exponerGlobales() {
+    window.abrirFicha = (nombreGrupo) => {
+        const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        if (!g) return;
         fichasUI.vistaActual  = 'detalle';
-        fichasUI.seleccionado = nombre;
+        fichasUI.seleccionado = nombreGrupo;
         sincronizarVista();
-        window.scrollTo(0,0);
+        window.scrollTo(0, 0);
     };
 
     window.volverCatalogo = () => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
         sincronizarVista();
-        window.scrollTo(0,0);
+        window.scrollTo(0, 0);
     };
 
-    window.abrirPanelOP = (nombre) => {
-        fichasUI.seleccionado = nombre;
-        abrirPanelOP(nombre);
-    };
-
-    window.abrirCrearPersonaje = abrirCrearPersonaje;
-
-    window.borrarPersonaje = async (nombre) => {
-        if (!fichasUI.esAdmin) return;
-        if (!confirm(`¿Eliminar a ${nombre}?`)) return;
-        const { eliminarPersonaje } = await import('./fichas-data.js');
-        await eliminarPersonaje(nombre);
-        sincronizarVista();
-    };
+    window.abrirPanelOP         = abrirPanelOP;
+    window.abrirCrearGrupo      = abrirCrearGrupo;
+    window.abrirGestorAliases   = abrirGestorAliases;
 
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
         sincronizarVista();
     };
 
-    // Filtros booru
     window._fichaToggleTag = (tag) => {
         const idx = fichasUI.tagsFiltro.indexOf(tag);
-        if (idx === -1) fichasUI.tagsFiltro.push(tag);
-        else fichasUI.tagsFiltro.splice(idx, 1);
+        idx === -1 ? fichasUI.tagsFiltro.push(tag) : fichasUI.tagsFiltro.splice(idx, 1);
         sincronizarVista();
     };
 
     window._fichaToggleTagYVolver = (tag) => {
         fichasUI.vistaActual = 'catalogo';
         fichasUI.seleccionado = null;
-        const idx = fichasUI.tagsFiltro.indexOf(tag);
-        if (idx === -1) fichasUI.tagsFiltro.push(tag);
+        if (!fichasUI.tagsFiltro.includes(tag)) fichasUI.tagsFiltro.push(tag);
         sincronizarVista();
-        window.scrollTo(0,0);
+        window.scrollTo(0, 0);
     };
 
-    window._fichaClearTags = () => {
-        fichasUI.tagsFiltro = [];
-        sincronizarVista();
-    };
+    window._fichaClearTags = () => { fichasUI.tagsFiltro = []; sincronizarVista(); };
 
-    window._fichaTagSearch = (v) => {
-        fichasUI.tagBusqueda = v;
-        renderSidebar();
-    };
+    window._fichaTagSearch = (v) => { fichasUI.tagBusqueda = v; renderSidebar(); };
 
     window._fichaSetHilo = async (val) => {
         fichasUI.hiloFiltro = val;
-        if (val === 'todos') {
-            postersDelHilo = null;
-        } else {
-            postersDelHilo = await getPosterNamesDelHilo(val);
-        }
+        postersDelHilo = val === 'todos' ? null : await getPosterNamesDelHilo(val);
         sincronizarVista();
     };
 }
-
-function toast(msg, tipo='ok') {
-    let el = document.getElementById('fichas-toast');
-    if (!el) return;
-    el.textContent = msg;
-    el.className = `toast-${tipo}`;
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.className = ''; }, 3000);
-}
-
-window._fichasToast = toast;
 
 init().catch(console.error);

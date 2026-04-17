@@ -1,9 +1,14 @@
 // ============================================================
-// fichas-op.js — Panel OP completo
+// fichas-op.js — Panel OP centrado en GRUPOS + editor de aliases
 // ============================================================
-import { fichasGlobal, gruposGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { calcPVMax, calcTier, fmtTag }   from './fichas-logic.js';
-import { guardarStats, guardarLore, guardarTags, aplicarDeltaPT, crearPersonaje } from './fichas-data.js';
+import { gruposGlobal, aliasesGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
+import { calcPVMax, fmtTag } from './fichas-logic.js';
+import {
+    guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo,
+    renombrarGrupo, eliminarGrupo,
+    crearAlias, asignarAlias, eliminarAlias,
+    aplicarDeltaPT, crearGrupo
+} from './fichas-data.js';
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
 
@@ -27,7 +32,6 @@ function abrirModal(titulo, html) {
     </div>`;
     ov.style.display = 'flex';
 }
-
 function cerrarModal() {
     const ov = document.getElementById('op-overlay');
     if (ov) ov.style.display = 'none';
@@ -36,100 +40,80 @@ window._cerrarOP = cerrarModal;
 
 function setMsg(id, txt, ok) {
     const el = document.getElementById(id);
-    if (el) { el.className = 'op-msg '+(ok?'ok':'err'); el.textContent = txt; }
+    if (el) { el.className='op-msg '+(ok?'ok':'err'); el.textContent = txt; }
 }
 
-// ── Panel principal ───────────────────────────────────────────
-export function abrirPanelOP(nombre) {
-    const p = fichasGlobal.find(x => x.nombre === nombre);
-    if (!p) return;
+// ── Panel principal del GRUPO ─────────────────────────────────
+export function abrirPanelOP(nombreGrupo) {
+    const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+    if (!g) return;
 
-    const pvMax = calcPVMax(p.pot||0, p.agi||0, p.ctl||0);
-    const grupo = gruposGlobal.find(g => g.id === p.refinado_id);
-    const displayName = grupo ? grupo.nombre_refinado : nombre;
+    const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
+    const pvMax = calcPVMax(pot, agi, ctl);
+    const potA  = g.pot_actual ?? pot;
+    const agiA  = g.agi_actual ?? agi;
+    const ctlA  = g.ctl_actual ?? ctl;
 
-    const tabsHTML = ['Stats', 'Tags & PT', 'Lore', 'Fusión', 'Grupos'].map((t,i) =>
+    const tabs = ['Stats','Tags & PT','Lore','Fusión','Grupo'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
     ).join('');
 
     const html = `
-    <div class="op-tabs">${tabsHTML}</div>
+    <div class="op-tabs">${tabs}</div>
 
-    <!-- TAB 0: STATS con actual/total -->
+    <!-- TAB 0: STATS -->
     <div id="op-p0">
         <p class="stat-hint">
-            <b>Total</b> = valor base permanente (determina Tier y PV Máx).<br>
-            <b>Actual</b> = valor en este momento (puede subir/bajar en combate).<br>
-            Si Actual = Total, muestra solo el número. Si difieren, muestra Actual/Total.
+            <b>Total</b> = base permanente (determina Tier y PV Máx).<br>
+            <b>Actual</b> = valor en este momento (puede variar en combate).<br>
+            Si Actual = Total, la ficha muestra solo el número. Si difieren, muestra <span style="color:#2980b9;">Actual</span>/Total.
         </p>
         <div class="stats-grid">
-            <div class="stat-field">
-                <label>POT Total</label>
-                <input id="op-pot-t" type="number" value="${p.pot||0}" oninput="window._opRecalcPV()">
-            </div>
-            <div class="stat-field">
-                <label style="color:#2980b9;">POT Actual</label>
-                <input id="op-pot-a" type="number" class="actual" value="${p.pot_actual??p.pot??0}">
-            </div>
-            <div class="stat-field">
-                <label>AGI Total</label>
-                <input id="op-agi-t" type="number" value="${p.agi||0}" oninput="window._opRecalcPV()">
-            </div>
-            <div class="stat-field">
-                <label style="color:#2980b9;">AGI Actual</label>
-                <input id="op-agi-a" type="number" class="actual" value="${p.agi_actual??p.agi??0}">
-            </div>
-            <div class="stat-field">
-                <label>CTL Total</label>
-                <input id="op-ctl-t" type="number" value="${p.ctl||0}" oninput="window._opRecalcPV()">
-            </div>
-            <div class="stat-field">
-                <label style="color:#2980b9;">CTL Actual</label>
-                <input id="op-ctl-a" type="number" class="actual" value="${p.ctl_actual??p.ctl??0}">
-            </div>
-            <div class="stat-field">
-                <label>PV Máx <span id="op-pvm" style="color:var(--green);">(${pvMax})</span></label>
+            <div class="stat-field"><label>POT Total</label>
+                <input id="op-pot-t" type="number" value="${pot}" oninput="window._opRecalcPV()"></div>
+            <div class="stat-field"><label style="color:#2980b9;">POT Actual</label>
+                <input id="op-pot-a" type="number" class="actual" value="${potA}"></div>
+            <div class="stat-field"><label>AGI Total</label>
+                <input id="op-agi-t" type="number" value="${agi}" oninput="window._opRecalcPV()"></div>
+            <div class="stat-field"><label style="color:#2980b9;">AGI Actual</label>
+                <input id="op-agi-a" type="number" class="actual" value="${agiA}"></div>
+            <div class="stat-field"><label>CTL Total</label>
+                <input id="op-ctl-t" type="number" value="${ctl}" oninput="window._opRecalcPV()"></div>
+            <div class="stat-field"><label style="color:#2980b9;">CTL Actual</label>
+                <input id="op-ctl-a" type="number" class="actual" value="${ctlA}"></div>
+            <div class="stat-field"><label>PV Máx <span id="op-pvm" style="color:var(--green);">(${pvMax})</span></label>
                 <input id="op-pv-max" type="number" value="${pvMax}" readonly
-                    style="background:var(--gray-100); color:var(--gray-500); cursor:not-allowed;">
-            </div>
-            <div class="stat-field">
-                <label style="color:#2980b9;">PV Actual</label>
-                <input id="op-pv-a" type="number" class="actual" value="${p.pv_actual??pvMax}">
-            </div>
+                    style="background:var(--gray-100);color:var(--gray-500);cursor:not-allowed;"></div>
+            <div class="stat-field"><label style="color:#2980b9;">PV Actual</label>
+                <input id="op-pv-a" type="number" class="actual" value="${g.pv_actual??pvMax}"></div>
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button class="op-btn op-btn-green" onclick="window._opGuardarStats('${nombre.replace(/'/g,"\\'")}')">💾 Guardar Stats</button>
-            <button class="op-btn op-btn-blue"  onclick="window._opRestaurarPV('${nombre.replace(/'/g,"\\'")}')">↺ Restaurar PV al máx</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="op-btn op-btn-green" onclick="window._opGuardarStats('${g.id}')">💾 Guardar</button>
+            <button class="op-btn op-btn-blue"  onclick="window._opRestaurarPV('${g.id}')">↺ Restaurar PV</button>
+            <button class="op-btn op-btn-gray"  onclick="window._opIgualarActualTotal('${g.id}')">= Igualar Actual a Total</button>
         </div>
         <div id="msg-stats" class="op-msg"></div>
     </div>
 
     <!-- TAB 1: TAGS & PT -->
     <div id="op-p1" style="display:none;">
-        <div style="font-size:0.78em; color:var(--gray-700); margin-bottom:8px; font-weight:600;">Tags actuales</div>
-        <div class="tags-chips" id="op-chips">
-            ${_chipsHTML(p.tags||[], ptGlobal[nombre]||{})}
-        </div>
-        <div style="display:flex; gap:6px; margin-bottom:14px;">
+        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">Tags actuales</div>
+        <div class="tags-chips" id="op-chips">${_chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{})}</div>
+        <div style="display:flex;gap:6px;margin-bottom:12px;">
             <input id="op-tag-inp" type="text" class="op-input" placeholder="#NuevoTag" style="flex:1;">
-            <button class="op-btn op-btn-green" onclick="window._opAddTag('${nombre.replace(/'/g,"\\'")}')">+ Agregar</button>
+            <button class="op-btn op-btn-green" onclick="window._opAddTag('${g.id}','${nombreGrupo.replace(/'/g,"\\'")}')")>+ Agregar</button>
         </div>
         <div id="msg-tags" class="op-msg"></div>
-        <hr style="border:none; border-top:1px solid var(--gray-200); margin:14px 0;">
-        <div style="font-size:0.78em; color:var(--gray-700); margin-bottom:8px; font-weight:600;">Delta de PT Manual</div>
-        <div class="op-row">
-            <span class="op-label">Tag</span>
+        <hr style="border:none;border-top:1px solid var(--gray-200);margin:14px 0;">
+        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Delta PT Manual</div>
+        <div class="op-row"><span class="op-label">Tag</span>
             <select id="op-pt-tag" class="op-select" style="flex:1;">
                 <option value="">— Elige —</option>
-                ${(p.tags||[]).map(t=>`<option value="${t}">${t.startsWith('#')?t:'#'+t}</option>`).join('')}
-            </select>
-        </div>
-        <div class="op-row">
-            <span class="op-label">Delta (±)</span>
-            <input id="op-pt-d" type="number" class="op-input" value="1" style="flex:1;">
-        </div>
-        <div class="op-row">
-            <span class="op-label">Motivo</span>
+                ${(g.tags||[]).map(t=>`<option value="${t}">${t.startsWith('#')?t:'#'+t}</option>`).join('')}
+            </select></div>
+        <div class="op-row"><span class="op-label">Delta (±)</span>
+            <input id="op-pt-d" type="number" class="op-input" value="1" style="flex:1;"></div>
+        <div class="op-row"><span class="op-label">Motivo</span>
             <select id="op-pt-m" class="op-select" style="flex:1;">
                 <option value="interaccion">Interacción (+1)</option>
                 <option value="fusion">Fusión (+5)</option>
@@ -137,314 +121,361 @@ export function abrirPanelOP(nombre) {
                 <option value="gasto_medalla">Gasto Medalla (−75)</option>
                 <option value="gasto_mutacion">Gasto Mutación (−100)</option>
                 <option value="manual">Manual libre</option>
-            </select>
-        </div>
-        <button class="op-btn op-btn-blue" onclick="window._opAplicarPT('${nombre.replace(/'/g,"\\'")}')">Aplicar Delta</button>
+            </select></div>
+        <button class="op-btn op-btn-blue" onclick="window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')")>Aplicar Delta</button>
         <div id="msg-pt" class="op-msg"></div>
     </div>
 
     <!-- TAB 2: LORE -->
     <div id="op-p2" style="display:none;">
-        <label style="font-size:0.78em; font-weight:600; color:var(--gray-700); display:block; margin-bottom:5px;">Historia / Lore</label>
-        <textarea id="op-lore" rows="7" class="op-input" style="resize:vertical; line-height:1.6;">${escTA(p.lore||'')}</textarea>
-        <label style="font-size:0.78em; font-weight:600; color:var(--gray-700); display:block; margin:10px 0 5px;">Quirk / Habilidad</label>
-        <textarea id="op-quirk" rows="5" class="op-input" style="resize:vertical; line-height:1.6;">${escTA(p.quirk||'')}</textarea>
-        <button class="op-btn op-btn-green" style="margin-top:10px;" onclick="window._opGuardarLore('${nombre.replace(/'/g,"\\'")}')">💾 Guardar</button>
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:5px;">Historia / Lore</label>
+        <textarea id="op-lore" rows="7" class="op-input" style="resize:vertical;line-height:1.6;">${escTA(g.lore||'')}</textarea>
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin:10px 0 5px;">Quirk</label>
+        <textarea id="op-quirk" rows="5" class="op-input" style="resize:vertical;line-height:1.6;">${escTA(g.quirk||'')}</textarea>
+        <button class="op-btn op-btn-green" style="margin-top:10px;" onclick="window._opGuardarLore('${g.id}')">💾 Guardar</button>
         <div id="msg-lore" class="op-msg"></div>
     </div>
 
     <!-- TAB 3: FUSIÓN -->
-    <div id="op-p3" style="display:none;">
-        ${_fusionHTML(nombre, p)}
-    </div>
+    <div id="op-p3" style="display:none;">${_fusionHTML(nombreGrupo)}</div>
 
-    <!-- TAB 4: GRUPOS NOMBRE -->
-    <div id="op-p4" style="display:none;">
-        ${_gruposHTML(p, nombre)}
-    </div>`;
+    <!-- TAB 4: GRUPO (renombrar, aliases, eliminar) -->
+    <div id="op-p4" style="display:none;">${_grupoHTML(g)}</div>`;
 
-    abrirModal(`⚙️ ${displayName}`, html);
+    abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
-    // Recalc PV en tiempo real
     ['op-pot-t','op-agi-t','op-ctl-t'].forEach(id => {
-        setTimeout(() => {
-            document.getElementById(id)?.addEventListener('input', window._opRecalcPV);
-        }, 50);
+        setTimeout(()=>{ document.getElementById(id)?.addEventListener('input', window._opRecalcPV); }, 50);
     });
 }
 
-function _chipsHTML(tags, ptDePJ) {
-    if (!tags.length) return `<span style="color:var(--gray-400); font-size:0.82em;">Sin tags</span>`;
+function _chipsHTML(grupoId, tags, ptDePJ) {
+    if (!tags.length) return `<span style="color:var(--gray-400);font-size:0.82em;">Sin tags</span>`;
     return tags.map(t => {
-        const pts = ptDePJ[t]||0;
-        const tf  = t.startsWith('#') ? t : '#'+t;
-        return `<span class="tag-chip">
-            ${tf} <span class="tag-chip-pts">${pts}pt</span>
-            <button class="tag-chip-rm" onclick="window._opRmTag(this,'${t.replace(/'/g,"\\'")}')" title="Quitar (sin gastar PT)">×</button>
+        const pts = ptDePJ[t]||0, tf = t.startsWith('#')?t:'#'+t;
+        return `<span class="tag-chip">${tf} <span class="tag-chip-pts">${pts}pt</span>
+            <button class="tag-chip-rm" onclick="window._opRmTag('${grupoId}','${t.replace(/'/g,"\\'")}')" title="Quitar">×</button>
         </span>`;
     }).join('');
 }
 
-function _fusionHTML(nombre, p) {
-    const fusionActiva = getFusionDe(nombre);
-    if (fusionActiva) {
-        const comp = fusionActiva.pj_a===nombre ? fusionActiva.pj_b : fusionActiva.pj_a;
+function _fusionHTML(nombreGrupo) {
+    const f = getFusionDe(nombreGrupo);
+    if (f) {
+        const comp = f.pj_a===nombreGrupo?f.pj_b:f.pj_a;
         return `<div class="fusion-card">
             <div class="fusion-card-title">⚡ En fusión con <b>${comp}</b></div>
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;">
-                ${(fusionActiva.tags_fusionados||[]).map(t=>
-                    `<span style="background:#f5eeff;border:1px solid #9b59b6;color:#6c3483;padding:2px 8px;border-radius:8px;font-size:0.78em;">${t.startsWith('#')?t:'#'+t}</span>`
-                ).join('')}
+                ${(f.tags_fusionados||[]).map(t=>`<span style="background:#f5eeff;border:1px solid #9b59b6;color:#6c3483;padding:2px 8px;border-radius:8px;font-size:0.78em;">${t.startsWith('#')?t:'#'+t}</span>`).join('')}
             </div>
-            <button class="op-btn op-btn-red" onclick="window._opTerminarFusion('${fusionActiva.id}')">✕ Terminar Fusión</button>
+            <button class="op-btn op-btn-red" onclick="window._opTerminarFusion('${f.id}')">✕ Terminar Fusión</button>
         </div>`;
     }
-
-    const disponibles = fichasGlobal
-        .filter(x => x.nombre !== nombre && !getFusionDe(x.nombre))
-        .map(x => {
-            const g = gruposGlobal.find(g2 => g2.id === x.refinado_id);
-            const dn = g ? g.nombre_refinado : x.nombre;
-            return `<option value="${x.nombre}">${dn}</option>`;
-        }).join('');
-
-    if (!disponibles) return `<p style="color:var(--gray-500);font-size:0.85em;">No hay personajes disponibles para fusión.</p>`;
-
-    return `<p style="color:var(--gray-500);font-size:0.82em;margin-bottom:12px;line-height:1.5;">
-        Al activar la fusión se combinan los tags de ambos.<br>
-        El doble icono aparece en el catálogo y ficha.
-    </p>
-    <div class="op-row">
-        <span class="op-label">Fusionar con</span>
-        <select id="op-fus-target" class="op-select" style="flex:1;">
+    const disponibles = gruposGlobal
+        .filter(x=>x.nombre_refinado!==nombreGrupo&&!getFusionDe(x.nombre_refinado))
+        .map(x=>`<option value="${x.nombre_refinado}">${x.nombre_refinado}</option>`).join('');
+    if (!disponibles) return `<p style="color:var(--gray-500);font-size:0.85em;">No hay grupos disponibles.</p>`;
+    return `<p class="stat-hint">Al fusionar se combinan los tags de ambos grupos. El doble icono aparece en el catálogo.</p>
+    <div class="op-row"><span class="op-label">Fusionar con</span>
+        <select id="op-fus-t" class="op-select" style="flex:1;">
             <option value="">— Elige —</option>${disponibles}
-        </select>
-    </div>
-    <button class="op-btn" style="background:#6c3483;color:#fff;border-color:#6c3483;" onclick="window._opActivarFusion('${nombre.replace(/'/g,"\\'")}')")>⚡ Activar Fusión</button>
+        </select></div>
+    <button class="op-btn" style="background:#6c3483;color:#fff;border-color:#6c3483;" onclick="window._opActivarFusion('${nombreGrupo.replace(/'/g,"\\'")}')")>⚡ Activar Fusión</button>
     <div id="msg-fus" class="op-msg"></div>`;
 }
 
-function _gruposHTML(p, nombre) {
-    const grupoActual = gruposGlobal.find(g => g.id === p.refinado_id);
+function _grupoHTML(g) {
+    const misAliases = aliasesGlobal.filter(a => a.refinado_id === g.id);
+    const sueltos    = aliasesGlobal.filter(a => !a.refinado_id);
 
-    const optsGrupos = gruposGlobal
-        .map(g => `<option value="${g.id}" ${g.id===p.refinado_id?'selected':''}>${g.nombre_refinado}</option>`)
-        .join('');
+    const aliasRows = misAliases.map(a => `
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--gray-100);">
+            <span style="flex:1;font-size:0.85em;">${a.nombre}</span>
+            <button class="op-btn op-btn-red" style="padding:2px 8px;font-size:0.72em;"
+                onclick="window._opDesasignarAlias('${a.id}')">Desvincular</button>
+            <button class="op-btn op-btn-gray" style="padding:2px 8px;font-size:0.72em;"
+                onclick="window._opEliminarAlias('${a.id}','${a.nombre.replace(/'/g,"\\'")}')")>🗑</button>
+        </div>`).join('') || `<p style="color:var(--gray-400);font-size:0.82em;">Sin aliases asignados</p>`;
+
+    const sueltosOpts = sueltos.map(a=>
+        `<option value="${a.id}">${a.nombre}</option>`).join('');
 
     return `
-    <p style="color:var(--gray-500);font-size:0.82em;margin-bottom:12px;line-height:1.5;">
-        El <b>Grupo Nombre</b> es lo que ven los jugadores públicamente.<br>
-        Asigna varios personajes DB al mismo grupo para que aparezcan como uno solo.<br>
-        Sin grupo asignado, el personaje solo es visible para el OP.
-    </p>
-    <div style="background:var(--gray-100);border:1px solid var(--booru-border);border-radius:var(--radius);padding:10px;margin-bottom:12px;font-size:0.85em;">
-        <b>Grupo actual:</b> ${grupoActual ? `<span style="color:var(--green-dark);">${grupoActual.nombre_refinado}</span>` : '<span style="color:var(--red);">Sin grupo (solo visible para OP)</span>'}
+    <!-- Renombrar -->
+    <div style="margin-bottom:14px;">
+        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:5px;">Nombre del grupo</div>
+        <div style="display:flex;gap:6px;">
+            <input id="op-grp-nom" type="text" class="op-input" value="${g.nombre_refinado}" style="flex:1;">
+            <button class="op-btn op-btn-green" onclick="window._opRenombrar('${g.id}')">Renombrar</button>
+        </div>
+        <div id="msg-renombrar" class="op-msg"></div>
     </div>
 
-    <div class="op-row">
-        <span class="op-label">Asignar a</span>
-        <select id="op-grupo-sel" class="op-select" style="flex:1;">
-            <option value="">— Sin grupo —</option>
-            ${optsGrupos}
-        </select>
+    <hr style="border:none;border-top:1px solid var(--gray-200);margin:12px 0;">
+
+    <!-- Aliases asignados -->
+    <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">
+        Aliases en este grupo (${misAliases.length})
     </div>
-    <button class="op-btn op-btn-green" onclick="window._opAsignarGrupo('${nombre.replace(/'/g,"\\'")}')")>💾 Guardar Grupo</button>
-    <div id="msg-grupo" class="op-msg"></div>
+    <div id="op-alias-lista" style="margin-bottom:12px;">${aliasRows}</div>
+
+    <!-- Asignar alias suelto -->
+    ${sueltosOpts ? `
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <select id="op-alias-suelto" class="op-select" style="flex:1;">
+            <option value="">— Alias suelto —</option>${sueltosOpts}
+        </select>
+        <button class="op-btn op-btn-green" onclick="window._opAsignarAlias('${g.id}')">+ Asignar</button>
+    </div>` : `<p style="color:var(--gray-400);font-size:0.78em;margin-bottom:8px;">No hay aliases sueltos disponibles.</p>`}
+
+    <!-- Crear nuevo alias -->
+    <div style="display:flex;gap:6px;margin-bottom:8px;">
+        <input id="op-alias-nuevo" type="text" class="op-input" placeholder="Nombre del nuevo alias" style="flex:1;">
+        <button class="op-btn op-btn-blue" onclick="window._opCrearYAsignarAlias('${g.id}')">Crear y asignar</button>
+    </div>
+    <div id="msg-alias" class="op-msg"></div>
 
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0;">
-    <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Crear nuevo grupo nombre</div>
-    <div style="display:flex;gap:6px;">
-        <input id="op-grupo-nuevo" type="text" class="op-input" placeholder="Nombre del grupo" style="flex:1;">
-        <button class="op-btn op-btn-green" onclick="window._opCrearGrupo()">Crear</button>
-    </div>
-    <div id="msg-grupo-nuevo" class="op-msg"></div>`;
+
+    <!-- Eliminar grupo -->
+    <div>
+        <div style="font-size:0.78em;font-weight:600;color:var(--red);margin-bottom:6px;">Zona de peligro</div>
+        <button class="op-btn op-btn-red" onclick="window._opEliminarGrupo('${g.id}','${g.nombre_refinado.replace(/'/g,"\\'")}')")>🗑 Eliminar este grupo</button>
+        <div style="font-size:0.72em;color:var(--gray-500);margin-top:4px;">Los aliases quedarán sueltos. No se borran los aliases ni los PT.</div>
+    </div>`;
 }
 
 // ── Exponer globales ──────────────────────────────────────────
 export function exponerGlobalesOP() {
 
     window._opTab = i => {
-        [0,1,2,3,4].forEach(j => {
-            const p = document.getElementById(`op-p${j}`);
-            const t = document.getElementById(`op-tab-${j}`);
-            if (p) p.style.display = j===i?'block':'none';
-            if (t) t.classList.toggle('active', j===i);
+        [0,1,2,3,4].forEach(j=>{
+            const p=document.getElementById(`op-p${j}`);
+            const t=document.getElementById(`op-tab-${j}`);
+            if(p) p.style.display=j===i?'block':'none';
+            if(t) t.classList.toggle('active',j===i);
         });
     };
 
     window._opRecalcPV = () => {
-        const pot = parseInt(document.getElementById('op-pot-t')?.value)||0;
-        const agi = parseInt(document.getElementById('op-agi-t')?.value)||0;
-        const ctl = parseInt(document.getElementById('op-ctl-t')?.value)||0;
-        const pvm = calcPVMax(pot,agi,ctl);
-        const el = document.getElementById('op-pvm');
-        const el2 = document.getElementById('op-pv-max');
-        if (el)  el.textContent  = `(${pvm})`;
-        if (el2) el2.value = pvm;
+        const pot=parseInt(document.getElementById('op-pot-t')?.value)||0;
+        const agi=parseInt(document.getElementById('op-agi-t')?.value)||0;
+        const ctl=parseInt(document.getElementById('op-ctl-t')?.value)||0;
+        const pvm=calcPVMax(pot,agi,ctl);
+        const el=document.getElementById('op-pvm'), el2=document.getElementById('op-pv-max');
+        if(el) el.textContent=`(${pvm})`;
+        if(el2) el2.value=pvm;
     };
 
-    window._opGuardarStats = async (nombre) => {
-        const pot   = parseInt(document.getElementById('op-pot-t')?.value)||0;
-        const agi   = parseInt(document.getElementById('op-agi-t')?.value)||0;
-        const ctl   = parseInt(document.getElementById('op-ctl-t')?.value)||0;
-        const potA  = parseInt(document.getElementById('op-pot-a')?.value)||0;
-        const agiA  = parseInt(document.getElementById('op-agi-a')?.value)||0;
-        const ctlA  = parseInt(document.getElementById('op-ctl-a')?.value)||0;
-        const pvA   = parseInt(document.getElementById('op-pv-a')?.value)||0;
-        const pvMax = calcPVMax(pot,agi,ctl);
-
-        const res = await guardarStats(nombre, {
-            pot, agi, ctl,
-            pv_actual: Math.min(pvA, pvMax)
+    window._opGuardarStats = async (grupoId) => {
+        const pot=parseInt(document.getElementById('op-pot-t')?.value)||0;
+        const agi=parseInt(document.getElementById('op-agi-t')?.value)||0;
+        const ctl=parseInt(document.getElementById('op-ctl-t')?.value)||0;
+        const potA=parseInt(document.getElementById('op-pot-a')?.value);
+        const agiA=parseInt(document.getElementById('op-agi-a')?.value);
+        const ctlA=parseInt(document.getElementById('op-ctl-a')?.value);
+        const pvA=parseInt(document.getElementById('op-pv-a')?.value)||0;
+        const res=await guardarStatsGrupo(grupoId,{
+            pot,agi,ctl,
+            pot_actual: isNaN(potA)||potA===pot?null:potA,
+            agi_actual: isNaN(agiA)||agiA===agi?null:agiA,
+            ctl_actual: isNaN(ctlA)||ctlA===ctl?null:ctlA,
+            pv_actual:  pvA
         });
-        // También guardar actuales en columnas separadas si existen
-        await supabase.from('personajes').update({
-            pot_actual: potA, agi_actual: agiA, ctl_actual: ctlA
-        }).eq('nombre', nombre).then(()=>{});
-
-        setMsg('msg-stats', res.ok ? '✅ Stats guardados' : '❌ '+res.msg, res.ok);
-        if (res.ok) window.sincronizarVista?.();
+        setMsg('msg-stats',res.ok?'✅ Guardado':'❌ '+res.msg,res.ok);
+        if(res.ok) window.sincronizarVista?.();
     };
 
-    window._opRestaurarPV = async (nombre) => {
-        const p = fichasGlobal.find(x=>x.nombre===nombre); if(!p) return;
-        const pvMax = calcPVMax(p.pot||0,p.agi||0,p.ctl||0);
-        document.getElementById('op-pv-a').value = pvMax;
-        const res = await guardarStats(nombre, { pot:p.pot, agi:p.agi, ctl:p.ctl, pv_actual:pvMax });
-        setMsg('msg-stats', res.ok ? `✅ PV → ${pvMax}` : '❌ '+res.msg, res.ok);
-        if (res.ok) window.sincronizarVista?.();
+    window._opRestaurarPV = async (grupoId) => {
+        const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
+        const pvMax=calcPVMax(g.pot||0,g.agi||0,g.ctl||0);
+        document.getElementById('op-pv-a').value=pvMax;
+        const res=await guardarStatsGrupo(grupoId,{pot:g.pot,agi:g.agi,ctl:g.ctl,pv_actual:pvMax});
+        setMsg('msg-stats',res.ok?`✅ PV → ${pvMax}`:'❌ '+res.msg,res.ok);
+        if(res.ok) window.sincronizarVista?.();
     };
 
-    window._opAddTag = async (nombre) => {
-        const raw = document.getElementById('op-tag-inp')?.value?.trim(); if(!raw) return;
-        const tag = raw.startsWith('#') ? raw : '#'+raw;
-        const p = fichasGlobal.find(x=>x.nombre===nombre); if(!p) return;
-        if ((p.tags||[]).includes(tag)) { setMsg('msg-tags','Ya existe',false); return; }
-        const nuevosTags = [...(p.tags||[]), tag];
-        const res = await guardarTags(nombre, nuevosTags);
-        setMsg('msg-tags', res.ok?`✅ ${tag} agregado`:'❌ '+res.msg, res.ok);
-        if (res.ok) {
+    window._opIgualarActualTotal = () => {
+        const pot=document.getElementById('op-pot-t')?.value;
+        const agi=document.getElementById('op-agi-t')?.value;
+        const ctl=document.getElementById('op-ctl-t')?.value;
+        if(document.getElementById('op-pot-a')) document.getElementById('op-pot-a').value=pot;
+        if(document.getElementById('op-agi-a')) document.getElementById('op-agi-a').value=agi;
+        if(document.getElementById('op-ctl-a')) document.getElementById('op-ctl-a').value=ctl;
+    };
+
+    window._opAddTag = async (grupoId, nombreGrupo) => {
+        const raw=document.getElementById('op-tag-inp')?.value?.trim(); if(!raw) return;
+        const tag=raw.startsWith('#')?raw:'#'+raw;
+        const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
+        if((g.tags||[]).includes(tag)){setMsg('msg-tags','Ya existe',false);return;}
+        const nuevosTags=[...(g.tags||[]),tag];
+        const res=await guardarTagsGrupo(grupoId,nuevosTags);
+        setMsg('msg-tags',res.ok?`✅ ${tag} agregado`:'❌ '+res.msg,res.ok);
+        if(res.ok){
             document.getElementById('op-tag-inp').value='';
-            const chips = document.getElementById('op-chips');
-            if (chips) chips.innerHTML = _chipsHTML(nuevosTags, ptGlobal[nombre]||{});
-            const sel = document.getElementById('op-pt-tag');
-            if (sel) sel.innerHTML = `<option value="">— Elige —</option>`+
+            const chips=document.getElementById('op-chips');
+            if(chips) chips.innerHTML=_chipsHTML(grupoId,nuevosTags,ptGlobal[nombreGrupo]||{});
+            const sel=document.getElementById('op-pt-tag');
+            if(sel) sel.innerHTML=`<option value="">— Elige —</option>`+
                 nuevosTags.map(t=>`<option value="${t}">${t.startsWith('#')?t:'#'+t}</option>`).join('');
             window.sincronizarVista?.();
         }
     };
 
-    window._opRmTag = async (btnEl, tag) => {
-        const nombre = fichasUI.seleccionado; if(!nombre) return;
-        const p = fichasGlobal.find(x=>x.nombre===nombre); if(!p) return;
-        const nuevosTags = (p.tags||[]).filter(t=>t!==tag);
-        const res = await guardarTags(nombre, nuevosTags);
-        if (res.ok) {
-            const chips = document.getElementById('op-chips');
-            if (chips) chips.innerHTML = _chipsHTML(nuevosTags, ptGlobal[nombre]||{});
+    window._opRmTag = async (grupoId, tag) => {
+        const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
+        const nuevosTags=(g.tags||[]).filter(t=>t!==tag);
+        const res=await guardarTagsGrupo(grupoId,nuevosTags);
+        if(res.ok){
+            const chips=document.getElementById('op-chips');
+            const nombre=g.nombre_refinado;
+            if(chips) chips.innerHTML=_chipsHTML(grupoId,nuevosTags,ptGlobal[nombre]||{});
             window.sincronizarVista?.();
         }
     };
 
-    window._opAplicarPT = async (nombre) => {
-        const tag    = document.getElementById('op-pt-tag')?.value; if(!tag) { setMsg('msg-pt','Elige un tag',false); return; }
-        const delta  = parseInt(document.getElementById('op-pt-d')?.value)||0;
-        const motivo = document.getElementById('op-pt-m')?.value||'manual';
-        if (!delta) { setMsg('msg-pt','El delta no puede ser 0',false); return; }
-        const res = await aplicarDeltaPT(nombre, tag, delta, motivo);
-        const signo = delta>0?'+':'';
-        setMsg('msg-pt', res.ok?`✅ ${signo}${delta} PT en ${tag}`:'❌ '+res.msg, res.ok);
-        if (res.ok) {
-            const chips = document.getElementById('op-chips');
-            const p = fichasGlobal.find(x=>x.nombre===nombre);
-            if (chips && p) chips.innerHTML = _chipsHTML(p.tags||[], ptGlobal[nombre]||{});
+    window._opAplicarPT = async (nombreGrupo) => {
+        const tag=document.getElementById('op-pt-tag')?.value; if(!tag){setMsg('msg-pt','Elige un tag',false);return;}
+        const delta=parseInt(document.getElementById('op-pt-d')?.value)||0;
+        const motivo=document.getElementById('op-pt-m')?.value||'manual';
+        if(!delta){setMsg('msg-pt','Delta no puede ser 0',false);return;}
+        const res=await aplicarDeltaPT(nombreGrupo,tag,delta,motivo);
+        const signo=delta>0?'+':'';
+        setMsg('msg-pt',res.ok?`✅ ${signo}${delta} PT en ${tag}`:'❌ '+res.msg,res.ok);
+        if(res.ok){
+            const g=gruposGlobal.find(x=>x.nombre_refinado===nombreGrupo);
+            const chips=document.getElementById('op-chips');
+            if(chips&&g) chips.innerHTML=_chipsHTML(g.id,g.tags||[],ptGlobal[nombreGrupo]||{});
             window.sincronizarVista?.();
         }
     };
 
-    window._opGuardarLore = async (nombre) => {
-        const lore  = document.getElementById('op-lore')?.value||'';
-        const quirk = document.getElementById('op-quirk')?.value||'';
-        const res = await guardarLore(nombre, {lore, quirk});
-        setMsg('msg-lore', res.ok?'✅ Guardado':'❌ '+res.msg, res.ok);
-        if (res.ok) window.sincronizarVista?.();
+    window._opGuardarLore = async (grupoId) => {
+        const lore=document.getElementById('op-lore')?.value||'';
+        const quirk=document.getElementById('op-quirk')?.value||'';
+        const res=await guardarLoreGrupo(grupoId,{lore,quirk});
+        setMsg('msg-lore',res.ok?'✅ Guardado':'❌ '+res.msg,res.ok);
+        if(res.ok) window.sincronizarVista?.();
     };
 
-    window._opActivarFusion = async (nombre) => {
-        const target = document.getElementById('op-fus-target')?.value;
-        if (!target) { setMsg('msg-fus','Elige personaje',false); return; }
-        const pA = fichasGlobal.find(x=>x.nombre===nombre);
-        const pB = fichasGlobal.find(x=>x.nombre===target);
-        if (!pA||!pB) return;
-        const res = await activarFusion(nombre, target, pA.tags||[], pB.tags||[]);
-        setMsg('msg-fus', res.ok?'✅ Fusión activada':'❌ '+res.msg, res.ok);
-        if (res.ok) { await cargarFusiones(); cerrarModal(); window.sincronizarVista?.(); }
+    window._opActivarFusion = async (nombreGrupo) => {
+        const target=document.getElementById('op-fus-t')?.value;
+        if(!target){setMsg('msg-fus','Elige grupo',false);return;}
+        const gA=gruposGlobal.find(x=>x.nombre_refinado===nombreGrupo);
+        const gB=gruposGlobal.find(x=>x.nombre_refinado===target);
+        if(!gA||!gB) return;
+        const res=await activarFusion(nombreGrupo,target,gA.tags||[],gB.tags||[]);
+        setMsg('msg-fus',res.ok?'✅ Fusión activada':'❌ '+res.msg,res.ok);
+        if(res.ok){await cargarFusiones();cerrarModal();window.sincronizarVista?.();}
     };
 
     window._opTerminarFusion = async (fusionId) => {
-        if (!confirm('¿Terminar esta fusión?')) return;
+        if(!confirm('¿Terminar esta fusión?')) return;
         await terminarFusion(fusionId);
-        cerrarModal();
+        cerrarModal(); window.sincronizarVista?.();
+    };
+
+    window._opRenombrar = async (grupoId) => {
+        const nom=document.getElementById('op-grp-nom')?.value?.trim();
+        const res=await renombrarGrupo(grupoId,nom);
+        setMsg('msg-renombrar',res.ok?'✅ Renombrado':'❌ '+res.msg,res.ok);
+        if(res.ok) window.sincronizarVista?.();
+    };
+
+    window._opAsignarAlias = async (grupoId) => {
+        const aliasId=document.getElementById('op-alias-suelto')?.value;
+        if(!aliasId){setMsg('msg-alias','Elige un alias',false);return;}
+        const res=await asignarAlias(aliasId,grupoId);
+        setMsg('msg-alias',res.ok?'✅ Alias asignado':'❌ '+res.msg,res.ok);
+        if(res.ok) window.sincronizarVista?.();
+    };
+
+    window._opCrearYAsignarAlias = async (grupoId) => {
+        const nom=document.getElementById('op-alias-nuevo')?.value?.trim();
+        if(!nom){setMsg('msg-alias','Nombre vacío',false);return;}
+        const r1=await crearAlias(nom);
+        if(!r1.ok){setMsg('msg-alias','❌ '+r1.msg,false);return;}
+        const r2=await asignarAlias(r1.alias.id,grupoId);
+        setMsg('msg-alias',r2.ok?`✅ "${nom}" creado y asignado`:'❌ '+r2.msg,r2.ok);
+        if(r2.ok){document.getElementById('op-alias-nuevo').value='';window.sincronizarVista?.();}
+    };
+
+    window._opDesasignarAlias = async (aliasId) => {
+        await asignarAlias(aliasId, null);
         window.sincronizarVista?.();
     };
 
-    window._opAsignarGrupo = async (nombre) => {
-        const grupoId = document.getElementById('op-grupo-sel')?.value || null;
-        const { error } = await supabase.from('personajes')
-            .update({ refinado_id: grupoId || null }).eq('nombre', nombre);
-        const p = fichasGlobal.find(x=>x.nombre===nombre);
-        if (p) p.refinado_id = grupoId || null;
-        setMsg('msg-grupo', error ? '❌ '+error.message : '✅ Grupo actualizado', !error);
-        if (!error) window.sincronizarVista?.();
+    window._opEliminarAlias = async (aliasId, nombre) => {
+        if(!confirm(`¿Eliminar el alias "${nombre}"?`)) return;
+        await eliminarAlias(aliasId);
+        window.sincronizarVista?.();
     };
 
-    window._opCrearGrupo = async () => {
-        const nombre = document.getElementById('op-grupo-nuevo')?.value?.trim();
-        if (!nombre) return;
-        const { data, error } = await supabase.from('personajes_refinados')
-            .insert({ nombre_refinado: nombre }).select('*').single();
-        if (error) { setMsg('msg-grupo-nuevo','❌ '+error.message,false); return; }
-        // Agregar al array local
-        const { gruposGlobal: gg } = await import('./fichas-state.js');
-        gg.push(data);
-        setMsg('msg-grupo-nuevo', '✅ Grupo creado', true);
-        document.getElementById('op-grupo-nuevo').value = '';
-        // Recargar el select
-        const sel = document.getElementById('op-grupo-sel');
-        if (sel) sel.innerHTML = `<option value="">— Sin grupo —</option>` +
-            gg.map(g=>`<option value="${g.id}">${g.nombre_refinado}</option>`).join('');
+    window._opEliminarGrupo = async (grupoId, nombre) => {
+        if(!confirm(`¿Eliminar el grupo "${nombre}"?\nLos aliases quedarán sueltos.`)) return;
+        await eliminarGrupo(grupoId);
+        cerrarModal(); window.sincronizarVista?.();
     };
 }
 
-// ── Formulario crear personaje ────────────────────────────────
-export function abrirCrearPersonaje() {
-    abrirModal('✨ Crear Personaje', `
-    <p class="stat-hint">El nombre puede tener aliases separados por coma: <code>HEOP, Sakataka</code></p>
+// ── Crear nuevo grupo ─────────────────────────────────────────
+export function abrirCrearGrupo() {
+    abrirModal('✨ Crear Grupo', `
+    <p class="stat-hint">El grupo es el personaje público. Los aliases son los nombres usados en el hilo de rol.</p>
     <div class="op-row"><span class="op-label">Nombre</span>
-        <input id="cp-nombre" type="text" class="op-input" style="flex:1;" placeholder="Ej: HEOP, Sakataka, Fufu"></div>
+        <input id="cp-nom" type="text" class="op-input" style="flex:1;" placeholder="Ej: Elisa"></div>
     <div class="stats-grid">
-        <div class="stat-field"><label>POT Total</label><input id="cp-pot" type="number" value="0"></div>
-        <div class="stat-field"><label>AGI Total</label><input id="cp-agi" type="number" value="0"></div>
-        <div class="stat-field"><label>CTL Total</label><input id="cp-ctl" type="number" value="0"></div>
+        <div class="stat-field"><label>POT</label><input id="cp-pot" type="number" value="0"></div>
+        <div class="stat-field"><label>AGI</label><input id="cp-agi" type="number" value="0"></div>
+        <div class="stat-field"><label>CTL</label><input id="cp-ctl" type="number" value="0"></div>
     </div>
-    <div style="margin-bottom:10px;">
-        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags (con coma)</label>
-        <input id="cp-tags" type="text" class="op-input" placeholder="#Eldritch, #Horror">
-    </div>
-    <button class="op-btn op-btn-green" onclick="window._cpCrear()">✨ Crear</button>
+    <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags (con coma)</label>
+    <input id="cp-tags" type="text" class="op-input" placeholder="#Eldritch, #Horror" style="margin-bottom:10px;">
+    <button class="op-btn op-btn-green" onclick="window._cpCrearGrupo()">✨ Crear Grupo</button>
     <div id="msg-cp" class="op-msg"></div>`);
 
-    window._cpCrear = async () => {
-        const nombre  = document.getElementById('cp-nombre')?.value?.trim();
-        const pot     = parseInt(document.getElementById('cp-pot')?.value)||0;
-        const agi     = parseInt(document.getElementById('cp-agi')?.value)||0;
-        const ctl     = parseInt(document.getElementById('cp-ctl')?.value)||0;
-        const rawTags = document.getElementById('cp-tags')?.value||'';
-        const tags    = rawTags.split(',').map(t=>{const s=t.trim();return s?(s.startsWith('#')?s:'#'+s):null;}).filter(Boolean);
-        const res = await crearPersonaje({nombre,pot,agi,ctl,tags});
-        setMsg('msg-cp', res.ok?'✅ Creado':'❌ '+res.msg, res.ok);
-        if (res.ok) setTimeout(()=>{ cerrarModal(); window.sincronizarVista?.(); }, 800);
+    window._cpCrearGrupo = async () => {
+        const nombre=document.getElementById('cp-nom')?.value?.trim();
+        const pot=parseInt(document.getElementById('cp-pot')?.value)||0;
+        const agi=parseInt(document.getElementById('cp-agi')?.value)||0;
+        const ctl=parseInt(document.getElementById('cp-ctl')?.value)||0;
+        const rawTags=document.getElementById('cp-tags')?.value||'';
+        const tags=rawTags.split(',').map(t=>{const s=t.trim();return s?(s.startsWith('#')?s:'#'+s):null;}).filter(Boolean);
+        const res=await crearGrupo({nombre,pot,agi,ctl,tags});
+        setMsg('msg-cp',res.ok?'✅ Grupo creado':'❌ '+res.msg,res.ok);
+        if(res.ok) setTimeout(()=>{cerrarModal();window.sincronizarVista?.();},800);
     };
 }
 
-function escTA(s) { return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// Botón de gestor de aliases globales (aliases sueltos)
+export function abrirGestorAliases() {
+    const sueltos = aliasesGlobal.filter(a => !a.refinado_id);
+    abrirModal('⚙ Aliases Sueltos', `
+    <p class="stat-hint">Estos nombres no están asignados a ningún grupo. Solo visibles para el OP.<br>
+    Crea un alias nuevo aquí, luego asígnalo desde el panel OP del grupo.</p>
+    <div id="lista-sueltos" style="margin-bottom:12px;">
+        ${sueltos.length
+            ? sueltos.map(a=>`
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--gray-100);">
+                <span style="flex:1;font-size:0.85em;">${a.nombre}</span>
+                <button class="op-btn op-btn-red" style="padding:2px 8px;font-size:0.72em;"
+                    onclick="window._opEliminarAlias('${a.id}','${a.nombre.replace(/'/g,"\\'")}')")>🗑</button>
+            </div>`).join('')
+            : `<p style="color:var(--gray-400);font-size:0.82em;">No hay aliases sueltos.</p>`}
+    </div>
+    <div style="display:flex;gap:6px;">
+        <input id="alias-nuevo-global" type="text" class="op-input" placeholder="Nombre del nuevo alias" style="flex:1;">
+        <button class="op-btn op-btn-green" onclick="window._crearAliasSuelto()">Crear alias</button>
+    </div>
+    <div id="msg-alias-global" class="op-msg"></div>`);
+
+    window._crearAliasSuelto = async () => {
+        const nom=document.getElementById('alias-nuevo-global')?.value?.trim();
+        const res=await crearAlias(nom);
+        setMsg('msg-alias-global',res.ok?`✅ "${nom}" creado`:'❌ '+res.msg,res.ok);
+        if(res.ok){document.getElementById('alias-nuevo-global').value='';}
+    };
+}
+
+function escTA(s){return String(s||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

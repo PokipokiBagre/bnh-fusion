@@ -1,24 +1,35 @@
 // ============================================================
 // fichas-state.js
 // ============================================================
+// MODELO CORRECTO:
+//   personajes            = aliases (nombre, refinado_id) — sin stats
+//   personajes_refinados  = grupos  (nombre_refinado, stats, tags, lore)
+//   El catálogo muestra GRUPOS, no personajes individuales.
+// ============================================================
 import { currentConfig } from '../bnh-auth.js';
 
 export const STORAGE_URL = currentConfig.storageUrl;
 
-// Datos cargados
-export let fichasGlobal  = [];   // todos los personajes de la DB
-export let gruposGlobal  = [];   // personajes_refinados (grupos nombre)
-export let ptGlobal      = {};   // { nombre_pj: { '#Tag': N } }
-export let hilosGlobal   = [];   // historial_hilos para el filtro
+// Grupos (personajes_refinados) — estos tienen stats, tags, lore
+export let gruposGlobal  = [];
 
-// Estado de la UI
+// Aliases (personajes) — solo nombre + refinado_id, sin stats
+// Usados solo por el panel OP para gestionar membership
+export let aliasesGlobal = [];
+
+// PT por grupo: { nombre_refinado: { '#Tag': N } }
+export let ptGlobal      = {};
+
+// Hilos para el filtro
+export let hilosGlobal   = [];
+
 export let fichasUI = {
-    vistaActual:    'catalogo',   // 'catalogo' | 'detalle'
-    seleccionado:   null,
-    esAdmin:        false,
-    tagsFiltro:     [],           // tags activos (booru filter)
-    hiloFiltro:     'todos',      // thread_id o 'todos'
-    tagBusqueda:    '',           // texto buscador sidebar
+    vistaActual:  'catalogo',   // 'catalogo' | 'detalle'
+    seleccionado: null,         // nombre_refinado del grupo seleccionado
+    esAdmin:      false,
+    tagsFiltro:   [],
+    hiloFiltro:   'todos',
+    tagBusqueda:  '',
 };
 
 export const norm = (str) => str.toString().trim().toLowerCase()
