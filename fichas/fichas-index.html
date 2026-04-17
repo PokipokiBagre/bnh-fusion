@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fichas — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../stylepanel.css">
+    <style>
+        body { background: #080808; color: #ddd; }
+
+        .fichas-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .ficha-card {
+            border: 1.5px solid #333;
+            border-radius: 12px;
+            padding: 16px;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .ficha-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+
+        .fichas-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            border-bottom: 1px solid #1a1a1a;
+            flex-wrap: wrap;
+            background: #0d0d0d;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .fichas-buscar {
+            flex: 1;
+            min-width: 180px;
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.88em;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #555;
+        }
+        .empty-state .empty-icon { font-size: 3em; margin-bottom: 12px; }
+        .empty-state h3 { color: #888; margin: 0 0 12px; }
+
+        /* Reutiliza clases de stylepanel.css */
+    </style>
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Fichas</a>
+        <div id="bnh-session-badge"></div>
+    </div>
+</header>
+
+<div class="fichas-header">
+    <input type="text" id="fichas-buscar" class="fichas-buscar"
+        placeholder="🔍 Buscar por nombre o tag…">
+    <button id="btn-crear-pj" class="btn btn-green" style="display:none;"
+        onclick="window.abrirCrearPersonaje()">
+        + Nuevo Personaje
+    </button>
+</div>
+
+<main class="app-main" style="padding: 20px;">
+    <div id="fichas-contenido">
+        <div class="empty-state">
+            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+            <p>Cargando fichas…</p>
+        </div>
+    </div>
+</main>
+
+<div id="op-modal" style="display:none;"></div>
+
+<script type="module" src="fichas-main.js"></script>
+</body>
+</html>
