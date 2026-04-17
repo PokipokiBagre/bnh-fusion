@@ -346,26 +346,45 @@ export const db = {
                 .in('post_no', postNos);
         },
 
-        // Mapa nombre_en_hilo → personaje_nombre (para resolver replies)
-        // Cruza poster_name de historial_posts con personajes.nombre
+        // Mapa nombre_en_hilo → { nombre, tags } (para resolver replies y calcular PT)
+        // Los alias (personajes) apuntan a su grupo (personajes_refinados) donde están los tags.
+        // También normaliza tripcodes: "Kumiko##eULHjo" → mapea igual que "Kumiko"
         async getMapaNombres() {
+            // Traemos aliases con el join a su grupo refinado
             const { data } = await supabase
                 .from('personajes')
-                .select('nombre, tags');
+                .select('nombre, refinado_id, personajes_refinados(nombre_refinado, tags)');
             if (!data) return {};
-        
+
             const mapa = {};
-            data.forEach(p => {
-                // El nombre completo siempre funciona
-                mapa[p.nombre] = p;
-                // Si tiene comas, cada parte también funciona por separado
-                if (p.nombre.includes(',')) {
-                    p.nombre.split(',').forEach(parte => {
+
+            data.forEach(alias => {
+                const grupo = alias.personajes_refinados;
+                // Tags vienen del grupo; si el alias no tiene grupo asignado, tags vacíos
+                const entry = {
+                    nombre: grupo?.nombre_refinado ?? alias.nombre,
+                    tags:   grupo?.tags ?? []
+                };
+
+                // Registrar por el nombre exacto del alias (ej: "Kumiko##eULHjo")
+                mapa[alias.nombre] = entry;
+
+                // También registrar sin tripcode (ej: "Kumiko") por si el poster
+                // postea sin tripcode en algún momento
+                const sinTrip = alias.nombre.replace(/##?\S+/, '').trim();
+                if (sinTrip && sinTrip !== alias.nombre && !mapa[sinTrip]) {
+                    mapa[sinTrip] = entry;
+                }
+
+                // Si tiene comas, cada parte también (ej: aliases múltiples separados)
+                if (alias.nombre.includes(',')) {
+                    alias.nombre.split(',').forEach(parte => {
                         const a = parte.trim();
-                        if (a) mapa[a] = p;
+                        if (a && !mapa[a]) mapa[a] = entry;
                     });
                 }
             });
+
             return mapa;
         }
   }
