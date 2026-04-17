@@ -70,19 +70,32 @@ export function renderRanking() {
     Object.values(ptTagState).forEach(tags => Object.values(tags).forEach(n => { totalPT += n; }));
 
     // Construir ranking de GRUPOS (agrupando aliases)
-    // poster_name → nombre_refinado via mapaAliasAGrupo
+    // poster_name puede ser "LinOP, Test, Test el Personaje" → dividir por coma
+    // Cada parte se resuelve individualmente en mapaAliasAGrupo
     const grupoData = {}; // nombre_refinado → { total_posts, aliases: [], ultimo_post }
-    rankingState.forEach(r => {
-        const grupo = mapaAliasAGrupo[r.poster_name]
-                   || mapaAliasAGrupo[r.poster_name.replace(/##?\S+/,'').trim()]
+
+    function resolverGrupos(posterName) {
+        const partes = posterName.split(',').map(s => s.trim()).filter(Boolean);
+        const grupos = new Set();
+        partes.forEach(p => {
+            const g = mapaAliasAGrupo[p]
+                   || mapaAliasAGrupo[p.replace(/##?\S+/, '').trim()]
                    || null;
-        if (grupo) {
+            if (g) grupos.add(g);
+        });
+        return [...grupos];
+    }
+
+    rankingState.forEach(r => {
+        const grupos = resolverGrupos(r.poster_name);
+        grupos.forEach(grupo => {
             if (!grupoData[grupo]) grupoData[grupo] = { total_posts: 0, aliases: [], ultimo_post: null };
             grupoData[grupo].total_posts += r.total_posts;
-            grupoData[grupo].aliases.push(r.poster_name);
+            if (!grupoData[grupo].aliases.includes(r.poster_name))
+                grupoData[grupo].aliases.push(r.poster_name);
             if (!grupoData[grupo].ultimo_post || r.ultimo_post > grupoData[grupo].ultimo_post)
                 grupoData[grupo].ultimo_post = r.ultimo_post;
-        }
+        });
     });
 
     const rankingGrupos = Object.entries(grupoData)
@@ -149,9 +162,7 @@ export function renderRanking() {
             <th>#</th><th>Alias / Poster</th><th>Grupo</th><th>Posts</th><th>PT en este hilo</th>
         </tr></thead><tbody>`;
         rankingState.forEach((r, i) => {
-            const grupo = mapaAliasAGrupo[r.poster_name]
-                       || mapaAliasAGrupo[r.poster_name.replace(/##?\S+/,'').trim()]
-                       || '—';
+            const grupo = resolverGrupos(r.poster_name)[0] || '—';
             const ptHtml = ptTagState[grupo] && grupo !== '—'
                 ? Object.entries(ptTagState[grupo]).sort((a,b)=>b[1]-a[1]).slice(0,4)
                     .map(([tag,pts])=>`<span style="border:1px solid #00b4d8;color:#00b4d8;
@@ -247,12 +258,12 @@ export function renderTimeline() {
                 title="${lbl}">+${delta} ${tag}</span>`;
         }).join('');
 
-        // Nombre del personaje (grupo nombre si existe)
-        const grupo = mapaAliasAGrupo[post.poster_name]
-                   || mapaAliasAGrupo[post.poster_name.replace(/##?\S+/,'').trim()]
-                   || null;
-        const nombreDisplay = grupo
-            ? `${grupo} <span style="font-size:0.72em;color:#aaa;font-weight:400;">(${post.poster_name})</span>`
+        // Nombre del personaje (grupos si existe, soporta multipersonaje)
+        const gruposPost = post.poster_name.split(',').map(s => s.trim()).filter(Boolean)
+            .map(p => mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/, '').trim()] || null)
+            .filter(Boolean);
+        const nombreDisplay = gruposPost.length
+            ? `${gruposPost.join(', ')} <span style="font-size:0.72em;color:#aaa;font-weight:400;">(${post.poster_name})</span>`
             : post.poster_name;
 
         html += `
