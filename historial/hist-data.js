@@ -178,46 +178,64 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
     const mapaNombres = await db.historial.getMapaNombres();
     if (!Object.keys(mapaNombres).length) {
-        console.warn('[PT] mapa vacío');
+        console.warn('[PT] mapa vacío — sin aliases en DB');
         return;
     }
 
-    // Índice cross-board: todos los posts para resolver replies entre hilos
-    const { data: todosLosPostsDB } = await supabase
+    // Índice cross-board para resolver replies entre hilos
+    const { data: indiceDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
         .eq('board', board);
-    const postsParaIndice = todosLosPostsDB || [];
+    const postsParaIndice = indiceDB || [];
 
-    // Los posts en DB tienen reply_to=null (bug del campo markdown vs message).
-    // Extraer replies directamente del contenido — igual que hace el UI.
+    // Leer contenido de la DB para los posts a procesar
+    // (más confiable que el JSON parseado, que puede tener el campo incorrecto)
+    const postNos = postsNuevos.map(p => p.post_no);
+    const { data: contenidosDB } = await supabase
+        .from('historial_posts')
+        .select('post_no, poster_name, contenido, reply_to')
+        .eq('board', board)
+        .eq('thread_id', threadId)
+        .in('post_no', postNos);
+
+    const contenidoMap = {};
+    (contenidosDB || []).forEach(p => { contenidoMap[p.post_no] = p; });
+
+    // Reconstruir reply_to desde contenido para cada post
     const postsConReplies = postsNuevos.map(post => {
-        if (post.reply_to && post.reply_to.length > 0) return post;
+        const dbPost = contenidoMap[post.post_no] || post;
+
+        // Si ya tiene reply_to válido, usarlo
+        if (dbPost.reply_to && dbPost.reply_to.length > 0) return { ...post, reply_to: dbPost.reply_to };
+
+        // Extraer >>NNN del contenido guardado en DB
+        const texto = dbPost.contenido || post.contenido || '';
         const nums = [];
         let m;
         const re = />>(\d+)/g;
-        const texto = post.contenido || '';
         while ((m = re.exec(texto)) !== null) nums.push(Number(m[1]));
         const uniq = [...new Set(nums)];
+
         return { ...post, reply_to: uniq.length > 0 ? uniq : null };
     });
 
     const conReplies = postsConReplies.filter(p => p.reply_to && p.reply_to.length > 0);
-    console.log('[PT] posts:', postsConReplies.length, '| con replies:', conReplies.length, '| mapa:', Object.keys(mapaNombres).length, '| índice:', postsParaIndice.length);
-    conReplies.slice(0, 3).forEach(p =>
-        console.log('  [PT]', p.poster_name, 'No.' + p.post_no, '→', p.reply_to)
-    );
+    console.log('[PT] posts:', postsConReplies.length,
+        '| con replies:', conReplies.length,
+        '| mapa:', Object.keys(mapaNombres).length,
+        '| índice:', postsParaIndice.length);
 
-    const transacciones = calcularTransaccionesPT(
-        postsConReplies,
-        mapaNombres,
-        threadId,
-        postsParaIndice
-    );
+    if (conReplies.length > 0) {
+        console.log('[PT] muestra:', conReplies.slice(0,3)
+            .map(p => `${p.poster_name} No.${p.post_no}→[${p.reply_to?.slice(0,3)}]`).join(' | '));
+    }
+
+    const transacciones = calcularTransaccionesPT(postsConReplies, mapaNombres, threadId, postsParaIndice);
 
     console.log('[PT] transacciones:', transacciones.length);
-    transacciones.slice(0, 5).forEach(t =>
-        console.log('  [PT]', t.personaje_nombre, '+' + t.delta, t.tag, '(post', t.origen_post_no + ')')
+    transacciones.slice(0,5).forEach(t =>
+        console.log(`  [PT] ${t.personaje_nombre} +${t.delta} ${t.tag} post:${t.origen_post_no}`)
     );
 
     if (transacciones.length > 0) {

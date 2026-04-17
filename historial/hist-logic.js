@@ -15,7 +15,7 @@ export function parsearPostsLynxChan(json, threadId, board) {
         const creation = p.creation ?? p.dateTime ?? p.time;
         const name     = (p.name?.trim() || 'Anónimo');
         const posterId = p.id || '';
-        const message  = p.message ?? p.markdown ?? '';  // message tiene texto plano con >>NNN; markdown tiene HTML
+        const message  = p.message ?? p.markdown ?? '';  // message = texto plano con >>NNN
         const files    = Array.isArray(p.files) ? p.files : (p.files ? [p.files] : []);
 
         if (!postId || !creation) return;
