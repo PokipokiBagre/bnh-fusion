@@ -177,7 +177,7 @@ window.actualizarManual = async function(board, threadId) {
             toast('⏳ Procesando JSON y calculando PT…', 'info');
             renderHeaderInfo();
 
-            const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson);
+            const resultado = await scrapearHilo(board, threadId, hilo.thread_url, manualJson, true); // calcPT=true
 
             if (!resultado.ok) { toast('❌ ' + resultado.error, 'error'); return; }
 

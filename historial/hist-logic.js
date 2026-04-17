@@ -10,26 +10,12 @@ export function parsearPostsLynxChan(json, threadId, board) {
 
     const rawPosts = json.posts || [];
 
-    // DEBUG: inspeccionar estructura del JSON de 8chan
-    if (rawPosts.length > 0) {
-        const p0 = rawPosts[0];
-        console.log('[parser] keys:', Object.keys(p0).join(', '));
-        // Mostrar todos los campos string que contengan >>
-        const conGt = rawPosts.find(p => Object.values(p).some(v => typeof v === 'string' && v.includes('>')));
-        if (conGt) {
-            Object.entries(conGt).forEach(([k,v]) => {
-                if (typeof v === 'string' && v.length > 0)
-                    console.log(`[parser] campo "${k}":`, v.substring(0,200));
-            });
-        }
-    }
-
     rawPosts.forEach(p => {
         const postId   = p.postId ?? p.no;
         const creation = p.creation ?? p.dateTime ?? p.time;
         const name     = (p.name?.trim() || 'Anónimo');
         const posterId = p.id || '';
-        const message  = p.markdown ?? p.message ?? '';
+        const message  = p.message ?? p.markdown ?? '';  // message tiene texto plano con >>NNN; markdown tiene HTML
         const files    = Array.isArray(p.files) ? p.files : (p.files ? [p.files] : []);
 
         if (!postId || !creation) return;
