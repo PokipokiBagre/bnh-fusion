@@ -180,15 +180,13 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
     const mapaNombres = await db.historial.getMapaNombres();
     if (!Object.keys(mapaNombres).length) return;
 
-    // Necesitamos el índice post_no→autor de TODO el hilo (no solo los nuevos)
-    // para poder resolver replies a posts viejos
+    // Necesitamos el índice post_no→autor de TODOS los hilos
+    // porque las replies pueden apuntar a posts de hilos anteriores
     const { data: todosLosPostsDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
-        .eq('board', board)
-        .eq('thread_id', threadId);
+        .eq('board', board);   // <-- sin filtrar por thread_id
 
-    // Combinar posts de la DB con los nuevos para tener el índice completo
     const postsParaIndice = todosLosPostsDB || [];
 
     // calcularTransaccionesPT usa post_no→poster_name internamente,
@@ -197,10 +195,12 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
         postsNuevos,
         mapaNombres,
         threadId,
-        postsParaIndice  // índice completo para resolver replies a posts viejos
+        postsParaIndice
     );
 
+    console.log(`[PT] mapa: ${Object.keys(mapaNombres).length} nombres, índice: ${postsParaIndice.length} posts, transacciones: ${transacciones.length}`);
     if (transacciones.length > 0) {
+        console.log('[PT] transacciones:', JSON.stringify(transacciones));
         await db.progresion.aplicarTransacciones(transacciones);
     }
 
