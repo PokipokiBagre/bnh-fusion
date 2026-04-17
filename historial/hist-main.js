@@ -8,7 +8,7 @@ import {
 } from './hist-state.js';
 import {
     cargarHilos, cargarPostsDB, cargarRankingDB,
-    cargarPTTagDelHilo, scrapearHilo,
+    cargarPTTagDelHilo, scrapearHilo, calcularPTHilo,
     agregarHilo, eliminarHilo, toggleHiloActivo
 } from './hist-data.js';
 import {
@@ -115,7 +115,7 @@ window.scrapeManual = async function(board, threadId) {
     toast('⏳ Obteniendo posts…', 'info');
     renderHeaderInfo();
 
-    const resultado = await scrapearHilo(board, threadId, hilo.thread_url);
+    const resultado = await scrapearHilo(board, threadId, hilo.thread_url, null, false);
 
     if (!resultado.ok) {
         toast('❌ ' + resultado.error, 'error');
@@ -201,6 +201,30 @@ window.actualizarHiloActivo = async function() {
     if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
     const { board, thread_id } = estadoUI.hiloActivo;
     await window.scrapeManual(board, thread_id);
+};
+
+// ── Calcular PT (con rango de fecha) ─────────────────────────
+window.calcularPT = async function(rango) {
+    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
+    const { board, thread_id } = estadoUI.hiloActivo;
+
+    let desdeFecha = null;
+    let label = 'completo';
+    if (rango === '1d')  { desdeFecha = new Date(Date.now() - 1  * 86400000); label = 'último día'; }
+    if (rango === '3d')  { desdeFecha = new Date(Date.now() - 3  * 86400000); label = 'últimos 3 días'; }
+    if (rango === '7d')  { desdeFecha = new Date(Date.now() - 7  * 86400000); label = 'última semana'; }
+    // rango === 'todo' → desdeFecha queda null → procesa todos
+
+    toast(`⏳ Calculando PT ${label}…`, 'info');
+    renderHeaderInfo();
+
+    const res = await calcularPTHilo(board, thread_id, desdeFecha);
+    if (!res.ok) { toast('❌ Error calculando PT', 'error'); return; }
+
+    await cargarHiloActivo();
+    mostrarVista(estadoUI.vistaActual);
+    toast(`✅ PT calculados (${res.procesados} posts · ${label})`, 'ok');
+    renderHeaderInfo();
 };
 
 window.agregarNuevoHilo = async function() {

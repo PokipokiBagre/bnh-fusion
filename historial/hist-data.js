@@ -103,7 +103,7 @@ export async function cargarPTTagDelHilo(threadId) {
 }
 
 // ── Scrape completo ───────────────────────────────────────────
-export async function scrapearHilo(board, threadId, threadUrl, manualJson = null) {
+export async function scrapearHilo(board, threadId, threadUrl, manualJson = null, calcPT = false) {
     estadoUI.cargando = true;
 
     const json = manualJson ?? await fetchHiloJSON(board, threadId);
@@ -154,8 +154,8 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         .from('historial_ranking')
         .upsert(ranking, { onConflict: 'board,thread_id,poster_name' });
 
-    // 5. Calcular y guardar PT por tags de los posts NUEVOS
-    await procesarPTDePostsNuevos(soloNuevos, threadId, board);
+    // 5. Calcular PT — solo si calcPT=true (por defecto false para separar flujos)
+    if (calcPT) await procesarPTDePostsNuevos(soloNuevos, threadId, board);
 
     // 6. Actualizar meta del hilo
     await supabase.from('historial_hilos').update({
@@ -206,6 +206,95 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
 
     // Marcar posts como procesados
     await db.historial.marcarProcesados(board, threadId, postsNuevos.map(p => p.post_no));
+}
+
+
+// ── Calcular PT de un hilo, opcionalmente filtrando por fecha ─────────────────
+// Si desdeFecha es null → procesa TODOS los posts sin procesar
+// Si desdeFecha es un Date → solo procesa posts desde esa fecha en adelante
+// Es idempotente: desmarca posts en el rango y los reprocesa limpiamente
+export async function calcularPTHilo(board, threadId, desdeFecha = null) {
+    estadoUI.cargando = true;
+
+    // 1. Obtener posts del hilo en el rango pedido
+    let query = supabase
+        .from('historial_posts')
+        .select('post_no, poster_name, reply_to, post_time, pt_procesado')
+        .eq('board', board)
+        .eq('thread_id', threadId)
+        .order('post_no');
+
+    if (desdeFecha) {
+        query = query.gte('post_time', desdeFecha.toISOString());
+    }
+
+    const { data: postsEnRango } = await query;
+    if (!postsEnRango || !postsEnRango.length) {
+        estadoUI.cargando = false;
+        return { ok: true, procesados: 0 };
+    }
+
+    const postNosEnRango = postsEnRango.map(p => p.post_no);
+
+    // 2. Borrar PT ya calculados de estos posts (para no duplicar)
+    await supabase
+        .from('log_puntos_tag')
+        .delete()
+        .eq('origen_thread_id', threadId)
+        .eq('motivo', 'interaccion')
+        .in('origen_post_no', postNosEnRango);
+
+    // 3. Desmarcar estos posts para que se reprocesen
+    await supabase
+        .from('historial_posts')
+        .update({ pt_procesado: false })
+        .eq('board', board)
+        .eq('thread_id', threadId)
+        .in('post_no', postNosEnRango);
+
+    // 4. Reconstruir puntos_tag desde log limpio
+    await reconstruirPuntosTotales();
+
+    // 5. Procesar PT de todos los posts en el rango
+    await procesarPTDePostsNuevos(postsEnRango, threadId, board);
+
+    // 6. Refrescar memoria
+    await cargarPTTagDelHilo(threadId);
+
+    estadoUI.cargando = false;
+    estadoUI.ultimaActualizacion = new Date();
+    return { ok: true, procesados: postNosEnRango.length };
+}
+
+// ── Reconstruir puntos_tag desde el log completo ──────────────
+// Borra la tabla y la recalcula sumando todos los deltas del log
+async function reconstruirPuntosTotales() {
+    // Leer el log completo
+    const { data: log } = await supabase
+        .from('log_puntos_tag')
+        .select('personaje_nombre, tag, delta');
+
+    if (!log) return;
+
+    // Agrupar sumas
+    const sumas = {};
+    log.forEach(r => {
+        const k = `${r.personaje_nombre}||${r.tag}`;
+        sumas[k] = (sumas[k] || 0) + r.delta;
+    });
+
+    // Borrar y reinsertar puntos_tag
+    await supabase.from('puntos_tag').delete().neq('personaje_nombre', '');
+    const rows = Object.entries(sumas)
+        .filter(([, v]) => v > 0)
+        .map(([k, cantidad]) => {
+            const [personaje_nombre, tag] = k.split('||');
+            return { personaje_nombre, tag, cantidad };
+        });
+
+    if (rows.length) {
+        await supabase.from('puntos_tag').insert(rows);
+    }
 }
 
 // ── Agregar nuevo hilo ────────────────────────────────────────
