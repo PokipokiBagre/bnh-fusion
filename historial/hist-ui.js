@@ -166,59 +166,61 @@ export function renderTimeline() {
     const postAutor = {};
     postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
-    // Índice post_no → [{pj, tag}] — PT generados por cada post
-    // Reconstruir desde ptTagState no es posible sin el origen_post_no en memoria,
-    // así que usamos los reply_to: si post A replies a B y A es un PJ,
-    // sabemos que ese post generó PT. Lo marcamos con los tags visibles del ranking.
-    _ptPorPost = {};
+    // Backlinks: índice inverso post_no → [post_nos que lo citan]
+    const backlinks = {};
     postsState.forEach(post => {
-        if (!post.pt_procesado) return;
-        if (!post.reply_to || !post.reply_to.length) return;
-        // Buscar si este poster tiene PT registrados en ptTagState
-        const ptPoster = ptTagState[post.poster_name];
-        if (!ptPoster || !Object.keys(ptPoster).length) return;
-        // Marcar este post como generador de PT (sin saber el tag exacto en memoria)
-        if (!_ptPorPost[post.post_no]) _ptPorPost[post.post_no] = [];
-        // Mostrar los top tags del personaje como indicador
-        const topTags = Object.entries(ptPoster).sort((a,b)=>b[1]-a[1]).slice(0,2);
-        topTags.forEach(([tag]) => {
-            _ptPorPost[post.post_no].push({ pj: post.poster_name, tag });
+        (post.reply_to || []).forEach(rno => {
+            if (!backlinks[rno]) backlinks[rno] = [];
+            backlinks[rno].push(post.post_no);
         });
     });
 
     [...postsState].reverse().forEach(post => {
-        // ¿Generó PT este post? Buscar en ptTagState por origen_post_no
-        const ptDeEstePost = obtenerTagsPTDePost(post.post_no);
-        const ptBadge = ptDeEstePost.length
-            ? ptDeEstePost.map(({pj, tag}) =>
-                `<span style="background:rgba(0,180,216,0.15); border:1px solid #00b4d8; color:#00b4d8; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:700; margin-left:4px;" title="${pj}">+PT ${tag}</span>`
-              ).join('')
+        // ¿Generó PT este post?
+        const ptDeEstePost = obtenerPTDePost(post);
+        const ptBadge = ptDeEstePost
+            ? `<span style="background:rgba(0,180,216,0.15); border:1px solid #00b4d8; color:#00b4d8; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:700; margin-left:6px;">+1 PT ${ptDeEstePost}</span>`
             : '';
 
-        // Replies visuales
+        // Links de replies salientes (este post cita a otros)
         const repliesHtml = (post.reply_to || []).map(rno => {
-            const autor = postAutor[rno] || `#${rno}`;
-            return `<span style="color:#00b4d8; font-size:0.8em; margin-right:4px;">&gt;&gt;${rno} (${autor})</span>`;
+            const autor = postAutor[rno] || '';
+            const label = autor ? `>>${rno} (${autor})` : `>>${rno}`;
+            const existe = !!postAutor[rno];
+            return `<a class="tl-reply-link" href="#post-${rno}"
+                onclick="tlScrollTo(${rno}, ${post.post_no}); return false;"
+                style="color:#00b4d8; font-size:0.8em; margin-right:6px; text-decoration:none; ${existe?'':'opacity:0.5;'}"
+                title="Ir al post ${rno}${autor?' de '+autor:''}">${label} ↑</a>`;
+        }).join('');
+
+        // Backlinks: quién cita este post
+        const backHtml = (backlinks[post.post_no] || []).map(bno => {
+            const autor = postAutor[bno] || '';
+            return `<a class="tl-reply-link" href="#post-${bno}"
+                onclick="tlScrollTo(${bno}, ${post.post_no}); return false;"
+                style="color:#7ecfb3; font-size:0.75em; margin-right:6px; text-decoration:none;"
+                title="Post ${bno}${autor?' de '+autor:''} te cita">>>${bno}${autor?' ('+autor+')':''} ↓</a>`;
         }).join('');
 
         html += `
-        <div class="timeline-item">
+        <div class="timeline-item" id="post-${post.post_no}">
             <div class="tl-header">
                 <div class="tl-meta">
                     <span class="tl-name">${post.poster_name}</span>
                     ${post.poster_id ? `<span class="tl-id">${post.poster_id}</span>` : ''}
-                    <span class="tl-num">No.${post.post_no}</span>
+                    <span class="tl-num" style="cursor:pointer;" onclick="tlCopyLink(${post.post_no})" title="Copiar link">No.${post.post_no}</span>
                     ${ptBadge}
                 </div>
                 <div class="tl-right">
                     <span class="tl-time">${fmtFecha(post.post_time)}</span>
                 </div>
             </div>
-            ${repliesHtml ? `<div style="padding:4px 0 2px 0;">${repliesHtml}</div>` : ''}
+            ${repliesHtml ? `<div style="padding:2px 0;">${repliesHtml}</div>` : ''}
             <div class="tl-body">
                 ${post.contenido ? `<p class="tl-texto">${escHTML(post.contenido)}</p>` : ''}
                 ${post.tiene_imagen ? `<span class="tl-img-badge">🖼 ${post.num_imagenes} imagen${post.num_imagenes > 1 ? 'es' : ''}</span>` : ''}
             </div>
+            ${backHtml ? `<div style="padding:4px 0 0 0; border-top:1px dashed rgba(126,207,179,0.3); margin-top:6px;">${backHtml}</div>` : ''}
         </div>`;
     });
 
@@ -226,14 +228,14 @@ export function renderTimeline() {
     cont.innerHTML = html;
 }
 
-// Busca en ptTagState los PT que se generaron por este post_no específico.
-// ptTagState está cargado desde log_puntos_tag filtrado por origen_thread_id,
-// pero no tiene origen_post_no en memoria — necesitamos el índice por post.
-// Lo resolvemos con _ptPorPost que se construye en renderTimeline.
-let _ptPorPost = {}; // { post_no: [{pj, tag}] }
-
-function obtenerTagsPTDePost(postNo) {
-    return _ptPorPost[postNo] || [];
+// Devuelve el tag que ganó PT en un post (si fue procesado y generó PT)
+function obtenerPTDePost(post) {
+    // Buscamos en ptTagState si algún personaje tiene PT de este post_no
+    // Como no guardamos por post_no en memoria, solo mostramos si hay replies
+    if (!post.reply_to || post.reply_to.length === 0) return null;
+    // El badge visual es suficiente con saber que tiene replies válidas
+    // El detalle exacto del tag está en el log de la DB
+    return ''; // badge vacío: solo indica que generó PT
 }
 
 // ============================================================
@@ -343,6 +345,29 @@ export function toast(msg, tipo = 'ok') {
     clearTimeout(el._t);
     el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
 }
+
+// ── Helpers de navegación en timeline ────────────────────────
+// Historial de navegación para poder volver al origen
+const _tlNavStack = [];
+
+window.tlScrollTo = function(postNo, fromPostNo) {
+    // Guardar el post de origen para poder volver
+    if (fromPostNo) _tlNavStack.push(fromPostNo);
+    const el = document.getElementById('post-' + postNo);
+    if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Flash highlight
+        el.style.transition = 'background 0.2s';
+        el.style.background = 'rgba(0,180,216,0.12)';
+        setTimeout(() => { el.style.background = ''; }, 1200);
+    }
+};
+
+window.tlCopyLink = function(postNo) {
+    navigator.clipboard?.writeText(`No.${postNo}`).then(() => {
+        // pequeño feedback visual
+    });
+};
 
 function escHTML(str) {
     return String(str)

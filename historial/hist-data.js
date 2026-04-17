@@ -139,14 +139,28 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: true, nuevos: 0 };
     }
 
-    // 3. Upsert todos los posts (no solo nuevos) para actualizar reply_to
-    // que antes se guardaba como null por el bug del campo markdown vs message
-    const { error: errPosts } = await supabase
-        .from('historial_posts')
-        .upsert(todosLosPosts, { onConflict: 'board,post_no' });
-    if (errPosts) {
-        estadoUI.cargando = false;
-        return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
+    // 3. Guardar posts nuevos
+    if (soloNuevos.length > 0) {
+        const { error: errPosts } = await supabase
+            .from('historial_posts')
+            .upsert(soloNuevos, { onConflict: 'board,post_no' });
+        if (errPosts) {
+            estadoUI.cargando = false;
+            return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
+        }
+    }
+
+    // 3b. Actualizar reply_to retroactivamente en lotes
+    // (posts guardados antes del fix tenían reply_to:null)
+    const LOTE_RT = 20;
+    for (let i = 0; i < todosLosPosts.length; i += LOTE_RT) {
+        const lote = todosLosPosts.slice(i, i + LOTE_RT);
+        await Promise.all(lote.map(p =>
+            supabase.from('historial_posts')
+                .update({ reply_to: p.reply_to })
+                .eq('board', board)
+                .eq('post_no', p.post_no)
+        ));
     }
 
     // 4. Actualizar ranking de posts (solo conteo)
@@ -155,8 +169,8 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         .from('historial_ranking')
         .upsert(ranking, { onConflict: 'board,thread_id,poster_name' });
 
-    // 5. Calcular PT — solo si calcPT=true (por defecto false para separar flujos)
-    if (calcPT) await procesarPTDePostsNuevos(soloNuevos, threadId, board);
+    // 5. Calcular PT con TODOS los posts (no solo nuevos) para aprovechar reply_to recién actualizado
+    if (calcPT) await procesarPTDePostsNuevos(todosLosPosts, threadId, board);
 
     // 6. Actualizar meta del hilo
     await supabase.from('historial_hilos').update({
@@ -217,55 +231,46 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
 export async function calcularPTHilo(board, threadId, desdeFecha = null) {
     estadoUI.cargando = true;
 
-    // 1. Obtener TODOS los posts del hilo para el índice completo de replies
-    const { data: todosLosPosts } = await supabase
+    // 1. Obtener posts del hilo en el rango pedido
+    let query = supabase
         .from('historial_posts')
         .select('post_no, poster_name, reply_to, post_time, pt_procesado')
         .eq('board', board)
         .eq('thread_id', threadId)
         .order('post_no');
 
-    if (!todosLosPosts || !todosLosPosts.length) {
-        estadoUI.cargando = false;
-        return { ok: false, error: 'No hay posts en este hilo. Usa Actualizar primero.' };
-    }
-
-    // Verificar si algún post tiene reply_to poblado
-    const conReplies = todosLosPosts.filter(p => p.reply_to && p.reply_to.length > 0);
-    console.log(`[calcPT] ${todosLosPosts.length} posts totales, ${conReplies.length} con reply_to en DB`);
-
-    if (conReplies.length === 0) {
-        estadoUI.cargando = false;
-        return { 
-            ok: false, 
-            error: 'Los posts no tienen reply_to guardado. Usa "📥 Pega JSON" para reprocesar el hilo con el JSON fresco de 8chan — esto actualizará los reply_to y calculará los PT correctamente.'
-        };
-    }
-
-    // 2. Filtrar al rango pedido
-    let postsEnRango = todosLosPosts;
     if (desdeFecha) {
-        postsEnRango = todosLosPosts.filter(p => new Date(p.post_time) >= desdeFecha);
+        query = query.gte('post_time', desdeFecha.toISOString());
+    }
+
+    const { data: postsEnRango } = await query;
+    if (!postsEnRango || !postsEnRango.length) {
+        estadoUI.cargando = false;
+        return { ok: true, procesados: 0 };
     }
 
     const postNosEnRango = postsEnRango.map(p => p.post_no);
 
-    // 3. Borrar PT de interacción de estos posts en lotes para evitar timeout
-    const LOTE = 50;
-    for (let i = 0; i < postNosEnRango.length; i += LOTE) {
-        const lote = postNosEnRango.slice(i, i + LOTE);
-        await supabase
-            .from('log_puntos_tag')
-            .delete()
-            .eq('origen_thread_id', threadId)
-            .eq('motivo', 'interaccion')
-            .in('origen_post_no', lote);
-    }
+    // 2. Borrar PT ya calculados de estos posts (para no duplicar)
+    await supabase
+        .from('log_puntos_tag')
+        .delete()
+        .eq('origen_thread_id', threadId)
+        .eq('motivo', 'interaccion')
+        .in('origen_post_no', postNosEnRango);
+
+    // 3. Desmarcar estos posts para que se reprocesen
+    await supabase
+        .from('historial_posts')
+        .update({ pt_procesado: false })
+        .eq('board', board)
+        .eq('thread_id', threadId)
+        .in('post_no', postNosEnRango);
 
     // 4. Reconstruir puntos_tag desde log limpio
     await reconstruirPuntosTotales();
 
-    // 5. Procesar PT — pasando todos los posts como índice para resolver cross-replies
+    // 5. Procesar PT de todos los posts en el rango
     await procesarPTDePostsNuevos(postsEnRango, threadId, board);
 
     // 6. Refrescar memoria
