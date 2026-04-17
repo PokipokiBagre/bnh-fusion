@@ -11,6 +11,7 @@ import {
 } from './fichas-data.js';
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
+import { crearTagInput, TAGS_CANONICOS } from '../bnh-tags.js';
 
 // ── Modal ─────────────────────────────────────────────────────
 function abrirModal(titulo, html) {
@@ -99,10 +100,7 @@ export function abrirPanelOP(nombreGrupo) {
     <div id="op-p1" style="display:none;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">Tags actuales</div>
         <div class="tags-chips" id="op-chips">${_chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{})}</div>
-        <div style="display:flex;gap:6px;margin-bottom:12px;">
-            <input id="op-tag-inp" type="text" class="op-input" placeholder="#NuevoTag" style="flex:1;">
-            <button class="op-btn op-btn-green" onclick="window._opAddTag('${g.id}','${nombreGrupo.replace(/'/g,"\\'")}')")>+ Agregar</button>
-        </div>
+        <div id="op-tag-inp-wrap" style="margin-bottom:12px;"></div>
         <div id="msg-tags" class="op-msg"></div>
         <hr style="border:none;border-top:1px solid var(--gray-200);margin:14px 0;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Delta PT Manual</div>
@@ -147,6 +145,17 @@ export function abrirPanelOP(nombreGrupo) {
     ['op-pot-t','op-agi-t','op-ctl-t'].forEach(id => {
         setTimeout(()=>{ document.getElementById(id)?.addEventListener('input', window._opRecalcPV); }, 50);
     });
+
+    // Montar widget de autosugerencia de tags en tab 1
+    setTimeout(() => {
+        const wrap = document.getElementById('op-tag-inp-wrap');
+        if (!wrap) return;
+        const g2 = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        const widget = crearTagInput('op-tag-inp', g2?.tags || [], (tag) => {
+            window._opAddTag(g.id, nombreGrupo, tag);
+        });
+        wrap.appendChild(widget.el);
+    }, 60);
 }
 
 function _chipsHTML(grupoId, tags, ptDePJ) {
@@ -304,9 +313,12 @@ export function exponerGlobalesOP() {
         if(document.getElementById('op-ctl-a')) document.getElementById('op-ctl-a').value=ctl;
     };
 
-    window._opAddTag = async (grupoId, nombreGrupo) => {
-        const raw=document.getElementById('op-tag-inp')?.value?.trim(); if(!raw) return;
-        const tag=raw.startsWith('#')?raw:'#'+raw;
+    window._opAddTag = async (grupoId, nombreGrupo, tagDirecto) => {
+        const tag = tagDirecto || (() => {
+            const raw=document.getElementById('op-tag-inp')?.value?.trim();
+            return raw ? (raw.startsWith('#')?raw:'#'+raw) : null;
+        })();
+        if(!tag) return;
         const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
         if((g.tags||[]).includes(tag)){setMsg('msg-tags','Ya existe',false);return;}
         const nuevosTags=[...(g.tags||[]),tag];
@@ -422,7 +434,7 @@ export function exponerGlobalesOP() {
 // ── Crear nuevo grupo ─────────────────────────────────────────
 export function abrirCrearGrupo() {
     abrirModal('✨ Crear Grupo', `
-    <p class="stat-hint">El grupo es el personaje público. Los aliases son los nombres usados en el hilo de rol.</p>
+    <p class="stat-hint">El grupo es el personaje público. Los aliases son los nombres del hilo de rol.</p>
     <div class="op-row"><span class="op-label">Nombre</span>
         <input id="cp-nom" type="text" class="op-input" style="flex:1;" placeholder="Ej: Elisa"></div>
     <div class="stats-grid">
@@ -430,19 +442,46 @@ export function abrirCrearGrupo() {
         <div class="stat-field"><label>AGI</label><input id="cp-agi" type="number" value="0"></div>
         <div class="stat-field"><label>CTL</label><input id="cp-ctl" type="number" value="0"></div>
     </div>
-    <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags (con coma)</label>
-    <input id="cp-tags" type="text" class="op-input" placeholder="#Eldritch, #Horror" style="margin-bottom:10px;">
+    <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags</label>
+    <div id="cp-tags-chips" class="tags-chips" style="margin-bottom:6px;"></div>
+    <div id="cp-tag-inp-wrap" style="margin-bottom:10px;"></div>
     <button class="op-btn op-btn-green" onclick="window._cpCrearGrupo()">✨ Crear Grupo</button>
     <div id="msg-cp" class="op-msg"></div>`);
+
+    // Lista de tags seleccionados en el formulario
+    const tagsSel = [];
+
+    function renderChipsCp() {
+        const chips = document.getElementById('cp-tags-chips');
+        if (!chips) return;
+        chips.innerHTML = tagsSel.map(t =>
+            `<span class="tag-chip">${t}
+                <button class="tag-chip-rm" onclick="window._cpRmTag('${t.replace(/'/g,"\\'")}')")>×</button>
+            </span>`
+        ).join('') || `<span style="color:var(--gray-400);font-size:0.82em;">Sin tags aún</span>`;
+    }
+
+    setTimeout(() => {
+        const wrap = document.getElementById('cp-tag-inp-wrap');
+        if (!wrap) return;
+        const widget = crearTagInput('cp-tag-inp', TAGS_CANONICOS, (tag) => {
+            if (!tagsSel.includes(tag)) { tagsSel.push(tag); renderChipsCp(); }
+        });
+        wrap.appendChild(widget.el);
+        renderChipsCp();
+    }, 60);
+
+    window._cpRmTag = (tag) => {
+        const idx = tagsSel.indexOf(tag);
+        if (idx !== -1) { tagsSel.splice(idx, 1); renderChipsCp(); }
+    };
 
     window._cpCrearGrupo = async () => {
         const nombre=document.getElementById('cp-nom')?.value?.trim();
         const pot=parseInt(document.getElementById('cp-pot')?.value)||0;
         const agi=parseInt(document.getElementById('cp-agi')?.value)||0;
         const ctl=parseInt(document.getElementById('cp-ctl')?.value)||0;
-        const rawTags=document.getElementById('cp-tags')?.value||'';
-        const tags=rawTags.split(',').map(t=>{const s=t.trim();return s?(s.startsWith('#')?s:'#'+s):null;}).filter(Boolean);
-        const res=await crearGrupo({nombre,pot,agi,ctl,tags});
+        const res=await crearGrupo({nombre,pot,agi,ctl,tags:[...tagsSel]});
         setMsg('msg-cp',res.ok?'✅ Grupo creado':'❌ '+res.msg,res.ok);
         if(res.ok) setTimeout(()=>{cerrarModal();window.sincronizarVista?.();},800);
     };
