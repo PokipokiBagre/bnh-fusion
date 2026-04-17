@@ -139,10 +139,11 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: true, nuevos: 0 };
     }
 
-    // 3. Guardar posts nuevos (con reply_to)
+    // 3. Upsert todos los posts (no solo nuevos) para actualizar reply_to
+    // que antes se guardaba como null por el bug del campo markdown vs message
     const { error: errPosts } = await supabase
         .from('historial_posts')
-        .upsert(soloNuevos, { onConflict: 'board,post_no' });
+        .upsert(todosLosPosts, { onConflict: 'board,post_no' });
     if (errPosts) {
         estadoUI.cargando = false;
         return { ok: false, error: 'Error guardando posts: ' + errPosts.message };

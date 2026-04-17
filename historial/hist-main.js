@@ -115,7 +115,7 @@ window.scrapeManual = async function(board, threadId) {
     toast('⏳ Obteniendo posts…', 'info');
     renderHeaderInfo();
 
-    const resultado = await scrapearHilo(board, threadId, hilo.thread_url, null, false);
+    const resultado = await scrapearHilo(board, threadId, hilo.thread_url, null, true); // calcPT=true siempre
 
     if (!resultado.ok) {
         toast('❌ ' + resultado.error, 'error');
@@ -129,7 +129,7 @@ window.scrapeManual = async function(board, threadId) {
 
     await cargarHilos();
     toast(resultado.nuevos > 0
-        ? `✅ ${resultado.nuevos} post(s) nuevo(s)${resultado.nuevos > 0 ? ' · PT calculados' : ''}`
+        ? `✅ ${resultado.nuevos} post(s) nuevo(s) · PT calculados`
         : '✓ Sin posts nuevos', 'ok');
     renderHeaderInfo();
 };
@@ -275,7 +275,7 @@ window.toggleAutoRefresh = function() {
         estadoUI.refreshInterval = setInterval(async () => {
             if (!estadoUI.hiloActivo) return;
             const { board, thread_id, thread_url } = estadoUI.hiloActivo;
-            const r = await scrapearHilo(board, thread_id, thread_url);
+            const r = await scrapearHilo(board, thread_id, thread_url, null, true); // calcPT=true
             if (r.ok && r.nuevos > 0) {
                 await cargarHiloActivo();
                 mostrarVista(estadoUI.vistaActual);
