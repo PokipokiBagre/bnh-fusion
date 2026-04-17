@@ -166,10 +166,19 @@ export function renderTimeline() {
     const postAutor = {};
     postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
+    // Extraer replies del contenido directamente (>>NNN en texto plano)
+    // No depende del campo reply_to de la DB
+    function getRepliesFromContenido(contenido) {
+        if (!contenido) return [];
+        const matches = [...contenido.matchAll(/>>(\d+)/g)];
+        return [...new Set(matches.map(m => Number(m[1])))];
+    }
+
     // Backlinks: índice inverso post_no → [post_nos que lo citan]
     const backlinks = {};
     postsState.forEach(post => {
-        (post.reply_to || []).forEach(rno => {
+        const replies = getRepliesFromContenido(post.contenido);
+        replies.forEach(rno => {
             if (!backlinks[rno]) backlinks[rno] = [];
             backlinks[rno].push(post.post_no);
         });
@@ -182,14 +191,15 @@ export function renderTimeline() {
             ? `<span style="background:rgba(0,180,216,0.15); border:1px solid #00b4d8; color:#00b4d8; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:700; margin-left:6px;">+1 PT ${ptDeEstePost}</span>`
             : '';
 
-        // Links de replies salientes (este post cita a otros)
-        const repliesHtml = (post.reply_to || []).map(rno => {
+        // Links de replies salientes — extraídos del contenido del post
+        const misReplies = getRepliesFromContenido(post.contenido);
+        const repliesHtml = misReplies.map(rno => {
             const autor = postAutor[rno] || '';
             const label = autor ? `>>${rno} (${autor})` : `>>${rno}`;
             const existe = !!postAutor[rno];
             return `<a class="tl-reply-link" href="#post-${rno}"
                 onclick="tlScrollTo(${rno}, ${post.post_no}); return false;"
-                style="color:#00b4d8; font-size:0.8em; margin-right:6px; text-decoration:none; ${existe?'':'opacity:0.5;'}"
+                style="color:#00b4d8; font-size:0.8em; margin-right:6px; text-decoration:none; cursor:pointer; ${existe?'':'opacity:0.5;'}"
                 title="Ir al post ${rno}${autor?' de '+autor:''}">${label} ↑</a>`;
         }).join('');
 
@@ -217,7 +227,7 @@ export function renderTimeline() {
             </div>
             ${repliesHtml ? `<div style="padding:2px 0;">${repliesHtml}</div>` : ''}
             <div class="tl-body">
-                ${post.contenido ? `<p class="tl-texto">${escHTML(post.contenido)}</p>` : ''}
+                ${post.contenido ? `<p class="tl-texto">${renderContenido(post.contenido, postAutor, post.post_no)}</p>` : ''}
                 ${post.tiene_imagen ? `<span class="tl-img-badge">🖼 ${post.num_imagenes} imagen${post.num_imagenes > 1 ? 'es' : ''}</span>` : ''}
             </div>
             ${backHtml ? `<div style="padding:4px 0 0 0; border-top:1px dashed rgba(126,207,179,0.3); margin-top:6px;">${backHtml}</div>` : ''}
@@ -373,4 +383,31 @@ function escHTML(str) {
     return String(str)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;')
         .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Renderiza el contenido del post convirtiendo >>NNN en links clicables
+function renderContenido(texto, postAutor, thisPostNo) {
+    // Primero escapar HTML
+    let s = String(texto)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/"/g, '&quot;');
+    // Convertir >>NNN a links (después de escapar para no romper HTML)
+    s = s.replace(/&gt;&gt;(\d+)/g, (_, rno) => {
+        const n = Number(rno);
+        const autor = postAutor[n] || '';
+        const existe = !!postAutor[n];
+        return `<a href="#post-${n}" onclick="tlScrollTo(${n}, ${thisPostNo}); return false;"
+            style="color:#00b4d8; font-weight:600; text-decoration:none; cursor:pointer; ${existe?'':'opacity:0.6;'}"
+            title="${autor?'Post de '+autor:''}">&gt;&gt;${rno}${autor?' <span style=\"color:#7ecfb3;font-size:0.85em;\">('+autor+')</span>':''}</a>`;
+    });
+    // También capturar >> que no fue escapado (por si acaso)
+    s = s.replace(/>>(\d+)/g, (_, rno) => {
+        const n = Number(rno);
+        const autor = postAutor[n] || '';
+        return `<a href="#post-${n}" onclick="tlScrollTo(${n}, ${thisPostNo}); return false;"
+            style="color:#00b4d8; font-weight:600; text-decoration:none; cursor:pointer;">&gt;&gt;${rno}${autor?' <span style=\"color:#7ecfb3;font-size:0.85em;\">('+autor+')</span>':''}</a>`;
+    });
+    // Greentext: líneas que empiezan con >
+    s = s.replace(/(^|\n)(&gt;(?!&gt;)[^\n]*)/g, '$1<span style="color:#789922;">$2</span>');
+    return s;
 }
