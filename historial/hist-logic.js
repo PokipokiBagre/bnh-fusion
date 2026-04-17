@@ -10,26 +10,17 @@ export function parsearPostsLynxChan(json, threadId, board) {
 
     const rawPosts = json.posts || [];
 
-    // Log del primer post para ver la estructura real del JSON
+    // DEBUG: inspeccionar estructura del JSON de 8chan
     if (rawPosts.length > 0) {
-        const sample = rawPosts[0];
-        console.log('[parser] Campos del primer post:', Object.keys(sample));
-        console.log('[parser] message:', sample.message?.substring?.(0, 200));
-        console.log('[parser] markdown:', sample.markdown?.substring?.(0, 200));
-        console.log('[parser] com:', sample.com?.substring?.(0, 200));
-        console.log('[parser] body:', sample.body?.substring?.(0, 200));
-        // Buscar el primer post que tenga >> en cualquier campo string
-        const conReply = rawPosts.find(p =>
-            Object.values(p).some(v => typeof v === 'string' && v.includes('>>'))
-        );
-        if (conReply) {
-            console.log('[parser] Post con >> encontrado, campos:', Object.keys(conReply));
-            Object.entries(conReply).forEach(([k, v]) => {
-                if (typeof v === 'string' && v.includes('>>'))
-                    console.log(`  [parser] campo "${k}" contiene >>:`, v.substring(0, 300));
+        const p0 = rawPosts[0];
+        console.log('[parser] keys:', Object.keys(p0).join(', '));
+        // Mostrar todos los campos string que contengan >>
+        const conGt = rawPosts.find(p => Object.values(p).some(v => typeof v === 'string' && v.includes('>')));
+        if (conGt) {
+            Object.entries(conGt).forEach(([k,v]) => {
+                if (typeof v === 'string' && v.length > 0)
+                    console.log(`[parser] campo "${k}":`, v.substring(0,200));
             });
-        } else {
-            console.warn('[parser] ⚠️ Ningún post tiene >> en campos string. Revisar estructura.');
         }
     }
 
