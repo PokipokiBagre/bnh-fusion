@@ -142,20 +142,6 @@ export function renderRanking() {
                 <td class="hide-sm" style="font-size:0.78em;color:#888;">${r.aliases.join(', ')}</td>
             </tr>`;
         });
-        // Posters sin grupo asignado
-        rankingState.forEach((r, i) => {
-            const tieneGrupo = mapaAliasAGrupo[r.poster_name]
-                            || mapaAliasAGrupo[r.poster_name.replace(/##?\S+/,'').trim()];
-            if (!tieneGrupo) {
-                html += `<tr style="opacity:0.5;">
-                    <td class="col-pos" style="color:#aaa;">—</td>
-                    <td class="col-nombre"><div style="font-size:0.85em;color:#999;">${r.poster_name} <span style="font-size:0.75em;">(sin grupo)</span></div></td>
-                    <td class="col-puntos" style="color:#999;">${r.total_posts}</td>
-                    <td><span style="color:#aaa;font-size:0.8em;">Sin PT</span></td>
-                    <td class="hide-sm"></td>
-                </tr>`;
-            }
-        });
         html += `</tbody></table>`;
     } else {
         // ── VISTA ALIASES (solo OP) ──

@@ -55,8 +55,23 @@ function extraerTagsDeLectura(contenido) {
     return [...new Set(found)];
 }
 
+// ── Resuelve los personajes de un poster_name ─────────────────
+// Si el nombre tiene comas → post multipersonaje → devuelve array de PJs
+// Si no → array de 1 PJ (o vacío si no está en el mapa)
+function resolverPersonajes(posterName, mapaNombres) {
+    const partes = posterName.split(',').map(s => s.trim()).filter(Boolean);
+    const resultado = [];
+    for (const parte of partes) {
+        const pj = mapaNombres[parte] ?? mapaNombres[normPosterName(parte)];
+        if (pj) resultado.push(pj);
+    }
+    return resultado;
+}
+
 // ── Calcula transacciones de PT ───────────────────────────────
 // 3 fuentes: NO_COMPARTIDOS, COMPARTIDOS, LECTURA
+// Post multipersonaje (nombre con comas): cada personaje actúa de forma
+// independiente, tanto al DAR como al RECIBIR PT (hasta 15 PT × N personajes).
 // yaProcessados = Set<post_no> ya en log para este thread (idempotencia)
 export function calcularTransaccionesPT(
     posts, mapaNombres, threadId,
@@ -78,67 +93,73 @@ export function calcularTransaccionesPT(
         while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
         const misReplies = [...new Set(replyNums)];
 
-        // El REPLIER debe ser personaje
-        const pjReplier = mapaNombres[post.poster_name]
-                       ?? mapaNombres[normPosterName(post.poster_name)];
-        if (!pjReplier) return;
+        // Personajes del EMISOR (1 en posts normales, N en multipersonaje)
+        const pjsEmisor = resolverPersonajes(post.poster_name, mapaNombres);
+        if (!pjsEmisor.length) return;
 
-        const tagsReplierLow = new Set((pjReplier.tags || []).map(t => t.toLowerCase()));
-        const tagOrig = {}; // lowercase → tag original con formato correcto
-        (pjReplier.tags || []).forEach(t => {
-            const norm = t.toLowerCase();
-            tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
-        });
-
-        // Multiplicador fusión: divide el delta
-        const enFusion = fusionados.has(pjReplier.nombre);
-        const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
-
-        const empujar = (tagLow, delta, motivo) => {
-            transacciones.push({
-                personaje_nombre: pjReplier.nombre,
-                tag:              tagOrig[tagLow] || ('#' + tagLow),
-                delta:            Math.max(1, Math.round(delta / divFusion)),
-                motivo,
-                origen_post_no:   post.post_no,
-                origen_thread_id: threadId
-            });
-        };
-
-        // ── FUENTE 3: LECTURA ─────────────────────────────────
-        const leidos = extraerTagsDeLectura(texto)
-            .map(t => t.toLowerCase())
-            .filter(t => tagsReplierLow.has(t));
-        shuffle(leidos).slice(0, OPCIONES.max_lectura).forEach(t =>
-            empujar(t, OPCIONES.delta_lectura, 'lectura')
-        );
-
-        // Fuentes 1 y 2 requieren replies a personajes
-        if (misReplies.length === 0) return;
-
+        // Tags de todos los personajes citados (para fuentes 1 y 2)
+        // Se calcula una sola vez y se comparte entre todos los emisores
         const tagsReplyados = new Set();
         let hayPJ = false;
         misReplies.forEach(rno => {
             const autor = postAutor[rno];
-            if (!autor || autor === post.poster_name) return;
-            const pjR = mapaNombres[autor] ?? mapaNombres[normPosterName(autor)];
-            if (!pjR) return;
-            hayPJ = true;
-            (pjR.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
+            if (!autor) return;
+            // El citado puede ser multipersonaje también → resolver sus PJs
+            const pjsCitados = resolverPersonajes(autor, mapaNombres);
+            pjsCitados.forEach(pjC => {
+                // No contarse a uno mismo
+                if (pjsEmisor.some(e => e.nombre === pjC.nombre)) return;
+                hayPJ = true;
+                (pjC.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
+            });
         });
-        if (!hayPJ) return;
 
-        // ── FUENTE 1: NO COMPARTIDOS ──────────────────────────
-        const noComp = [...tagsReplierLow].filter(t => !tagsReplyados.has(t));
-        shuffle(noComp).slice(0, OPCIONES.max_no_compartidos).forEach(t =>
-            empujar(t, OPCIONES.delta_no_compartido, 'interaccion')
-        );
+        // Procesar cada personaje emisor de forma independiente
+        pjsEmisor.forEach(pjReplier => {
+            const tagsReplierLow = new Set((pjReplier.tags || []).map(t => t.toLowerCase()));
+            const tagOrig = {};
+            (pjReplier.tags || []).forEach(t => {
+                const norm = t.toLowerCase();
+                tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
+            });
 
-        // ── FUENTE 2: COMPARTIDOS ─────────────────────────────
-        const comp = [...tagsReplierLow].filter(t => tagsReplyados.has(t));
-        shuffle(comp).slice(0, OPCIONES.max_compartidos).forEach(t =>
-            empujar(t, OPCIONES.delta_compartido, 'compartido')
-        );
+            const enFusion = fusionados.has(pjReplier.nombre);
+            const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
+
+            const empujar = (tagLow, delta, motivo) => {
+                transacciones.push({
+                    personaje_nombre: pjReplier.nombre,
+                    tag:              tagOrig[tagLow] || ('#' + tagLow),
+                    delta:            Math.max(1, Math.round(delta / divFusion)),
+                    motivo,
+                    origen_post_no:   post.post_no,
+                    origen_thread_id: threadId
+                });
+            };
+
+            // ── FUENTE 3: LECTURA ─────────────────────────────
+            const leidos = extraerTagsDeLectura(texto)
+                .map(t => t.toLowerCase())
+                .filter(t => tagsReplierLow.has(t));
+            shuffle(leidos).slice(0, OPCIONES.max_lectura).forEach(t =>
+                empujar(t, OPCIONES.delta_lectura, 'lectura')
+            );
+
+            // Fuentes 1 y 2 solo si hay replies a personajes
+            if (!hayPJ) return;
+
+            // ── FUENTE 1: NO COMPARTIDOS ──────────────────────
+            const noComp = [...tagsReplierLow].filter(t => !tagsReplyados.has(t));
+            shuffle(noComp).slice(0, OPCIONES.max_no_compartidos).forEach(t =>
+                empujar(t, OPCIONES.delta_no_compartido, 'interaccion')
+            );
+
+            // ── FUENTE 2: COMPARTIDOS ─────────────────────────
+            const comp = [...tagsReplierLow].filter(t => tagsReplyados.has(t));
+            shuffle(comp).slice(0, OPCIONES.max_compartidos).forEach(t =>
+                empujar(t, OPCIONES.delta_compartido, 'compartido')
+            );
+        });
     });
 
     return transacciones;
