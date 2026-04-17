@@ -353,10 +353,18 @@ export const db = {
                 .from('personajes')
                 .select('nombre, tags');
             if (!data) return {};
-            // Devuelve objeto: { 'NombreEnHilo': { nombre, tags } }
+        
             const mapa = {};
-            data.forEach(p => { mapa[p.nombre] = p; });
+            data.forEach(p => {
+                // El nombre completo siempre funciona
+                mapa[p.nombre] = p;
+                // Si tiene comas, cada parte también funciona por separado
+                if (p.nombre.includes(',')) {
+                    p.nombre.split(',').forEach(parte => {
+                        const a = parte.trim();
+                        if (a) mapa[a] = p;
+                    });
+                }
+            });
             return mapa;
         }
-    }
-};
