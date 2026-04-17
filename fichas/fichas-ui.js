@@ -105,10 +105,14 @@ export function renderSidebar() {
             onclick="window._fichaModoAsignar()">
             ${fichasUI.modoAsignar ? '✏️ Modo Asignar: ON (click para salir)' : '✏️ Modo Asignar Tags'}
         </button>
-        ${fichasUI.modoAsignar && fichasUI.tagAsignar ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;">
-            Tag activo: <b style="color:#d35400;">${fichasUI.tagAsignar}</b><br>
-            <span style="color:#888;">Click en ficha = asignar/desasignar</span>
-        </div>` : ''}
+        ${fichasUI.modoAsignar && fichasUI.tagsAsignar.size > 0
+            ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;">
+                Tags activos (<b>${fichasUI.tagsAsignar.size}</b>):<br>
+                <b style="color:#d35400;">${[...fichasUI.tagsAsignar].join(', ')}</b><br>
+                <span style="color:#888;">Click en ficha = asignar/desasignar</span></div>`
+            : fichasUI.modoAsignar
+                ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;color:#888;">Selecciona uno o más tags →</div>`
+                : ''}
     </div>` : ''}
 
     <div class="sidebar-section">
@@ -136,7 +140,7 @@ export function renderSidebar() {
         <ul class="tag-list">
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
-                const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagAsignar === tag;
+                const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);
                 const cero   = cnt === 0;
                 const click  = cero ? '' : `onclick="window._fichaToggleTag('${tag.replace(/'/g, "\\'")}')"`; 
                 const estilo = (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
@@ -205,21 +209,23 @@ export function renderCatalogo(postersDelHilo) {
         const tagsPreview = (g.tags||[]).slice(0,5)
             .map(t=>`<span class="ficha-tag-mini">${t.replace(/^#/,'')}</span>`).join('');
 
-        // Modo asignar: detectar si este grupo ya tiene el tag activo
-        const enModoAsignar = fichasUI.modoAsignar && fichasUI.tagAsignar;
-        const tieneTagActivo = enModoAsignar && (g.tags||[]).some(t =>
-            (t.startsWith('#')?t:'#'+t).toLowerCase() === fichasUI.tagAsignar?.toLowerCase()
-        );
-        const cardBorder = tieneTagActivo
+        // Modo asignar: detectar qué tags del Set activo ya tiene este grupo
+        const enModoAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.size > 0;
+        const tagsGrupoNorm = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+        const tagsConAsignados = enModoAsignar
+            ? [...fichasUI.tagsAsignar].filter(tag => tagsGrupoNorm.includes(tag.toLowerCase()))
+            : [];
+        const tieneAlgunTagActivo = tagsConAsignados.length > 0;
+        const cardBorder = tieneAlgunTagActivo
             ? 'outline:3px solid #27ae60;outline-offset:-2px;background:rgba(39,174,96,0.13);'
             : enModoAsignar ? 'opacity:0.7;' : '';
-        const cardClick = enModoAsignar
+        const cardClick = fichasUI.modoAsignar
             ? `window._fichaAsignarTagClick('${safeN}')`
             : `window.abrirFicha('${safeN}')`;
 
         return `
         <div class="ficha-card" onclick="${cardClick}" style="position:relative;${cardBorder}">
-            ${tieneTagActivo ? `<div style="position:absolute;top:4px;left:4px;z-index:10;background:#27ae60;color:white;font-size:0.65em;font-weight:700;padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">✓ ${fichasUI.tagAsignar}</div>` : ''}
+            ${tieneAlgunTagActivo ? `<div style="position:absolute;top:4px;left:4px;z-index:10;background:#27ae60;color:white;font-size:0.65em;font-weight:700;padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">✓ ${tagsConAsignados.join(' ')}</div>` : ''}
             <div class="ficha-img-wrap">
                 <img class="ficha-img" src="${imgGrupo(g)}" onerror="${onErr}" loading="lazy">
                 <div class="ficha-tier-badge" style="background:${tc.bg};color:${tc.text};border:1px solid ${tc.border};">T${tier}</div>

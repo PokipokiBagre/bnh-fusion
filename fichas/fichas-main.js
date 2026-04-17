@@ -2,7 +2,7 @@
 // fichas-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { fichasUI, gruposGlobal }  from './fichas-state.js';
+import { fichasUI, gruposGlobal, ptGlobal } from './fichas-state.js';
 import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones } from '../bnh-fusion.js';
 import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle } from './fichas-ui.js';
@@ -106,50 +106,55 @@ function exponerGlobales() {
     // Activar/desactivar modo asignar (toggle)
     window._fichaModoAsignar = () => {
         fichasUI.modoAsignar = !fichasUI.modoAsignar;
-        if (!fichasUI.modoAsignar) fichasUI.tagAsignar = null;
+        if (!fichasUI.modoAsignar) fichasUI.tagsAsignar.clear();
         sincronizarVista();
     };
 
     // Al hacer click en una ficha en modo asignar
     window._fichaAsignarTagClick = async (nombreGrupo) => {
-        const tag = fichasUI.tagAsignar;
-        if (!tag) return;
+        const tags = [...fichasUI.tagsAsignar];
+        if (!tags.length) return;
         const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
         if (!g) return;
 
-        const tieneTag = (g.tags||[]).some(t =>
-            (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
-        );
-
-        if (tieneTag) {
-            // Desasignar: confirmar con aviso de PT
-            const pts = (ptGlobal[nombreGrupo]||{})[tag] || 0;
-            const msg = pts > 0
-                ? `¿Desasignar ${tag} de ${nombreGrupo}?\n\n${nombreGrupo} tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`
-                : `¿Desasignar ${tag} de ${nombreGrupo}?`;
-            if (!confirm(msg)) return;
-            const nuevosTags = (g.tags||[]).filter(t =>
-                (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
+        for (const tag of tags) {
+            const tieneTag = (g.tags||[]).some(t =>
+                (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
-            const res = await guardarTagsGrupo(g.id, nuevosTags);
-            if (res.ok && pts > 0) await borrarPTDeTag(nombreGrupo, tag);
-        } else {
-            // Asignar
-            const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
-            const nuevosTags = [...(g.tags||[]), tagNorm];
-            await guardarTagsGrupo(g.id, nuevosTags);
+
+            if (tieneTag) {
+                // Desasignar: confirmar con aviso de PT
+                const pts = (ptGlobal[nombreGrupo]||{})[tag] || 0;
+                const msg = pts > 0
+                    ? `¿Desasignar ${tag} de ${nombreGrupo}?\n\n${nombreGrupo} tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`
+                    : `¿Desasignar ${tag} de ${nombreGrupo}?`;
+                if (!confirm(msg)) continue;
+                const nuevosTags = (g.tags||[]).filter(t =>
+                    (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
+                );
+                const res = await guardarTagsGrupo(g.id, nuevosTags);
+                if (res.ok && pts > 0) await borrarPTDeTag(nombreGrupo, tag);
+            } else {
+                // Asignar
+                const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+                const nuevosTags = [...(g.tags||[]), tagNorm];
+                await guardarTagsGrupo(g.id, nuevosTags);
+            }
         }
         renderCatalogo(postersDelHilo);
         renderSidebar();
     };
 
-    // Al hacer click en un tag del sidebar en modo asignar → seleccionar ese tag
-    // (reemplaza _fichaToggleTag en modo asignar)
+    // Al hacer click en un tag del sidebar en modo asignar → toggle ese tag en el Set
     const _originalToggleTag = window._fichaToggleTag;
     window._fichaToggleTag = (tag) => {
         if (fichasUI.modoAsignar) {
-            // En modo asignar, click en tag del sidebar = seleccionar como tag activo
-            fichasUI.tagAsignar = fichasUI.tagAsignar === tag ? null : tag;
+            // En modo asignar, click en tag del sidebar = toggle en el Set de tags activos
+            if (fichasUI.tagsAsignar.has(tag)) {
+                fichasUI.tagsAsignar.delete(tag);
+            } else {
+                fichasUI.tagsAsignar.add(tag);
+            }
             renderSidebar();
             renderCatalogo(postersDelHilo);
         } else {
