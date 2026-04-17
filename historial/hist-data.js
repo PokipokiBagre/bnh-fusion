@@ -139,28 +139,13 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         return { ok: true, nuevos: 0 };
     }
 
-    // 3. Guardar posts nuevos
-    if (soloNuevos.length > 0) {
-        const { error: errPosts } = await supabase
-            .from('historial_posts')
-            .upsert(soloNuevos, { onConflict: 'board,post_no' });
-        if (errPosts) {
-            estadoUI.cargando = false;
-            return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
-        }
-    }
-
-    // 3b. Actualizar reply_to retroactivamente en lotes
-    // (posts guardados antes del fix tenían reply_to:null)
-    const LOTE_RT = 20;
-    for (let i = 0; i < todosLosPosts.length; i += LOTE_RT) {
-        const lote = todosLosPosts.slice(i, i + LOTE_RT);
-        await Promise.all(lote.map(p =>
-            supabase.from('historial_posts')
-                .update({ reply_to: p.reply_to })
-                .eq('board', board)
-                .eq('post_no', p.post_no)
-        ));
+    // 3. Guardar posts nuevos (con reply_to)
+    const { error: errPosts } = await supabase
+        .from('historial_posts')
+        .upsert(soloNuevos, { onConflict: 'board,post_no' });
+    if (errPosts) {
+        estadoUI.cargando = false;
+        return { ok: false, error: 'Error guardando posts: ' + errPosts.message };
     }
 
     // 4. Actualizar ranking de posts (solo conteo)
@@ -169,8 +154,8 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
         .from('historial_ranking')
         .upsert(ranking, { onConflict: 'board,thread_id,poster_name' });
 
-    // 5. Calcular PT con TODOS los posts (no solo nuevos) para aprovechar reply_to recién actualizado
-    if (calcPT) await procesarPTDePostsNuevos(todosLosPosts, threadId, board);
+    // 5. Calcular PT — solo si calcPT=true (por defecto false para separar flujos)
+    if (calcPT) await procesarPTDePostsNuevos(soloNuevos, threadId, board);
 
     // 6. Actualizar meta del hilo
     await supabase.from('historial_hilos').update({
@@ -191,35 +176,51 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 // ── Procesar PT para un array de posts nuevos ─────────────────
 // Solo procesa posts que aún no tienen pt_procesado = true
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
-    // Construir mapa nombre → { nombre, tags }
     const mapaNombres = await db.historial.getMapaNombres();
-    if (!Object.keys(mapaNombres).length) return;
+    if (!Object.keys(mapaNombres).length) {
+        console.warn('[PT] mapa vacío — no hay aliases en DB');
+        return;
+    }
 
-    // Necesitamos el índice post_no→autor de TODO el hilo (no solo los nuevos)
-    // para poder resolver replies a posts viejos
+    // Índice cross-hilo: todos los posts del board para resolver replies entre hilos
     const { data: todosLosPostsDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
-        .eq('board', board)
-        .eq('thread_id', threadId);
-
-    // Combinar posts de la DB con los nuevos para tener el índice completo
+        .eq('board', board);
     const postsParaIndice = todosLosPostsDB || [];
 
-    // calcularTransaccionesPT usa post_no→poster_name internamente,
-    // así que le pasamos todos para el índice pero solo procesamos los nuevos
+    // FIX: reply_to en DB puede ser null (bug anterior del campo markdown vs message).
+    // Reconstruir reply_to desde el contenido del post antes de calcular PT.
+    const replyRegex = />>(\d+)/g;
+    const postsConReplies = postsNuevos.map(post => {
+        if (post.reply_to && post.reply_to.length > 0) return post;
+        const matches = [...(post.contenido || '').matchAll(replyRegex)];
+        const replyTo = [...new Set(matches.map(m => Number(m[1])))];
+        return { ...post, reply_to: replyTo.length > 0 ? replyTo : null };
+    });
+
+    const conReplies = postsConReplies.filter(p => p.reply_to && p.reply_to.length > 0);
+    console.log('[PT] posts:', postsConReplies.length, '| con replies:', conReplies.length, '| mapa:', Object.keys(mapaNombres).length, '| índice:', postsParaIndice.length);
+    conReplies.slice(0, 3).forEach(p =>
+        console.log(`  [PT] ${p.poster_name} No.${p.post_no} → [${p.reply_to}]`)
+    );
+
     const transacciones = calcularTransaccionesPT(
-        postsNuevos,
+        postsConReplies,
         mapaNombres,
         threadId,
-        postsParaIndice  // índice completo para resolver replies a posts viejos
+        postsParaIndice
+    );
+
+    console.log('[PT] transacciones:', transacciones.length);
+    transacciones.forEach(t =>
+        console.log(`  [PT] ${t.personaje_nombre} +${t.delta} ${t.tag} (post ${t.origen_post_no})`)
     );
 
     if (transacciones.length > 0) {
         await db.progresion.aplicarTransacciones(transacciones);
     }
 
-    // Marcar posts como procesados
     await db.historial.marcarProcesados(board, threadId, postsNuevos.map(p => p.post_no));
 }
 
