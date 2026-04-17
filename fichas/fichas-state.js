@@ -24,12 +24,13 @@ export let ptGlobal      = {};
 export let hilosGlobal   = [];
 
 export let fichasUI = {
-    vistaActual:  'catalogo',   // 'catalogo' | 'detalle'
-    seleccionado: null,         // nombre_refinado del grupo seleccionado
-    esAdmin:      false,
-    tagsFiltro:   [],
-    hiloFiltro:   'todos',
-    tagBusqueda:  '',
+    vistaActual:   'catalogo',  // 'catalogo' | 'detalle'
+    seleccionado:  null,        // nombre_refinado del grupo seleccionado
+    esAdmin:       false,
+    tagsFiltro:    [],
+    hiloFiltro:    'todos',
+    tagBusqueda:   '',
+    nombreBusqueda:'',          // ← buscador de nombres/aliases
 };
 
 export const norm = (str) => str.toString().trim().toLowerCase()

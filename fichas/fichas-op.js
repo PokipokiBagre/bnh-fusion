@@ -137,7 +137,7 @@ export function abrirPanelOP(nombreGrupo) {
     <!-- TAB 3: FUSIÓN -->
     <div id="op-p3" style="display:none;">${_fusionHTML(nombreGrupo)}</div>
 
-    <!-- TAB 4: GRUPO (renombrar, aliases, eliminar) -->
+    <!-- TAB 4: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
     <div id="op-p4" style="display:none;">${_grupoHTML(g)}</div>`;
 
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
@@ -209,6 +209,12 @@ function _grupoHTML(g) {
     const sueltosOpts = sueltos.map(a=>
         `<option value="${a.id}">${a.nombre}</option>`).join('');
 
+    // Grupos disponibles para absorber (todos excepto este)
+    const otrosGrupos = gruposGlobal
+        .filter(x => x.id !== g.id)
+        .map(x => `<option value="${x.nombre_refinado}">${x.nombre_refinado}</option>`)
+        .join('');
+
     return `
     <!-- Renombrar -->
     <div style="margin-bottom:14px;">
@@ -243,6 +249,31 @@ function _grupoHTML(g) {
         <button class="op-btn op-btn-blue" onclick="window._opCrearYAsignarAlias('${g.id}')">Crear y asignar</button>
     </div>
     <div id="msg-alias" class="op-msg"></div>
+
+    <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0;">
+
+    <!-- ★ FUSIONAR GRUPOS (absorción permanente) -->
+    <div style="margin-bottom:14px;">
+        <div style="font-size:0.78em;font-weight:600;color:#8e44ad;margin-bottom:4px;">
+            🔀 Fusionar grupos (absorción permanente)
+        </div>
+        <p style="font-size:0.75em;color:var(--gray-500);margin:0 0 8px;">
+            Absorbe otro grupo en este: sus tags y aliases pasan aquí, y ese grupo se elimina.
+            Esta acción <b>no se puede deshacer</b>.
+        </p>
+        ${otrosGrupos ? `
+        <div style="display:flex;gap:6px;align-items:center;">
+            <select id="op-absorber-sel" class="op-select" style="flex:1;">
+                <option value="">— Elige grupo a absorber —</option>${otrosGrupos}
+            </select>
+            <button class="op-btn" style="background:#8e44ad;color:#fff;border-color:#8e44ad;white-space:nowrap;"
+                onclick="window._opAbsorberGrupo('${g.id}','${g.nombre_refinado.replace(/'/g,"\\'")}')")>
+                🔀 Absorber
+            </button>
+        </div>
+        <div id="msg-absorber" class="op-msg"></div>
+        ` : `<p style="color:var(--gray-400);font-size:0.78em;">No hay otros grupos disponibles.</p>`}
+    </div>
 
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0;">
 
@@ -429,6 +460,67 @@ export function exponerGlobalesOP() {
         await eliminarGrupo(grupoId);
         cerrarModal(); window.sincronizarVista?.();
     };
+
+    // ── Absorción permanente de grupos ────────────────────────
+    // Toma el grupo fuente (sel) y lo absorbe en el destino (grupoId):
+    //   1. Copia tags únicos de fuente → destino
+    //   2. Reasigna todos los aliases de fuente → destino
+    //   3. Elimina el grupo fuente (sus PT quedan en log_puntos_tag
+    //      bajo su nombre original — el OP puede migrarlos manualmente
+    //      si lo desea)
+    window._opAbsorberGrupo = async (grupoDestinoId, nombreDestino) => {
+        const nombreFuente = document.getElementById('op-absorber-sel')?.value;
+        if (!nombreFuente) { setMsg('msg-absorber','Elige un grupo a absorber',false); return; }
+
+        const gFuente  = gruposGlobal.find(x => x.nombre_refinado === nombreFuente);
+        const gDestino = gruposGlobal.find(x => x.id === grupoDestinoId);
+        if (!gFuente || !gDestino) { setMsg('msg-absorber','Grupo no encontrado',false); return; }
+
+        const confirm1 = confirm(
+            `¿Absorber "${nombreFuente}" en "${nombreDestino}"?\n\n` +
+            `• Sus tags únicos se añadirán a "${nombreDestino}"\n` +
+            `• Sus aliases pasarán a "${nombreDestino}"\n` +
+            `• El grupo "${nombreFuente}" se eliminará\n\n` +
+            `Esta acción NO se puede deshacer.`
+        );
+        if (!confirm1) return;
+
+        setMsg('msg-absorber','⏳ Procesando…', true);
+
+        try {
+            // 1. Fusionar tags (union sin duplicados)
+            const tagsDestino = new Set((gDestino.tags||[]).map(t=>t.startsWith('#')?t:'#'+t));
+            const tagsFuente  = (gFuente.tags||[]).map(t=>t.startsWith('#')?t:'#'+t);
+            tagsFuente.forEach(t => tagsDestino.add(t));
+            const tagsUnidos  = [...tagsDestino];
+
+            const r1 = await guardarTagsGrupo(grupoDestinoId, tagsUnidos);
+            if (!r1.ok) { setMsg('msg-absorber','❌ Error al fusionar tags: '+r1.msg, false); return; }
+
+            // 2. Reasignar aliases de la fuente al destino
+            const aliasesFuente = aliasesGlobal.filter(a => a.refinado_id === gFuente.id);
+            for (const a of aliasesFuente) {
+                await asignarAlias(a.id, grupoDestinoId);
+            }
+
+            // 3. Eliminar el grupo fuente
+            // (eliminarGrupo desasigna aliases primero, pero ya los reasignamos arriba)
+            await supabase.from('personajes_refinados').delete().eq('id', gFuente.id);
+            const idx = gruposGlobal.findIndex(g => g.id === gFuente.id);
+            if (idx !== -1) gruposGlobal.splice(idx, 1);
+
+            setMsg('msg-absorber',`✅ "${nombreFuente}" absorbido en "${nombreDestino}"`, true);
+
+            // Refrescar vista y cerrar modal tras breve pausa
+            setTimeout(async () => {
+                cerrarModal();
+                await window.sincronizarVista?.();
+            }, 900);
+
+        } catch(e) {
+            setMsg('msg-absorber','❌ Error inesperado: '+e.message, false);
+        }
+    };
 }
 
 // ── Crear nuevo grupo ─────────────────────────────────────────
@@ -448,7 +540,6 @@ export function abrirCrearGrupo() {
     <button class="op-btn op-btn-green" onclick="window._cpCrearGrupo()">✨ Crear Grupo</button>
     <div id="msg-cp" class="op-msg"></div>`);
 
-    // Lista de tags seleccionados en el formulario
     const tagsSel = [];
 
     function renderChipsCp() {

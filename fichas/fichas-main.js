@@ -82,6 +82,20 @@ function exponerGlobales() {
 
     window._fichaClearTags = () => { fichasUI.tagsFiltro = []; sincronizarVista(); };
 
+    // Buscador de nombre/alias
+    window._fichaNombreSearch = (v) => {
+        fichasUI.nombreBusqueda = v;
+        renderSidebar();
+        renderCatalogo(postersDelHilo);
+    };
+
+    // Limpia todos los filtros (tags + nombre)
+    window._fichaClearAll = () => {
+        fichasUI.tagsFiltro     = [];
+        fichasUI.nombreBusqueda = '';
+        sincronizarVista();
+    };
+
     window._fichaTagSearch = (v) => { fichasUI.tagBusqueda = v; renderSidebar(); };
 
     window._fichaSetHilo = async (val) => {

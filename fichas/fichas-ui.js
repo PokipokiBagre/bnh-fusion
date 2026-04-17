@@ -26,7 +26,6 @@ export function getGruposFiltrados(postersDelHilo) {
             const misAliases = aliasesGlobal
                 .filter(a => a.refinado_id === g.id)
                 .map(a => a.nombre);
-            // Expandir aliases separados por coma
             return misAliases.some(a =>
                 a.split(',').map(x=>x.trim()).some(x => postersDelHilo.has(x))
             );
@@ -38,6 +37,19 @@ export function getGruposFiltrados(postersDelHilo) {
         lista = lista.filter(g => {
             const tagsG = (g.tags||[]).map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase());
             return fichasUI.tagsFiltro.every(tf => tagsG.includes(tf.toLowerCase()));
+        });
+    }
+
+    // Filtro por nombre (busca en nombre del grupo Y en sus aliases)
+    if (fichasUI.nombreBusqueda?.trim()) {
+        const q = fichasUI.nombreBusqueda.trim().toLowerCase();
+        lista = lista.filter(g => {
+            if (g.nombre_refinado.toLowerCase().includes(q)) return true;
+            // También busca en aliases del grupo
+            const misAliases = aliasesGlobal
+                .filter(a => a.refinado_id === g.id)
+                .map(a => a.nombre.toLowerCase());
+            return misAliases.some(a => a.includes(q));
         });
     }
 
@@ -70,6 +82,14 @@ export function renderSidebar() {
             <option value="todos" ${fichasUI.hiloFiltro==='todos'?'selected':''}>Todos los hilos</option>
             ${hilosOpts}
         </select>
+    </div>
+
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Buscar personaje</div>
+        <input type="text" class="sidebar-search" placeholder="Nombre o alias..."
+            value="${fichasUI.nombreBusqueda||''}"
+            oninput="window._fichaNombreSearch(this.value)"
+            style="margin-bottom:0;">
     </div>
 
     <div class="sidebar-section">
@@ -125,8 +145,8 @@ export function renderCatalogo(postersDelHilo) {
     if (!lista.length) {
         cont.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">
             <div class="empty-icon">👤</div>
-            <h3>${fichasUI.tagsFiltro.length?'Sin coincidencias':'No hay personajes'}</h3>
-            ${fichasUI.tagsFiltro.length?`<p><a href="#" onclick="window._fichaClearTags();return false;" style="color:var(--booru-link);">Limpiar filtros</a></p>`:''}
+            <h3>${fichasUI.tagsFiltro.length||fichasUI.nombreBusqueda?'Sin coincidencias':'No hay personajes'}</h3>
+            ${fichasUI.tagsFiltro.length||fichasUI.nombreBusqueda?`<p><a href="#" onclick="window._fichaClearAll();return false;" style="color:var(--booru-link);">Limpiar filtros</a></p>`:''}
         </div>`;
         return;
     }
