@@ -346,37 +346,45 @@ export const db = {
                 .in('post_no', postNos);
         },
 
-        // Mapa nombre_en_hilo → { nombre, tags } (para resolver replies y calcular PT)
-        // Los alias (personajes) apuntan a su grupo (personajes_refinados) donde están los tags.
-        // También normaliza tripcodes: "Kumiko##eULHjo" → mapea igual que "Kumiko"
+        // Mapa nombre_en_hilo → { nombre, tags } para calcular PT de interacción.
+        // Los tags vienen de personajes_refinados (el grupo del alias).
+        // También normaliza tripcodes: "Kumiko##eULHjo" matchea igual que "Kumiko".
         async getMapaNombres() {
-            // Traemos aliases con el join a su grupo refinado
-            const { data } = await supabase
+            // Query 1: todos los aliases con su refinado_id
+            const { data: aliases } = await supabase
                 .from('personajes')
-                .select('nombre, refinado_id, personajes_refinados(nombre_refinado, tags)');
-            if (!data) return {};
+                .select('nombre, refinado_id');
+            if (!aliases) return {};
+
+            // Query 2: todos los grupos con sus tags
+            const { data: grupos } = await supabase
+                .from('personajes_refinados')
+                .select('id, nombre_refinado, tags');
+            if (!grupos) return {};
+
+            // Índice id → grupo
+            const grupoById = {};
+            grupos.forEach(g => { grupoById[g.id] = g; });
 
             const mapa = {};
 
-            data.forEach(alias => {
-                const grupo = alias.personajes_refinados;
-                // Tags vienen del grupo; si el alias no tiene grupo asignado, tags vacíos
+            aliases.forEach(alias => {
+                const grupo = alias.refinado_id ? grupoById[alias.refinado_id] : null;
                 const entry = {
                     nombre: grupo?.nombre_refinado ?? alias.nombre,
                     tags:   grupo?.tags ?? []
                 };
 
-                // Registrar por el nombre exacto del alias (ej: "Kumiko##eULHjo")
+                // Registrar por nombre exacto del alias (ej: "Kumiko##eULHjo")
                 mapa[alias.nombre] = entry;
 
-                // También registrar sin tripcode (ej: "Kumiko") por si el poster
-                // postea sin tripcode en algún momento
+                // También sin tripcode (ej: "Kumiko") por si postea sin él
                 const sinTrip = alias.nombre.replace(/##?\S+/, '').trim();
                 if (sinTrip && sinTrip !== alias.nombre && !mapa[sinTrip]) {
                     mapa[sinTrip] = entry;
                 }
 
-                // Si tiene comas, cada parte también (ej: aliases múltiples separados)
+                // Si tiene comas, registrar cada parte separada
                 if (alias.nombre.includes(',')) {
                     alias.nombre.split(',').forEach(parte => {
                         const a = parte.trim();
