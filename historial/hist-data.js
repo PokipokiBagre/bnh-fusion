@@ -3,9 +3,10 @@
 // ============================================================
 import { supabase }   from '../bnh-auth.js';
 import { db }         from '../bnh-db.js';
+import { initOpciones } from '../bnh-opciones-tags.js';
 import {
     hilosState, postsState, rankingState,
-    ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI, CORS_PROXY
+    ptTagState, estadoUI, CORS_PROXY
 } from './hist-state.js';
 import {
     parsearPostsLynxChan, calcularTransaccionesPT,
@@ -83,50 +84,22 @@ export async function cargarRankingDB(board, threadId) {
 }
 
 // ── Cargar PT acumulados en el hilo (del log) ─────────────────
-// Carga PT del hilo: acumulados (ptTagState) y por post (ptPorPost)
-// También carga el mapa alias → grupo nombre (mapaAliasAGrupo)
+// Construye ptTagState: { 'NombrePJ': { '#Tag': N, ... } }
 export async function cargarPTTagDelHilo(threadId) {
-    // Todos los motivos de PT automáticos
     const { data } = await supabase
         .from('log_puntos_tag')
-        .select('personaje_nombre, tag, delta, motivo, origen_post_no')
+        .select('personaje_nombre, tag, delta')
         .eq('origen_thread_id', threadId)
-        .in('motivo', ['interaccion', 'compartido', 'lectura']);
+        .eq('motivo', 'interaccion');
 
-    // Vaciar
+    // Vaciar y reconstruir
     Object.keys(ptTagState).forEach(k => delete ptTagState[k]);
-    Object.keys(ptPorPost).forEach(k => delete ptPorPost[k]);
 
     if (!data) return;
-
     data.forEach(row => {
-        // Acumulado por personaje
         if (!ptTagState[row.personaje_nombre]) ptTagState[row.personaje_nombre] = {};
         ptTagState[row.personaje_nombre][row.tag] =
             (ptTagState[row.personaje_nombre][row.tag] || 0) + row.delta;
-
-        // Por post específico
-        if (row.origen_post_no) {
-            if (!ptPorPost[row.origen_post_no]) ptPorPost[row.origen_post_no] = [];
-            ptPorPost[row.origen_post_no].push({
-                personaje_nombre: row.personaje_nombre,
-                tag:   row.tag,
-                delta: row.delta,
-                motivo: row.motivo
-            });
-        }
-    });
-
-    // Cargar mapa alias → nombre_refinado
-    const { data: aliases } = await supabase
-        .from('personajes')
-        .select('nombre, personajes_refinados(nombre_refinado)')
-        .not('refinado_id', 'is', null);
-
-    Object.keys(mapaAliasAGrupo).forEach(k => delete mapaAliasAGrupo[k]);
-    (aliases || []).forEach(a => {
-        const grupo = a.personajes_refinados?.nombre_refinado;
-        if (grupo) mapaAliasAGrupo[a.nombre] = grupo;
     });
 }
 
@@ -204,35 +177,62 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 // ── Procesar PT para un array de posts nuevos ─────────────────
 // Solo procesa posts que aún no tienen pt_procesado = true
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
-    // Construir mapa nombre → { nombre, tags }
     const mapaNombres = await db.historial.getMapaNombres();
-    if (!Object.keys(mapaNombres).length) return;
+    if (!Object.keys(mapaNombres).length) { console.warn('[PT] mapa vacío'); return; }
 
-    // Necesitamos el índice post_no→autor de TODO el hilo (no solo los nuevos)
-    // para poder resolver replies a posts viejos
-    const { data: todosLosPostsDB } = await supabase
+    // Índice cross-board: todos los hilos para resolver replies entre hilos
+    const { data: indiceDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
+        .eq('board', board);
+    const postsParaIndice = indiceDB || [];
+
+    // Leer contenido desde DB (más confiable que el JSON parseado)
+    const postNos = postsNuevos.map(p => p.post_no);
+    const { data: contenidosDB } = await supabase
+        .from('historial_posts')
+        .select('post_no, contenido')
         .eq('board', board)
-        .eq('thread_id', threadId);
+        .eq('thread_id', threadId)
+        .in('post_no', postNos);
+    const contenidoMap = {};
+    (contenidosDB || []).forEach(p => { contenidoMap[p.post_no] = p.contenido; });
 
-    // Combinar posts de la DB con los nuevos para tener el índice completo
-    const postsParaIndice = todosLosPostsDB || [];
+    // Posts con contenido enriquecido desde DB
+    const postsEnriquecidos = postsNuevos.map(p => ({
+        ...p,
+        contenido: contenidoMap[p.post_no] ?? p.contenido ?? ''
+    }));
 
-    // calcularTransaccionesPT usa post_no→poster_name internamente,
-    // así que le pasamos todos para el índice pero solo procesamos los nuevos
+    // Idempotencia: posts que ya tienen PT en el log para este thread
+    const { data: yaEnLog } = await supabase
+        .from('log_puntos_tag')
+        .select('origen_post_no')
+        .eq('origen_thread_id', threadId)
+        .in('motivo', ['interaccion', 'compartido', 'lectura']);
+    const yaProcessados = new Set((yaEnLog || []).map(r => r.origen_post_no));
+
+    // Personajes en fusión
+    const fusionados = new Set();
+    try {
+        const { data: fusiones } = await supabase
+            .from('fusiones_activas').select('pj_a, pj_b').eq('activa', true);
+        (fusiones || []).forEach(f => { fusionados.add(f.pj_a); fusionados.add(f.pj_b); });
+    } catch(_) {}
+
     const transacciones = calcularTransaccionesPT(
-        postsNuevos,
-        mapaNombres,
-        threadId,
-        postsParaIndice  // índice completo para resolver replies a posts viejos
+        postsEnriquecidos, mapaNombres, threadId,
+        postsParaIndice, fusionados, yaProcessados
     );
+
+    console.log('[PT] hilo:', threadId, '| posts:', postsEnriquecidos.length,
+        '| ya procesados:', yaProcessados.size,
+        '| transacciones:', transacciones.length);
 
     if (transacciones.length > 0) {
         await db.progresion.aplicarTransacciones(transacciones);
     }
 
-    // Marcar posts como procesados
     await db.historial.marcarProcesados(board, threadId, postsNuevos.map(p => p.post_no));
 }
 
@@ -323,6 +323,63 @@ async function reconstruirPuntosTotales() {
     if (rows.length) {
         await supabase.from('puntos_tag').insert(rows);
     }
+}
+
+
+// ── Eliminar PT de un hilo por rango de fecha ─────────────────
+export async function eliminarPTHilo(board, threadId, desdeFecha = null) {
+    estadoUI.cargando = true;
+
+    // Posts en el rango
+    let query = supabase
+        .from('historial_posts')
+        .select('post_no, post_time')
+        .eq('board', board)
+        .eq('thread_id', threadId);
+    if (desdeFecha) query = query.gte('post_time', desdeFecha.toISOString());
+
+    const { data: posts } = await query;
+    if (!posts || !posts.length) { estadoUI.cargando = false; return { ok: true, eliminados: 0 }; }
+
+    const postNos = posts.map(p => p.post_no);
+
+    // Borrar del log en lotes
+    const LOTE = 50;
+    for (let i = 0; i < postNos.length; i += LOTE) {
+        const lote = postNos.slice(i, i + LOTE);
+        await supabase.from('log_puntos_tag')
+            .delete()
+            .eq('origen_thread_id', threadId)
+            .in('motivo', ['interaccion', 'compartido', 'lectura'])
+            .in('origen_post_no', lote);
+    }
+
+    // Desmarcar posts para que se puedan reprocesar
+    await supabase.from('historial_posts')
+        .update({ pt_procesado: false })
+        .eq('board', board)
+        .eq('thread_id', threadId)
+        .in('post_no', postNos);
+
+    // Reconstruir puntos_tag desde el log limpio
+    const { data: log } = await supabase
+        .from('log_puntos_tag').select('personaje_nombre, tag, delta');
+    const sumas = {};
+    (log || []).forEach(r => {
+        const k = r.personaje_nombre + '||' + r.tag;
+        sumas[k] = (sumas[k] || 0) + r.delta;
+    });
+    await supabase.from('puntos_tag').delete().neq('personaje_nombre', '');
+    const rows = Object.entries(sumas)
+        .filter(([,v]) => v > 0)
+        .map(([k, cantidad]) => {
+            const [personaje_nombre, tag] = k.split('||');
+            return { personaje_nombre, tag, cantidad };
+        });
+    if (rows.length) await supabase.from('puntos_tag').insert(rows);
+
+    estadoUI.cargando = false;
+    return { ok: true, eliminados: postNos.length };
 }
 
 // ── Agregar nuevo hilo ────────────────────────────────────────

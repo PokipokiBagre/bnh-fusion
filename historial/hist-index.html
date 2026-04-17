@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tracking de Posts — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="../stylehistorial.css">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Tracking</a>
+
+        <div id="hilo-activo-info" class="hilo-badge">
+            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
+        </div>
+
+        <div style="display:flex; gap:6px; align-items:center; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+
+            <!-- Opciones PT -->
+            <button class="btn btn-sm" onclick="window.abrirOpcionesTags()"
+                style="background:#2c3e50; border-color:#34495e; color:white;"
+                title="Opciones del sistema de PT">
+                ⚙ Opciones PT
+            </button>
+
+            <!-- Actualizar posts -->
+            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()"
+                title="Scrapea posts nuevos y calcula PT">
+                🔄 Actualizar
+            </button>
+
+            <!-- Calcular PT dropdown -->
+            <div style="position:relative;" id="pt-dropdown-wrap">
+                <button class="btn btn-sm" onclick="toggleDropdown('pt-menu')"
+                    style="background:#1a4a80; border-color:#2980b9; color:white;">
+                    ⚡ Calcular PT ▾
+                </button>
+                <div id="pt-menu" class="dropdown-menu">
+                    <div class="pt-menu-item" onclick="window.calcularPT('todo'); closeDropdown('pt-menu')">
+                        📋 Completo (todo el hilo)
+                    </div>
+                    <div class="pt-menu-item" onclick="window.calcularPT('7d'); closeDropdown('pt-menu')">
+                        📅 Última semana
+                    </div>
+                    <div class="pt-menu-item" onclick="window.calcularPT('3d'); closeDropdown('pt-menu')">
+                        📅 Últimos 3 días
+                    </div>
+                    <div class="pt-menu-item" onclick="window.calcularPT('1d'); closeDropdown('pt-menu')">
+                        📅 Último día
+                    </div>
+                </div>
+            </div>
+
+            <!-- Eliminar PT dropdown -->
+            <div style="position:relative;" id="del-dropdown-wrap">
+                <button class="btn btn-sm" onclick="toggleDropdown('del-menu')"
+                    style="background:#7b241c; border-color:#c0392b; color:white;">
+                    🗑 Eliminar PT ▾
+                </button>
+                <div id="del-menu" class="dropdown-menu">
+                    <div class="pt-menu-item" style="color:#c0392b;"
+                        onclick="window.eliminarPT('todo'); closeDropdown('del-menu')">
+                        ⚠ Eliminar todos los PT
+                    </div>
+                    <div class="pt-menu-item" style="color:#c0392b;"
+                        onclick="window.eliminarPT('7d'); closeDropdown('del-menu')">
+                        🗑 Eliminar última semana
+                    </div>
+                    <div class="pt-menu-item" style="color:#c0392b;"
+                        onclick="window.eliminarPT('3d'); closeDropdown('del-menu')">
+                        🗑 Eliminar últimos 3 días
+                    </div>
+                    <div class="pt-menu-item" style="color:#c0392b;"
+                        onclick="window.eliminarPT('1d'); closeDropdown('del-menu')">
+                        🗑 Eliminar último día
+                    </div>
+                </div>
+            </div>
+
+            <div id="bnh-session-badge"></div>
+        </div>
+    </div>
+
+    <nav class="app-nav">
+        <button class="nav-tab active" data-vista="ranking">Ranking</button>
+        <button class="nav-tab"        data-vista="timeline">Timeline</button>
+        <button class="nav-tab"        data-vista="hilos">Hilos</button>
+    </nav>
+</header>
+
+<main class="app-main">
+    <div id="contenido-principal">
+        <div class="empty-state">
+            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
+            <p>Cargando sistema…</p>
+        </div>
+    </div>
+</main>
+
+<div id="toast-msg" class="toast"></div>
+
+<style>
+.dropdown-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px);
+    background: white; border: 1.5px solid #2980b9; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15); z-index: 999;
+    min-width: 200px; overflow: hidden;
+}
+.dropdown-menu.open { display: block !important; }
+.pt-menu-item {
+    padding: 10px 16px; font-size: 0.85em; cursor: pointer;
+    font-weight: 500; transition: background 0.15s;
+    border-bottom: 1px solid #e9ecef; color: #1a4a80;
+}
+.pt-menu-item:last-child { border-bottom: none; }
+.pt-menu-item:hover { background: #f8f9fa; }
+#del-menu { border-color: #c0392b; }
+</style>
+
+<script type="module" src="hist-main.js"></script>
+<script>
+function toggleDropdown(id) {
+    const all = ['pt-menu', 'del-menu'];
+    all.forEach(d => {
+        const el = document.getElementById(d);
+        if (el) { d === id ? el.classList.toggle('open') : el.classList.remove('open'); }
+    });
+}
+function closeDropdown(id) {
+    document.getElementById(id)?.classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+    const wraps = ['pt-dropdown-wrap', 'del-dropdown-wrap'];
+    wraps.forEach(w => {
+        const wrap = document.getElementById(w);
+        if (wrap && !wrap.contains(e.target)) {
+            wrap.querySelector('.dropdown-menu')?.classList.remove('open');
+        }
+    });
+});
+</script>
+</body>
+</html>

@@ -8,14 +8,13 @@ import {
 } from './hist-state.js';
 import {
     cargarHilos, cargarPostsDB, cargarRankingDB,
-    cargarPTTagDelHilo, scrapearHilo, calcularPTHilo,
+    cargarPTTagDelHilo, scrapearHilo, calcularPTHilo, eliminarPTHilo,
     agregarHilo, eliminarHilo, toggleHiloActivo
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
-    renderHeaderInfo, renderOpcionesModal, toast
+    renderHeaderInfo, toast
 } from './hist-ui.js';
-import { initOpciones, OPCIONES } from '../bnh-opciones-tags.js';
 
 // ── Bridge con Tampermonkey ───────────────────────────────────
 (function setupExtensionBridge() {
@@ -48,7 +47,6 @@ async function init() {
     const btnCfg = document.getElementById('btn-config');
     if (btnCfg) btnCfg.style.display = estadoUI.esAdmin ? 'inline-block' : 'none';
 
-    await initOpciones();
     await cargarHilos();
 
     // Restaurar hilo activo de sesión anterior
@@ -229,6 +227,31 @@ window.calcularPT = async function(rango) {
     renderHeaderInfo();
 };
 
+// ── Eliminar PT por rango ────────────────────────────────────
+window.eliminarPT = async function(rango) {
+    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
+    const { board, thread_id } = estadoUI.hiloActivo;
+
+    let desdeFecha = null;
+    let label = 'todos';
+    if (rango === '1d') { desdeFecha = new Date(Date.now() - 86400000);     label = 'último día'; }
+    if (rango === '3d') { desdeFecha = new Date(Date.now() - 3*86400000);   label = 'últimos 3 días'; }
+    if (rango === '7d') { desdeFecha = new Date(Date.now() - 7*86400000);   label = 'última semana'; }
+
+    if (!confirm(`¿Eliminar PT de ${label} del hilo activo?\nEsto NO se puede deshacer.`)) return;
+
+    toast(`⏳ Eliminando PT (${label})…`, 'info');
+    renderHeaderInfo();
+
+    const res = await eliminarPTHilo(board, thread_id, desdeFecha);
+    if (!res.ok) { toast('❌ Error eliminando PT', 'error'); return; }
+
+    await cargarHiloActivo();
+    mostrarVista(estadoUI.vistaActual);
+    toast(`🗑 PT eliminados (${res.eliminados} posts · ${label})`, 'ok');
+    renderHeaderInfo();
+};
+
 window.agregarNuevoHilo = async function() {
     const url    = document.getElementById('inp-url')?.value?.trim();
     const titulo = document.getElementById('inp-titulo')?.value?.trim();
@@ -291,31 +314,6 @@ window.toggleAutoRefresh = function() {
 };
 
 window.irAHilos     = function() { mostrarVista('hilos'); };
-
-// ── Panel Opciones Tags ───────────────────────────────────────
-window.abrirOpcionesTags = function() {
-    const existing = document.getElementById('modal-opciones-tags');
-    if (existing) { existing.remove(); return; }
-
-    const overlay = document.createElement('div');
-    overlay.id = 'modal-opciones-tags';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px);';
-    overlay.innerHTML = `
-        <div style="background:white;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.2);
-            min-width:320px;max-width:540px;width:90%;border:2px solid var(--green);">
-            <div style="display:flex;justify-content:space-between;align-items:center;
-                padding:12px 16px;border-bottom:1px solid #e9ecef;">
-                <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;">Opciones de PT</span>
-                <button onclick="document.getElementById('modal-opciones-tags').remove()"
-                    style="background:none;border:none;font-size:1.3em;cursor:pointer;color:#aaa;">×</button>
-            </div>
-            <div id="opciones-tags-body">
-                ${renderOpcionesModal(estadoUI.esAdmin)}
-            </div>
-        </div>`;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-};
 window.mostrarVista = mostrarVista;
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
