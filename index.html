@@ -51,6 +51,7 @@
 <p class="section-title">Sistemas</p>
 <div class="cards-grid" id="cards-grid">
 
+    <!-- ── HISTORIAL (existente, LIVE) ── -->
     <a class="card" href="historial/index.html">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-historial" src="" alt="Historial" onerror="this.src=''">
@@ -63,30 +64,46 @@
         </div>
     </a>
 
-    <div class="card coming-soon">
+    <!-- ── FICHAS (nueva) ── -->
+    <a class="card" href="fichas/index.html" id="card-fichas">
         <div class="card-img-wrap">
-            <img class="card-img" id="card-img-personajes" src="" alt="">
-            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+            <img class="card-img" id="card-img-fichas" src="" alt="Fichas" onerror="this.src=''">
+            <span class="card-badge badge-live">NUEVO</span>
         </div>
         <div class="card-body">
-            <div class="card-name">Personajes</div>
-            <div class="card-desc">Fichas de personajes jugadores y NPCs con estadísticas, inventario y habilidades.</div>
-            <div class="card-arrow">EN DESARROLLO</div>
+            <div class="card-name">Fichas</div>
+            <div class="card-desc">Stats PAC, PV, Tier y medallas equipadas de cada personaje de la campaña.</div>
+            <div class="card-arrow">ABRIR →</div>
         </div>
-    </div>
+    </a>
 
-    <div class="card coming-soon">
+    <!-- ── PROGRESIÓN (nueva) ── -->
+    <a class="card" href="progresion/index.html" id="card-progresion">
         <div class="card-img-wrap">
-            <img class="card-img" id="card-img-estadisticas" src="" alt="">
-            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+            <img class="card-img" id="card-img-progresion" src="" alt="Progresión" onerror="this.src=''">
+            <span class="card-badge badge-live">NUEVO</span>
         </div>
         <div class="card-body">
-            <div class="card-name">Estadísticas</div>
-            <div class="card-desc">Resumen global de stats, afinidades y progresión de todos los personajes de la campaña.</div>
-            <div class="card-arrow">EN DESARROLLO</div>
+            <div class="card-name">Progresión</div>
+            <div class="card-desc">Puntos de Tag acumulados por interacciones de rol. Evolución de atributos y medallas.</div>
+            <div class="card-arrow">ABRIR →</div>
         </div>
-    </div>
+    </a>
 
+    <!-- ── MEDALLAS (nueva) ── -->
+    <a class="card" href="medallas/index.html" id="card-medallas">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-medallas" src="" alt="Medallas" onerror="this.src=''">
+            <span class="card-badge badge-live">NUEVO</span>
+        </div>
+        <div class="card-body">
+            <div class="card-name">Medallas</div>
+            <div class="card-desc">Catálogo completo de habilidades: efectos, costos CTL y tags de cada medalla del sistema.</div>
+            <div class="card-arrow">ABRIR →</div>
+        </div>
+    </a>
+
+    <!-- ── IMÁGENES (coming soon) ── -->
     <div class="card coming-soon">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-extra" src="" alt="">
@@ -99,6 +116,7 @@
         </div>
     </div>
 
+    <!-- ── PANEL MÁSTER (solo admins) ── -->
     <div class="card card-panel-dev" id="card-panel-dev" style="display:none;" onclick="location.href='panel-de-desarrollo/index.html'">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-panel-dev" src="" alt="">
@@ -106,7 +124,7 @@
         </div>
         <div class="card-body">
             <div class="card-name">Panel Máster</div>
-            <div class="card-desc">Gestión completa: personajes, inventarios, hechizos, mapa y configuración de página.</div>
+            <div class="card-desc">Gestión completa: personajes, inventarios, medallas, agrupaciones y configuración.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </div>
@@ -116,36 +134,33 @@
 <footer>BNH · SISTEMA DE ROL</footer>
 
 <script type="module">
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { bnhAuth, supabase, currentConfig } from './bnh-auth.js';
 import { bnhConfigs } from './bnh/config.js';
 
-// ── Lógica de Selección de Campaña ────────────────────────────
+// ── Selección de campaña ──────────────────────────────────────
 if (!localStorage.getItem('bnh_selected')) {
     const modal = document.getElementById('modal-campana');
     const lista = document.getElementById('lista-campanas');
     modal.style.display = 'flex';
-    
+
     Object.values(bnhConfigs).forEach(camp => {
         const btn = document.createElement('button');
         btn.textContent = camp.nombreCorto || camp.id;
         btn.style.cssText = "background: var(--green); color: white; border: none; padding: 14px; border-radius: 8px; font-family: 'Inter', sans-serif; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s;";
         btn.onmouseover = () => btn.style.background = 'var(--green-dark)';
-        btn.onmouseout = () => btn.style.background = 'var(--green)';
+        btn.onmouseout  = () => btn.style.background = 'var(--green)';
         btn.onclick = () => {
             localStorage.setItem('bnh_selected', camp.id);
             location.reload();
         };
         lista.appendChild(btn);
     });
-    
-    // Detenemos la carga del resto de la página hasta que elija una opción
-    throw new Error("Esperando selección de campaña..."); 
+
+    throw new Error("Esperando selección de campaña...");
 }
 
 const STORAGE_URL = currentConfig.storageUrl;
 
-// ── Helpers ──────────────────────────────────────────────────
 function imgUrl(nombre) {
     return `${STORAGE_URL}/imginterfaz/${nombre}?v=${Date.now()}`;
 }
@@ -156,77 +171,61 @@ function setImgSrc(id, nombre, fallback = '') {
     el.onerror = () => { el.src = fallback; };
 }
 
-// ── Auth ─────────────────────────────────────────────────────
+// ── Auth ──────────────────────────────────────────────────────
 await bnhAuth.init();
 const badge = document.getElementById('bnh-session-badge');
 if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
-// Mostrar card panel dev solo a admins
 if (bnhAuth.esAdmin()) {
     document.getElementById('card-panel-dev').style.display = 'flex';
 }
 
-// ── Imágenes de tarjetas ──────────────────────────────────────
+// ── Imágenes ──────────────────────────────────────────────────
 const fb = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-setImgSrc('card-img-historial',    'historial.png',    fb);
-setImgSrc('card-img-personajes',   'personajes.png',   fb);
-setImgSrc('card-img-misiones',     'misiones.png',     fb);
-setImgSrc('card-img-estadisticas', 'estadisticas.png', fb);
-setImgSrc('card-img-extra',        'extra.png',        fb);
-setImgSrc('card-img-panel-dev',    'panel-dev.png',    fb);
+setImgSrc('card-img-historial',   'historial.png',   fb);
+setImgSrc('card-img-fichas',      'fichas.png',      fb);
+setImgSrc('card-img-progresion',  'progresion.png',  fb);
+setImgSrc('card-img-medallas',    'medallas.png',    fb);
+setImgSrc('card-img-extra',       'extra.png',       fb);
+setImgSrc('card-img-panel-dev',   'panel-dev.png',   fb);
 
-// Fondo hero
-document.getElementById('hero-bg').style.backgroundImage = `url('${imgUrl('bnh-hero.png')}')`;
-// Fondo tarjetas de hilos
-document.getElementById('thread-rol-bg').style.backgroundImage  = `url('${imgUrl('thread-rol.png')}')`;
-document.getElementById('thread-meta-bg').style.backgroundImage = `url('${imgUrl('thread-meta.png')}')`;
+document.getElementById('hero-bg').style.backgroundImage           = `url('${imgUrl('bnh-hero.png')}')`;
+document.getElementById('thread-rol-bg').style.backgroundImage     = `url('${imgUrl('thread-rol.png')}')`;
+document.getElementById('thread-meta-bg').style.backgroundImage    = `url('${imgUrl('thread-meta.png')}')`;
 
 // ── Config UI desde Supabase ──────────────────────────────────
-async function cargarConfigUI() {
-    try {
-        const { data } = await supabase
-            .from('config_ui')
-            .select('*')
-            .eq('hex_id', 'default')
-            .single();
-        if (!data) return;
+try {
+    const { data } = await supabase
+        .from('config_ui')
+        .select('*')
+        .eq('hex_id', 'default')
+        .single();
 
-        // Favicon dinámico
+    if (data) {
         const favicon = document.getElementById('dynamic-favicon');
         if (favicon) favicon.href = imgUrl('icon.png');
 
-        // Hero
         if (data.titulo) {
-            document.getElementById('hero-title').textContent  = data.titulo;
-            document.getElementById('nav-titulo').textContent  = data.titulo;
+            document.getElementById('hero-title').textContent = data.titulo;
+            document.getElementById('nav-titulo').textContent = data.titulo;
             document.title = data.titulo;
         }
         if (data.subtitulo) document.getElementById('hero-subtitle').textContent = data.subtitulo;
         if (data.lore)      document.getElementById('hero-lore').textContent     = data.lore;
 
-        // Hilos
-        if (data.link_rol) {
-            const el = document.getElementById('thread-rol');
-            if (el) el.href = data.link_rol;
-        }
-        if (data.nombre_rol) {
-            const el = document.getElementById('thread-rol-label');
-            if (el) el.textContent = data.nombre_rol;
-        }
-        if (data.link_meta) {
-            const el = document.getElementById('thread-meta');
-            if (el) el.href = data.link_meta;
-        }
-        if (data.nombre_meta) {
-            const el = document.getElementById('thread-meta-label');
-            if (el) el.textContent = data.nombre_meta;
-        }
-    } catch (e) {
-        console.warn('config_ui no disponible:', e.message);
-    }
-}
+        const threadRol  = document.getElementById('thread-rol');
+        const threadMeta = document.getElementById('thread-meta');
+        if (data.link_rol   && threadRol)  threadRol.href  = data.link_rol;
+        if (data.link_meta  && threadMeta) threadMeta.href = data.link_meta;
 
-await cargarConfigUI();
+        const lblRol  = document.getElementById('thread-rol-label');
+        const lblMeta = document.getElementById('thread-meta-label');
+        if (data.nombre_rol  && lblRol)  lblRol.textContent  = data.nombre_rol;
+        if (data.nombre_meta && lblMeta) lblMeta.textContent = data.nombre_meta;
+    }
+} catch (e) {
+    console.warn('config_ui no disponible:', e.message);
+}
 </script>
 
 </body>
