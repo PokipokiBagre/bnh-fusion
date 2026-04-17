@@ -458,9 +458,15 @@ export function exponerGlobalesOP() {
     };
 
     window._opEliminarAlias = async (aliasId, nombre) => {
-        if(!confirm(`¿Eliminar el alias "${nombre}"?`)) return;
         await eliminarAlias(aliasId);
-        window.sincronizarVista?.();
+        // Quitar la fila del DOM sin recargar
+        const row = document.getElementById(`alias-row-${aliasId}`);
+        if (row) row.remove();
+        // Si no quedan sueltos, mostrar mensaje vacío
+        const lista = document.getElementById('lista-sueltos');
+        if (lista && !lista.querySelector('[id^="alias-row-"]')) {
+            lista.innerHTML = `<p style="color:var(--gray-400);font-size:0.82em;">No hay aliases sueltos.</p>`;
+        }
     };
 
     window._opEliminarGrupo = async (grupoId, nombre) => {
@@ -595,7 +601,7 @@ export function abrirGestorAliases() {
     <div id="lista-sueltos" style="margin-bottom:12px;">
         ${sueltos.length
             ? sueltos.map(a=>`
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--gray-100);">
+            <div id="alias-row-${a.id}" style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--gray-100);">
                 <span style="flex:1;font-size:0.85em;">${a.nombre}</span>
                 <button class="op-btn op-btn-red" style="padding:2px 8px;font-size:0.72em;"
                     onclick="window._opEliminarAlias('${a.id}','${a.nombre.replace(/'/g,"\\'")}')")>🗑</button>
