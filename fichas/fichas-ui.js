@@ -2,6 +2,7 @@
 // fichas-ui.js — Catálogo y Detalle centrado en GRUPOS
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
+import { guardarTagsGrupo, borrarPTDeTag } from './fichas-data.js';
 import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
@@ -96,8 +97,18 @@ export function renderSidebar() {
         <div class="sidebar-section-title">Admin</div>
         <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
             onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;"
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:6px;"
             onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:6px;"
+            onclick="window._fichaAsignarAliasesGrupo()">🔗 Asignar alias de grupo</button>
+        <button id="btn-modo-asignar" class="btn btn-sm" style="width:100%;${fichasUI.modoAsignar?'background:#d35400;color:white;border-color:#d35400;':''}"
+            onclick="window._fichaModoAsignar()">
+            ${fichasUI.modoAsignar ? '✏️ Modo Asignar: ON (click para salir)' : '✏️ Modo Asignar Tags'}
+        </button>
+        ${fichasUI.modoAsignar && fichasUI.tagAsignar ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;">
+            Tag activo: <b style="color:#d35400;">${fichasUI.tagAsignar}</b><br>
+            <span style="color:#888;">Click en ficha = asignar/desasignar</span>
+        </div>` : ''}
     </div>` : ''}
 
     <div class="sidebar-section">
@@ -193,8 +204,21 @@ export function renderCatalogo(postersDelHilo) {
         const tagsPreview = (g.tags||[]).slice(0,5)
             .map(t=>`<span class="ficha-tag-mini">${t.replace(/^#/,'')}</span>`).join('');
 
+        // Modo asignar: detectar si este grupo ya tiene el tag activo
+        const enModoAsignar = fichasUI.modoAsignar && fichasUI.tagAsignar;
+        const tieneTagActivo = enModoAsignar && (g.tags||[]).some(t =>
+            (t.startsWith('#')?t:'#'+t).toLowerCase() === fichasUI.tagAsignar?.toLowerCase()
+        );
+        const cardBorder = tieneTagActivo
+            ? 'outline:3px solid #27ae60;outline-offset:-2px;'
+            : '';
+        const cardClick = enModoAsignar
+            ? `window._fichaAsignarTagClick('${safeN}')`
+            : `window.abrirFicha('${safeN}')`;
+
         return `
-        <div class="ficha-card" onclick="window.abrirFicha('${safeN}')">
+        <div class="ficha-card" onclick="${cardClick}" style="position:relative;${cardBorder}">
+            ${tieneTagActivo ? `<div style="position:absolute;top:4px;left:4px;z-index:10;background:#27ae60;color:white;font-size:0.65em;font-weight:700;padding:1px 5px;border-radius:3px;">✓ ${fichasUI.tagAsignar}</div>` : ''}
             <div class="ficha-img-wrap">
                 <img class="ficha-img" src="${imgGrupo(g)}" onerror="${onErr}" loading="lazy">
                 <div class="ficha-tier-badge" style="background:${tc.bg};color:${tc.text};border:1px solid ${tc.border};">T${tier}</div>

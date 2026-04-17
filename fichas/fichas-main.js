@@ -7,6 +7,7 @@ import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones } from '../bnh-fusion.js';
 import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle } from './fichas-ui.js';
 import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP } from './fichas-op.js';
+import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 
 let postersDelHilo = null;
 
@@ -100,6 +101,69 @@ function exponerGlobales() {
     };
 
     window._fichaTagSearch = (v) => { fichasUI.tagBusqueda = v; renderSidebar(); };
+
+    // ── Modo Asignar Tags ─────────────────────────────────────
+    // Activar/desactivar modo asignar (toggle)
+    window._fichaModoAsignar = () => {
+        fichasUI.modoAsignar = !fichasUI.modoAsignar;
+        if (!fichasUI.modoAsignar) fichasUI.tagAsignar = null;
+        sincronizarVista();
+    };
+
+    // Al hacer click en una ficha en modo asignar
+    window._fichaAsignarTagClick = async (nombreGrupo) => {
+        const tag = fichasUI.tagAsignar;
+        if (!tag) return;
+        const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        if (!g) return;
+
+        const tieneTag = (g.tags||[]).some(t =>
+            (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
+        );
+
+        if (tieneTag) {
+            // Desasignar: confirmar con aviso de PT
+            const pts = (ptGlobal[nombreGrupo]||{})[tag] || 0;
+            const msg = pts > 0
+                ? `¿Desasignar ${tag} de ${nombreGrupo}?\n\n${nombreGrupo} tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`
+                : `¿Desasignar ${tag} de ${nombreGrupo}?`;
+            if (!confirm(msg)) return;
+            const nuevosTags = (g.tags||[]).filter(t =>
+                (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
+            );
+            const res = await guardarTagsGrupo(g.id, nuevosTags);
+            if (res.ok && pts > 0) await borrarPTDeTag(nombreGrupo, tag);
+        } else {
+            // Asignar
+            const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+            const nuevosTags = [...(g.tags||[]), tagNorm];
+            await guardarTagsGrupo(g.id, nuevosTags);
+        }
+        renderCatalogo(postersDelHilo);
+        renderSidebar();
+    };
+
+    // Al hacer click en un tag del sidebar en modo asignar → seleccionar ese tag
+    // (reemplaza _fichaToggleTag en modo asignar)
+    const _originalToggleTag = window._fichaToggleTag;
+    window._fichaToggleTag = (tag) => {
+        if (fichasUI.modoAsignar) {
+            // En modo asignar, click en tag del sidebar = seleccionar como tag activo
+            fichasUI.tagAsignar = fichasUI.tagAsignar === tag ? null : tag;
+            renderSidebar();
+            renderCatalogo(postersDelHilo);
+        } else {
+            _originalToggleTag(tag);
+        }
+    };
+
+    // Botón "Asignar alias de grupo nombre"
+    window._fichaAsignarAliasesGrupo = async () => {
+        if (!confirm('¿Asignar alias de grupo nombre a todos los grupos?\n\nSe creará o reasignará el alias con el mismo nombre del grupo para cada grupo que no lo tenga.')) return;
+        const res = await asignarAliasesDeGrupoNombre();
+        alert(\`✅ Aliases asignados\nCreados: \${res.creados}\nReasignados: \${res.reasignados}\`);
+        await sincronizarVista();
+    };
 
     window._fichaSetHilo = async (val) => {
         fichasUI.hiloFiltro = val;

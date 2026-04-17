@@ -31,6 +31,8 @@ export let fichasUI = {
     hiloFiltro:    'todos',
     tagBusqueda:   '',
     nombreBusqueda:'',          // ← buscador de nombres/aliases
+    modoAsignar:   false,       // ← modo asignar tags activo
+    tagAsignar:    null,        // ← tag seleccionado en modo asignar
 };
 
 export const norm = (str) => str.toString().trim().toLowerCase()

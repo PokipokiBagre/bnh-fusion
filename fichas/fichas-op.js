@@ -4,7 +4,7 @@
 import { gruposGlobal, aliasesGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { calcPVMax, fmtTag } from './fichas-logic.js';
 import {
-    guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo,
+    guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo, borrarPTDeTag,
     renombrarGrupo, eliminarGrupo,
     crearAlias, asignarAlias, eliminarAlias,
     aplicarDeltaPT, crearGrupo
@@ -368,9 +368,17 @@ export function exponerGlobalesOP() {
 
     window._opRmTag = async (grupoId, tag) => {
         const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
+        const tf = tag.startsWith('#')?tag:'#'+tag;
+        const pts = ptGlobal[g.nombre_refinado]?.[tag] || ptGlobal[g.nombre_refinado]?.[tf] || 0;
+        const confirmar = pts > 0
+            ? confirm(`¿Desasignar ${tf} de ${g.nombre_refinado}?\n\nEste personaje tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`)
+            : confirm(`¿Desasignar ${tf} de ${g.nombre_refinado}?`);
+        if (!confirmar) return;
         const nuevosTags=(g.tags||[]).filter(t=>t!==tag);
         const res=await guardarTagsGrupo(grupoId,nuevosTags);
         if(res.ok){
+            // Borrar PT del tag si los había
+            if (pts > 0) await borrarPTDeTag(g.nombre_refinado, tag);
             const chips=document.getElementById('op-chips');
             const nombre=g.nombre_refinado;
             if(chips) chips.innerHTML=_chipsHTML(grupoId,nuevosTags,ptGlobal[nombre]||{});

@@ -59,6 +59,13 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
 
     if (error) return { ok: false, msg: error.message };
     gruposGlobal.push(data);
+
+    // Auto-crear alias con el mismo nombre del grupo
+    const { data: aliasData } = await supabase.from('personajes')
+        .insert({ nombre: nombre.trim(), refinado_id: data.id })
+        .select('*').single();
+    if (aliasData) aliasesGlobal.push(aliasData);
+
     return { ok: true, grupo: data };
 }
 
@@ -157,4 +164,47 @@ function calcPVSimple(pot, agi, ctl) {
     const pac = (pot||0)+(agi||0)+(ctl||0);
     const b = pac>=100?20:pac>=80?15:pac>=60?10:5;
     return Math.floor((pot||0)/4)+Math.floor((agi||0)/4)+Math.floor((ctl||0)/4)+b;
+}
+
+// Borra PT de un tag específico de un grupo (al desasignar el tag)
+export async function borrarPTDeTag(nombreGrupo, tag) {
+    // Borrar de puntos_tag
+    await supabase.from('puntos_tag')
+        .delete()
+        .eq('personaje_nombre', nombreGrupo)
+        .eq('tag', tag);
+    // Borrar del log también para que no se reconstruyan
+    await supabase.from('log_puntos_tag')
+        .delete()
+        .eq('personaje_nombre', nombreGrupo)
+        .eq('tag', tag);
+    // Actualizar estado en memoria
+    if (ptGlobal[nombreGrupo]) delete ptGlobal[nombreGrupo][tag];
+}
+
+// Asigna alias de grupo nombre: crea o reasigna el alias con el nombre del grupo
+// para todos los grupos que no lo tengan, o lo tengan en otro grupo
+export async function asignarAliasesDeGrupoNombre() {
+    let creados = 0, reasignados = 0;
+    for (const g of gruposGlobal) {
+        const nombre = g.nombre_refinado;
+        // Buscar alias con ese nombre exacto
+        const existente = aliasesGlobal.find(a => a.nombre === nombre);
+        if (!existente) {
+            // No existe: crear y asignar
+            const { data } = await supabase.from('personajes')
+                .insert({ nombre, refinado_id: g.id })
+                .select('*').single();
+            if (data) { aliasesGlobal.push(data); creados++; }
+        } else if (existente.refinado_id !== g.id) {
+            // Existe pero en otro grupo (o suelto): reasignar
+            await supabase.from('personajes')
+                .update({ refinado_id: g.id })
+                .eq('id', existente.id);
+            existente.refinado_id = g.id;
+            reasignados++;
+        }
+        // Si ya está bien asignado, no hacer nada
+    }
+    return { creados, reasignados };
 }
