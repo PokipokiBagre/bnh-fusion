@@ -7,9 +7,17 @@ export let hilosState   = [];  // Hilos rastreados
 export let postsState   = [];  // Posts del hilo activo
 export let rankingState = [];  // Ranking: { poster_name, total_posts, pt_total, tags_ganados{} }
 
-// PT por tag acumulados en el hilo activo
-// { 'NombrePersonaje': { '#Eldritch': 5, '#Horror': 2, ... } }
+// PT acumulados por personaje en el hilo activo
+// { 'nombre_refinado': { '#Tag': N, ... } }
 export let ptTagState = {};
+
+// PT ganados por post específico
+// { post_no: [{ personaje_nombre, tag, delta, motivo }] }
+export let ptPorPost = {};
+
+// Mapa alias → nombre_refinado
+// { 'Penta': 'Lumina', 'Kumiko##eULHjo': 'Raul', ... }
+export let mapaAliasAGrupo = {};
 
 export let estadoUI = {
     vistaActual:         'ranking',  // 'ranking' | 'timeline' | 'hilos'

@@ -1,13 +1,11 @@
 // ============================================================
 // hist-data.js — Fetch de 8chan + CRUD Supabase + PT por Tags
 // ============================================================
-import { supabase }        from '../bnh-auth.js';
-import { db }             from '../bnh-db.js';
-import { initOpciones }   from '../bnh-opciones-tags.js';
-import { cargarFusiones, fusionState } from '../bnh-fusion.js';
+import { supabase }   from '../bnh-auth.js';
+import { db }         from '../bnh-db.js';
 import {
     hilosState, postsState, rankingState,
-    ptTagState, estadoUI, CORS_PROXY
+    ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI, CORS_PROXY
 } from './hist-state.js';
 import {
     parsearPostsLynxChan, calcularTransaccionesPT,
@@ -85,22 +83,50 @@ export async function cargarRankingDB(board, threadId) {
 }
 
 // ── Cargar PT acumulados en el hilo (del log) ─────────────────
-// Construye ptTagState: { 'NombrePJ': { '#Tag': N, ... } }
+// Carga PT del hilo: acumulados (ptTagState) y por post (ptPorPost)
+// También carga el mapa alias → grupo nombre (mapaAliasAGrupo)
 export async function cargarPTTagDelHilo(threadId) {
+    // Todos los motivos de PT automáticos
     const { data } = await supabase
         .from('log_puntos_tag')
-        .select('personaje_nombre, tag, delta')
+        .select('personaje_nombre, tag, delta, motivo, origen_post_no')
         .eq('origen_thread_id', threadId)
-        .eq('motivo', 'interaccion');
+        .in('motivo', ['interaccion', 'compartido', 'lectura']);
 
-    // Vaciar y reconstruir
+    // Vaciar
     Object.keys(ptTagState).forEach(k => delete ptTagState[k]);
+    Object.keys(ptPorPost).forEach(k => delete ptPorPost[k]);
 
     if (!data) return;
+
     data.forEach(row => {
+        // Acumulado por personaje
         if (!ptTagState[row.personaje_nombre]) ptTagState[row.personaje_nombre] = {};
         ptTagState[row.personaje_nombre][row.tag] =
             (ptTagState[row.personaje_nombre][row.tag] || 0) + row.delta;
+
+        // Por post específico
+        if (row.origen_post_no) {
+            if (!ptPorPost[row.origen_post_no]) ptPorPost[row.origen_post_no] = [];
+            ptPorPost[row.origen_post_no].push({
+                personaje_nombre: row.personaje_nombre,
+                tag:   row.tag,
+                delta: row.delta,
+                motivo: row.motivo
+            });
+        }
+    });
+
+    // Cargar mapa alias → nombre_refinado
+    const { data: aliases } = await supabase
+        .from('personajes')
+        .select('nombre, personajes_refinados(nombre_refinado)')
+        .not('refinado_id', 'is', null);
+
+    Object.keys(mapaAliasAGrupo).forEach(k => delete mapaAliasAGrupo[k]);
+    (aliases || []).forEach(a => {
+        const grupo = a.personajes_refinados?.nombre_refinado;
+        if (grupo) mapaAliasAGrupo[a.nombre] = grupo;
     });
 }
 
@@ -178,68 +204,35 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
 // ── Procesar PT para un array de posts nuevos ─────────────────
 // Solo procesa posts que aún no tienen pt_procesado = true
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
-    // Cargar opciones y personajes
-    await initOpciones();
-    await cargarFusiones();
-
+    // Construir mapa nombre → { nombre, tags }
     const mapaNombres = await db.historial.getMapaNombres();
-    if (!Object.keys(mapaNombres).length) {
-        console.warn('[PT] mapa vacío');
-        return;
-    }
+    if (!Object.keys(mapaNombres).length) return;
 
-    // Índice cross-board para replies entre hilos
-    const { data: indiceDB } = await supabase
+    // Necesitamos el índice post_no→autor de TODO el hilo (no solo los nuevos)
+    // para poder resolver replies a posts viejos
+    const { data: todosLosPostsDB } = await supabase
         .from('historial_posts')
         .select('post_no, poster_name')
-        .eq('board', board);
-    const postsParaIndice = indiceDB || [];
-
-    // Leer contenido de DB para los posts a procesar
-    const postNos = postsNuevos.map(p => p.post_no);
-    const { data: contenidosDB } = await supabase
-        .from('historial_posts')
-        .select('post_no, contenido')
         .eq('board', board)
-        .eq('thread_id', threadId)
-        .in('post_no', postNos);
-    const contenidoMap = {};
-    (contenidosDB || []).forEach(p => { contenidoMap[p.post_no] = p.contenido; });
+        .eq('thread_id', threadId);
 
-    // Enriquecer posts con contenido de DB (más confiable)
-    const postsEnriquecidos = postsNuevos.map(p => ({
-        ...p,
-        contenido: contenidoMap[p.post_no] ?? p.contenido ?? ''
-    }));
+    // Combinar posts de la DB con los nuevos para tener el índice completo
+    const postsParaIndice = todosLosPostsDB || [];
 
-    // Personajes en fusión activa
-    const fusionados = new Set();
-    for (const [, f] of fusionState) {
-        if (f.activa) { fusionados.add(f.pj_a); fusionados.add(f.pj_b); }
-    }
-
-    // Posts ya procesados en este thread (idempotencia)
-    const { data: yaEnLog } = await supabase
-        .from('log_puntos_tag')
-        .select('origen_post_no')
-        .eq('origen_thread_id', threadId)
-        .in('motivo', ['interaccion', 'compartido', 'lectura']);
-    const yaProcessados = new Set((yaEnLog || []).map(r => r.origen_post_no));
-
+    // calcularTransaccionesPT usa post_no→poster_name internamente,
+    // así que le pasamos todos para el índice pero solo procesamos los nuevos
     const transacciones = calcularTransaccionesPT(
-        postsEnriquecidos, mapaNombres, threadId,
-        postsParaIndice, fusionados, yaProcessados
+        postsNuevos,
+        mapaNombres,
+        threadId,
+        postsParaIndice  // índice completo para resolver replies a posts viejos
     );
-
-    console.log('[PT] posts:', postsEnriquecidos.length,
-        '| ya procesados:', yaProcessados.size,
-        '| nuevos a procesar:', postsEnriquecidos.filter(p => !yaProcessados.has(p.post_no)).length,
-        '| transacciones:', transacciones.length);
 
     if (transacciones.length > 0) {
         await db.progresion.aplicarTransacciones(transacciones);
     }
 
+    // Marcar posts como procesados
     await db.historial.marcarProcesados(board, threadId, postsNuevos.map(p => p.post_no));
 }
 
