@@ -166,11 +166,33 @@ export function renderTimeline() {
     const postAutor = {};
     postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
+    // Índice post_no → [{pj, tag}] — PT generados por cada post
+    // Reconstruir desde ptTagState no es posible sin el origen_post_no en memoria,
+    // así que usamos los reply_to: si post A replies a B y A es un PJ,
+    // sabemos que ese post generó PT. Lo marcamos con los tags visibles del ranking.
+    _ptPorPost = {};
+    postsState.forEach(post => {
+        if (!post.pt_procesado) return;
+        if (!post.reply_to || !post.reply_to.length) return;
+        // Buscar si este poster tiene PT registrados en ptTagState
+        const ptPoster = ptTagState[post.poster_name];
+        if (!ptPoster || !Object.keys(ptPoster).length) return;
+        // Marcar este post como generador de PT (sin saber el tag exacto en memoria)
+        if (!_ptPorPost[post.post_no]) _ptPorPost[post.post_no] = [];
+        // Mostrar los top tags del personaje como indicador
+        const topTags = Object.entries(ptPoster).sort((a,b)=>b[1]-a[1]).slice(0,2);
+        topTags.forEach(([tag]) => {
+            _ptPorPost[post.post_no].push({ pj: post.poster_name, tag });
+        });
+    });
+
     [...postsState].reverse().forEach(post => {
-        // ¿Generó PT este post?
-        const ptDeEstePost = obtenerPTDePost(post);
-        const ptBadge = ptDeEstePost
-            ? `<span style="background:rgba(0,180,216,0.15); border:1px solid #00b4d8; color:#00b4d8; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:700; margin-left:6px;">+1 PT ${ptDeEstePost}</span>`
+        // ¿Generó PT este post? Buscar en ptTagState por origen_post_no
+        const ptDeEstePost = obtenerTagsPTDePost(post.post_no);
+        const ptBadge = ptDeEstePost.length
+            ? ptDeEstePost.map(({pj, tag}) =>
+                `<span style="background:rgba(0,180,216,0.15); border:1px solid #00b4d8; color:#00b4d8; padding:2px 8px; border-radius:10px; font-size:0.75em; font-weight:700; margin-left:4px;" title="${pj}">+PT ${tag}</span>`
+              ).join('')
             : '';
 
         // Replies visuales
@@ -204,14 +226,14 @@ export function renderTimeline() {
     cont.innerHTML = html;
 }
 
-// Devuelve el tag que ganó PT en un post (si fue procesado y generó PT)
-function obtenerPTDePost(post) {
-    // Buscamos en ptTagState si algún personaje tiene PT de este post_no
-    // Como no guardamos por post_no en memoria, solo mostramos si hay replies
-    if (!post.reply_to || post.reply_to.length === 0) return null;
-    // El badge visual es suficiente con saber que tiene replies válidas
-    // El detalle exacto del tag está en el log de la DB
-    return ''; // badge vacío: solo indica que generó PT
+// Busca en ptTagState los PT que se generaron por este post_no específico.
+// ptTagState está cargado desde log_puntos_tag filtrado por origen_thread_id,
+// pero no tiene origen_post_no en memoria — necesitamos el índice por post.
+// Lo resolvemos con _ptPorPost que se construye en renderTimeline.
+let _ptPorPost = {}; // { post_no: [{pj, tag}] }
+
+function obtenerTagsPTDePost(postNo) {
+    return _ptPorPost[postNo] || [];
 }
 
 // ============================================================
