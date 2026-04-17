@@ -136,10 +136,11 @@ export function renderSidebar() {
         <ul class="tag-list">
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
+                const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagAsignar === tag;
                 const cero   = cnt === 0;
-                const click  = cero ? '' : `onclick="window._fichaToggleTag('${tag.replace(/'/g, "\\'")}')"`;
-                const estilo = activo ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
-                return `<li class="${activo?'active':''}" ${click} style="${cero?'opacity:0.45;cursor:default;':''}">
+                const click  = cero ? '' : `onclick="window._fichaToggleTag('${tag.replace(/'/g, "\\'")}')"`; 
+                const estilo = (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
+                return `<li class="${activo||esTagAsignar?'active':''}" ${click} style="${cero?'opacity:0.45;cursor:default;':''}">
                     <span class="tag-link" style="${estilo}">${tag}</span>
                     <span class="tag-count">${cnt}</span>
                 </li>`;

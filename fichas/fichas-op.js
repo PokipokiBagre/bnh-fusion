@@ -100,27 +100,37 @@ export function abrirPanelOP(nombreGrupo) {
     <div id="op-p1" style="display:none;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">Tags actuales</div>
         <div class="tags-chips" id="op-chips">${_chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{})}</div>
-        <div id="op-tag-inp-wrap" style="margin-bottom:12px;"></div>
+        <div id="op-tag-inp-wrap" style="margin-bottom:6px;"></div>
+
+        <div style="font-size:0.72em;font-weight:600;color:var(--gray-500);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">
+            Tags a asignar <span style="font-weight:400;color:var(--gray-400);">(click para agregar)</span>
+        </div>
+        <div id="op-tags-pool" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;max-height:120px;overflow-y:auto;padding:4px 0;"></div>
+
         <div id="msg-tags" class="op-msg"></div>
-        <hr style="border:none;border-top:1px solid var(--gray-200);margin:14px 0;">
-        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:8px;">Delta PT Manual</div>
-        <div class="op-row"><span class="op-label">Tag</span>
-            <select id="op-pt-tag" class="op-select" style="flex:1;">
-                <option value="">— Elige —</option>
-                ${(g.tags||[]).map(t=>`<option value="${t}">${t.startsWith('#')?t:'#'+t}</option>`).join('')}
-            </select></div>
-        <div class="op-row"><span class="op-label">Delta (±)</span>
-            <input id="op-pt-d" type="number" class="op-input" value="1" style="flex:1;"></div>
-        <div class="op-row"><span class="op-label">Motivo</span>
-            <select id="op-pt-m" class="op-select" style="flex:1;">
-                <option value="interaccion">Interacción (+1)</option>
-                <option value="fusion">Fusión (+5)</option>
+        <hr style="border:none;border-top:1px solid var(--gray-200);margin:12px 0 10px;">
+
+        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">
+            Delta PT Manual <span style="font-weight:400;color:var(--gray-400);font-size:0.9em;">(selecciona tags → aplica a todos)</span>
+        </div>
+        <div id="op-pt-pool" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;max-height:110px;overflow-y:auto;padding:4px 0;"></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+            <span class="op-label" style="flex:none;">Delta (±)</span>
+            <input id="op-pt-d" type="number" class="op-input" value="1" style="width:70px;">
+            <span class="op-label" style="flex:none;">Motivo</span>
+            <select id="op-pt-m" class="op-select" style="flex:1;min-width:140px;">
+                <option value="interaccion">Interacción</option>
+                <option value="fusion">Fusión</option>
                 <option value="gasto_stat">Gasto Stat (−50)</option>
                 <option value="gasto_medalla">Gasto Medalla (−75)</option>
                 <option value="gasto_mutacion">Gasto Mutación (−100)</option>
                 <option value="manual">Manual libre</option>
-            </select></div>
-        <button class="op-btn op-btn-blue" onclick="window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')")>Aplicar Delta</button>
+            </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <button class="op-btn op-btn-blue" onclick="window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')">Aplicar a seleccionados</button>
+            <span id="op-pt-sel-count" style="font-size:0.78em;color:var(--gray-500);"></span>
+        </div>
         <div id="msg-pt" class="op-msg"></div>
     </div>
 
@@ -146,17 +156,95 @@ export function abrirPanelOP(nombreGrupo) {
         setTimeout(()=>{ document.getElementById(id)?.addEventListener('input', window._opRecalcPV); }, 50);
     });
 
-    // Montar widget de autosugerencia de tags en tab 1
+    // Montar tab 1: widget input + pool de tags sugeridos + pool PT
     setTimeout(() => {
         const wrap = document.getElementById('op-tag-inp-wrap');
-        if (!wrap) return;
-        const g2 = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
-        const widget = crearTagInput('op-tag-inp', g2?.tags || [], (tag) => {
-            window._opAddTag(g.id, nombreGrupo, tag);
-        });
-        wrap.appendChild(widget.el);
+        if (wrap) {
+            const g2 = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+            const widget = crearTagInput('op-tag-inp', g2?.tags || [], (tag) => {
+                window._opAddTag(g.id, nombreGrupo, tag);
+            });
+            wrap.appendChild(widget.el);
+        }
+        window._opRefreshTab1Pools(g.id, nombreGrupo);
     }, 60);
 }
+
+// Construye y refresca los dos pools del tab 1
+window._opRefreshTab1Pools = (grupoId, nombreGrupo) => {
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    if (!g) return;
+    const tagsActuales = new Set((g.tags||[]).map(t => t.startsWith('#')?t:'#'+t));
+
+    // Índice de cuántos grupos tienen cada tag (para mostrar popularidad)
+    const tagCount = {};
+    gruposGlobal.forEach(gr => {
+        (gr.tags||[]).forEach(t => {
+            const k = t.startsWith('#')?t:'#'+t;
+            tagCount[k] = (tagCount[k]||0)+1;
+        });
+    });
+
+    // ── Pool de tags a asignar (40 aleatorios de los que NO tiene) ──
+    const poolAsignar = document.getElementById('op-tags-pool');
+    if (poolAsignar) {
+        const disponibles = TAGS_CANONICOS
+            .filter(t => !tagsActuales.has(t.startsWith('#')?t:'#'+t))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 40);
+
+        poolAsignar.innerHTML = disponibles.length
+            ? disponibles.map(t => {
+                const cnt = tagCount[t.startsWith('#')?t:'#'+t] || 0;
+                return `<span onclick="window._opAddTag('${grupoId}','${nombreGrupo.replace(/'/g,"\'")}','${t.replace(/'/g,"\'")}');window._opRefreshTab1Pools('${grupoId}','${nombreGrupo.replace(/'/g,"\'")}');"
+                    style="background:#fdf2f2;border:1px solid #e74c3c;color:#c0392b;padding:2px 7px;
+                    border-radius:8px;font-size:0.7em;cursor:pointer;white-space:nowrap;
+                    transition:opacity .15s;" onmouseover="this.style.opacity='.7'" onmouseout="this.style.opacity='1'">
+                    ${t}${cnt?' <span style=\"color:#aaa\">('+cnt+')</span>':''}
+                </span>`;
+            }).join('')
+            : '<span style="color:var(--gray-400);font-size:0.78em;">Ya tiene todos los tags del catálogo</span>';
+    }
+
+    // ── Pool de tags para Delta PT (todos los tags del personaje, multiseleccionable) ──
+    const poolPT = document.getElementById('op-pt-pool');
+    if (poolPT) {
+        if (!window._opPTSel) window._opPTSel = new Set();
+        window._opPTSel.clear();
+        const ptDePJ = ptGlobal[nombreGrupo] || {};
+
+        poolPT.innerHTML = (g.tags||[]).length
+            ? (g.tags||[]).map(t => {
+                const tf = t.startsWith('#')?t:'#'+t;
+                const pts = ptDePJ[t]||ptDePJ[tf]||0;
+                return `<span id="op-ptchip-${tf.replace(/[^a-zA-Z0-9]/g,'_')}"
+                    onclick="window._opTogglePTTag('${tf.replace(/'/g,"\'")}')"
+                    style="background:#eaf4ff;border:1px solid #2980b9;color:#1a4a80;padding:2px 8px;
+                    border-radius:8px;font-size:0.72em;cursor:pointer;transition:all .15s;">
+                    ${tf} <span style="color:#888;font-size:0.85em;">${pts}pt</span>
+                </span>`;
+            }).join('')
+            : '<span style="color:var(--gray-400);font-size:0.78em;">Sin tags</span>';
+
+        const cnt = document.getElementById('op-pt-sel-count');
+        if (cnt) cnt.textContent = '';
+    }
+};
+
+window._opTogglePTTag = (tag) => {
+    if (!window._opPTSel) window._opPTSel = new Set();
+    const id = 'op-ptchip-' + tag.replace(/[^a-zA-Z0-9]/g,'_');
+    const el = document.getElementById(id);
+    if (window._opPTSel.has(tag)) {
+        window._opPTSel.delete(tag);
+        if (el) { el.style.background='#eaf4ff'; el.style.borderColor='#2980b9'; el.style.color='#1a4a80'; }
+    } else {
+        window._opPTSel.add(tag);
+        if (el) { el.style.background='#1a4a80'; el.style.borderColor='#1a4a80'; el.style.color='white'; }
+    }
+    const cnt = document.getElementById('op-pt-sel-count');
+    if (cnt) cnt.textContent = window._opPTSel.size ? `${window._opPTSel.size} tag(s) seleccionado(s)` : '';
+};
 
 function _chipsHTML(grupoId, tags, ptDePJ) {
     if (!tags.length) return `<span style="color:var(--gray-400);font-size:0.82em;">Sin tags</span>`;
@@ -356,12 +444,11 @@ export function exponerGlobalesOP() {
         const res=await guardarTagsGrupo(grupoId,nuevosTags);
         setMsg('msg-tags',res.ok?`✅ ${tag} agregado`:'❌ '+res.msg,res.ok);
         if(res.ok){
-            document.getElementById('op-tag-inp').value='';
+            const inpEl = document.getElementById('op-tag-inp');
+            if (inpEl) inpEl.value='';
             const chips=document.getElementById('op-chips');
             if(chips) chips.innerHTML=_chipsHTML(grupoId,nuevosTags,ptGlobal[nombreGrupo]||{});
-            const sel=document.getElementById('op-pt-tag');
-            if(sel) sel.innerHTML=`<option value="">— Elige —</option>`+
-                nuevosTags.map(t=>`<option value="${t}">${t.startsWith('#')?t:'#'+t}</option>`).join('');
+            window._opRefreshTab1Pools?.(grupoId, nombreGrupo);
             window.sincronizarVista?.();
         }
     };
@@ -387,19 +474,34 @@ export function exponerGlobalesOP() {
     };
 
     window._opAplicarPT = async (nombreGrupo) => {
-        const tag=document.getElementById('op-pt-tag')?.value; if(!tag){setMsg('msg-pt','Elige un tag',false);return;}
+        const tags = window._opPTSel && window._opPTSel.size > 0
+            ? [...window._opPTSel]
+            : [];
+        if (!tags.length) { setMsg('msg-pt', 'Selecciona al menos un tag', false); return; }
         const delta=parseInt(document.getElementById('op-pt-d')?.value)||0;
         const motivo=document.getElementById('op-pt-m')?.value||'manual';
-        if(!delta){setMsg('msg-pt','Delta no puede ser 0',false);return;}
-        const res=await aplicarDeltaPT(nombreGrupo,tag,delta,motivo);
-        const signo=delta>0?'+':'';
-        setMsg('msg-pt',res.ok?`✅ ${signo}${delta} PT en ${tag}`:'❌ '+res.msg,res.ok);
-        if(res.ok){
-            const g=gruposGlobal.find(x=>x.nombre_refinado===nombreGrupo);
-            const chips=document.getElementById('op-chips');
-            if(chips&&g) chips.innerHTML=_chipsHTML(g.id,g.tags||[],ptGlobal[nombreGrupo]||{});
-            window.sincronizarVista?.();
+        if (!delta) { setMsg('msg-pt', 'Delta no puede ser 0', false); return; }
+
+        let errores = 0;
+        for (const tag of tags) {
+            const res = await aplicarDeltaPT(nombreGrupo, tag, delta, motivo);
+            if (!res.ok) errores++;
         }
+
+        const signo = delta > 0 ? '+' : '';
+        setMsg('msg-pt',
+            errores === 0
+                ? `✅ ${signo}${delta} PT en ${tags.length} tag(s)`
+                : `⚠ ${tags.length - errores} ok, ${errores} errores`,
+            errores === 0);
+
+        const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        const chips = document.getElementById('op-chips');
+        if (chips && g) chips.innerHTML = _chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{});
+
+        // Refrescar pool PT con los nuevos valores
+        window._opRefreshTab1Pools(g?.id, nombreGrupo);
+        window.sincronizarVista?.();
     };
 
     window._opGuardarLore = async (grupoId) => {
