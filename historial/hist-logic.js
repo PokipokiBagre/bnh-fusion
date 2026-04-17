@@ -10,6 +10,29 @@ export function parsearPostsLynxChan(json, threadId, board) {
 
     const rawPosts = json.posts || [];
 
+    // Log del primer post para ver la estructura real del JSON
+    if (rawPosts.length > 0) {
+        const sample = rawPosts[0];
+        console.log('[parser] Campos del primer post:', Object.keys(sample));
+        console.log('[parser] message:', sample.message?.substring?.(0, 200));
+        console.log('[parser] markdown:', sample.markdown?.substring?.(0, 200));
+        console.log('[parser] com:', sample.com?.substring?.(0, 200));
+        console.log('[parser] body:', sample.body?.substring?.(0, 200));
+        // Buscar el primer post que tenga >> en cualquier campo string
+        const conReply = rawPosts.find(p =>
+            Object.values(p).some(v => typeof v === 'string' && v.includes('>>'))
+        );
+        if (conReply) {
+            console.log('[parser] Post con >> encontrado, campos:', Object.keys(conReply));
+            Object.entries(conReply).forEach(([k, v]) => {
+                if (typeof v === 'string' && v.includes('>>'))
+                    console.log(`  [parser] campo "${k}" contiene >>:`, v.substring(0, 300));
+            });
+        } else {
+            console.warn('[parser] ⚠️ Ningún post tiene >> en campos string. Revisar estructura.');
+        }
+    }
+
     rawPosts.forEach(p => {
         const postId   = p.postId ?? p.no;
         const creation = p.creation ?? p.dateTime ?? p.time;
@@ -68,22 +91,11 @@ export function calcularTransaccionesPT(posts, mapaNombres, threadId, indiceComp
     indiceCompleto.forEach(p => { postAutor[p.post_no] = p.poster_name; });
     posts.forEach(p => { postAutor[p.post_no] = p.poster_name; });
 
-    // Log diagnóstico: mostrar qué posts tienen reply_to
-    const conReplies = posts.filter(p => p.reply_to && p.reply_to.length > 0);
-    console.log(`[calcPT] ${posts.length} posts, ${conReplies.length} con replies`);
-    conReplies.slice(0, 5).forEach(p => {
-        const enMapa = !!(mapaNombres[p.poster_name] ?? mapaNombres[normPosterName(p.poster_name)]);
-        const replyResueltas = (p.reply_to || []).map(rno => ({
-            rno,
-            autor: postAutor[rno] || '❌ NO EN ÍNDICE',
-            enMapa: !!(mapaNombres[postAutor[rno]] ?? mapaNombres[normPosterName(postAutor[rno] || '')])
-        }));
-        console.log(`  Post ${p.post_no} de "${p.poster_name}" (enMapa:${enMapa}) → replies:`, JSON.stringify(replyResueltas));
-    });
-
     posts.forEach(post => {
         if (!post.reply_to || post.reply_to.length === 0) return;
 
+        // Buscar el personaje del poster (quién hace la reply)
+        // Intentar con nombre completo primero, luego sin tripcode
         const pjReplier = mapaNombres[post.poster_name]
                        ?? mapaNombres[normPosterName(post.poster_name)];
         if (!pjReplier) return; // poster no registrado como personaje
