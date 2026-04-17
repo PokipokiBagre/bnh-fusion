@@ -6,7 +6,7 @@ import { db }         from '../bnh-db.js';
 import { initOpciones } from '../bnh-opciones-tags.js';
 import {
     hilosState, postsState, rankingState,
-    ptTagState, estadoUI, CORS_PROXY
+    ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI, CORS_PROXY
 } from './hist-state.js';
 import {
     parsearPostsLynxChan, calcularTransaccionesPT,
@@ -84,23 +84,49 @@ export async function cargarRankingDB(board, threadId) {
 }
 
 // ── Cargar PT acumulados en el hilo (del log) ─────────────────
-// Construye ptTagState: { 'NombrePJ': { '#Tag': N, ... } }
+// Construye ptTagState, ptPorPost y mapaAliasAGrupo
 export async function cargarPTTagDelHilo(threadId) {
+    // Leer TODOS los motivos para tener el total real de PT por personaje
     const { data } = await supabase
         .from('log_puntos_tag')
-        .select('personaje_nombre, tag, delta')
-        .eq('origen_thread_id', threadId)
-        .eq('motivo', 'interaccion');
+        .select('personaje_nombre, tag, delta, motivo, origen_post_no')
+        .eq('origen_thread_id', threadId);
 
-    // Vaciar y reconstruir
+    // Vaciar y reconstruir ptTagState
     Object.keys(ptTagState).forEach(k => delete ptTagState[k]);
+    // Vaciar ptPorPost
+    Object.keys(ptPorPost).forEach(k => delete ptPorPost[k]);
 
-    if (!data) return;
-    data.forEach(row => {
-        if (!ptTagState[row.personaje_nombre]) ptTagState[row.personaje_nombre] = {};
-        ptTagState[row.personaje_nombre][row.tag] =
-            (ptTagState[row.personaje_nombre][row.tag] || 0) + row.delta;
-    });
+    if (data) {
+        data.forEach(row => {
+            // ptTagState: acumulado por personaje/tag
+            if (!ptTagState[row.personaje_nombre]) ptTagState[row.personaje_nombre] = {};
+            ptTagState[row.personaje_nombre][row.tag] =
+                (ptTagState[row.personaje_nombre][row.tag] || 0) + row.delta;
+
+            // ptPorPost: detalle por post_no
+            if (row.origen_post_no != null) {
+                if (!ptPorPost[row.origen_post_no]) ptPorPost[row.origen_post_no] = [];
+                ptPorPost[row.origen_post_no].push({
+                    personaje_nombre: row.personaje_nombre,
+                    tag:    row.tag,
+                    delta:  row.delta,
+                    motivo: row.motivo
+                });
+            }
+        });
+    }
+
+    // Reconstruir mapaAliasAGrupo: alias (poster_name) → nombre_refinado
+    Object.keys(mapaAliasAGrupo).forEach(k => delete mapaAliasAGrupo[k]);
+    try {
+        const mapaNombres = await db.historial.getMapaNombres();
+        Object.entries(mapaNombres).forEach(([alias, pj]) => {
+            mapaAliasAGrupo[alias] = pj.nombre;
+        });
+    } catch (e) {
+        console.warn('[PT] No se pudo construir mapaAliasAGrupo:', e);
+    }
 }
 
 // ── Scrape completo ───────────────────────────────────────────
