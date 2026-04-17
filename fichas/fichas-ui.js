@@ -91,6 +91,15 @@ export function renderSidebar() {
     ).join('');
 
     sidebar.innerHTML = `
+    ${fichasUI.esAdmin ? `
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Admin</div>
+        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
+            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;"
+            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
+    </div>` : ''}
+
     <div class="sidebar-section">
         <div class="sidebar-section-title">Hilo</div>
         <select onchange="window._fichaSetHilo(this.value)"
@@ -128,14 +137,7 @@ export function renderSidebar() {
         </ul>
     </div>
 
-    ${fichasUI.esAdmin ? `
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Admin</div>
-        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
-            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;"
-            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
-    </div>` : ''}`;
+    `;
 }
 
 export function renderActiveTagsBar() {
