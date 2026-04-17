@@ -4,101 +4,56 @@
     <script src="../bnh-guard.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracking de Posts — BNH</title>
+    <title>Fichas — BNH</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
-    <link rel="stylesheet" href="../stylehistorial.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../stylefichas.css">
 </head>
 <body>
 
 <header class="app-header">
     <div class="header-top">
-        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Tracking</a>
-
-        <div id="hilo-activo-info" class="hilo-badge">
-            <span style="color:#aaa; font-size:0.85em;">Sin hilo seleccionado</span>
-        </div>
-
-        <div style="display:flex; gap:6px; align-items:center; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
-
-            <!-- Opciones PT — visible para todos, editable solo OP -->
-            <button class="btn btn-sm" onclick="window.abrirOpcionesTags()"
-                style="background:#2c3e50; border-color:#34495e; color:white;"
-                title="Opciones del sistema de PT">
-                ⚙ Opciones PT
-            </button>
-
-            <!-- Actualizar posts -->
-            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()"
-                title="Scrapea posts nuevos y calcula PT">
-                🔄 Actualizar
-            </button>
-
-            <!-- Dropdown Calcular PT -->
-            <div style="position:relative;" id="pt-dropdown-wrap">
-                <button class="btn btn-sm" onclick="document.getElementById('pt-menu').classList.toggle('open')"
-                    style="background:#1a4a80; border-color:#2980b9; color:white;">
-                    ⚡ Calcular PT ▾
-                </button>
-                <div id="pt-menu" style="
-                    display:none; position:absolute; right:0; top:calc(100% + 4px);
-                    background:white; border:1.5px solid #2980b9; border-radius:8px;
-                    box-shadow:0 4px 16px rgba(0,0,0,0.15); z-index:999; min-width:190px;
-                    overflow:hidden;">
-                    <div class="pt-menu-item" onclick="window.calcularPT('todo'); document.getElementById('pt-menu').classList.remove('open')">
-                        📋 Completo (todo el hilo)
-                    </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('7d'); document.getElementById('pt-menu').classList.remove('open')">
-                        📅 Última semana
-                    </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('3d'); document.getElementById('pt-menu').classList.remove('open')">
-                        📅 Últimos 3 días
-                    </div>
-                    <div class="pt-menu-item" onclick="window.calcularPT('1d'); document.getElementById('pt-menu').classList.remove('open')">
-                        📅 Último día
-                    </div>
-                </div>
-            </div>
-
-            <div id="bnh-session-badge"></div>
-        </div>
+        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Fichas</a>
+        <div id="bnh-session-badge"></div>
     </div>
-
-    <nav class="app-nav">
-        <button class="nav-tab active" data-vista="ranking">Ranking</button>
-        <button class="nav-tab"        data-vista="timeline">Timeline</button>
-        <button class="nav-tab"        data-vista="hilos">Hilos</button>
-    </nav>
 </header>
 
-<main class="app-main">
-    <div id="contenido-principal">
-        <div class="empty-state">
-            <div class="spinner" style="width:32px; height:32px; margin: 0 auto 16px;"></div>
-            <p>Cargando sistema…</p>
+<!-- Tags activos bar (oculta si no hay filtros) -->
+<div id="active-tags-bar" class="active-tags-bar" style="display:none;"></div>
+
+<!-- Layout principal con sidebar + contenido -->
+<div id="fichas-layout" class="fichas-layout">
+
+    <!-- Sidebar de tags -->
+    <aside id="fichas-sidebar" class="fichas-sidebar">
+        <div style="padding:20px; text-align:center;">
+            <div class="spinner" style="margin:0 auto;"></div>
         </div>
-    </div>
-</main>
+    </aside>
 
-<div id="toast-msg" class="toast"></div>
+    <!-- Zona de contenido -->
+    <section class="fichas-content">
+        <!-- Topbar del contenido -->
+        <div class="content-topbar">
+            <span id="fichas-count-info" class="content-topbar-info">Cargando…</span>
+        </div>
+        <!-- Grid de fichas -->
+        <div id="fichas-grid-area" class="fichas-grid"></div>
+    </section>
 
-<style>
-.pt-menu-item {
-    padding: 10px 16px; font-size: 0.85em; cursor: pointer;
-    color: #1a4a80; font-weight: 500; transition: background 0.15s;
-    border-bottom: 1px solid #e9ecef;
-}
-.pt-menu-item:last-child { border-bottom: none; }
-.pt-menu-item:hover { background: #e8f4fd; }
-#pt-menu.open { display: block !important; }
-</style>
+</div>
 
-<script type="module" src="hist-main.js"></script>
-<script>
-document.addEventListener('click', (e) => {
-    const wrap = document.getElementById('pt-dropdown-wrap');
-    if (wrap && !wrap.contains(e.target))
-        document.getElementById('pt-menu')?.classList.remove('open');
-});
-</script>
+<!-- Vista detalle (fuera del layout booru) -->
+<div id="fichas-detalle-wrap" style="display:none; padding:0 16px 20px;">
+    <div id="fichas-contenido"></div>
+</div>
+
+<!-- Toast -->
+<div id="fichas-toast"></div>
+
+<!-- Modal OP -->
+<div id="op-overlay" class="op-modal-overlay" style="display:none;"></div>
+
+<script type="module" src="fichas-main.js"></script>
 </body>
 </html>
