@@ -161,7 +161,7 @@ function exponerGlobales() {
     window._fichaAsignarAliasesGrupo = async () => {
         if (!confirm('¿Asignar alias de grupo nombre a todos los grupos?\n\nSe creará o reasignará el alias con el mismo nombre del grupo para cada grupo que no lo tenga.')) return;
         const res = await asignarAliasesDeGrupoNombre();
-        alert(\`✅ Aliases asignados\nCreados: \${res.creados}\nReasignados: \${res.reasignados}\`);
+        alert(`✅ Aliases asignados\nCreados: ${res.creados}\nReasignados: ${res.reasignados}`);
         await sincronizarVista();
     };
 
