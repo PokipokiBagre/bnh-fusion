@@ -210,15 +210,15 @@ export function renderCatalogo(postersDelHilo) {
             (t.startsWith('#')?t:'#'+t).toLowerCase() === fichasUI.tagAsignar?.toLowerCase()
         );
         const cardBorder = tieneTagActivo
-            ? 'outline:3px solid #27ae60;outline-offset:-2px;'
-            : '';
+            ? 'outline:3px solid #27ae60;outline-offset:-2px;background:rgba(39,174,96,0.13);'
+            : enModoAsignar ? 'opacity:0.7;' : '';
         const cardClick = enModoAsignar
             ? `window._fichaAsignarTagClick('${safeN}')`
             : `window.abrirFicha('${safeN}')`;
 
         return `
         <div class="ficha-card" onclick="${cardClick}" style="position:relative;${cardBorder}">
-            ${tieneTagActivo ? `<div style="position:absolute;top:4px;left:4px;z-index:10;background:#27ae60;color:white;font-size:0.65em;font-weight:700;padding:1px 5px;border-radius:3px;">✓ ${fichasUI.tagAsignar}</div>` : ''}
+            ${tieneTagActivo ? `<div style="position:absolute;top:4px;left:4px;z-index:10;background:#27ae60;color:white;font-size:0.65em;font-weight:700;padding:2px 7px;border-radius:3px;box-shadow:0 1px 4px rgba(0,0,0,0.18);">✓ ${fichasUI.tagAsignar}</div>` : ''}
             <div class="ficha-img-wrap">
                 <img class="ficha-img" src="${imgGrupo(g)}" onerror="${onErr}" loading="lazy">
                 <div class="ficha-tier-badge" style="background:${tc.bg};color:${tc.text};border:1px solid ${tc.border};">T${tier}</div>
