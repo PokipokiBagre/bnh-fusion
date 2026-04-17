@@ -4,6 +4,10 @@
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
+import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
+
+// Inicializar tags del catálogo en cuanto carga el módulo
+initTags();
 
 const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -61,11 +65,24 @@ export function renderSidebar() {
     const sidebar = $('fichas-sidebar');
     if (!sidebar) return;
 
+    // Índice de tags basado en grupos cargados
     const tagIndex = buildTagIndex(gruposGlobal);
-    let tagEntries = Object.entries(tagIndex).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+
+    // Añadir tags del catálogo que ningún grupo tiene aún (count 0)
+    TAGS_CANONICOS.forEach(t => {
+        const k = t.startsWith('#') ? t : '#' + t;
+        if (!(k in tagIndex)) tagIndex[k] = 0;
+    });
+
+    // Ordenar: con personajes primero (desc count), luego los 0 alfabéticamente
+    let tagEntries = Object.entries(tagIndex).sort((a, b) => {
+        if (b[1] !== a[1]) return b[1] - a[1];
+        return a[0].localeCompare(b[0]);
+    });
+
     if (fichasUI.tagBusqueda) {
         const q = fichasUI.tagBusqueda.toLowerCase();
-        tagEntries = tagEntries.filter(([t])=>t.toLowerCase().includes(q));
+        tagEntries = tagEntries.filter(([t]) => t.toLowerCase().includes(q));
     }
 
     const hilosOpts = hilosGlobal.map(h =>
@@ -74,15 +91,6 @@ export function renderSidebar() {
     ).join('');
 
     sidebar.innerHTML = `
-    ${fichasUI.esAdmin ? `
-    <div class="sidebar-section">
-        <div class="sidebar-section-title">Admin</div>
-        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
-            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
-        <button class="btn btn-outline btn-sm" style="width:100%;"
-            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
-    </div>` : ''}
-
     <div class="sidebar-section">
         <div class="sidebar-section-title">Hilo</div>
         <select onchange="window._fichaSetHilo(this.value)"
@@ -105,17 +113,29 @@ export function renderSidebar() {
         <div class="sidebar-section-title">Tags <span style="color:var(--gray-500);font-weight:400;">(${tagEntries.length})</span></div>
         <input type="text" class="sidebar-search" placeholder="Buscar tag..."
             value="${fichasUI.tagBusqueda}" oninput="window._fichaTagSearch(this.value)">
-        <ul class="tag-list" style="max-height:55vh;overflow-y:auto;">
+        <ul class="tag-list">
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
-                return `<li class="${activo?'active':''}" onclick="window._fichaToggleTag('${tag.replace(/'/g,"\\'")}')")>
-                    <span class="tag-link" style="${activo?'color:var(--red);font-weight:700;':''}">${tag}</span>
+                const cero   = cnt === 0;
+                const click  = cero ? '' : `onclick="window._fichaToggleTag('${tag.replace(/'/g, "\\'")}')"`;
+                const estilo = activo ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
+                return `<li class="${activo?'active':''}" ${click} style="${cero?'opacity:0.45;cursor:default;':''}">
+                    <span class="tag-link" style="${estilo}">${tag}</span>
                     <span class="tag-count">${cnt}</span>
                 </li>`;
             }).join('')}
             ${!tagEntries.length ? `<li style="color:var(--gray-500);font-size:0.82em;padding:4px;">Sin tags</li>` : ''}
         </ul>
-    </div>`;
+    </div>
+
+    ${fichasUI.esAdmin ? `
+    <div class="sidebar-section">
+        <div class="sidebar-section-title">Admin</div>
+        <button class="btn btn-green btn-sm" style="width:100%;margin-bottom:6px;"
+            onclick="window.abrirCrearGrupo()">+ Nuevo Grupo</button>
+        <button class="btn btn-outline btn-sm" style="width:100%;"
+            onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
+    </div>` : ''}`;
 }
 
 export function renderActiveTagsBar() {
