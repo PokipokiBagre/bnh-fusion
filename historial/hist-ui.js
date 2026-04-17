@@ -249,20 +249,42 @@ export function renderTimeline() {
                 >&gt;&gt;${bno}${autor?` (${autor})`:''} ↓</a>`;
         }).join('');
 
-        // PT ganados EN ESTE POST (no acumulados)
+        // PT ganados EN ESTE POST — agrupados por personaje receptor
         const ptEstePost = ptPorPost[post.post_no] || [];
-        const ptAgrupado = {};
+
+        // Agrupar por personaje → tag → delta
+        const ptPorPJ = {}; // { nombre_refinado: { tag: delta } }
         ptEstePost.forEach(e => {
-            if (!ptAgrupado[e.tag]) ptAgrupado[e.tag] = { delta:0, motivo:e.motivo };
-            ptAgrupado[e.tag].delta += e.delta;
+            if (!ptPorPJ[e.personaje_nombre]) ptPorPJ[e.personaje_nombre] = {};
+            if (!ptPorPJ[e.personaje_nombre][e.tag]) ptPorPJ[e.personaje_nombre][e.tag] = 0;
+            ptPorPJ[e.personaje_nombre][e.tag] += e.delta;
         });
-        const ptBadges = Object.entries(ptAgrupado).map(([tag, {delta, motivo}]) => {
-            const col = motiColor[motivo] || '#00b4d8';
-            const lbl = motiLabel[motivo] || motivo;
-            return `<span style="border:1px solid ${col};color:${col};background:rgba(0,180,216,0.06);
-                padding:2px 7px;border-radius:8px;font-size:0.72em;font-weight:700;margin-right:3px;"
-                title="${lbl}">+${delta} ${tag}</span>`;
-        }).join('');
+
+        // Si solo hay un personaje, mostrar lista plana; si hay varios, mostrar por nombre
+        const esMultiPJ = Object.keys(ptPorPJ).length > 1;
+        let ptBadges = '';
+        if (esMultiPJ) {
+            // Multipersonaje: "Nombre: +1 #Tag +1 #Tag2 / Nombre2: ..."
+            ptBadges = Object.entries(ptPorPJ).map(([pj, tags]) => {
+                const tagBadges = Object.entries(tags).map(([tag, delta]) => {
+                    const tagCorto = tag.length > 18 ? tag.substring(0, 16) + '…' : tag;
+                    return `<span style="border:1px solid #00b4d8;color:#00b4d8;background:rgba(0,180,216,0.06);
+                        padding:2px 6px;border-radius:8px;font-size:0.72em;font-weight:700;
+                        white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;"
+                        title="${tag}">+${delta} ${tagCorto}</span>`;
+                }).join(' ');
+                return `<span style="font-size:0.72em;color:#555;font-weight:600;">${pj}:</span> ${tagBadges}`;
+            }).join('<br>');
+        } else if (Object.keys(ptPorPJ).length === 1) {
+            const tags = Object.values(ptPorPJ)[0];
+            ptBadges = Object.entries(tags).map(([tag, delta]) => {
+                const tagCorto = tag.length > 18 ? tag.substring(0, 16) + '…' : tag;
+                return `<span style="border:1px solid #00b4d8;color:#00b4d8;background:rgba(0,180,216,0.06);
+                    padding:2px 6px;border-radius:8px;font-size:0.72em;font-weight:700;
+                    white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;"
+                    title="${tag}">+${delta} ${tagCorto}</span>`;
+            }).join(' ');
+        }
 
         // Nombre del personaje (grupos si existe, soporta multipersonaje)
         const gruposPost = post.poster_name.split(',').map(s => s.trim()).filter(Boolean)
@@ -291,7 +313,7 @@ export function renderTimeline() {
             </div>
 
             ${repliesHtml?`<div style="padding-bottom:5px;border-bottom:1px solid rgba(0,180,216,0.15);">
-                <span style="font-size:0.68em;color:#ccc;margin-right:3px;">cita→</span>${repliesHtml}</div>`:''}
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citas:</span>${repliesHtml}</div>`:''}
 
             <div style="color:#333;line-height:1.5;word-break:break-word;">
                 ${renderContenido(post.contenido||'', postAutor, post.post_no)}
@@ -300,11 +322,11 @@ export function renderTimeline() {
                     color:#666;">🖼 ${post.num_imagenes} imagen${post.num_imagenes>1?'es':''}</span></div>`:''}
             </div>
 
-            ${ptBadges?`<div style="padding-top:5px;border-top:1px solid rgba(0,180,216,0.15);">
-                <span style="font-size:0.68em;color:#ccc;margin-right:3px;">PT este post→</span>${ptBadges}</div>`:''}
+            ${ptBadges?`<div style="padding-top:5px;border-top:1px solid rgba(0,180,216,0.15);display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;">
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;flex-shrink:0;">PT/post:</span><div style="display:flex;flex-wrap:wrap;gap:3px;">${ptBadges}</div></div>`:''}
 
             ${backHtml?`<div style="padding-top:4px;border-top:1px solid rgba(126,207,179,0.2);">
-                <span style="font-size:0.68em;color:#ccc;margin-right:3px;">citado→</span>${backHtml}</div>`:''}
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citado por:</span>${backHtml}</div>`:''}
         </div>`;
     });
 

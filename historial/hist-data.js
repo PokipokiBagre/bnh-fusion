@@ -259,6 +259,9 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
 
     if (transacciones.length > 0) {
         await db.progresion.aplicarTransacciones(transacciones);
+        // Registrar en tags_catalogo todos los tags que aparecieron
+        const tagsNuevos = [...new Set(transacciones.map(t => t.tag))];
+        await db.historial.registrarTagsNuevos(tagsNuevos);
     }
 
     await db.historial.marcarProcesados(board, threadId, postsNuevos.map(p => p.post_no));
