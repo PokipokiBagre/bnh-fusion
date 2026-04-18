@@ -14,11 +14,9 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
-// Imagen: usa el primer alias del grupo normalizado
+// Imagen: siempre usa el nombre_refinado del grupo (los aliases no tienen imagen propia)
 function imgGrupo(grupo) {
-    const alias = (aliasesGlobal.find(a => a.refinado_id === grupo.id)?.nombre) || grupo.nombre_refinado;
-    const clave = alias.includes(',') ? alias.split(',')[0].trim() : alias;
-    return `${STORAGE_URL}/imgpersonajes/${norm(clave)}icon.png`;
+    return `${STORAGE_URL}/imgpersonajes/${norm(grupo.nombre_refinado)}icon.png`;
 }
 
 // ── Filtrar GRUPOS según estado de fichasUI ───────────────────
