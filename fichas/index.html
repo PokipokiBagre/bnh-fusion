@@ -8,6 +8,28 @@
     <link rel="icon" type="image/png" id="dynamic-favicon">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../stylefichas.css">
+    <style>
+        #fichas-upload-panel {
+            display: none;
+            flex-direction: column;
+            position: fixed;
+            top: 0; right: 0;
+            width: 260px;
+            height: 100vh;
+            background: white;
+            border-left: 2px solid var(--booru-border);
+            box-shadow: -4px 0 20px rgba(0,0,0,0.12);
+            padding: 20px 16px;
+            z-index: 1000;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+        body.upload-panel-open #fichas-layout,
+        body.upload-panel-open #fichas-detalle-wrap {
+            margin-right: 268px;
+            transition: margin-right 0.2s;
+        }
+    </style>
 </head>
 <body>
 
@@ -18,42 +40,40 @@
     </div>
 </header>
 
-<!-- Tags activos bar (oculta si no hay filtros) -->
 <div id="active-tags-bar" class="active-tags-bar" style="display:none;"></div>
 
-<!-- Layout principal con sidebar + contenido -->
 <div id="fichas-layout" class="fichas-layout">
-
-    <!-- Sidebar de tags -->
     <aside id="fichas-sidebar" class="fichas-sidebar">
         <div style="padding:20px; text-align:center;">
             <div class="spinner" style="margin:0 auto;"></div>
         </div>
     </aside>
-
-    <!-- Zona de contenido -->
     <section class="fichas-content">
-        <!-- Topbar del contenido -->
         <div class="content-topbar">
             <span id="fichas-count-info" class="content-topbar-info">Cargando…</span>
         </div>
-        <!-- Grid de fichas -->
         <div id="fichas-grid-area" class="fichas-grid"></div>
     </section>
-
 </div>
 
-<!-- Vista detalle (fuera del layout booru) -->
 <div id="fichas-detalle-wrap" style="display:none; padding:0 16px 20px;">
     <div id="fichas-contenido"></div>
 </div>
 
-<!-- Toast -->
 <div id="fichas-toast"></div>
-
-<!-- Modal OP -->
 <div id="op-overlay" class="op-modal-overlay" style="display:none;"></div>
+<div id="fichas-upload-panel"></div>
 
 <script type="module" src="fichas-main.js"></script>
+<script>
+    const _obs = new MutationObserver(() => {
+        const p = document.getElementById('fichas-upload-panel');
+        if (p) document.body.classList.toggle('upload-panel-open', p.style.display !== 'none');
+    });
+    const _w = setInterval(() => {
+        const p = document.getElementById('fichas-upload-panel');
+        if (p) { _obs.observe(p, { attributes: true, attributeFilter: ['style'] }); clearInterval(_w); }
+    }, 100);
+</script>
 </body>
 </html>

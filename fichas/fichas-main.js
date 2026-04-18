@@ -5,7 +5,8 @@ import { bnhAuth, currentConfig } from '../bnh-auth.js';
 import { fichasUI, gruposGlobal, ptGlobal } from './fichas-state.js';
 import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones } from '../bnh-fusion.js';
-import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle } from './fichas-ui.js';
+import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle, renderUploadPanel, cerrarUploadPanel } from './fichas-ui.js';
+import { subirImagenGrupo } from './fichas-upload.js';
 import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP } from './fichas-op.js';
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 
@@ -169,6 +170,61 @@ function exponerGlobales() {
         alert(`✅ Aliases asignados\nCreados: ${res.creados}\nReasignados: ${res.reasignados}`);
         await sincronizarVista();
     };
+
+    // ── Upload de imagen ─────────────────────────────────────
+    window._fichasAbrirUpload = (nombreGrupo) => {
+        renderUploadPanel(nombreGrupo);
+        // Scroll al panel si está en detalle
+        setTimeout(() => {
+            document.getElementById('fichas-upload-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 60);
+    };
+
+    window._fichasCerrarUpload = () => cerrarUploadPanel();
+
+    window._fichasHandleDrop = async (e) => {
+        e.preventDefault();
+        e.currentTarget.style.borderColor = '';
+        const file = e.dataTransfer.files[0];
+        if (file?.type.startsWith('image/')) await _ejecutarSubidaFicha(file);
+    };
+
+    window._fichasHandleFile = async (e) => {
+        const file = e.target.files[0];
+        if (file) await _ejecutarSubidaFicha(file);
+        e.target.value = '';
+    };
+
+    async function _ejecutarSubidaFicha(file) {
+        const panel = document.getElementById('fichas-upload-panel');
+        const nombreGrupo = panel?.dataset.grupo;
+        if (!nombreGrupo) return;
+
+        const prog = document.getElementById('fichas-upload-progress');
+        const fill = document.getElementById('fichas-prog-fill');
+        const msg  = document.getElementById('fichas-prog-msg');
+        if (prog) prog.style.display = 'block';
+
+        try {
+            const url = await subirImagenGrupo(file, nombreGrupo, (pct, txt) => {
+                if (fill) fill.style.width = pct + '%';
+                if (msg)  msg.textContent = txt;
+            });
+            // Actualizar preview con la nueva imagen
+            const preview = document.getElementById('upload-preview-img');
+            if (preview) preview.src = url;
+            if (msg) { msg.textContent = '✅ ¡Imagen actualizada!'; msg.style.color = 'var(--green)'; }
+            // Refrescar catálogo para que la nueva imagen aparezca
+            setTimeout(() => {
+                renderCatalogo(postersDelHilo);
+                if (fichasUI.vistaActual === 'detalle') renderDetalle(fichasUI.seleccionado);
+            }, 800);
+        } catch(e) {
+            if (msg)  { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--red)'; }
+            if (fill) fill.style.width = '0%';
+            setTimeout(() => { if (prog) prog.style.display = 'none'; }, 3500);
+        }
+    }
 
     window._fichaSetHilo = async (val) => {
         fichasUI.hiloFiltro = val;
