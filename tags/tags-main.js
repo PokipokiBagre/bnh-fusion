@@ -199,7 +199,6 @@ function _exponerGlobales() {
         } else {
             lista.sort((a,b) => b.count - a.count || a.nombre.localeCompare(b.nombre));
         }
-        const texto = orden === 'alfabetico'
         const sep = '\n';
         const texto = orden === 'alfabetico'
             ? lista.map(t => '#' + t.nombre).join(sep)
