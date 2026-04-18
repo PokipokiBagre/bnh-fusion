@@ -243,7 +243,11 @@ export function renderCatalogo(postersDelHilo) {
             <button onclick="event.stopPropagation();window.abrirPanelOP('${safeN}')"
                 style="position:absolute;bottom:5px;right:5px;background:rgba(30,132,73,0.85);
                        color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
-                       cursor:pointer;font-weight:700;">OP</button>`:''}
+                       cursor:pointer;font-weight:700;">OP</button>
+            <button onclick="event.stopPropagation();window._fichasAbrirUpload('${safeN}')"
+                style="position:absolute;bottom:5px;left:5px;background:rgba(26,74,128,0.85);
+                       color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
+                       cursor:pointer;font-weight:700;">📷</button>`:''}
         </div>`;
     }).join('');
 }
