@@ -15,11 +15,9 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
-// Imagen: usa el primer alias del grupo normalizado
+// Imagen: siempre usa nombre_refinado (aliases no tienen imagen propia)
 function imgGrupo(grupo) {
-    const alias = (aliasesGlobal.find(a => a.refinado_id === grupo.id)?.nombre) || grupo.nombre_refinado;
-    const clave = alias.includes(',') ? alias.split(',')[0].trim() : alias;
-    return `${STORAGE_URL}/imgpersonajes/${norm(clave)}icon.png`;
+    return urlIcono(grupo.nombre_refinado);
 }
 
 // ── Filtrar GRUPOS según estado de fichasUI ───────────────────
@@ -243,7 +241,9 @@ export function renderCatalogo(postersDelHilo) {
             <button onclick="event.stopPropagation();window.abrirPanelOP('${safeN}')"
                 style="position:absolute;bottom:5px;right:5px;background:rgba(30,132,73,0.85);
                        color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
-                       cursor:pointer;font-weight:700;">OP</button>`:''}
+                       cursor:pointer;font-weight:700;">OP</button>
+            <button onclick="event.stopPropagation();window._fichasAbrirUpload('${safeN}')"
+                class="ficha-upload-btn" title="Subir imagen">📷</button>`:''}
         </div>`;
     }).join('');
 }
@@ -284,7 +284,10 @@ export function renderDetalle(nombreGrupo) {
         <div class="detalle-titulo">
             ${g.nombre_refinado}
             ${fusion ? renderFusionBadge(nombreGrupo, STORAGE_URL, norm) : ''}
-            ${fichasUI.esAdmin?`<button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>`:''}
+            ${fichasUI.esAdmin?`
+            <button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>
+            <button onclick="window._fichasAbrirUpload('${safeN}')" class="btn btn-sm" style="background:#1a4a80;border-color:#2980b9;color:white;">📷 Imagen</button>
+            `:''}
         </div>
 
         ${misAliases.length?`
@@ -338,7 +341,9 @@ export function renderDetalle(nombreGrupo) {
       <div>
         <div class="infobox">
             <div class="infobox-header" style="background:${tc.border};">${g.nombre_refinado}</div>
-            <img src="${imgGrupo(g)}" onerror="${onErr}">
+            <img src="${urlProfile(g.nombre_refinado)}"
+                onerror="this.onerror=null;this.src='${fallback}';"
+                style="width:100%;height:auto;display:block;border-bottom:1px solid var(--booru-border);">
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
