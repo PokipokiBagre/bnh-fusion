@@ -109,8 +109,20 @@ function exponerGlobales() {
     // ── Modo Asignar Tags ─────────────────────────────────────
     // Activar/desactivar modo asignar (toggle)
     window._fichaModoAsignar = () => {
-        fichasUI.modoAsignar = !fichasUI.modoAsignar;
-        if (!fichasUI.modoAsignar) fichasUI.tagsAsignar.clear();
+        if (!fichasUI.modoAsignar && !fichasUI.modoInverso) {
+            // off → asignar
+            fichasUI.modoAsignar = true;
+        } else if (fichasUI.modoAsignar && !fichasUI.modoInverso) {
+            // asignar → inverso
+            fichasUI.modoAsignar = false;
+            fichasUI.modoInverso = true;
+            fichasUI.tagsAsignar.clear();
+            fichasUI.grupoAsignar = null;
+        } else {
+            // inverso → off
+            fichasUI.modoInverso = false;
+            fichasUI.grupoAsignar = null;
+        }
         sincronizarVista();
     };
 
@@ -127,12 +139,7 @@ function exponerGlobales() {
             );
 
             if (tieneTag) {
-                // Desasignar: confirmar con aviso de PT
-                const pts = (ptGlobal[nombreGrupo]||{})[tag] || 0;
-                const msg = pts > 0
-                    ? `¿Desasignar ${tag} de ${nombreGrupo}?\n\n${nombreGrupo} tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`
-                    : `¿Desasignar ${tag} de ${nombreGrupo}?`;
-                if (!confirm(msg)) continue;
+                // Desasignar sin confirmación
                 const nuevosTags = (g.tags||[]).filter(t =>
                     (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
                 );
@@ -151,14 +158,34 @@ function exponerGlobales() {
 
     // Al hacer click en un tag del sidebar en modo asignar → toggle ese tag en el Set
     const _originalToggleTag = window._fichaToggleTag;
-    window._fichaToggleTag = (tag) => {
-        if (fichasUI.modoAsignar) {
-            // En modo asignar, click en tag del sidebar = toggle en el Set de tags activos
-            if (fichasUI.tagsAsignar.has(tag)) {
-                fichasUI.tagsAsignar.delete(tag);
+    window._fichaToggleTag = async (tag) => {
+        if (fichasUI.modoInverso) {
+            if (!fichasUI.grupoAsignar) return; // need to select a group first
+            const g = gruposGlobal.find(x => x.nombre_refinado === fichasUI.grupoAsignar);
+            if (!g) return;
+            const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+            const tieneTag = (g.tags||[]).some(t =>
+                (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
+            );
+            if (tieneTag) {
+                // Desasignar sin confirmar
+                const nuevosTags = (g.tags||[]).filter(t =>
+                    (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
+                );
+                const res = await guardarTagsGrupo(g.id, nuevosTags);
+                if (res.ok) {
+                    const pts = (ptGlobal[fichasUI.grupoAsignar]||{})[tag]||0;
+                    if (pts > 0) await borrarPTDeTag(fichasUI.grupoAsignar, tag);
+                }
             } else {
-                fichasUI.tagsAsignar.add(tag);
+                const nuevosTags = [...(g.tags||[]), tagNorm];
+                await guardarTagsGrupo(g.id, nuevosTags);
             }
+            renderSidebar();
+            renderCatalogo(postersDelHilo);
+        } else if (fichasUI.modoAsignar) {
+            if (fichasUI.tagsAsignar.has(tag)) fichasUI.tagsAsignar.delete(tag);
+            else fichasUI.tagsAsignar.add(tag);
             renderSidebar();
             renderCatalogo(postersDelHilo);
         } else {
@@ -184,6 +211,13 @@ function exponerGlobales() {
     };
 
     window._fichasCerrarUpload = () => cerrarUploadPanel();
+
+    // Modo inverso: click en ficha = seleccionar ese personaje
+    window._fichaInversoClick = (nombreGrupo) => {
+        fichasUI.grupoAsignar = fichasUI.grupoAsignar === nombreGrupo ? null : nombreGrupo;
+        renderSidebar();
+        renderCatalogo(postersDelHilo);
+    };
 
     window._fichasSetTipo = (tipo) => {
         const panel = document.getElementById('fichas-upload-panel');

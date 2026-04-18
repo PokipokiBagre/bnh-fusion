@@ -103,17 +103,22 @@ export function renderSidebar() {
             onclick="window.abrirGestorAliases()">⚙ Gestionar Aliases</button>
         <button class="btn btn-outline btn-sm" style="width:100%;margin-bottom:6px;"
             onclick="window._fichaAsignarAliasesGrupo()">🔗 Asignar alias de grupo</button>
-        <button id="btn-modo-asignar" class="btn btn-sm" style="width:100%;${fichasUI.modoAsignar?'background:#d35400;color:white;border-color:#d35400;':''}"
+        <button id="btn-modo-asignar" class="btn btn-sm" style="width:100%;${fichasUI.modoInverso?'background:#6c3483;color:white;border-color:#6c3483;':fichasUI.modoAsignar?'background:#d35400;color:white;border-color:#d35400;':''}"
             onclick="window._fichaModoAsignar()">
-            ${fichasUI.modoAsignar ? '✏️ Modo Asignar: ON (click para salir)' : '✏️ Modo Asignar Tags'}
+            ${fichasUI.modoInverso ? '🔄 Modo Inverso: ON' : fichasUI.modoAsignar ? '✏️ Modo Asignar: ON' : '✏️ Modo Asignar Tags'}
         </button>
-        ${fichasUI.modoAsignar && fichasUI.tagsAsignar.size > 0
+        ${fichasUI.modoInverso
+            ? `<div style="margin-top:6px;padding:6px 8px;background:#f5eeff;border:1px solid #9b59b6;border-radius:6px;font-size:0.8em;">
+                ${fichasUI.grupoAsignar
+                    ? `Personaje: <b style="color:#6c3483;">${fichasUI.grupoAsignar}</b><br><span style="color:#888;">Click tag = asignar/desasignar</span>`
+                    : `<span style='color:#888;'>Click en una ficha para seleccionarla</span>`}
+            </div>`
+            : fichasUI.modoAsignar && fichasUI.tagsAsignar.size > 0
             ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;">
-                Tags activos (<b>${fichasUI.tagsAsignar.size}</b>):<br>
-                <b style="color:#d35400;">${[...fichasUI.tagsAsignar].join(', ')}</b><br>
+                Tags: <b style="color:#d35400;">${[...fichasUI.tagsAsignar].join(', ')}</b><br>
                 <span style="color:#888;">Click en ficha = asignar/desasignar</span></div>`
             : fichasUI.modoAsignar
-                ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;color:#888;">Selecciona uno o más tags →</div>`
+                ? `<div style="margin-top:6px;padding:6px 8px;background:#fff3e0;border:1px solid #d35400;border-radius:6px;font-size:0.8em;"><span style='color:#888;'>Selecciona tags del sidebar</span></div>`
                 : ''}
     </div>` : ''}
 
@@ -143,9 +148,18 @@ export function renderSidebar() {
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
                 const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);
+                // In inverso mode: show if selected grupo has this tag
+                const grupoSel = fichasUI.modoInverso && fichasUI.grupoAsignar
+                    ? gruposGlobal.find(g => g.nombre_refinado === fichasUI.grupoAsignar)
+                    : null;
+                const grupoTieneTag = grupoSel && (grupoSel.tags||[]).some(t =>
+                    (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
+                );
                 const cero   = cnt === 0;
                 const click  = cero ? '' : `onclick="window._fichaToggleTag('${tag.replace(/'/g, "\\'")}')"`; 
-                const estilo = (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
+                const estilo = fichasUI.modoInverso && grupoSel
+                    ? grupoTieneTag ? 'color:var(--green);font-weight:700;' : ''
+                    : (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : cero ? 'color:var(--gray-400);' : '';
                 return `<li class="${activo||esTagAsignar?'active':''}" ${click} style="${cero?'opacity:0.45;cursor:default;':''}">
                     <span class="tag-link" style="${estilo}">${tag}</span>
                     <span class="tag-count">${cnt}</span>
@@ -218,10 +232,15 @@ export function renderCatalogo(postersDelHilo) {
             ? [...fichasUI.tagsAsignar].filter(tag => tagsGrupoNorm.includes(tag.toLowerCase()))
             : [];
         const tieneAlgunTagActivo = tagsConAsignados.length > 0;
-        const cardBorder = tieneAlgunTagActivo
+        const esGrupoSeleccionado = fichasUI.modoInverso && fichasUI.grupoAsignar === g.nombre_refinado;
+        const cardBorder = esGrupoSeleccionado
+            ? 'outline:3px solid #9b59b6;outline-offset:-2px;background:rgba(155,89,182,0.1);'
+            : tieneAlgunTagActivo
             ? 'outline:3px solid #27ae60;outline-offset:-2px;background:rgba(39,174,96,0.13);'
-            : enModoAsignar ? 'opacity:0.7;' : '';
-        const cardClick = fichasUI.modoAsignar
+            : (enModoAsignar || fichasUI.modoInverso) ? 'opacity:0.7;' : '';
+        const cardClick = fichasUI.modoInverso
+            ? `window._fichaInversoClick('${safeN}')`
+            : fichasUI.modoAsignar
             ? `window._fichaAsignarTagClick('${safeN}')`
             : `window.abrirFicha('${safeN}')`;
 

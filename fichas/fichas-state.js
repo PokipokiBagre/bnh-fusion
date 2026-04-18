@@ -32,7 +32,9 @@ export let fichasUI = {
     tagBusqueda:   '',
     nombreBusqueda:'',          // ← buscador de nombres/aliases
     modoAsignar:   false,       // ← modo asignar tags activo
-    tagsAsignar:   new Set(),   // ← tags seleccionados en modo asignar (multiselección)
+    modoInverso:   false,       // ← modo inverso: selecciona personaje, asigna tags
+    tagsAsignar:   new Set(),   // ← tags seleccionados en modo asignar
+    grupoAsignar:  null,        // ← grupo seleccionado en modo inverso
 };
 
 export const norm = (str) => str.toString().trim().toLowerCase()

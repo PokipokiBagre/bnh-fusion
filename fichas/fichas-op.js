@@ -466,10 +466,24 @@ export function exponerGlobalesOP() {
                     const el = document.getElementById(id);
                     if (el) initMarkupTextarea(el);
                 });
-                // Campos de info_extra también soportan markup
-                ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'].forEach(k => {
+                // Campos de info_extra con markup + navegación con flechas
+                const infoKeys = ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'];
+                infoKeys.forEach((k, idx) => {
                     const el = document.getElementById('op-info-' + k);
-                    if (el) initMarkupTextarea(el);
+                    if (!el) return;
+                    initMarkupTextarea(el);
+                    el.addEventListener('keydown', e => {
+                        if (e.key === 'ArrowDown' && !el._markupSugOpen?.()) {
+                            e.preventDefault();
+                            const next = document.getElementById('op-info-' + infoKeys[idx + 1]);
+                            if (next) next.focus();
+                        }
+                        if (e.key === 'ArrowUp' && !el._markupSugOpen?.()) {
+                            e.preventDefault();
+                            const prev = document.getElementById('op-info-' + infoKeys[idx - 1]);
+                            if (prev) prev.focus();
+                        }
+                    });
                 });
             }, 60);
         }
@@ -551,12 +565,6 @@ export function exponerGlobalesOP() {
 
     window._opRmTag = async (grupoId, tag) => {
         const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
-        const tf = tag.startsWith('#')?tag:'#'+tag;
-        const pts = ptGlobal[g.nombre_refinado]?.[tag] || ptGlobal[g.nombre_refinado]?.[tf] || 0;
-        const confirmar = pts > 0
-            ? confirm(`¿Desasignar ${tf} de ${g.nombre_refinado}?\n\nEste personaje tiene ${pts} PT en ese tag.\nSe borrarán permanentemente.`)
-            : confirm(`¿Desasignar ${tf} de ${g.nombre_refinado}?`);
-        if (!confirmar) return;
         const nuevosTags=(g.tags||[]).filter(t=>t!==tag);
         const res=await guardarTagsGrupo(grupoId,nuevosTags);
         if(res.ok){
