@@ -17,7 +17,10 @@ const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
 // Imagen: siempre usa nombre_refinado (aliases no tienen imagen propia)
 function imgGrupo(grupo) {
-    return urlIcono(grupo.nombre_refinado);
+    return `${STORAGE_URL}/imgpersonajes/${norm(grupo.nombre_refinado)}icon.png`;
+}
+function urlProfile(nombreRefinado) {
+    return `${STORAGE_URL}/imgpersonajes/${norm(nombreRefinado)}profile.png`;
 }
 
 // ── Filtrar GRUPOS según estado de fichasUI ───────────────────
