@@ -2,7 +2,7 @@
 // fichas-ui.js — Catálogo y Detalle centrado en GRUPOS
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { subirImagenGrupo } from './fichas-upload.js';
+import { subirImagenGrupo, urlIcono, urlProfile } from './fichas-upload.js';
 import { guardarTagsGrupo, borrarPTDeTag } from './fichas-data.js';
 import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
@@ -245,9 +245,7 @@ export function renderCatalogo(postersDelHilo) {
                        color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
                        cursor:pointer;font-weight:700;">OP</button>
             <button onclick="event.stopPropagation();window._fichasAbrirUpload('${safeN}')"
-                style="position:absolute;bottom:5px;left:5px;background:rgba(26,74,128,0.85);
-                       color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
-                       cursor:pointer;font-weight:700;">📷</button>`:''}
+                class="ficha-upload-btn" title="Subir imagen">📷</button>`:''}
         </div>`;
     }).join('');
 }
@@ -346,6 +344,10 @@ export function renderDetalle(nombreGrupo) {
         <div class="infobox">
             <div class="infobox-header" style="background:${tc.border};">${g.nombre_refinado}</div>
             <img src="${imgGrupo(g)}" onerror="${onErr}">
+            <img src="${urlProfile(g.nombre_refinado)}"
+                onerror="this.style.display='none'"
+                class="infobox-profile"
+                title="Imagen profile">
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
@@ -387,44 +389,58 @@ export function renderUploadPanel(nombreGrupo) {
     panel.dataset.grupo = nombreGrupo;
     panel.style.display = 'flex';
 
+    // Default tipo al abrir
+    panel.dataset.tipo = panel.dataset.tipo || 'icon';
+
     panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-        <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;font-size:1em;">
-            📷 Imagen — ${nombreGrupo}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;font-size:0.95em;">
+            📷 ${nombreGrupo}
         </span>
         <button onclick="window._fichasCerrarUpload()"
             style="background:none;border:none;font-size:1.4em;cursor:pointer;color:#aaa;line-height:1;">×</button>
     </div>
 
-    <div style="margin-bottom:12px;text-align:center;">
-        <img id="upload-preview-img"
-            src="${STORAGE_URL}/imgpersonajes/${norm(nombreGrupo)}icon.png?v=${Date.now()}"
-            onerror="this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png';"
-            style="width:120px;height:120px;object-fit:cover;object-position:top;
-                   border-radius:8px;border:2px solid var(--booru-border);">
-        <div style="font-size:0.72em;color:var(--gray-400);margin-top:5px;">Imagen actual</div>
+    <!-- Selector icon / profile -->
+    <div class="upload-tipo-sel">
+        <button class="upload-tipo-btn ${panel.dataset.tipo==='icon'?'active':''}"
+            onclick="window._fichasSetTipo('icon')">
+            🖼 Icono<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Tarjeta · 512px</span>
+        </button>
+        <button class="upload-tipo-btn ${panel.dataset.tipo==='profile'?'active':''}"
+            onclick="window._fichasSetTipo('profile')">
+            👤 Profile<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Detalle · 800px</span>
+        </button>
     </div>
 
-    <div id="fichas-drop-zone"
+    <!-- Preview actual -->
+    <div style="margin-bottom:10px;text-align:center;">
+        <img id="upload-preview-img"
+            src="${panel.dataset.tipo==='icon' ? urlIcono(nombreGrupo) : urlProfile(nombreGrupo)}?v=${Date.now()}"
+            onerror="this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png';"
+            style="width:100%;max-height:150px;object-fit:cover;object-position:top;
+                   border-radius:6px;border:1px solid var(--booru-border);">
+        <div style="font-size:0.7em;color:var(--gray-400);margin-top:4px;">Actual</div>
+    </div>
+
+    <div class="fichas-dropzone" id="fichas-drop-zone"
         onclick="document.getElementById('fichas-file-input').click()"
-        ondragover="event.preventDefault();this.style.borderColor='var(--green)'"
-        ondragleave="this.style.borderColor=''"
-        ondrop="window._fichasHandleDrop(event)"
-        style="border:2px dashed var(--booru-border);border-radius:8px;padding:20px 12px;
-               text-align:center;cursor:pointer;transition:border-color .2s;margin-bottom:10px;">
-        <div style="font-size:1.8em;margin-bottom:6px;">🖼️</div>
-        <div style="font-size:0.82em;color:var(--green-dark);font-weight:600;">Arrastra aquí o click</div>
-        <div style="font-size:0.72em;color:var(--gray-400);margin-top:3px;">JPG · PNG · WEBP</div>
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="window._fichasHandleDrop(event)">
+        <div style="font-size:1.6em;margin-bottom:4px;">🖼️</div>
+        <div style="font-size:0.8em;color:var(--green-dark);font-weight:600;">Arrastra aquí o click</div>
+        <div style="font-size:0.7em;color:var(--gray-400);margin-top:2px;">JPG · PNG · WEBP</div>
     </div>
 
     <input type="file" id="fichas-file-input" accept="image/*" style="display:none"
         onchange="window._fichasHandleFile(event)">
 
     <div id="fichas-upload-progress" style="display:none;margin-bottom:8px;">
-        <div style="height:5px;background:var(--gray-200);border-radius:3px;overflow:hidden;margin-bottom:5px;">
-            <div id="fichas-prog-fill" style="height:100%;background:var(--green);width:0%;transition:width .3s;"></div>
+        <div class="fichas-prog-bar">
+            <div id="fichas-prog-fill" class="fichas-prog-fill"></div>
         </div>
-        <div id="fichas-prog-msg" style="font-size:0.75em;text-align:center;color:var(--gray-500);"></div>
+        <div id="fichas-prog-msg" style="font-size:0.72em;text-align:center;color:var(--gray-500);"></div>
     </div>`;
 }
 

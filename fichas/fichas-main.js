@@ -182,6 +182,15 @@ function exponerGlobales() {
 
     window._fichasCerrarUpload = () => cerrarUploadPanel();
 
+    window._fichasSetTipo = (tipo) => {
+        const panel = document.getElementById('fichas-upload-panel');
+        if (!panel) return;
+        panel.dataset.tipo = tipo;
+        // Re-render the panel to update buttons and preview
+        const nombreGrupo = panel.dataset.grupo;
+        if (nombreGrupo) renderUploadPanel(nombreGrupo);
+    };
+
     window._fichasHandleDrop = async (e) => {
         e.preventDefault();
         e.currentTarget.style.borderColor = '';
@@ -198,6 +207,7 @@ function exponerGlobales() {
     async function _ejecutarSubidaFicha(file) {
         const panel = document.getElementById('fichas-upload-panel');
         const nombreGrupo = panel?.dataset.grupo;
+        const tipo = panel?.dataset.tipo || 'icon';
         if (!nombreGrupo) return;
 
         const prog = document.getElementById('fichas-upload-progress');
@@ -206,7 +216,7 @@ function exponerGlobales() {
         if (prog) prog.style.display = 'block';
 
         try {
-            const url = await subirImagenGrupo(file, nombreGrupo, (pct, txt) => {
+            const url = await subirImagenGrupo(file, nombreGrupo, tipo, (pct, txt) => {
                 if (fill) fill.style.width = pct + '%';
                 if (msg)  msg.textContent = txt;
             });

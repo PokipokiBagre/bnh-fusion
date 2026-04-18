@@ -1,7 +1,8 @@
 // ============================================================
 // fichas-upload.js — Subida de imágenes de personaje al Storage
 // Bucket: imagenes-bnh / carpeta: imgpersonajes
-// Nombre de archivo: norm(nombre_refinado)icon.png/.jpg
+// icon:    norm(nombre_refinado)icon.png/.jpg   → thumbnail cuadrado
+// profile: norm(nombre_refinado)profile.png/.jpg → imagen detalle
 // ============================================================
 
 import { supabase } from '../bnh-auth.js';
@@ -10,35 +11,37 @@ import { STORAGE_URL, norm } from './fichas-state.js';
 const BUCKET  = 'imagenes-bnh';
 const CARPETA = 'imgpersonajes';
 
-// Timeout de subida: 25s (protege contra suspensión de pestaña)
 function uploadSeguro(ruta, file, tipo) {
     const solicitud = supabase.storage.from(BUCKET)
         .upload(ruta, file, { upsert: true, contentType: tipo, cacheControl: '3600' });
     let t;
     const limite = new Promise((_, rej) => {
-        t = setTimeout(() => rej(new Error('Conexión interrumpida (timeout 25s)')), 25000);
+        t = setTimeout(() => rej(new Error('Timeout 25s — intenta de nuevo')), 25000);
     });
     return Promise.race([solicitud, limite]).finally(() => clearTimeout(t));
 }
 
-// Redimensiona y convierte a PNG + JPG (max 512px)
-function convertirAFormatos(file) {
+// icon: cuadrado 512px | profile: 800px ancho máximo, sin recorte
+function convertirAFormatos(file, tipoUpload) {
     return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
         img.onload = () => {
             try {
-                const MAX = 512;
+                const MAX = tipoUpload === 'profile' ? 800 : 512;
                 let w = img.naturalWidth, h = img.naturalHeight;
                 if (w > MAX || h > MAX) {
                     const r = Math.min(MAX / w, MAX / h);
                     w = Math.round(w * r); h = Math.round(h * r);
                 }
-                const canvas = document.createElement('canvas');
-                canvas.width = w; canvas.height = h;
-                canvas.getContext('2d').drawImage(img, 0, 0, w, h);
 
-                canvas.toBlob(blobPNG => {
+                // PNG
+                const c1 = document.createElement('canvas');
+                c1.width = w; c1.height = h;
+                c1.getContext('2d').drawImage(img, 0, 0, w, h);
+
+                c1.toBlob(blobPNG => {
+                    // JPG con fondo blanco
                     const c2 = document.createElement('canvas');
                     c2.width = w; c2.height = h;
                     const ctx2 = c2.getContext('2d');
@@ -50,24 +53,22 @@ function convertirAFormatos(file) {
                         resolve({ blobPNG, blobJPG });
                     }, 'image/jpeg', 0.92);
                 }, 'image/png');
-            } catch (e) { reject(new Error('Error procesando imagen localmente.')); }
+            } catch(e) { reject(new Error('Error procesando imagen.')); }
         };
         img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Formato inválido.')); };
         img.src = url;
     });
 }
 
-// ── API pública ───────────────────────────────────────────────
-// Sube la imagen para un grupo (nombre_refinado).
-// onProgreso(pct, msg) se llama durante el proceso.
-// Devuelve la URL pública del PNG subido.
-export async function subirImagenGrupo(file, nombreRefinado, onProgreso) {
+// tipoUpload: 'icon' | 'profile'
+export async function subirImagenGrupo(file, nombreRefinado, tipoUpload = 'icon', onProgreso) {
     if (!file || !nombreRefinado) throw new Error('Faltan parámetros.');
 
-    const key = norm(nombreRefinado) + 'icon';
+    const sufijo = tipoUpload === 'profile' ? 'profile' : 'icon';
+    const key = norm(nombreRefinado) + sufijo;
 
     if (onProgreso) onProgreso(20, 'Procesando imagen…');
-    const { blobPNG, blobJPG } = await convertirAFormatos(file);
+    const { blobPNG, blobJPG } = await convertirAFormatos(file, tipoUpload);
 
     const rutaPNG = `${CARPETA}/${key}.png`;
     const rutaJPG = `${CARPETA}/${key}.jpg`;
@@ -86,4 +87,12 @@ export async function subirImagenGrupo(file, nombreRefinado, onProgreso) {
 
     if (onProgreso) onProgreso(100, '¡Imagen subida!');
     return `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
+}
+
+// URLs públicas de cada tipo
+export function urlIcono(nombreRefinado) {
+    return `${STORAGE_URL}/${CARPETA}/${norm(nombreRefinado)}icon.png`;
+}
+export function urlProfile(nombreRefinado) {
+    return `${STORAGE_URL}/${CARPETA}/${norm(nombreRefinado)}profile.png`;
 }
