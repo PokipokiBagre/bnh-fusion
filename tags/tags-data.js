@@ -2,7 +2,7 @@
 // tags/tags-data.js
 // ============================================================
 import { supabase } from '../bnh-auth.js';
-import { setGrupos, setPuntosAll, setCatalogoTags, setMedallasCat } from './tags-state.js';
+import { setGrupos, setPuntosAll, setCatalogoTags, setMedallasCat, catalogoTags } from './tags-state.js';
 
 export async function cargarTodo() {
     const [
@@ -50,7 +50,6 @@ export async function canjearPT(personajeNombre, tag, tipo) {
     if (!costo) return { ok: false, msg: 'Tipo de canje desconocido.' };
 
     // Verificar si el tag está baneado
-    const { catalogoTags } = await import('./tags-state.js');
     const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     if (catEntry?.baneado) return { ok: false, msg: `El tag ${tag} está baneado — no permite canjes.` };
