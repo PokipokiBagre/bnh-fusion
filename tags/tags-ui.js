@@ -16,10 +16,25 @@ export function renderProgresion() {
     const pj = tagsState.pjSeleccionado;
     const tagsConPts = pj ? getTagsConPuntos(pj) : [];
 
-    const charHtml = grupos.map(g => {
+    // Apply role/status filters to character grid
+    const gruposFiltrados = grupos.filter(g => {
+        const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+        const rolOk = tagsState.filtroRol === 'todos' || tags.includes(tagsState.filtroRol.toLowerCase());
+        const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
+        return rolOk && estOk;
+    });
+    const btnRol = (val, label) => {
+        const activo = tagsState.filtroRol === val;
+        return `<button class="btn btn-sm ${activo?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
+    };
+    const btnEst = (val, label) => {
+        const activo = tagsState.filtroEstado === val;
+        return `<button class="btn btn-sm ${activo?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
+    };
+    const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
-        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
+        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\'")}')">
             <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
             <span>${g.nombre_refinado}</span>
         </div>`;
@@ -77,6 +92,11 @@ export function renderProgresion() {
             <div style="display:flex;flex-direction:column;gap:16px;">
                 <div class="card">
                     <div class="card-title">Personaje</div>
+                    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                        ${btnRol('todos','Todos')}${btnRol('#Jugador','Jugador')}${btnRol('#NPC','NPC')}
+                        <span style="width:1px;background:var(--gray-200);margin:0 4px;"></span>
+                        ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
+                    </div>
                     <div class="char-grid">${charHtml}</div>
                 </div>
                 ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
@@ -242,20 +262,29 @@ export function renderCatalogo() {
         entradas = entradas.filter(e => e.tag.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q));
     }
 
-    // Grid of tag cards (4 columns)
-    const cards = entradas.map(({ tag, count, desc, medallas }) => `
-        <div onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}');"
+    // Grid of tag cards (8 columns)
+    const cards = entradas.map(({ tag, count, desc, medallas }) => {
+        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+        const adminBtns = tagsState.esAdmin ? `
+            <div style="display:flex;gap:4px;margin-top:6px;" onclick="event.stopPropagation()">
+                <button class="btn btn-sm btn-outline" style="flex:1;font-size:0.68em;padding:3px 4px;"
+                    onclick="window._tagsRenombrar('${tag.replace(/'/g,"\'")}')" title="Renombrar tag">✏️</button>
+                <button class="btn btn-sm btn-outline" style="flex:1;font-size:0.68em;padding:3px 4px;color:var(--red);border-color:var(--red);"
+                    onclick="window._tagsEliminar('${tag.replace(/'/g,"\'")}',${count})" title="Eliminar tag">🗑️</button>
+            </div>` : '';
+        return `<div onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\'")}');"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
-                   padding:12px;cursor:pointer;transition:0.15s;"
-            onmouseover="this.style.borderColor='var(--blue)';this.style.transform='translateY(-2px)'"
-            onmouseout="this.style.borderColor='var(--gray-200)';this.style.transform=''">
-            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:3px;">${tag}</div>
-            <div style="font-size:0.72em;color:var(--gray-500);margin-bottom:${desc?'5px':'0'};">
-                ${count} personaje${count!==1?'s':''}
-                ${medallas.length ? `· 🏅${medallas.length}` : ''}
+                   padding:10px;cursor:pointer;transition:0.15s;"
+            onmouseover="this.style.borderColor='var(--blue)'"
+            onmouseout="this.style.borderColor='var(--gray-200)'">
+            <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:2px;">${tag}</div>
+            <div style="font-size:0.7em;color:var(--gray-500);margin-bottom:${desc?'4px':'0'};">
+                ${count} personaje${count!==1?'s':''}${medallas.length ? ` · 🏅${medallas.length}` : ''}
             </div>
-            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
-        </div>`).join('');
+            ${desc ? `<div style="font-size:0.72em;color:var(--gray-700);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
+            ${adminBtns}
+        </div>`;
+    }).join('');
 
     wrap.innerHTML = `
         <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;">
@@ -265,7 +294,7 @@ export function renderCatalogo() {
                 style="max-width:360px;">
             <span style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
             ${cards || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
         </div>`;
 
@@ -313,6 +342,13 @@ export function renderBaneados() {
         <div class="stats-banner" style="margin-bottom:16px;">
             <div class="stat-box"><div class="num" style="color:var(--red);">${baneadosCount}</div><div class="lbl">Tags baneados</div></div>
             <div class="stat-box"><div class="num">${allTags.length - baneadosCount}</div><div class="lbl">Tags activos</div></div>
+            <div class="stat-box" style="text-align:left;padding:10px 14px;">
+                <div style="font-size:0.72em;font-weight:700;color:var(--gray-500);margin-bottom:8px;text-transform:uppercase;">Exportar</div>
+                <div style="display:flex;flex-direction:column;gap:5px;">
+                    <button class="btn btn-sm btn-outline" onclick="window._tagsDescargar('alfabetico')">📥 Tags (A→Z)</button>
+                    <button class="btn btn-sm btn-outline" onclick="window._tagsDescargar('popularidad')">📥 Tags (N→1)</button>
+                </div>
+            </div>
         </div>
         <div class="card">
             <div class="card-title">Gestión de Tags Baneados</div>

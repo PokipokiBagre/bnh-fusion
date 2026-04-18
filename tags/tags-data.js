@@ -39,8 +39,6 @@ export async function guardarBaneoTag(nombre, baneado) {
 }
 
 export async function canjearPT(personajeNombre, tag, tipo) {
-    // Importar catalogoTags para verificar si está baneado
-    const { catalogoTags } = await import('./tags-state.js');
     const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     if (catEntry?.baneado) return { ok: false, msg: `El tag ${tag} está baneado y no permite canjes.` };
@@ -80,4 +78,86 @@ export async function canjearPT(personajeNombre, tag, tipo) {
     // Para 'tres_tags' el OP asigna los tags manualmente después del canje
 
     return { ok: true, nueva };
+}
+
+// ── Renombrar un tag en TODOS los personajes + catalogo ───────
+export async function renameTag(nombreViejo, nombreNuevo) {
+    nombreNuevo = nombreNuevo.trim();
+    if (!nombreNuevo) return { ok: false, msg: 'El nuevo nombre no puede estar vacío.' };
+    if (nombreViejo === nombreNuevo) return { ok: true };
+
+    const viejoNorm = nombreViejo.startsWith('#') ? nombreViejo : '#' + nombreViejo;
+    const nuevoNorm = nombreNuevo.startsWith('#') ? nombreNuevo : '#' + nombreNuevo;
+    const viejoKey  = viejoNorm.slice(1);
+    const nuevoKey  = nuevoNorm.slice(1);
+
+    try {
+        // 1. Actualizar en personajes_refinados (en cada array de tags)
+        const { data: pjs } = await supabase.from('personajes_refinados').select('id, tags');
+        const updates = (pjs || [])
+            .filter(p => (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === viejoNorm.toLowerCase()))
+            .map(p => ({
+                id: p.id,
+                tags: p.tags.map(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === viejoNorm.toLowerCase()
+                    ? nuevoNorm : t)
+            }));
+
+        for (const u of updates) {
+            await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
+        }
+
+        // 2. Actualizar puntos_tag
+        await supabase.from('puntos_tag').update({ tag: nuevoNorm })
+            .ilike('tag', viejoNorm);
+
+        // 3. Actualizar log_puntos_tag
+        await supabase.from('log_puntos_tag').update({ tag: nuevoNorm })
+            .ilike('tag', viejoNorm);
+
+        // 4. Actualizar/renombrar en tags_catalogo
+        const { data: catOld } = await supabase.from('tags_catalogo')
+            .select('descripcion, baneado').ilike('nombre', viejoKey).maybeSingle();
+        if (catOld) {
+            await supabase.from('tags_catalogo').delete().ilike('nombre', viejoKey);
+            await supabase.from('tags_catalogo').upsert(
+                { nombre: nuevoKey, descripcion: catOld.descripcion, baneado: catOld.baneado },
+                { onConflict: 'nombre' }
+            );
+        }
+
+        return { ok: true, afectados: updates.length };
+    } catch(e) {
+        return { ok: false, msg: e.message };
+    }
+}
+
+// ── Eliminar un tag de TODOS los personajes + catalogo ────────
+export async function deleteTag(nombre) {
+    const tagNorm = nombre.startsWith('#') ? nombre : '#' + nombre;
+    const tagKey  = tagNorm.slice(1);
+    try {
+        // 1. Quitar de todos los personajes
+        const { data: pjs } = await supabase.from('personajes_refinados').select('id, tags');
+        const updates = (pjs || [])
+            .filter(p => (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tagNorm.toLowerCase()))
+            .map(p => ({
+                id: p.id,
+                tags: p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase())
+            }));
+
+        for (const u of updates) {
+            await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
+        }
+
+        // 2. Borrar de puntos_tag y log
+        await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
+        await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
+
+        // 3. Borrar del catálogo
+        await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
+
+        return { ok: true, afectados: updates.length };
+    } catch(e) {
+        return { ok: false, msg: e.message };
+    }
 }

@@ -15,6 +15,8 @@ export const tagsState = {
     pjSeleccionado: null,           // nombre_refinado activo en tab Progresión
     busquedaCat:    '',             // filtro texto en Catálogo
     esAdmin:        false,
+    filtroRol:      '#Jugador',     // 'todos' | '#Jugador' | '#NPC'
+    filtroEstado:   '#Activo',      // 'todos' | '#Activo' | '#Inactivo'
 };
 
 // Datos globales cargados una sola vez

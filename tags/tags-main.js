@@ -3,7 +3,7 @@
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
 import { tagsState, STORAGE_URL, grupos, catalogoTags } from './tags-state.js';
-import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, canjearPT } from './tags-data.js';
+import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, canjearPT, renameTag, deleteTag } from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
 
@@ -148,6 +148,69 @@ function _exponerGlobales() {
     // Ir a fichas filtrado por tag
     window._tagsIrAFichas = (tag) => {
         window.location.href = `../fichas/index.html?tag=${encodeURIComponent(tag)}`;
+    };
+
+    // Filtros rol/estado en progresión
+    window._tagsFiltroRol    = (v) => { tagsState.filtroRol    = v; renderProgresion(); };
+    window._tagsFiltroEstado = (v) => { tagsState.filtroEstado = v; renderProgresion(); };
+
+    // Renombrar tag (drop y actualiza en toda la BD)
+    window._tagsRenombrar = async (tag) => {
+        const nuevoNombre = prompt(`Renombrar ${tag} → nuevo nombre (sin #):`);
+        if (!nuevoNombre || nuevoNombre.trim() === '' || nuevoNombre.trim() === tag.replace('#','')) return;
+        const btn = event?.target;
+        if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        const res = await renameTag(tag, nuevoNombre.trim());
+        if (res.ok) {
+            toast(`✅ ${tag} renombrado a #${nuevoNombre.trim()} en ${res.afectados} personajes`, 'ok');
+            await cargarTodo(); initMarkup({ grupos });
+            renderCatalogo();
+        } else {
+            toast('❌ ' + res.msg, 'error');
+        }
+    };
+
+    // Eliminar tag de todos los personajes y el catálogo
+    window._tagsEliminar = async (tag, count) => {
+        const msg = count > 0
+            ? `¿Eliminar ${tag}? Se quitará de ${count} personaje${count!==1?'s':''} y del catálogo. Esta acción no se puede deshacer.`
+            : `¿Eliminar ${tag} del catálogo?`;
+        if (!confirm(msg)) return;
+        const res = await deleteTag(tag);
+        if (res.ok) {
+            toast(`🗑️ ${tag} eliminado de ${res.afectados} personajes`, 'ok');
+            await cargarTodo(); initMarkup({ grupos });
+            renderCatalogo();
+        } else {
+            toast('❌ ' + res.msg, 'error');
+        }
+    };
+
+    // Descargar lista de tags como .txt
+    window._tagsDescargar = (orden) => {
+        const tagMapa = {};
+        grupos.forEach(g => (g.tags||[]).forEach(t => {
+            const k = (t.startsWith('#') ? t.slice(1) : t);
+            tagMapa[k] = (tagMapa[k]||0) + 1;
+        }));
+        let lista = Object.entries(tagMapa).map(([nombre, count]) => ({ nombre, count }));
+        if (orden === 'alfabetico') {
+            lista.sort((a,b) => a.nombre.localeCompare(b.nombre));
+        } else {
+            lista.sort((a,b) => b.count - a.count || a.nombre.localeCompare(b.nombre));
+        }
+        const texto = orden === 'alfabetico'
+            ? lista.map(t => '#' + t.nombre).join('
+')
+            : lista.map(t => `#${t.nombre} (${t.count})`).join('
+');
+        const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `tags-bnh-${orden}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     // Cerrar modal con ESC o click en fondo
