@@ -147,7 +147,10 @@ function exponerGlobales() {
                     (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
                 );
                 const res = await guardarTagsGrupo(g.id, nuevosTags);
-                if (res.ok && pts > 0) await borrarPTDeTag(nombreGrupo, tag);
+                if (res.ok) {
+                    const pts = (ptGlobal[nombreGrupo]||{})[tag] || 0;
+                    if (pts > 0) await borrarPTDeTag(nombreGrupo, tag);
+                }
             } else {
                 // Asignar
                 const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
@@ -155,6 +158,7 @@ function exponerGlobales() {
                 await guardarTagsGrupo(g.id, nuevosTags);
             }
         }
+        await Promise.resolve();
         renderCatalogo(postersDelHilo);
         _renderTagListOnly();
     };
@@ -184,6 +188,8 @@ function exponerGlobales() {
                 const nuevosTags = [...(g.tags||[]), tagNorm];
                 await guardarTagsGrupo(g.id, nuevosTags);
             }
+            // Small delay ensures gruposGlobal memory update propagates to both renders
+            await Promise.resolve();
             _renderTagListOnly();
             renderCatalogo(postersDelHilo);
         } else if (fichasUI.modoAsignar) {
