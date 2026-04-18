@@ -22,7 +22,7 @@ export async function guardarMedalla(datos) {
         tags:                  datos.tags || [],
         costo_ctl:             Number(datos.costo_ctl) || 0,
         efecto_desc:           datos.efecto_base || '',
-        tipo:                  datos.tipo || 'ofensiva',
+        tipo:                  ['activa','pasiva'].includes(datos.tipo) ? datos.tipo : 'activa',
         quirk_tag:             datos.quirk_tag || '',
         requisitos_base:       datos.requisitos_base       || [],
         efectos_condicionales: datos.efectos_condicionales || [],
