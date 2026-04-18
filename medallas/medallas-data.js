@@ -22,7 +22,7 @@ export async function guardarMedalla(datos) {
         tags:                  datos.tags || [],
         costo_ctl:             Number(datos.costo_ctl) || 0,
         efecto_desc:           datos.efecto_base || '',
-        tipo:                  ['activa','pasiva'].includes(datos.tipo) ? datos.tipo : 'activa',
+        tipo:                  datos.tipo || 'ofensiva',
         quirk_tag:             datos.quirk_tag || '',
         requisitos_base:       datos.requisitos_base       || [],
         efectos_condicionales: datos.efectos_condicionales || [],
@@ -46,4 +46,16 @@ export async function guardarPosicionesGrafo(posiciones) {
         await supabase.from('medallas_catalogo')
             .update({ pos_x: p.pos_x, pos_y: p.pos_y }).eq('id', p.id);
     }
+}
+
+export async function crearTag(nombre) {
+    // Tags exist implicitly in medallas_catalogo.tags[] array.
+    // We store canonical tags in a dedicated table if available,
+    // otherwise we just return the normalized tag string.
+    const tag = nombre.trim().startsWith('#') ? nombre.trim() : '#' + nombre.trim();
+    // Try inserting into tags_canonicos table (may not exist — fails gracefully)
+    try {
+        await supabase.from('tags_canonicos').upsert({ nombre: tag }, { onConflict: 'nombre' });
+    } catch(_) { /* table may not exist, that's fine */ }
+    return { ok: true, tag };
 }

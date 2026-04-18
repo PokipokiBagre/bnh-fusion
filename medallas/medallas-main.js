@@ -1,8 +1,8 @@
 // medallas/medallas-main.js
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
 import { medallaState, medallas, grupos, STORAGE_URL } from './medallas-state.js';
-import { cargarTodo, guardarMedalla, eliminarMedalla } from './medallas-data.js';
-import { renderCatalogo, renderGrafo, renderPersonaje, renderDetalleMedalla, renderFormMedalla, _htmlReqRow, _htmlCondRow, toast } from './medallas-ui.js';
+import { cargarTodo, guardarMedalla, eliminarMedalla, crearTag } from './medallas-data.js';
+import { renderCatalogo, renderGrafo, renderPersonaje, renderDetalleMedalla, renderFormMedalla, _htmlReqRow, _htmlCondRow, toast, mountNewTagInput } from './medallas-ui.js';
 import { buildGraph } from './medallas-grafo.js';
 import { initMarkup } from '../bnh-markup.js';
 
@@ -82,10 +82,32 @@ function _exponerGlobales() {
     window._medAddReq = () => {
         const c = window._fm_reqCount = (window._fm_reqCount||0) + 1;
         document.getElementById('fm-reqs').insertAdjacentHTML('beforeend', _htmlReqRow({}, c));
+        setTimeout(() => mountNewTagInput('req-tag-' + c), 30);
     };
     window._medAddCond = () => {
         const c = window._fm_condCount = (window._fm_condCount||0) + 1;
         document.getElementById('fm-conds').insertAdjacentHTML('beforeend', _htmlCondRow({}, c));
+        setTimeout(() => mountNewTagInput('cond-tag-' + c), 30);
+    };
+
+    // Crear tag nuevo desde el formulario de medalla
+    window._medCrearTag = () => {
+        const nombre = prompt('Nombre del nuevo tag (con o sin #):');
+        if (!nombre || !nombre.trim()) return;
+        const tag = nombre.trim().startsWith('#') ? nombre.trim() : '#' + nombre.trim();
+        crearTag(tag).then(res => {
+            if (res.ok) {
+                toast('🏷️ Tag "' + res.tag + '" listo para usar', 'ok');
+                // Auto-append to fm-tags field if open
+                const fmTags = document.getElementById('fm-tags');
+                if (fmTags) {
+                    const cur = fmTags.value.trim();
+                    fmTags.value = cur ? cur + ', ' + res.tag : res.tag;
+                }
+            } else {
+                toast('❌ Error al crear tag', 'error');
+            }
+        });
     };
 
     window._medGuardar = async () => {

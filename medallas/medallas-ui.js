@@ -3,10 +3,117 @@ import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './
 import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ, getTagsClusters } from './medallas-logic.js';
 import { buildGraph, initGrafo, resetGrafoView } from './medallas-grafo.js';
 import { renderMarkup } from '../bnh-markup.js';
+import { crearTag } from './medallas-data.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 let _grafoCargado = false;
+
+// ── Tag autocomplete engine ───────────────────────────────────
+function _getTagsCatalogo() {
+    const set = new Set();
+    medallas.forEach(m => (m.tags||[]).forEach(t => set.add(t.startsWith('#') ? t : '#'+t)));
+    return [...set].sort((a,b) => a.localeCompare(b));
+}
+
+function _mountTagAutocomplete(input, onSelect) {
+    if (!input || input._acMounted) return;
+    input._acMounted = true;
+
+    const dropdown = document.createElement('ul');
+    dropdown.style.cssText = [
+        'position:absolute','z-index:9999','background:#fff',
+        'border:1.5px solid var(--green)','border-radius:6px',
+        'box-shadow:0 4px 16px rgba(0,0,0,0.13)','margin:0','padding:4px 0',
+        'list-style:none','max-height:200px','overflow-y:auto','min-width:180px','font-size:0.85em'
+    ].join(';');
+    let _items = [], _active = -1;
+
+    function _show(items) {
+        _items = items; _active = -1;
+        dropdown.innerHTML = items.map((t,i) =>
+            `<li data-i="${i}" style="padding:6px 14px;cursor:pointer;color:var(--blue);font-weight:600;border-radius:4px;transition:background .1s;"
+                onmouseover="this.style.background='var(--blue-pale)'" onmouseout="this.style.background=''">${t}</li>`
+        ).join('');
+        dropdown.querySelectorAll('li').forEach(li => {
+            li.addEventListener('mousedown', e => { e.preventDefault(); _pick(_items[+li.dataset.i]); });
+        });
+        _attach();
+    }
+
+    function _attach() {
+        const rect = input.getBoundingClientRect();
+        const scrollY = window.scrollY || document.documentElement.scrollTop;
+        dropdown.style.top  = (rect.bottom + scrollY + 2) + 'px';
+        dropdown.style.left = rect.left + 'px';
+        dropdown.style.width = Math.max(rect.width, 200) + 'px';
+        if (!dropdown.parentNode) document.body.appendChild(dropdown);
+    }
+
+    function _hide() {
+        _items = []; _active = -1;
+        dropdown.innerHTML = '';
+        if (dropdown.parentNode) dropdown.parentNode.removeChild(dropdown);
+    }
+
+    function _pick(tag) {
+        if (!tag) return;
+        if (input.id === 'fm-tags') {
+            const parts = input.value.split(',');
+            parts[parts.length - 1] = ' ' + tag;
+            input.value = parts.join(',');
+        } else {
+            input.value = tag;
+        }
+        _hide();
+        onSelect?.(tag);
+        input.focus();
+    }
+
+    function _setActive(i) {
+        const lis = dropdown.querySelectorAll('li');
+        lis.forEach(l => l.style.background = '');
+        _active = Math.max(0, Math.min(i, _items.length - 1));
+        if (lis[_active]) { lis[_active].style.background = 'var(--blue-pale)'; lis[_active].scrollIntoView({ block:'nearest' }); }
+    }
+
+    input.addEventListener('input', () => {
+        const val = input.id === 'fm-tags'
+            ? (input.value.split(',').pop() || '').trim()
+            : input.value.trim();
+        if (!val || !val.startsWith('#')) { _hide(); return; }
+        const q = val.toLowerCase();
+        const matches = _getTagsCatalogo().filter(t => t.toLowerCase().includes(q));
+        if (!matches.length) { _hide(); return; }
+        _show(matches.slice(0, 20));
+    });
+
+    input.addEventListener('keydown', e => {
+        if (!_items.length) return;
+        if (e.key === 'ArrowDown') { e.preventDefault(); _setActive(_active + 1); }
+        else if (e.key === 'ArrowUp')  { e.preventDefault(); _setActive(_active - 1); }
+        else if (e.key === 'Tab' || e.key === 'Enter') {
+            if (_active >= 0) { e.preventDefault(); _pick(_items[_active]); }
+            else if (_items.length === 1) { e.preventDefault(); _pick(_items[0]); }
+            else { _hide(); }
+        }
+        else if (e.key === 'Escape') { _hide(); }
+    });
+
+    input.addEventListener('blur', () => setTimeout(_hide, 150));
+}
+
+function _mountAllTagInputs() {
+    const fmTags = document.getElementById('fm-tags');
+    if (fmTags) _mountTagAutocomplete(fmTags, null);
+    document.querySelectorAll('[id^="req-tag-"]').forEach(el => _mountTagAutocomplete(el, null));
+    document.querySelectorAll('[id^="cond-tag-"]').forEach(el => _mountTagAutocomplete(el, null));
+}
+
+export function mountNewTagInput(id) {
+    const el = document.getElementById(id);
+    if (el) _mountTagAutocomplete(el, null);
+}
 
 // ── Tab Catálogo ──────────────────────────────────────────────
 export function renderCatalogo() {
@@ -263,9 +370,12 @@ export function renderFormMedalla(m = null) {
 
                     <div>
                         <label class="form-label">Tags de la medalla (tags asociados)</label>
-                        <input class="inp" id="fm-tags" value="${_esc((m?.tags||[]).join(', '))}"
-                            placeholder="#Tag1, #Tag2 — separados por coma">
-                        <div style="font-size:0.75em;color:var(--gray-500);margin-top:3px;">El primer tag es el tag principal. Escribe con # o sin él.</div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <input class="inp" id="fm-tags" value="${_esc((m?.tags||[]).join(', '))}"
+                                placeholder="#Tag1, #Tag2 — separados por coma" style="flex:1;">
+                            <button class="btn btn-outline btn-sm" type="button" onclick="window._medCrearTag()" title="Crear tag nuevo en el catálogo">🏷️ Crear tag</button>
+                        </div>
+                        <div style="font-size:0.75em;color:var(--gray-500);margin-top:3px;">El primer tag es el principal. Escribe <b>#</b> para ver sugerencias. Si el tag no existe, usa <b>Crear tag</b>.</div>
                     </div>
 
                     <div>
@@ -319,20 +429,25 @@ export function renderFormMedalla(m = null) {
     // Expose row counter
     window._fm_reqCount  = reqs.length;
     window._fm_condCount = conds.length;
+
+    // Mount tag autocomplete on all tag inputs
+    setTimeout(_mountAllTagInputs, 60);
 }
 
 export function _htmlReqRow(r = {}, idx) {
+    setTimeout(() => mountNewTagInput('req-tag-' + idx), 30);
     return `<div class="cond-row" id="req-row-${idx}">
-        <input class="inp" placeholder="#Tag" style="flex:1;" value="${_esc(r.tag||'')}" id="req-tag-${idx}">
+        <input class="inp" placeholder="#Tag (escribe # para sugerencias)" style="flex:1;" value="${_esc(r.tag||'')}" id="req-tag-${idx}" autocomplete="off">
         <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;" value="${r.pts_minimos||0}" id="req-pts-${idx}">
         <button class="btn btn-red btn-sm" onclick="document.getElementById('req-row-${idx}').remove()">✕</button>
     </div>`;
 }
 
 export function _htmlCondRow(c = {}, idx) {
+    setTimeout(() => mountNewTagInput('cond-tag-' + idx), 30);
     return `<div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${idx}">
         <div style="display:flex;gap:8px;">
-            <input class="inp" placeholder="#Tag" style="flex:1;" value="${_esc(c.tag||'')}" id="cond-tag-${idx}">
+            <input class="inp" placeholder="#Tag (escribe # para sugerencias)" style="flex:1;" value="${_esc(c.tag||'')}" id="cond-tag-${idx}" autocomplete="off">
             <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;" value="${c.pts_minimos||0}" id="cond-pts-${idx}">
             <button class="btn btn-red btn-sm" onclick="document.getElementById('cond-row-${idx}').remove()">✕</button>
         </div>
