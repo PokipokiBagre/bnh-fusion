@@ -276,7 +276,7 @@ export function renderFormMedalla(m = null) {
                     <div>
                         <label class="form-label">Tipo</label>
                         <select class="inp" id="fm-tipo" style="max-width:200px;">
-                            ${['ofensiva','defensiva','de_soporte','pasiva','reactiva'].map(t =>
+                            ${['activa','pasiva'].map(t =>
                                 `<option value="${t}" ${m?.tipo===t?'selected':''}>${t}</option>`
                             ).join('')}
                         </select>
