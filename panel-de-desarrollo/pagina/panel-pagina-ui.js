@@ -11,15 +11,16 @@ const STORAGE_URL = currentConfig.storageUrl;
 
 // Mapa actualizado (sin Misiones)
 const IMAGENES_INDEX = [
-    { key: 'icon',         archivo: 'icon.png',         label: 'Icono / Favicon',       zona: 'Favicon del sitio' },
-    { key: 'bnh-hero',     archivo: 'bnh-hero.png',     label: 'Fondo del Hero',         zona: 'Imagen de fondo del header principal' },
-    { key: 'thread-rol',   archivo: 'thread-rol.png',   label: 'Tarjeta Hilo Rol',       zona: 'Sección "Hilos Activos" → Rol' },
-    { key: 'thread-meta',  archivo: 'thread-meta.png',  label: 'Tarjeta Meta',           zona: 'Sección "Hilos Activos" → Meta' },
-    { key: 'historial',    archivo: 'historial.png',    label: 'Tarjeta Historial',      zona: 'Grid principal → Historial de Posts' },
-    { key: 'personajes',   archivo: 'personajes.png',   label: 'Tarjeta Personajes',     zona: 'Grid principal → Personajes' },
-    { key: 'estadisticas', archivo: 'estadisticas.png', label: 'Tarjeta Estadísticas',   zona: 'Grid principal → Estadísticas' },
-    { key: 'extra',        archivo: 'extra.png',        label: 'Tarjeta Imágenes',       zona: 'Grid principal → Imágenes' },
-    { key: 'panel-dev',    archivo: 'panel-dev.png',    label: 'Tarjeta Panel Máster',   zona: 'Grid principal → Panel Máster (solo OP)' },
+    { key: 'icon',         archivo: 'icon.png',         label: 'Icono / Favicon',     zona: 'Favicon del sitio' },
+    { key: 'bnh-hero',     archivo: 'bnh-hero.png',     label: 'Fondo del Hero',       zona: 'Imagen de fondo del header principal' },
+    { key: 'thread-rol',   archivo: 'thread-rol.png',   label: 'Tarjeta Hilo Rol',     zona: 'Sección "Hilos Activos" → Rol' },
+    { key: 'thread-meta',  archivo: 'thread-meta.png',  label: 'Tarjeta Meta',         zona: 'Sección "Hilos Activos" → Meta' },
+    { key: 'historial',    archivo: 'historial.png',    label: 'Tarjeta Historial',    zona: 'Grid principal → Historial' },
+    { key: 'fichas',       archivo: 'fichas.png',       label: 'Tarjeta Fichas',       zona: 'Grid principal → Fichas' },
+    { key: 'tags',         archivo: 'tags.png',         label: 'Tarjeta Tags',         zona: 'Grid principal → Tags' },
+    { key: 'medallas',     archivo: 'medallas.png',     label: 'Tarjeta Medallas',     zona: 'Grid principal → Medallas' },
+    { key: 'fusion',       archivo: 'fusion.png',       label: 'Tarjeta Fusión',       zona: 'Grid principal → Fusión' },
+    { key: 'panel-dev',    archivo: 'panel-dev.png',    label: 'Tarjeta Panel Máster', zona: 'Grid principal → Panel Máster (solo OP)' },
     { key: 'no_encontrado',archivo: 'no_encontrado.png',label: 'Imagen "No encontrado"', zona: 'Fallback cuando falta una imagen' },
 ];
 
@@ -191,11 +192,12 @@ function _renderPreviewCompleto(c) {
     const fbSVG    = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22%3E%3Crect width=%2270%22 height=%2270%22 fill=%22%23f8f9fa%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23adb5bd%22 font-size=%2222%22%3E%3F%3C/text%3E%3C/svg%3E`;
 
     const gridItems = [
-        { key:'historial',    label:'HISTORIAL DE POSTS' },
-        { key:'personajes',   label:'PERSONAJES' },
-        { key:'estadisticas', label:'ESTADÍSTICAS' },
-        { key:'extra',        label:'IMÁGENES' },
-        { key:'panel-dev',    label:'PANEL MÁSTER' }
+        { key:'historial',  label:'HISTORIAL' },
+        { key:'fichas',     label:'FICHAS' },
+        { key:'tags',       label:'TAGS' },
+        { key:'medallas',   label:'MEDALLAS' },
+        { key:'fusion',     label:'FUSIÓN' },
+        { key:'panel-dev',  label:'PANEL MÁSTER' }
     ];
 
     const onErrorGeneral = `this.onerror=function(){ this.onerror=null; this.src='${fbSVG}'; }; this.src='${fb}';`;
