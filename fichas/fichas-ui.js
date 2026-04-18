@@ -321,10 +321,10 @@ export function renderDetalle(nombreGrupo) {
             </div>
         </div>`:''}
 
-        ${g.descripcion?`<div class="wiki-section"><div class="wiki-section-header">Descripción</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.descripcion)}</div></div>`:\'\'}
-        ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.lore)}</div></div>`:\'\'}
-        ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:\'\'}
-        ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:\'\'}
+        ${g.descripcion?`<div class="wiki-section"><div class="wiki-section-header">Descripción</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.descripcion)}</div></div>`:''}
+        ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.lore)}</div></div>`:''}
+        ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:''}
+        ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
         ${Object.values(g.info_extra||{}).some(v=>v)?`
         <div class="wiki-section">
             <div class="wiki-section-header">Información</div>
@@ -340,7 +340,7 @@ export function renderDetalle(nombreGrupo) {
                     ${(g.info_extra||{})['familia'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Familia</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['familia']}</td></tr>` : ''}
                     ${(g.info_extra||{})['nota'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Nota extra</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['nota']}</td></tr>` : ''}
             </table>
-        </div>`:\'\' }
+        </div>`:'' }
 
         ${Object.keys(ptG).length?`
         <div class="wiki-section">
