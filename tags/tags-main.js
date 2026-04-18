@@ -200,10 +200,10 @@ function _exponerGlobales() {
             lista.sort((a,b) => b.count - a.count || a.nombre.localeCompare(b.nombre));
         }
         const texto = orden === 'alfabetico'
-            ? lista.map(t => '#' + t.nombre).join('
-')
-            : lista.map(t => `#${t.nombre} (${t.count})`).join('
-');
+        const sep = '\n';
+        const texto = orden === 'alfabetico'
+            ? lista.map(t => '#' + t.nombre).join(sep)
+            : lista.map(t => '#' + t.nombre + ' (' + t.count + ')').join(sep);
         const blob = new Blob([texto], { type: 'text/plain;charset=utf-8' });
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
