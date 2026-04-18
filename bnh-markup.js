@@ -202,13 +202,19 @@ export function initMarkupTextarea(textarea) {
     }
 
     function apply(item) {
-        const v = textarea.value, cur = textarea.selectionStart;
+        const v = textarea.value;
+        const cur = textarea.selectionStart;
+        // _start - 1 = position of the trigger symbol (@, #, !)
+        // cur         = position after the partial query typed so far
         const needsDelim = item.includes(' ');
-        const insertion  = needsDelim ? `${_sym}${item}${_sym}` : `${_sym}${item}`;
-        const before = v.slice(0, _start - 1) + insertion;
-        const after  = v.slice(cur);
-        textarea.value = before + ' ' + after;
-        const pos = before.length + 1;
+        const symPos  = _start - 1;
+        const textBefore = v.slice(0, symPos);      // everything before @
+        const textAfter  = v.slice(cur);             // everything after the partial
+        const insertion  = needsDelim
+            ? `${_sym}${item}${_sym} `
+            : `${_sym}${item} `;
+        textarea.value = textBefore + insertion + textAfter;
+        const pos = textBefore.length + insertion.length;
         textarea.setSelectionRange(pos, pos);
         close();
         textarea.focus();
