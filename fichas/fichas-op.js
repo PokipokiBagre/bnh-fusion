@@ -766,6 +766,22 @@ export function abrirCrearGrupo() {
     <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags</label>
     <div id="cp-tags-chips" class="tags-chips" style="margin-bottom:6px;"></div>
     <div id="cp-tag-inp-wrap" style="margin-bottom:10px;"></div>
+    <div style="display:flex;gap:12px;margin-bottom:10px;">
+        <div>
+            <div style="font-size:0.75em;font-weight:600;color:var(--gray-700);margin-bottom:5px;">Tipo</div>
+            <div style="display:flex;gap:4px;">
+                <button id="cp-jugador" class="op-btn op-btn-green" style="font-size:0.78em;padding:4px 10px;" onclick="window._cpToggleRol('Jugador')">Jugador</button>
+                <button id="cp-npc" class="op-btn op-btn-gray" style="font-size:0.78em;padding:4px 10px;" onclick="window._cpToggleRol('NPC')">NPC</button>
+            </div>
+        </div>
+        <div>
+            <div style="font-size:0.75em;font-weight:600;color:var(--gray-700);margin-bottom:5px;">Estado</div>
+            <div style="display:flex;gap:4px;">
+                <button id="cp-activo" class="op-btn op-btn-green" style="font-size:0.78em;padding:4px 10px;" onclick="window._cpToggleEstado('Activo')">Activo</button>
+                <button id="cp-inactivo" class="op-btn op-btn-gray" style="font-size:0.78em;padding:4px 10px;" onclick="window._cpToggleEstado('Inactivo')">Inactivo</button>
+            </div>
+        </div>
+    </div>
     <button class="op-btn op-btn-green" onclick="window._cpCrearGrupo()">✨ Crear Grupo</button>
     <div id="msg-cp" class="op-msg"></div>`);
 
@@ -791,6 +807,20 @@ export function abrirCrearGrupo() {
         renderChipsCp();
     }, 60);
 
+    let _cpRol = 'Jugador', _cpEstado = 'Activo';
+    setTimeout(() => {
+        window._cpToggleRol = (v) => {
+            _cpRol = v;
+            document.getElementById('cp-jugador').className = `op-btn ${v==='Jugador'?'op-btn-green':'op-btn-gray'}`;
+            document.getElementById('cp-npc').className = `op-btn ${v==='NPC'?'op-btn-green':'op-btn-gray'}`;
+        };
+        window._cpToggleEstado = (v) => {
+            _cpEstado = v;
+            document.getElementById('cp-activo').className = `op-btn ${v==='Activo'?'op-btn-green':'op-btn-gray'}`;
+            document.getElementById('cp-inactivo').className = `op-btn ${v==='Inactivo'?'op-btn-green':'op-btn-gray'}`;
+        };
+    }, 80);
+
     window._cpRmTag = (tag) => {
         const idx = tagsSel.indexOf(tag);
         if (idx !== -1) { tagsSel.splice(idx, 1); renderChipsCp(); }
@@ -801,7 +831,8 @@ export function abrirCrearGrupo() {
         const pot=parseInt(document.getElementById('cp-pot')?.value)||0;
         const agi=parseInt(document.getElementById('cp-agi')?.value)||0;
         const ctl=parseInt(document.getElementById('cp-ctl')?.value)||0;
-        const res=await crearGrupo({nombre,pot,agi,ctl,tags:[...tagsSel]});
+        const extraTags = ['#'+_cpRol, '#'+_cpEstado];
+        const res=await crearGrupo({nombre,pot,agi,ctl,tags:[...new Set([...tagsSel,...extraTags])]});
         setMsg('msg-cp',res.ok?'✅ Grupo creado':'❌ '+res.msg,res.ok);
         if(res.ok) setTimeout(()=>{cerrarModal();window.sincronizarVista?.();},800);
     };

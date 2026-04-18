@@ -32,6 +32,8 @@ export let fichasUI = {
     tagBusqueda:   '',
     nombreBusqueda:'',          // ← buscador de nombres/aliases
     modoAsignar:   false,       // ← modo asignar tags activo
+    filtroRol:     'todos',     // 'todos' | '#Jugador' | '#NPC'
+    filtroEstado:  'todos',     // 'todos' | '#Activo' | '#Inactivo'
     modoInverso:   false,       // ← modo inverso: selecciona personaje, asigna tags
     tagsAsignar:   new Set(),   // ← tags seleccionados en modo asignar
     grupoAsignar:  null,        // ← grupo seleccionado en modo inverso

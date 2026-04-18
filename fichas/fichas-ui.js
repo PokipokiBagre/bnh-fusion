@@ -39,6 +39,20 @@ export function getGruposFiltrados(postersDelHilo) {
         });
     }
 
+    // Filtro por rol (#Jugador / #NPC)
+    if (fichasUI.filtroRol && fichasUI.filtroRol !== 'todos') {
+        lista = lista.filter(g => (g.tags||[]).some(t =>
+            (t.startsWith('#')?t:'#'+t).toLowerCase() === fichasUI.filtroRol.toLowerCase()
+        ));
+    }
+
+    // Filtro por estado (#Activo / #Inactivo)
+    if (fichasUI.filtroEstado && fichasUI.filtroEstado !== 'todos') {
+        lista = lista.filter(g => (g.tags||[]).some(t =>
+            (t.startsWith('#')?t:'#'+t).toLowerCase() === fichasUI.filtroEstado.toLowerCase()
+        ));
+    }
+
     // Filtro por tags (AND)
     if (fichasUI.tagsFiltro.length > 0) {
         lista = lista.filter(g => {
@@ -141,10 +155,24 @@ export function renderSidebar() {
     </div>
 
     <div class="sidebar-section">
+        <div class="sidebar-section-title">Filtros</div>
+        <div style="display:flex;gap:3px;margin-bottom:6px;flex-wrap:wrap;">
+            <button class="btn btn-sm ${fichasUI.filtroRol==='todos'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroRol('todos')">Todos</button>
+            <button class="btn btn-sm ${fichasUI.filtroRol==='#Jugador'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroRol('#Jugador')">Jugador</button>
+            <button class="btn btn-sm ${fichasUI.filtroRol==='#NPC'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroRol('#NPC')">NPC</button>
+        </div>
+        <div style="display:flex;gap:3px;flex-wrap:wrap;">
+            <button class="btn btn-sm ${fichasUI.filtroEstado==='todos'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroEstado('todos')">Todos</button>
+            <button class="btn btn-sm ${fichasUI.filtroEstado==='#Activo'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroEstado('#Activo')">Activo</button>
+            <button class="btn btn-sm ${fichasUI.filtroEstado==='#Inactivo'?'btn-green':'btn-outline'}" style="flex:1;font-size:0.72em;padding:3px 4px;" onclick="window._fichaFiltroEstado('#Inactivo')">Inactivo</button>
+        </div>
+    </div>
+
+    <div class="sidebar-section">
         <div class="sidebar-section-title">Tags <span style="color:var(--gray-500);font-weight:400;">(${tagEntries.length})</span></div>
-        <input type="text" class="sidebar-search" placeholder="Buscar tag..."
+        <input id="sidebar-tag-search" type="text" class="sidebar-search" placeholder="Buscar tag..."
             value="${fichasUI.tagBusqueda}" oninput="window._fichaTagSearch(this.value)">
-        <ul class="tag-list">
+        <ul class="tag-list" id="sidebar-tag-list">
             ${tagEntries.map(([tag, cnt]) => {
                 const activo = fichasUI.tagsFiltro.includes(tag);
                 const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);

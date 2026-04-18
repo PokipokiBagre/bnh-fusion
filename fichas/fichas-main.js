@@ -104,7 +104,10 @@ function exponerGlobales() {
         sincronizarVista();
     };
 
-    window._fichaTagSearch = (v) => { fichasUI.tagBusqueda = v; renderSidebar(); };
+    window._fichaTagSearch = (v) => {
+        fichasUI.tagBusqueda = v;
+        _renderTagListOnly(); // update only tag list, preserve input focus
+    };
 
     // ── Modo Asignar Tags ─────────────────────────────────────
     // Activar/desactivar modo asignar (toggle)
@@ -153,7 +156,7 @@ function exponerGlobales() {
             }
         }
         renderCatalogo(postersDelHilo);
-        renderSidebar();
+        _renderTagListOnly();
     };
 
     // Al hacer click en un tag del sidebar en modo asignar → toggle ese tag en el Set
@@ -181,12 +184,12 @@ function exponerGlobales() {
                 const nuevosTags = [...(g.tags||[]), tagNorm];
                 await guardarTagsGrupo(g.id, nuevosTags);
             }
-            renderSidebar();
+            _renderTagListOnly();
             renderCatalogo(postersDelHilo);
         } else if (fichasUI.modoAsignar) {
             if (fichasUI.tagsAsignar.has(tag)) fichasUI.tagsAsignar.delete(tag);
             else fichasUI.tagsAsignar.add(tag);
-            renderSidebar();
+            _renderTagListOnly();
             renderCatalogo(postersDelHilo);
         } else {
             _originalToggleTag(tag);
@@ -274,6 +277,55 @@ function exponerGlobales() {
             setTimeout(() => { if (prog) prog.style.display = 'none'; }, 3500);
         }
     }
+
+    // Partial render: only update the tag list UL (preserves input focus)
+    function _renderTagListOnly() {
+        const ul = document.getElementById('sidebar-tag-list');
+        if (!ul) { renderSidebar(); return; }
+        // Rebuild tag entries with current state
+        const { buildTagIndex } = window._fichasLogicExports || {};
+        // Use gruposGlobal directly
+        const tagMap = {};
+        gruposGlobal.forEach(g => {
+            (g.tags||[]).forEach(t => {
+                const k = t.startsWith('#') ? t : '#'+t;
+                tagMap[k] = (tagMap[k]||0) + 1;
+            });
+        });
+        let entries = Object.entries(tagMap).sort((a,b) => b[1]!==a[1] ? b[1]-a[1] : a[0].localeCompare(b[0]));
+        if (fichasUI.tagBusqueda) {
+            const q = fichasUI.tagBusqueda.toLowerCase();
+            entries = entries.filter(([t]) => t.toLowerCase().includes(q));
+        }
+        ul.innerHTML = entries.map(([tag, cnt]) => {
+            const activo = fichasUI.tagsFiltro.includes(tag);
+            const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);
+            const grupoSel = fichasUI.modoInverso && fichasUI.grupoAsignar
+                ? gruposGlobal.find(g => g.nombre_refinado === fichasUI.grupoAsignar) : null;
+            const grupoTieneTag = grupoSel && (grupoSel.tags||[]).some(t =>
+                (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
+            );
+            const cero = cnt === 0;
+            const click = `onclick="window._fichaToggleTag('${tag.replace(/'/g,"\'")}')"`; 
+            const estilo = fichasUI.modoInverso && grupoSel
+                ? grupoTieneTag ? 'color:var(--green);font-weight:700;' : ''
+                : (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : '';
+            return `<li class="${activo||esTagAsignar||grupoTieneTag?'active':''}" ${click}>
+                <span class="tag-link" style="${estilo}">${tag}</span>
+                <span class="tag-count">${cnt}</span>
+            </li>`;
+        }).join('') || '<li style="color:var(--gray-500);font-size:0.82em;padding:4px;">Sin tags</li>';
+    }
+
+    window._fichaFiltroRol = (val) => {
+        fichasUI.filtroRol = val;
+        sincronizarVista();
+    };
+
+    window._fichaFiltroEstado = (val) => {
+        fichasUI.filtroEstado = val;
+        sincronizarVista();
+    };
 
     window._fichaSetHilo = async (val) => {
         fichasUI.hiloFiltro = val;
