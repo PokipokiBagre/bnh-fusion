@@ -1,114 +1,149 @@
 // ============================================================
 // fichas-markup.js — Sistema de markup para lore y quirk
 //
-// Sintaxis en el editor (lo que guarda el OP en la BD):
+// Sintaxis guardada en BD:
 //   @Nombre        → link verde al personaje en fichas
-//   #Tag           → link rojo al tag en la página de tags
+//   #Tag           → link rojo al tag en tags
 //   !Medalla       → link azul a la medalla en medallas
 //
-// En la vista pública los símbolos NO se muestran,
-// solo el texto coloreado con su link.
-// En el editor (textarea) sí se ven los símbolos.
+// Vista pública: símbolo oculto, texto coloreado con link.
+// Editor: símbolo visible antes del nombre.
 // ============================================================
 
-import { gruposGlobal, aliasesGlobal } from './fichas-state.js';
+import { gruposGlobal } from './fichas-state.js';
+
+// Escapa solo para texto plano (no para atributos ya seguros)
+function escTxt(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 
 // ── Renderizado de texto con markup ──────────────────────────
-// Convierte el texto crudo a HTML con spans/links coloreados.
+// Parsea el texto crudo token a token para evitar doble-escape.
 export function renderMarkup(texto) {
     if (!texto) return '';
 
-    // Escapar HTML primero
-    let html = String(texto)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
+    // Tokenizar: separar en fragmentos de texto plano y tokens @/#!/
+    // Token: @Palabra_con_espacios_hasta_doble_espacio_o_salto
+    // Para @ admitimos espacios dentro del nombre (ej: @All Tight)
+    // Para # y ! solo palabras sin espacios
+    const tokens = [];
+    let i = 0;
+    const t = String(texto);
 
-    // @Nombre → span verde con link a fichas
-    html = html.replace(/@([\wÀ-ɏ][\wÀ-ɏ\s_.-]*?)(?=\s|$|[^wÀ-ɏ\s_.-])/g, (_, nombre) => {
-        const enc = encodeURIComponent(nombre.trim());
-        return `<a href="../fichas/index.html#${enc}"
-            onclick="event.preventDefault();window._markupIrAFicha('${nombre.trim().replace(/'/g,"\\'")}');return false;"
-            style="color:var(--green);font-weight:600;text-decoration:none;cursor:pointer;"
-            title="Ver ficha de ${nombre.trim()}">${nombre.trim()}</a>`;
-    });
+    while (i < t.length) {
+        const ch = t[i];
 
-    // #Tag → span rojo con link a tags
-    html = html.replace(/#([\wÀ-ɏ][\wÀ-ɏ_.]*)/g, (_, tag) => {
-        const enc = encodeURIComponent(tag);
-        return `<a href="../tags/index.html#${enc}"
-            style="color:var(--red);font-weight:600;text-decoration:none;cursor:pointer;"
-            title="Ver tag #${tag}">#${tag}</a>`;
-    });
+        if (ch === '@') {
+            // Nombre: letras, números, spaces, guiones, puntos hasta \n o doble espacio
+            const match = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ .,-]*?)(?=\s{2}|\n|$)/);
+            if (match && match[1].trim()) {
+                tokens.push({ tipo: 'persona', valor: match[1].trim() });
+                i += 1 + match[1].length;
+                continue;
+            }
+        }
 
-    // !Medalla → span azul con link a medallas
-    html = html.replace(/!([\wÀ-ɏ][\wÀ-ɏ\s_.-]*?)(?=\s|$|[^wÀ-ɏ\s_.-])/g, (_, medalla) => {
-        const enc = encodeURIComponent(medalla.trim());
-        return `<a href="../medallas/index.html#${enc}"
-            style="color:#1a4a80;font-weight:600;text-decoration:none;cursor:pointer;"
-            title="Ver medalla ${medalla.trim()}">${medalla.trim()}</a>`;
-    });
+        if (ch === '#') {
+            const match = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ_.]*)/);
+            if (match) {
+                tokens.push({ tipo: 'tag', valor: match[1] });
+                i += 1 + match[1].length;
+                continue;
+            }
+        }
 
-    // Saltos de línea
-    html = html.replace(/\n/g, '<br>');
+        if (ch === '!') {
+            const match = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ _.,-]*?)(?=\s{2}|\n|$)/);
+            if (match && match[1].trim()) {
+                tokens.push({ tipo: 'medalla', valor: match[1].trim() });
+                i += 1 + match[1].length;
+                continue;
+            }
+        }
 
-    return html;
+        if (ch === '\n') {
+            tokens.push({ tipo: 'br' });
+            i++;
+            continue;
+        }
+
+        // Texto plano: acumular hasta el próximo símbolo especial o salto
+        let j = i + 1;
+        while (j < t.length && t[j] !== '@' && t[j] !== '#' && t[j] !== '!' && t[j] !== '\n') j++;
+        tokens.push({ tipo: 'texto', valor: t.slice(i, j) });
+        i = j;
+    }
+
+    // Convertir tokens a HTML
+    return tokens.map(tok => {
+        if (tok.tipo === 'br') return '<br>';
+        if (tok.tipo === 'texto') return escTxt(tok.valor);
+
+        if (tok.tipo === 'persona') {
+            const n = tok.valor;
+            return `<a href="#" onclick="event.preventDefault();window._markupIrAFicha('${n.replace(/'/g,"\\'")}');return false;"
+                style="color:var(--green);font-weight:600;text-decoration:none;cursor:pointer;"
+                title="Ver ficha de ${escTxt(n)}">${escTxt(n)}</a>`;
+        }
+
+        if (tok.tipo === 'tag') {
+            const tag = tok.valor;
+            return `<a href="../tags/index.html#${encodeURIComponent(tag)}"
+                style="color:var(--red);font-weight:600;text-decoration:none;cursor:pointer;"
+                title="Ver tag #${escTxt(tag)}">#${escTxt(tag)}</a>`;
+        }
+
+        if (tok.tipo === 'medalla') {
+            const m = tok.valor;
+            return `<a href="../medallas/index.html#${encodeURIComponent(m)}"
+                style="color:#1a4a80;font-weight:600;text-decoration:none;cursor:pointer;"
+                title="Ver medalla ${escTxt(m)}">${escTxt(m)}</a>`;
+        }
+
+        return '';
+    }).join('');
 }
 
 // Handler global para navegar a una ficha desde el markup
 window._markupIrAFicha = (nombreGrupo) => {
     if (window.abrirFicha) {
         window.abrirFicha(nombreGrupo);
-    } else {
-        window.location.href = `../fichas/index.html`;
     }
 };
 
 // ── Autosugerencia en textareas ───────────────────────────────
-// Llama esto una vez que el textarea está en el DOM.
-// tipo: 'lore' | 'quirk' (solo para identificar el elemento)
 export function initMarkupTextarea(textarea) {
     if (!textarea || textarea._markupInit) return;
     textarea._markupInit = true;
 
-    // Contenedor de sugerencias (aparece encima del cursor)
     const sug = document.createElement('div');
-    sug.id = textarea.id + '-markup-sug';
     sug.style.cssText = `
         display:none; position:fixed; z-index:99999;
         background:white; border:1.5px solid var(--booru-border);
-        border-radius:6px; box-shadow:0 -4px 16px rgba(0,0,0,0.12);
-        max-height:180px; overflow-y:auto; min-width:200px; max-width:320px;
-        font-size:0.85em;
+        border-radius:6px; box-shadow:0 -4px 16px rgba(0,0,0,0.14);
+        max-height:200px; overflow-y:auto; min-width:200px; max-width:300px;
+        font-size:0.85em; font-family:'Inter',sans-serif;
     `;
     document.body.appendChild(sug);
 
-    let _prefix = '';   // texto después del símbolo activo
-    let _symbol = '';   // '@', '#', o '!'
-    let _startPos = 0;  // posición donde empezó el token
-    let _items = [];    // lista actual de sugerencias
-    let _sel = 0;       // índice seleccionado
+    let _symbol = '', _startPos = 0, _items = [], _sel = 0;
 
     function getCandidatos(sym, query) {
         const q = query.toLowerCase();
         if (sym === '@') {
-            // Nombres de grupos (nombre_refinado)
             return gruposGlobal
                 .map(g => g.nombre_refinado)
                 .filter(n => n.toLowerCase().includes(q))
                 .slice(0, 8);
         }
         if (sym === '#') {
-            // Tags de todos los grupos (únicos)
             const set = new Set();
             gruposGlobal.forEach(g => (g.tags||[]).forEach(t => {
-                const tag = t.startsWith('#') ? t.slice(1) : t;
-                set.add(tag);
+                set.add(t.startsWith('#') ? t.slice(1) : t);
             }));
             return [...set].filter(t => t.toLowerCase().includes(q)).sort().slice(0, 8);
         }
         if (sym === '!') {
-            // Por ahora vacío — medallas se cargarán cuando exista el módulo
             return (window._medidasCatalogo || [])
                 .map(m => m.nombre)
                 .filter(n => n.toLowerCase().includes(q))
@@ -117,27 +152,34 @@ export function initMarkupTextarea(textarea) {
         return [];
     }
 
+    function posicionar() {
+        const rect = textarea.getBoundingClientRect();
+        // Mostrar encima del textarea
+        const spaceAbove = rect.top;
+        const spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceAbove > 180 || spaceAbove > spaceBelow) {
+            sug.style.top    = 'auto';
+            sug.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+            sug.style.top    = (rect.bottom + 4) + 'px';
+            sug.style.bottom = 'auto';
+        }
+        sug.style.left = rect.left + 'px';
+    }
+
     function renderSug() {
         if (!_items.length) { sug.style.display = 'none'; return; }
-
-        // Posicionar encima del cursor
-        const rect = textarea.getBoundingClientRect();
-        // Estimamos posición vertical — encima del textarea
-        sug.style.left   = rect.left + 'px';
-        sug.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
-        sug.style.top    = 'auto';
+        posicionar();
         sug.style.display = 'block';
 
-        const colorMap = { '@': 'var(--green)', '#': 'var(--red)', '!': '#1a4a80' };
-        const col = colorMap[_symbol] || 'var(--gray-900)';
-
+        const col = _symbol === '@' ? 'var(--green)' : _symbol === '#' ? 'var(--red)' : '#1a4a80';
         sug.innerHTML = _items.map((item, i) => `
             <div data-idx="${i}" style="padding:7px 12px;cursor:pointer;
-                background:${i === _sel ? 'var(--green-pale)' : 'white'};
-                color:${i === _sel ? 'var(--green-dark)' : col};
-                font-weight:${i === _sel ? '700' : '500'};
+                background:${i===_sel?'var(--green-pale)':'white'};
+                color:${i===_sel?'var(--green-dark)':col};
+                font-weight:${i===_sel?'700':'500'};
                 border-bottom:1px solid var(--gray-100);">
-                <span style="opacity:0.5;margin-right:2px;">${_symbol}</span>${item}
+                <span style="opacity:0.45;margin-right:1px;">${_symbol}</span>${item}
             </div>`).join('');
 
         sug.querySelectorAll('[data-idx]').forEach(el => {
@@ -149,12 +191,11 @@ export function initMarkupTextarea(textarea) {
     }
 
     function aplicar(item) {
-        const val = textarea.value;
-        const before = val.slice(0, _startPos);   // incluye el símbolo
+        const val    = textarea.value;
+        const before = val.slice(0, _startPos - 1) + _symbol + item; // incluir símbolo
         const after  = val.slice(textarea.selectionStart);
-        textarea.value = before + item + ' ' + after;
-        // Mover cursor
-        const pos = _startPos + item.length + 1;
+        textarea.value = before + ' ' + after;
+        const pos = before.length + 1;
         textarea.setSelectionRange(pos, pos);
         cerrar();
         textarea.focus();
@@ -162,27 +203,25 @@ export function initMarkupTextarea(textarea) {
 
     function cerrar() {
         sug.style.display = 'none';
-        _items = []; _prefix = ''; _symbol = ''; _sel = 0;
+        _items = []; _symbol = ''; _sel = 0;
     }
 
     textarea.addEventListener('input', () => {
         const val = textarea.value;
         const cur = textarea.selectionStart;
-
-        // Buscar el último @, # o ! antes del cursor en la misma palabra
         let found = false;
+
         for (let i = cur - 1; i >= 0; i--) {
             const ch = val[i];
             if (ch === '@' || ch === '#' || ch === '!') {
                 _symbol   = ch;
-                _startPos = i + 1; // después del símbolo
-                _prefix   = val.slice(i + 1, cur);
-                _items    = getCandidatos(ch, _prefix);
+                _startPos = i + 1;
+                const query = val.slice(i + 1, cur);
+                _items    = getCandidatos(ch, query);
                 _sel      = 0;
                 found     = true;
                 break;
             }
-            // Si hay espacio o salto de línea, parar
             if (ch === ' ' || ch === '\n') break;
         }
         if (!found) cerrar();
@@ -191,28 +230,11 @@ export function initMarkupTextarea(textarea) {
 
     textarea.addEventListener('keydown', (e) => {
         if (!_items.length) return;
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            _sel = (_sel - 1 + _items.length) % _items.length;
-            renderSug();
-        } else if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            _sel = (_sel + 1) % _items.length;
-            renderSug();
-        } else if (e.key === 'Tab' || e.key === 'Enter') {
-            if (_items.length) {
-                e.preventDefault();
-                aplicar(_items[_sel]);
-            }
-        } else if (e.key === 'Escape') {
-            cerrar();
-        }
+        if (e.key === 'ArrowUp')   { e.preventDefault(); _sel = (_sel-1+_items.length)%_items.length; renderSug(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); _sel = (_sel+1)%_items.length; renderSug(); }
+        if (e.key === 'Tab' || e.key === 'Enter') { e.preventDefault(); aplicar(_items[_sel]); }
+        if (e.key === 'Escape') cerrar();
     });
 
-    textarea.addEventListener('blur', () => {
-        // Delay para que el mousedown de la sugerencia se procese primero
-        setTimeout(cerrar, 150);
-    });
-
-    textarea.addEventListener('scroll', cerrar);
+    textarea.addEventListener('blur', () => setTimeout(cerrar, 150));
 }
