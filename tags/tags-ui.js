@@ -40,7 +40,7 @@ export function renderProgresion() {
 
             let canjeHtml = '';
             if (baneado) {
-                canjeHtml = `<div class="thresh-badges"><span class="thresh far">🚫 Baneado — sin canjes</span></div>`;
+                canjeHtml = ''; // símbolo 🚫 ya aparece en el nombre del tag
             } else if (tagsState.esAdmin && pts > 0) {
                 canjeHtml = `<div class="thresh-badges">`;
                 if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','tres_tags')">−100 → 🎁 3 tags</button>`;
