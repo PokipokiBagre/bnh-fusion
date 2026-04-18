@@ -114,7 +114,7 @@ export function renderMarkup(texto) {
         }
         if (tok.tipo === 'tag') {
             const tag = tok.valor;
-            return `<a href="../tags/index.html#${encodeURIComponent(tag)}"
+            return `<a href="#" onclick="event.preventDefault();window._markupIrATag('${tag.replace(/'/g,"\'")}');return false;"
                 style="color:var(--red,#c0392b);font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver tag #${escTxt(tag)}">#${escTxt(tag)}</a>`;
         }
@@ -129,6 +129,18 @@ export function renderMarkup(texto) {
 }
 
 // Handler global para navegar a una ficha (la página destino lo implementa)
+window._markupIrATag = (tag) => {
+    if (window._tagsVerDetalle) {
+        // We're inside the tags page — open the detail modal
+        window._tagsVerDetalle(tag.startsWith('#') ? tag : '#' + tag);
+    } else {
+        // Navigate to tags page
+        window.location.href = (window.location.pathname.includes('/fichas/')
+            ? '../tags/index.html'
+            : 'tags/index.html') + '?tag=' + encodeURIComponent(tag);
+    }
+};
+
 window._markupIrAFicha = (nombreGrupo) => {
     if (window.abrirFicha) {
         window.abrirFicha(nombreGrupo);
