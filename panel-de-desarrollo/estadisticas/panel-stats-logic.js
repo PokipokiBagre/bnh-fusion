@@ -57,6 +57,9 @@ export async function crearGrupoRefinado(nombre) {
         }
         if (data) {
             stState.grupoActivoId = data.id;
+            // Auto-crear alias con el mismo nombre del grupo
+            await supabase.from('personajes')
+                .insert({ nombre: nombre, refinado_id: data.id });
             await cargarAgrupaciones();
             return { ok: true };
         }
@@ -76,11 +79,6 @@ export async function eliminarGrupoRefinado(refId) {
 export async function asignarPersonajeAGrupoActivo(personajeId) {
     const refId = stState.grupoActivoId;
     if (!refId) return { ok: false, msg: "Haz clic sobre un grupo a la derecha para seleccionarlo antes de asignar." };
-
-    const miembrosActuales = stState.personajesRaw.filter(p => p.refinado_id === refId).length;
-    if (miembrosActuales >= 6) {
-        return { ok: false, msg: "Este grupo ya está lleno (Límite de 6 personajes)." };
-    }
 
     try {
         const { error } = await supabase.from('personajes').update({ refinado_id: refId }).eq('id', personajeId);

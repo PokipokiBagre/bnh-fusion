@@ -130,60 +130,52 @@ function _renderRowPersonaje(p) {
 
 function _renderGrupo(grupo) {
     const isActivo = stState.grupoActivoId === grupo.id;
-    const borderStyle = isActivo ? 'border: 3px solid var(--green); box-shadow: 0 0 0 4px var(--green-pale);' : 'border: 1.5px solid var(--gray-300);';
-    
+    const borderStyle = isActivo
+        ? 'border: 3px solid var(--green); box-shadow: 0 0 0 4px var(--green-pale);'
+        : 'border: 1.5px solid var(--gray-300);';
+
     const miembros = stState.personajesRaw.filter(p => p.refinado_id === grupo.id);
     let totalPts = grupo.puntos_manual || 0;
     miembros.forEach(m => totalPts += (stState.puntosPorPersonaje[m.nombre] || 0));
 
-    let slotsHtml = '';
-    // Exactamente 6 espacios (Slots) visuales
-    for(let i=0; i<6; i++) {
-        if (i < miembros.length) {
-            const m = miembros[i];
-            slotsHtml += `
-                <div style="background: var(--white); border: 1px solid var(--gray-300); font-size: 0.75em; padding: 4px 8px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="color:var(--gray-900); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${m.nombre}">${m.nombre}</span>
-                    <span style="color:var(--red); cursor:pointer; font-weight:bold; padding-left:8px;" onclick="event.stopPropagation(); window._stDesvincular('${m.id}', event)">×</span>
-                </div>
-            `;
-        } else {
-            slotsHtml += `
-                <div style="background: var(--gray-100); border: 1px dashed var(--gray-300); font-size: 0.7em; padding: 4px 8px; border-radius: 4px; color: var(--gray-400); display: flex; align-items: center; justify-content: center; height: 26px;">
-                    Slot ${i+1} vacío
-                </div>
-            `;
-        }
-    }
+    // Imagen del grupo: siempre usa nombre_refinado (igual que fichas)
+    const imgUrl   = `${STORAGE_URL}/imgpersonajes/${norm(grupo.nombre_refinado)}icon.png`;
+    const imgError = `this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
 
-    let deleteBtn = '';
-    if (miembros.length === 0) {
-        deleteBtn = `
-            <div style="margin-top: 10px; border-top: 1px solid var(--gray-200); padding-top: 10px;">
-                <button class="btn btn-outline" style="padding: 4px 6px; font-size: 0.7em; border-color:var(--red); color:var(--red); width:100%; justify-content:center;" onclick="event.stopPropagation(); window._stEliminarGrupo('${grupo.id}', event)">🗑️ Eliminar Grupo Vacío</button>
-            </div>
-        `;
-    }
+    // Aliases del grupo (todos, sin límite)
+    const aliasesHtml = miembros.length
+        ? miembros.map(m => `
+            <div style="background:var(--white);border:1px solid var(--gray-300);font-size:0.75em;padding:4px 8px;border-radius:4px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--gray-900);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${m.nombre}">${m.nombre}</span>
+                <span style="color:var(--red);cursor:pointer;font-weight:bold;padding-left:8px;"
+                    onclick="event.stopPropagation();window._stDesvincular('${m.id}',event)">×</span>
+            </div>`).join('')
+        : `<div style="color:var(--gray-400);font-size:0.75em;font-style:italic;padding:4px 0;">Sin aliases asignados</div>`;
+
+    const deleteBtn = miembros.length === 0 ? `
+        <div style="margin-top:10px;border-top:1px solid var(--gray-200);padding-top:10px;">
+            <button class="btn btn-outline" style="padding:4px 6px;font-size:0.7em;border-color:var(--red);color:var(--red);width:100%;justify-content:center;"
+                onclick="event.stopPropagation();window._stEliminarGrupo('${grupo.id}',event)">🗑️ Eliminar Grupo Vacío</button>
+        </div>` : '';
 
     return `
-        <div style="${borderStyle} background: var(--gray-50); border-radius: var(--radius-lg); padding: 16px; display: flex; flex-direction: column; cursor: pointer; transition: 0.2s;" onclick="window._stActivarGrupo('${grupo.id}')">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div style="overflow: hidden; padding-right: 10px;">
-                    <div style="font-weight: 700; font-size: 1.1em; color: var(--green-dark); white-space: nowrap; text-overflow: ellipsis; overflow: hidden;" title="${grupo.nombre_refinado}">${grupo.nombre_refinado}</div>
-                    <div style="font-family: monospace; font-size: 0.7em; color: var(--gray-500);">ID: ${grupo.id.split('-')[0]}</div>
+        <div style="${borderStyle} background:var(--gray-50);border-radius:var(--radius-lg);padding:14px;display:flex;flex-direction:column;cursor:pointer;transition:0.2s;"
+            onclick="window._stActivarGrupo('${grupo.id}')">
+            <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;">
+                <img src="${imgUrl}" onerror="${imgError}"
+                    style="width:42px;height:42px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid var(--white);box-shadow:var(--shadow-sm);flex-shrink:0;">
+                <div style="flex:1;overflow:hidden;">
+                    <div style="font-weight:700;font-size:0.95em;color:var(--green-dark);white-space:nowrap;text-overflow:ellipsis;overflow:hidden;"
+                        title="${grupo.nombre_refinado}">${grupo.nombre_refinado}</div>
+                    <div style="font-size:0.7em;color:var(--gray-500);">${miembros.length} alias · ${totalPts} PT</div>
                 </div>
-                <div style="background: var(--green-pale); color: var(--green-dark); font-weight: 800; font-size: 0.9em; padding: 4px 8px; border-radius: 6px; flex-shrink: 0;">
-                    ${totalPts} Pts
-                </div>
+                ${isActivo ? '<div style="font-size:0.7em;background:var(--green);color:white;padding:2px 6px;border-radius:4px;flex-shrink:0;">ACTIVO</div>' : ''}
             </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 6px;">
-                ${slotsHtml}
+            <div style="display:flex;flex-direction:column;gap:5px;">
+                ${aliasesHtml}
             </div>
-
             ${deleteBtn}
-        </div>
-    `;
+        </div>`;
 }
 
 function _exponerGlobalesStats() {
