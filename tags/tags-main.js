@@ -121,6 +121,30 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
+    // Asignar tag desde el detalle modal (OP)
+    window._tagsAsignarDesdeDetalle = async (grupoId, nombreGrupo, tag) => {
+        const { supabase } = await import('../bnh-auth.js');
+        const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+        // Fetch current tags
+        const { data: g } = await supabase.from('personajes_refinados')
+            .select('tags').eq('id', grupoId).maybeSingle();
+        if (!g) return;
+        const nuevosTags = [...new Set([...(g.tags||[]), tagNorm])];
+        const { error } = await supabase.from('personajes_refinados')
+            .update({ tags: nuevosTags }).eq('id', grupoId);
+        if (!error) {
+            // Update in-memory
+            const gLocal = grupos.find(x => x.id === grupoId);
+            if (gLocal) gLocal.tags = nuevosTags;
+            // Visual feedback: fade out the thumb
+            const el = document.getElementById('assign-' + grupoId);
+            if (el) { el.style.opacity = '0.2'; el.style.pointerEvents = 'none'; el.querySelector('span').textContent = '✅'; }
+            toast(`✅ ${tagNorm} asignado a ${nombreGrupo}`, 'ok');
+        } else {
+            toast('❌ ' + error.message, 'error');
+        }
+    };
+
     // Ir a fichas filtrado por tag
     window._tagsIrAFichas = (tag) => {
         window.location.href = `../fichas/index.html?tag=${encodeURIComponent(tag)}`;

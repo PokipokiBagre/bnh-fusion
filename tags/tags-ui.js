@@ -184,6 +184,30 @@ export function renderTagDetalle(tagNombre) {
                                 </div>`;
                             }).join('') || '<span style="color:var(--gray-400);font-size:0.85em;">Ninguno aún.</span>'}
                         </div>
+                    <!-- Asignación rápida (solo OP) -->
+                    ${tagsState.esAdmin ? (() => {
+                        const sinTag = grupos.filter(g =>
+                            !(g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
+                        );
+                        if (!sinTag.length) return `<div style="font-size:0.82em;color:var(--green-dark);padding-top:8px;">✅ Todos tienen este tag.</div>`;
+                        return `<div style="margin-top:4px;">
+                            <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">
+                                Sin este tag — click para asignar (${sinTag.length})
+                            </div>
+                            <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;
+                                background:var(--gray-100);border-radius:var(--radius);padding:10px;">
+                                ${sinTag.map(g => {
+                                    const img2 = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
+                                    const safeN = g.nombre_refinado.replace(/'/g,"\'");
+                                    const safeT = tag.replace(/'/g,"\'");
+                                    return `<div class="char-thumb" id="assign-${g.id}" style="cursor:pointer;opacity:0.65;"
+                                        onclick="window._tagsAsignarDesdeDetalle('${g.id}','${safeN}','${safeT}')">
+                                        <img src="${img2}" onerror="this.onerror=null;this.src='${fb()}';">
+                                        <span>${g.nombre_refinado}</span></div>`;
+                                }).join('')}
+                            </div>
+                        </div>`;
+                    })() : ''}
                     </div>
                 </div>
             </div>
