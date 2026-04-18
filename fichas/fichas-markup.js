@@ -1,9 +1,9 @@
-// ============================================================
 // fichas-markup.js
-// @Nombre → green link to ficha
-// #Tag    → red link to tags page
-// !Medalla → blue link to medallas page
-// ============================================================
+// @Nombre        → verde, nombre sin espacios
+// @Nombre Comp@  → verde, nombre con espacios (delimitado con @ final)
+// #Tag           → rojo, sin espacios
+// !Medalla       → azul, sin espacios
+// !Medalla Comp! → azul, con espacios (delimitado con ! final)
 
 import { gruposGlobal } from './fichas-state.js';
 
@@ -21,42 +21,53 @@ export function renderMarkup(texto) {
         const ch = t[i];
 
         if (ch === '@') {
-            // Match name: word chars + single spaces, stop at #!@, newline, double-space, end
             const rest = t.slice(i + 1);
-            const m = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*(?:\s[\wÀ-ɏ._-]+)*)(?=\s*[#!@,\n]|\s{2}|$)/);
-            if (m && m[1].trim()) {
-                tokens.push({ tipo: 'persona', valor: m[1].trim() });
-                i += 1 + m[1].length;
+            // @Nombre con espacios@ (delimitado)
+            const mD = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ ._-]+?)@/);
+            if (mD) {
+                tokens.push({ tipo: 'persona', valor: mD[1].trim() });
+                i += 1 + mD[1].length + 1;
+                continue;
+            }
+            // @NombreSimple (sin espacios)
+            const mS = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*)/);
+            if (mS) {
+                tokens.push({ tipo: 'persona', valor: mS[1].trim() });
+                i += 1 + mS[1].length;
                 continue;
             }
         }
 
         if (ch === '#') {
-            const m = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ_.]*)/);
-            if (m) {
-                tokens.push({ tipo: 'tag', valor: m[1] });
-                i += 1 + m[1].length;
+            const mS = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ_.]*)/);
+            if (mS) {
+                tokens.push({ tipo: 'tag', valor: mS[1] });
+                i += 1 + mS[1].length;
                 continue;
             }
         }
 
         if (ch === '!') {
             const rest = t.slice(i + 1);
-            const m = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*(?:\s[\wÀ-ɏ._-]+)*)(?=\s*[#!@,\n]|\s{2}|$)/);
-            if (m && m[1].trim()) {
-                tokens.push({ tipo: 'medalla', valor: m[1].trim() });
-                i += 1 + m[1].length;
+            // !Medalla con espacios! (delimitado)
+            const mD = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ ._-]+?)!/);
+            if (mD) {
+                tokens.push({ tipo: 'medalla', valor: mD[1].trim() });
+                i += 1 + mD[1].length + 1;
+                continue;
+            }
+            // !MedallaSimple (sin espacios)
+            const mS = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*)/);
+            if (mS) {
+                tokens.push({ tipo: 'medalla', valor: mS[1].trim() });
+                i += 1 + mS[1].length;
                 continue;
             }
         }
 
-        if (ch === '\n') {
-            tokens.push({ tipo: 'br' });
-            i++;
-            continue;
-        }
+        if (ch === '\n') { tokens.push({ tipo: 'br' }); i++; continue; }
 
-        // Plain text: accumulate until next special char
+        // Plain text
         let j = i + 1;
         while (j < t.length && t[j] !== '@' && t[j] !== '#' && t[j] !== '!' && t[j] !== '\n') j++;
         tokens.push({ tipo: 'texto', valor: t.slice(i, j) });
@@ -86,7 +97,6 @@ window._markupIrAFicha = (nombreGrupo) => {
     if (window.abrirFicha) window.abrirFicha(nombreGrupo);
 };
 
-// ── Autosugerencia ────────────────────────────────────────────
 export function initMarkupTextarea(textarea) {
     if (!textarea || textarea._markupInit) return;
     textarea._markupInit = true;
@@ -112,10 +122,9 @@ export function initMarkupTextarea(textarea) {
     function render() {
         if (!_items.length) { sug.style.display='none'; return; }
         const rect = textarea.getBoundingClientRect();
-        const above = rect.top > 180;
         sug.style.left = rect.left + 'px';
-        if (above) { sug.style.bottom=(window.innerHeight-rect.top+4)+'px'; sug.style.top='auto'; }
-        else        { sug.style.top=(rect.bottom+4)+'px'; sug.style.bottom='auto'; }
+        if (rect.top > 180) { sug.style.bottom=(window.innerHeight-rect.top+4)+'px'; sug.style.top='auto'; }
+        else                { sug.style.top=(rect.bottom+4)+'px'; sug.style.bottom='auto'; }
         sug.style.display = 'block';
         const col = _sym==='@'?'var(--green)':_sym==='#'?'var(--red)':'#1a4a80';
         sug.innerHTML = _items.map((it,i) =>
@@ -129,7 +138,10 @@ export function initMarkupTextarea(textarea) {
 
     function apply(item) {
         const v = textarea.value, cur = textarea.selectionStart;
-        const before = v.slice(0, _start-1) + _sym + item;
+        // If name has spaces, wrap with delimiter
+        const needsDelim = item.includes(' ');
+        const insertion = needsDelim ? _sym + item + _sym : _sym + item;
+        const before = v.slice(0, _start - 1) + insertion;
         const after  = v.slice(cur);
         textarea.value = before + ' ' + after;
         const pos = before.length + 1;
