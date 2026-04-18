@@ -1,6 +1,7 @@
 // medallas/medallas-data.js
 import { supabase } from '../bnh-auth.js';
 import { setMedallas, setGrupos, setPuntosAll } from './medallas-state.js';
+import { registrarTagEnDB, TAGS_CANONICOS } from '../bnh-tags.js';
 
 export async function cargarTodo() {
     const [{ data: med }, { data: gr }, { data: pts }] = await Promise.all([
@@ -9,20 +10,38 @@ export async function cargarTodo() {
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
     ]);
     setMedallas(med || []);
-    setGrupos(gr  || []);
+    setGrupos(gr   || []);
     setPuntosAll(pts || []);
 }
 
+// Comprueba si un tag existe en el catálogo canónico y lo crea si no.
+async function _asegurarTag(tag) {
+    if (!tag) return;
+    const nombre = tag.startsWith('#') ? tag : '#' + tag;
+    const existe = TAGS_CANONICOS.some(t => t.toLowerCase() === nombre.toLowerCase());
+    if (!existe) {
+        await registrarTagEnDB(nombre);
+    }
+}
+
 export async function guardarMedalla(datos) {
-    // datos = { id?, nombre, tag_requerido, costo_ctl, efecto_base,
-    //           tipo, quirk_tag, tags,
-    //           requisitos_base, efectos_condicionales, pos_x, pos_y }
+    const tipo = ['activa','pasiva'].includes(datos.tipo) ? datos.tipo : 'activa';
+
+    // Asegurar que todos los tags referenciados existen en el catálogo
+    const todosLosTags = [
+        ...(datos.tags || []),
+        ...(datos.requisitos_base || []).map(r => r.tag),
+        ...(datos.efectos_condicionales || []).map(ec => ec.tag),
+    ].filter(Boolean);
+
+    await Promise.all(todosLosTags.map(t => _asegurarTag(t)));
+
     const payload = {
         nombre:                datos.nombre,
         tags:                  datos.tags || [],
         costo_ctl:             Number(datos.costo_ctl) || 0,
         efecto_desc:           datos.efecto_base || '',
-        tipo:                  datos.tipo || 'ofensiva',
+        tipo,
         quirk_tag:             datos.quirk_tag || '',
         requisitos_base:       datos.requisitos_base       || [],
         efectos_condicionales: datos.efectos_condicionales || [],
@@ -30,8 +49,13 @@ export async function guardarMedalla(datos) {
         pos_y:                 datos.pos_y || 0,
     };
     if (datos.id) payload.id = datos.id;
-    const { data, error } = await supabase.from('medallas_catalogo')
-        .upsert(payload, { onConflict: 'id' }).select('id').single();
+
+    const { data, error } = await supabase
+        .from('medallas_catalogo')
+        .upsert(payload, { onConflict: 'id' })
+        .select('id')
+        .single();
+
     return error ? { ok: false, msg: error.message } : { ok: true, id: data.id };
 }
 
@@ -41,21 +65,8 @@ export async function eliminarMedalla(id) {
 }
 
 export async function guardarPosicionesGrafo(posiciones) {
-    // posiciones = [{ id, pos_x, pos_y }]
     for (const p of posiciones) {
         await supabase.from('medallas_catalogo')
             .update({ pos_x: p.pos_x, pos_y: p.pos_y }).eq('id', p.id);
     }
-}
-
-export async function crearTag(nombre) {
-    // Tags exist implicitly in medallas_catalogo.tags[] array.
-    // We store canonical tags in a dedicated table if available,
-    // otherwise we just return the normalized tag string.
-    const tag = nombre.trim().startsWith('#') ? nombre.trim() : '#' + nombre.trim();
-    // Try inserting into tags_canonicos table (may not exist — fails gracefully)
-    try {
-        await supabase.from('tags_canonicos').upsert({ nombre: tag }, { onConflict: 'nombre' });
-    } catch(_) { /* table may not exist, that's fine */ }
-    return { ok: true, tag };
 }
