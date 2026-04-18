@@ -9,6 +9,7 @@ import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle, rend
 import { subirImagenGrupo } from './fichas-upload.js';
 import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP } from './fichas-op.js';
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
+import { initMarkup } from './fichas-markup.js';
 
 let postersDelHilo = null;
 
@@ -23,6 +24,7 @@ async function init() {
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
     await Promise.all([cargarTodo(), cargarFusiones()]);
+    initMarkup({ grupos: gruposGlobal }); // alimentar bnh-markup con datos actualizados
     exponerGlobalesOP();
     exponerGlobales();
     sincronizarVista();
@@ -65,6 +67,7 @@ function exponerGlobales() {
 
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
+    initMarkup({ grupos: gruposGlobal }); // alimentar bnh-markup con datos actualizados
         sincronizarVista();
     };
 
