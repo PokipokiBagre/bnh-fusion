@@ -11,6 +11,7 @@ import {
 } from './fichas-data.js';
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
+import { initMarkupTextarea } from './fichas-markup.js';
 import { crearTagInput, TAGS_CANONICOS } from '../bnh-tags.js';
 
 // ── Modal ─────────────────────────────────────────────────────
@@ -136,10 +137,16 @@ export function abrirPanelOP(nombreGrupo) {
 
     <!-- TAB 2: LORE -->
     <div id="op-p2" style="display:none;">
+        <div style="font-size:0.72em;color:var(--gray-500);margin-bottom:8px;line-height:1.6;">
+            <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha del personaje &nbsp;·&nbsp;
+            <span style="color:var(--red);font-weight:700;">#Tag</span> → página de tags &nbsp;·&nbsp;
+            <span style="color:#1a4a80;font-weight:700;">!Medalla</span> → página de medallas<br>
+            <span style="color:var(--gray-400);">Tab / Enter para autocompletar · ↑↓ para navegar sugerencias</span>
+        </div>
         <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:5px;">Historia / Lore</label>
-        <textarea id="op-lore" rows="7" class="op-input" style="resize:vertical;line-height:1.6;">${escTA(g.lore||'')}</textarea>
+        <textarea id="op-lore" rows="7" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.lore||'')}</textarea>
         <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin:10px 0 5px;">Quirk</label>
-        <textarea id="op-quirk" rows="5" class="op-input" style="resize:vertical;line-height:1.6;">${escTA(g.quirk||'')}</textarea>
+        <textarea id="op-quirk" rows="5" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.quirk||'')}</textarea>
         <button class="op-btn op-btn-green" style="margin-top:10px;" onclick="window._opGuardarLore('${g.id}')">💾 Guardar</button>
         <div id="msg-lore" class="op-msg"></div>
     </div>
@@ -377,6 +384,15 @@ function _grupoHTML(g) {
 export function exponerGlobalesOP() {
 
     window._opTab = i => {
+        // Montar markup en textareas de lore cuando se activa tab 2
+        if (i === 2) {
+            setTimeout(() => {
+                const loreEl  = document.getElementById('op-lore');
+                const quirkEl = document.getElementById('op-quirk');
+                if (loreEl)  initMarkupTextarea(loreEl);
+                if (quirkEl) initMarkupTextarea(quirkEl);
+            }, 60);
+        }
         [0,1,2,3,4].forEach(j=>{
             const p=document.getElementById(`op-p${j}`);
             const t=document.getElementById(`op-tab-${j}`);

@@ -2,11 +2,11 @@
 // fichas-ui.js — Catálogo y Detalle centrado en GRUPOS
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { subirImagenGrupo, urlIcono, urlProfile } from './fichas-upload.js';
 import { guardarTagsGrupo, borrarPTDeTag } from './fichas-data.js';
 import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
+import { renderMarkup } from './fichas-markup.js';
 
 // Inicializar tags del catálogo en cuanto carga el módulo
 initTags();
@@ -15,9 +15,11 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
-// Imagen: siempre usa nombre_refinado del grupo (aliases no tienen imagen propia)
+// Imagen: usa el primer alias del grupo normalizado
 function imgGrupo(grupo) {
-    return urlIcono(grupo.nombre_refinado);
+    const alias = (aliasesGlobal.find(a => a.refinado_id === grupo.id)?.nombre) || grupo.nombre_refinado;
+    const clave = alias.includes(',') ? alias.split(',')[0].trim() : alias;
+    return `${STORAGE_URL}/imgpersonajes/${norm(clave)}icon.png`;
 }
 
 // ── Filtrar GRUPOS según estado de fichasUI ───────────────────
@@ -241,9 +243,7 @@ export function renderCatalogo(postersDelHilo) {
             <button onclick="event.stopPropagation();window.abrirPanelOP('${safeN}')"
                 style="position:absolute;bottom:5px;right:5px;background:rgba(30,132,73,0.85);
                        color:#fff;border:none;border-radius:3px;padding:2px 7px;font-size:0.68em;
-                       cursor:pointer;font-weight:700;">OP</button>
-            <button onclick="event.stopPropagation();window._fichasAbrirUpload('${safeN}')"
-                class="ficha-upload-btn" title="Subir imagen">📷</button>`:''}
+                       cursor:pointer;font-weight:700;">OP</button>`:''}
         </div>`;
     }).join('');
 }
@@ -284,10 +284,7 @@ export function renderDetalle(nombreGrupo) {
         <div class="detalle-titulo">
             ${g.nombre_refinado}
             ${fusion ? renderFusionBadge(nombreGrupo, STORAGE_URL, norm) : ''}
-            ${fichasUI.esAdmin?`
-            <button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>
-            <button onclick="window._fichasAbrirUpload('${safeN}')" class="btn btn-sm" style="background:#1a4a80;border-color:#2980b9;color:white;">📷 Imagen</button>
-            `:''}
+            ${fichasUI.esAdmin?`<button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>`:''}
         </div>
 
         ${misAliases.length?`
@@ -318,8 +315,8 @@ export function renderDetalle(nombreGrupo) {
             </div>
         </div>`:''}
 
-        ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body">${esc(g.lore)}</div></div>`:''}
-        ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body">${esc(g.quirk)}</div></div>`:''}
+        ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.lore)}</div></div>`:''}
+        ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
 
         ${Object.keys(ptG).length?`
         <div class="wiki-section">
@@ -341,9 +338,7 @@ export function renderDetalle(nombreGrupo) {
       <div>
         <div class="infobox">
             <div class="infobox-header" style="background:${tc.border};">${g.nombre_refinado}</div>
-            <img src="${urlProfile(g.nombre_refinado)}"
-                onerror="this.onerror=null;this.src='${fallback}';"
-                style="width:100%;height:auto;display:block;border-bottom:1px solid var(--booru-border);">
+            <img src="${imgGrupo(g)}" onerror="${onErr}">
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
@@ -369,78 +364,3 @@ export function renderDetalle(nombreGrupo) {
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// ── Panel lateral de subida de imagen ─────────────────────────
-// Se monta en #fichas-upload-panel (elemento en index.html)
-export function renderUploadPanel(nombreGrupo) {
-    const panel = document.getElementById('fichas-upload-panel');
-    if (!panel) return;
-
-    // Si ya está abierto para el mismo grupo, cerrar
-    if (panel.dataset.grupo === nombreGrupo && panel.style.display !== 'none') {
-        cerrarUploadPanel();
-        return;
-    }
-
-    panel.dataset.grupo = nombreGrupo;
-    panel.style.display = 'flex';
-
-    // Default tipo al abrir
-    panel.dataset.tipo = panel.dataset.tipo || 'icon';
-
-    panel.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;font-size:0.95em;">
-            📷 ${nombreGrupo}
-        </span>
-        <button onclick="window._fichasCerrarUpload()"
-            style="background:none;border:none;font-size:1.4em;cursor:pointer;color:#aaa;line-height:1;">×</button>
-    </div>
-
-    <!-- Selector icon / profile -->
-    <div class="upload-tipo-sel">
-        <button class="upload-tipo-btn ${panel.dataset.tipo==='icon'?'active':''}"
-            onclick="window._fichasSetTipo('icon')">
-            🖼 Icono<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Tarjeta · 512px</span>
-        </button>
-        <button class="upload-tipo-btn ${panel.dataset.tipo==='profile'?'active':''}"
-            onclick="window._fichasSetTipo('profile')">
-            👤 Profile<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Detalle · 800px</span>
-        </button>
-    </div>
-
-    <!-- Preview actual -->
-    <div style="margin-bottom:10px;text-align:center;">
-        <img id="upload-preview-img"
-            src="${panel.dataset.tipo==='icon' ? urlIcono(nombreGrupo) : urlProfile(nombreGrupo)}?v=${Date.now()}"
-            onerror="this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png';"
-            style="width:100%;max-height:150px;object-fit:cover;object-position:top;
-                   border-radius:6px;border:1px solid var(--booru-border);">
-        <div style="font-size:0.7em;color:var(--gray-400);margin-top:4px;">Actual</div>
-    </div>
-
-    <div class="fichas-dropzone" id="fichas-drop-zone"
-        onclick="document.getElementById('fichas-file-input').click()"
-        ondragover="event.preventDefault();this.classList.add('drag-over')"
-        ondragleave="this.classList.remove('drag-over')"
-        ondrop="window._fichasHandleDrop(event)">
-        <div style="font-size:1.6em;margin-bottom:4px;">🖼️</div>
-        <div style="font-size:0.8em;color:var(--green-dark);font-weight:600;">Arrastra aquí o click</div>
-        <div style="font-size:0.7em;color:var(--gray-400);margin-top:2px;">JPG · PNG · WEBP</div>
-    </div>
-
-    <input type="file" id="fichas-file-input" accept="image/*" style="display:none"
-        onchange="window._fichasHandleFile(event)">
-
-    <div id="fichas-upload-progress" style="display:none;margin-bottom:8px;">
-        <div class="fichas-prog-bar">
-            <div id="fichas-prog-fill" class="fichas-prog-fill"></div>
-        </div>
-        <div id="fichas-prog-msg" style="font-size:0.72em;text-align:center;color:var(--gray-500);"></div>
-    </div>`;
-}
-
-export function cerrarUploadPanel() {
-    const panel = document.getElementById('fichas-upload-panel');
-    if (panel) { panel.style.display = 'none'; panel.dataset.grupo = ''; }
-}
