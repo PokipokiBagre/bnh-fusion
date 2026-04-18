@@ -209,9 +209,11 @@ export function initMarkupTextarea(textarea) {
         const symPos     = _start - 1;        // position of @ # !
         const textBefore = v.slice(0, symPos); // text before the symbol
         const textAfter  = v.slice(cur);       // text after the typed partial
-        const insertion  = needsDelim
-            ? `${_sym}${item}${_sym} `
-            : `${_sym}${item} `;
+        // Always add closing delimiter for @ and !
+        // # never needs delimiter (tags have no spaces)
+        const insertion = _sym === '#'
+            ? `#${item} `
+            : `${_sym}${item}${_sym} `;
         textarea.value = textBefore + insertion + textAfter;
         const pos = textBefore.length + insertion.length;
         textarea.setSelectionRange(pos, pos);
