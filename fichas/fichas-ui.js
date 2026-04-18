@@ -343,11 +343,9 @@ export function renderDetalle(nombreGrupo) {
       <div>
         <div class="infobox">
             <div class="infobox-header" style="background:${tc.border};">${g.nombre_refinado}</div>
-            <img src="${imgGrupo(g)}" onerror="${onErr}">
             <img src="${urlProfile(g.nombre_refinado)}"
-                onerror="this.style.display='none'"
-                class="infobox-profile"
-                title="Imagen profile">
+                onerror="this.onerror=null;this.src='${fallback}';"
+                style="width:100%;height:auto;display:block;border-bottom:1px solid var(--booru-border);">
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
