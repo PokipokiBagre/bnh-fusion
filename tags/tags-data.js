@@ -49,11 +49,6 @@ export async function canjearPT(personajeNombre, tag, tipo) {
     const costo = COSTOS[tipo];
     if (!costo) return { ok: false, msg: 'Tipo de canje desconocido.' };
 
-    // Verificar si el tag está baneado
-    const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
-    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
-    if (catEntry?.baneado) return { ok: false, msg: `El tag ${tag} está baneado — no permite canjes.` };
-
     // Registrar gasto en log_puntos_tag y descontar de puntos_tag
     const { error: eLog } = await supabase.from('log_puntos_tag').insert({
         personaje_nombre: personajeNombre,
