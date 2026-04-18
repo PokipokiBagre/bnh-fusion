@@ -761,3 +761,113 @@ body {
     .fichas-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
     .stats-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Botón upload en tarjeta (OP only) ── */
+.ficha-upload-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background: rgba(26,74,128,0.82);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 2px 6px;
+    font-size: 0.68em;
+    cursor: pointer;
+    font-weight: 700;
+    line-height: 1.6;
+    z-index: 5;
+    transition: background 0.15s;
+}
+.ficha-upload-btn:hover { background: rgba(26,74,128,1); }
+
+/* ── Panel lateral de subida de imagen ── */
+#fichas-upload-panel {
+    display: none;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 270px;
+    height: 100vh;
+    background: var(--white);
+    border-left: 2px solid var(--booru-border);
+    box-shadow: -4px 0 20px rgba(0,0,0,0.12);
+    padding: 16px;
+    z-index: 1000;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+/* Encoge el layout cuando el panel está abierto */
+body.upload-panel-open #fichas-layout,
+body.upload-panel-open #fichas-detalle-wrap {
+    margin-right: 274px;
+    transition: margin-right 0.2s;
+}
+
+/* Zona drag&drop del panel */
+.fichas-dropzone {
+    border: 2px dashed var(--booru-border);
+    border-radius: var(--radius-lg);
+    padding: 18px 10px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    margin-bottom: 10px;
+}
+.fichas-dropzone:hover,
+.fichas-dropzone.drag-over {
+    border-color: var(--green);
+    background: var(--green-pale);
+}
+
+/* Selector icon/profile */
+.upload-tipo-sel {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+.upload-tipo-btn {
+    flex: 1;
+    padding: 6px;
+    border: 1.5px solid var(--gray-300);
+    border-radius: var(--radius);
+    background: var(--gray-100);
+    color: var(--gray-700);
+    font-size: 0.78em;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+    transition: 0.15s;
+}
+.upload-tipo-btn.active {
+    background: var(--green-pale);
+    border-color: var(--green);
+    color: var(--green-dark);
+}
+
+/* Barra de progreso del panel */
+.fichas-prog-bar {
+    height: 5px;
+    background: var(--gray-200);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 5px;
+}
+.fichas-prog-fill {
+    height: 100%;
+    background: var(--green);
+    width: 0%;
+    transition: width 0.3s;
+}
+
+/* Imagen profile en infobox (encima de stats) */
+.infobox-profile {
+    width: 100%;
+    max-height: 220px;
+    object-fit: cover;
+    object-position: top;
+    display: block;
+    border-bottom: 1px solid var(--booru-border);
+}
