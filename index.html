@@ -10,10 +10,10 @@
 </head>
 <body>
 
-<div id="modal-campana" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 99999; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
-    <div style="background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; width: 90%; border: 2px solid var(--green); box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
-        <h2 style="font-family: 'Cinzel', serif; color: var(--green-dark); margin-bottom: 24px;">Selecciona la Campaña</h2>
-        <div id="lista-campanas" style="display: flex; flex-direction: column; gap: 12px;"></div>
+<div id="modal-campana" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:99999; align-items:center; justify-content:center; backdrop-filter:blur(4px);">
+    <div style="background:white; padding:40px; border-radius:12px; text-align:center; max-width:400px; width:90%; border:2px solid var(--green); box-shadow:0 10px 30px rgba(0,0,0,0.5);">
+        <h2 style="font-family:'Cinzel',serif; color:var(--green-dark); margin-bottom:24px;">Selecciona la Campaña</h2>
+        <div id="lista-campanas" style="display:flex; flex-direction:column; gap:12px;"></div>
     </div>
 </div>
 
@@ -51,72 +51,66 @@
 <p class="section-title">Sistemas</p>
 <div class="cards-grid" id="cards-grid">
 
-    <!-- ── HISTORIAL (existente, LIVE) ── -->
     <a class="card" href="historial/index.html">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-historial" src="" alt="Historial" onerror="this.src=''">
             <span class="card-badge badge-live">LIVE</span>
         </div>
         <div class="card-body">
-            <div class="card-name">Historial de Posts</div>
-            <div class="card-desc">Ranking de participación, timeline de posts y scraping en tiempo real del hilo activo.</div>
+            <div class="card-name">Historial</div>
+            <div class="card-desc">Ranking de participación por personaje, timeline de posts con PT calculados en tiempo real y scraping del hilo activo.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </a>
 
-    <!-- ── FICHAS (nueva) ── -->
-    <a class="card" href="fichas/index.html" id="card-fichas">
+    <a class="card" href="fichas/index.html">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-fichas" src="" alt="Fichas" onerror="this.src=''">
-            <span class="card-badge badge-live">NUEVO</span>
+            <span class="card-badge badge-live">LIVE</span>
         </div>
         <div class="card-body">
             <div class="card-name">Fichas</div>
-            <div class="card-desc">Stats PAC, PV, Tier y medallas equipadas de cada personaje de la campaña.</div>
+            <div class="card-desc">Catálogo de personajes con stats PAC, Tier, PV y tags de quirk. Filtrable por tags y por hilo activo.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </a>
 
-    <!-- ── PROGRESIÓN (nueva) ── -->
-    <a class="card" href="progresion/index.html" id="card-progresion">
+    <a class="card" href="tags/index.html">
         <div class="card-img-wrap">
-            <img class="card-img" id="card-img-progresion" src="" alt="Progresión" onerror="this.src=''">
+            <img class="card-img" id="card-img-tags" src="" alt="Tags" onerror="this.src=''">
             <span class="card-badge badge-live">NUEVO</span>
         </div>
         <div class="card-body">
-            <div class="card-name">Progresión</div>
-            <div class="card-desc">Puntos de Tag acumulados por interacciones de rol. Evolución de atributos y medallas.</div>
+            <div class="card-name">Tags</div>
+            <div class="card-desc">Puntos de Tag acumulados por interacciones de rol. Historial de transacciones y proximidad a canjes de stats y medallas.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </a>
 
-    <!-- ── MEDALLAS (nueva) ── -->
-    <a class="card" href="medallas/index.html" id="card-medallas">
+    <a class="card" href="medallas/index.html">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-medallas" src="" alt="Medallas" onerror="this.src=''">
             <span class="card-badge badge-live">NUEVO</span>
         </div>
         <div class="card-body">
             <div class="card-name">Medallas</div>
-            <div class="card-desc">Catálogo completo de habilidades: efectos, costos CTL y tags de cada medalla del sistema.</div>
+            <div class="card-desc">Catálogo de habilidades del sistema: efectos, costos CTL y tags requeridos de cada medalla.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </a>
 
-    <!-- ── IMÁGENES (coming soon) ── -->
-    <div class="card coming-soon">
+    <a class="card" href="fusion/index.html">
         <div class="card-img-wrap">
-            <img class="card-img" id="card-img-extra" src="" alt="">
-            <span class="card-badge badge-soon">PRÓXIMAMENTE</span>
+            <img class="card-img" id="card-img-fusion" src="" alt="Fusión" onerror="this.src=''">
+            <span class="card-badge badge-live">NUEVO</span>
         </div>
         <div class="card-body">
-            <div class="card-name">Imágenes</div>
-            <div class="card-desc">Galería de ilustraciones, mapas y arte de la campaña.</div>
-            <div class="card-arrow">EN DESARROLLO</div>
+            <div class="card-name">Fusión</div>
+            <div class="card-desc">Simula y propone fusiones entre dos personajes. Combina sus tags, crea medallas fusionadas y previsualiza el resultado antes de activarla.</div>
+            <div class="card-arrow">ABRIR →</div>
         </div>
-    </div>
+    </a>
 
-    <!-- ── PANEL MÁSTER (solo admins) ── -->
     <div class="card card-panel-dev" id="card-panel-dev" style="display:none;" onclick="location.href='panel-de-desarrollo/index.html'">
         <div class="card-img-wrap">
             <img class="card-img" id="card-img-panel-dev" src="" alt="">
@@ -124,7 +118,7 @@
         </div>
         <div class="card-body">
             <div class="card-name">Panel Máster</div>
-            <div class="card-desc">Gestión completa: personajes, inventarios, medallas, agrupaciones y configuración.</div>
+            <div class="card-desc">Gestión completa: personajes, aliases, tags, medallas, fusiones activas y configuración de campaña.</div>
             <div class="card-arrow">ABRIR →</div>
         </div>
     </div>
@@ -137,96 +131,64 @@
 import { bnhAuth, supabase, currentConfig } from './bnh-auth.js';
 import { bnhConfigs } from './bnh/config.js';
 
-// ── Selección de campaña ──────────────────────────────────────
 if (!localStorage.getItem('bnh_selected')) {
     const modal = document.getElementById('modal-campana');
     const lista = document.getElementById('lista-campanas');
     modal.style.display = 'flex';
-
     Object.values(bnhConfigs).forEach(camp => {
         const btn = document.createElement('button');
         btn.textContent = camp.nombreCorto || camp.id;
-        btn.style.cssText = "background: var(--green); color: white; border: none; padding: 14px; border-radius: 8px; font-family: 'Inter', sans-serif; font-weight: bold; cursor: pointer; font-size: 1.1em; transition: 0.2s;";
+        btn.style.cssText = "background:var(--green);color:white;border:none;padding:14px;border-radius:8px;font-family:'Inter',sans-serif;font-weight:bold;cursor:pointer;font-size:1.1em;transition:0.2s;";
         btn.onmouseover = () => btn.style.background = 'var(--green-dark)';
         btn.onmouseout  = () => btn.style.background = 'var(--green)';
-        btn.onclick = () => {
-            localStorage.setItem('bnh_selected', camp.id);
-            location.reload();
-        };
+        btn.onclick = () => { localStorage.setItem('bnh_selected', camp.id); location.reload(); };
         lista.appendChild(btn);
     });
-
     throw new Error("Esperando selección de campaña...");
 }
 
 const STORAGE_URL = currentConfig.storageUrl;
-
-function imgUrl(nombre) {
-    return `${STORAGE_URL}/imginterfaz/${nombre}?v=${Date.now()}`;
-}
-function setImgSrc(id, nombre, fallback = '') {
+function imgUrl(n) { return `${STORAGE_URL}/imginterfaz/${n}?v=${Date.now()}`; }
+function setImg(id, n) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.src = imgUrl(nombre);
-    el.onerror = () => { el.src = fallback; };
+    el.src = imgUrl(n);
+    el.onerror = () => { el.src = `${STORAGE_URL}/imginterfaz/no_encontrado.png`; };
 }
 
-// ── Auth ──────────────────────────────────────────────────────
 await bnhAuth.init();
 const badge = document.getElementById('bnh-session-badge');
 if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
+if (bnhAuth.esAdmin()) document.getElementById('card-panel-dev').style.display = 'flex';
 
-if (bnhAuth.esAdmin()) {
-    document.getElementById('card-panel-dev').style.display = 'flex';
-}
+const favicon = document.getElementById('dynamic-favicon');
+if (favicon) favicon.href = imgUrl('icon.png');
 
-// ── Imágenes ──────────────────────────────────────────────────
-const fb = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-setImgSrc('card-img-historial',   'historial.png',   fb);
-setImgSrc('card-img-fichas',      'fichas.png',      fb);
-setImgSrc('card-img-progresion',  'progresion.png',  fb);
-setImgSrc('card-img-medallas',    'medallas.png',    fb);
-setImgSrc('card-img-extra',       'extra.png',       fb);
-setImgSrc('card-img-panel-dev',   'panel-dev.png',   fb);
+setImg('card-img-historial', 'historial.png');
+setImg('card-img-fichas',    'fichas.png');
+setImg('card-img-tags',      'tags.png');
+setImg('card-img-medallas',  'medallas.png');
+setImg('card-img-fusion',    'fusion.png');
+setImg('card-img-panel-dev', 'panel-dev.png');
 
-document.getElementById('hero-bg').style.backgroundImage           = `url('${imgUrl('bnh-hero.png')}')`;
-document.getElementById('thread-rol-bg').style.backgroundImage     = `url('${imgUrl('thread-rol.png')}')`;
-document.getElementById('thread-meta-bg').style.backgroundImage    = `url('${imgUrl('thread-meta.png')}')`;
+document.getElementById('hero-bg').style.backgroundImage        = `url('${imgUrl('bnh-hero.png')}')`;
+document.getElementById('thread-rol-bg').style.backgroundImage  = `url('${imgUrl('thread-rol.png')}')`;
+document.getElementById('thread-meta-bg').style.backgroundImage = `url('${imgUrl('thread-meta.png')}')`;
 
-// ── Config UI desde Supabase ──────────────────────────────────
 try {
-    const { data } = await supabase
-        .from('config_ui')
-        .select('*')
-        .eq('hex_id', 'default')
-        .single();
-
+    const { data } = await supabase.from('config_ui').select('*').eq('hex_id','default').single();
     if (data) {
-        const favicon = document.getElementById('dynamic-favicon');
-        if (favicon) favicon.href = imgUrl('icon.png');
-
-        if (data.titulo) {
-            document.getElementById('hero-title').textContent = data.titulo;
-            document.getElementById('nav-titulo').textContent = data.titulo;
-            document.title = data.titulo;
-        }
+        if (data.titulo)    { document.getElementById('hero-title').textContent = data.titulo; document.getElementById('nav-titulo').textContent = data.titulo; document.title = data.titulo; }
         if (data.subtitulo) document.getElementById('hero-subtitle').textContent = data.subtitulo;
         if (data.lore)      document.getElementById('hero-lore').textContent     = data.lore;
-
-        const threadRol  = document.getElementById('thread-rol');
-        const threadMeta = document.getElementById('thread-meta');
-        if (data.link_rol   && threadRol)  threadRol.href  = data.link_rol;
-        if (data.link_meta  && threadMeta) threadMeta.href = data.link_meta;
-
-        const lblRol  = document.getElementById('thread-rol-label');
-        const lblMeta = document.getElementById('thread-meta-label');
-        if (data.nombre_rol  && lblRol)  lblRol.textContent  = data.nombre_rol;
-        if (data.nombre_meta && lblMeta) lblMeta.textContent = data.nombre_meta;
+        const tr = document.getElementById('thread-rol'),  tm = document.getElementById('thread-meta');
+        if (data.link_rol  && tr) tr.href = data.link_rol;
+        if (data.link_meta && tm) tm.href = data.link_meta;
+        const lr = document.getElementById('thread-rol-label'), lm = document.getElementById('thread-meta-label');
+        if (data.nombre_rol  && lr) lr.textContent = data.nombre_rol;
+        if (data.nombre_meta && lm) lm.textContent = data.nombre_meta;
     }
-} catch (e) {
-    console.warn('config_ui no disponible:', e.message);
-}
+} catch(e) { console.warn('config_ui:', e.message); }
 </script>
-
 </body>
 </html>
