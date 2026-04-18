@@ -153,7 +153,7 @@ export function initMarkupTextarea(textarea) {
     ].join(';');
     document.body.appendChild(sug);
 
-    let _sym = '', _start = 0, _items = [], _sel = 0;
+    let _sym = '', _start = 0, _items = [], _sel = 0, _applying = false;
 
     function getCandidatos(sym, q) {
         q = q.toLowerCase();
@@ -202,14 +202,13 @@ export function initMarkupTextarea(textarea) {
     }
 
     function apply(item) {
-        const v = textarea.value;
+        _applying = true;
+        const v   = textarea.value;
         const cur = textarea.selectionStart;
-        // _start - 1 = position of the trigger symbol (@, #, !)
-        // cur         = position after the partial query typed so far
         const needsDelim = item.includes(' ');
-        const symPos  = _start - 1;
-        const textBefore = v.slice(0, symPos);      // everything before @
-        const textAfter  = v.slice(cur);             // everything after the partial
+        const symPos     = _start - 1;        // position of @ # !
+        const textBefore = v.slice(0, symPos); // text before the symbol
+        const textAfter  = v.slice(cur);       // text after the typed partial
         const insertion  = needsDelim
             ? `${_sym}${item}${_sym} `
             : `${_sym}${item} `;
@@ -218,11 +217,14 @@ export function initMarkupTextarea(textarea) {
         textarea.setSelectionRange(pos, pos);
         close();
         textarea.focus();
+        // Reset flag after microtask so input event (if fired) is ignored
+        Promise.resolve().then(() => { _applying = false; });
     }
 
     function close() { sug.style.display='none'; _items=[]; _sym=''; _sel=0; }
 
     textarea.addEventListener('input', () => {
+        if (_applying) return; // ignore synthetic input from apply()
         const v = textarea.value, cur = textarea.selectionStart;
         let found = false;
         for (let i = cur - 1; i >= 0; i--) {
