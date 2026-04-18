@@ -95,12 +95,32 @@ export async function guardarLoreGrupo(grupoId, { descripcion, lore, personalida
     return { ok: true };
 }
 
+// Pares mutuamente excluyentes de tags
+const TAG_EXCLUSIVOS = [
+    ['#Activo', '#Inactivo'],
+    ['#Jugador', '#NPC'],
+];
+
 export async function guardarTagsGrupo(grupoId, tags) {
+    // Aplicar exclusividad: si se añade uno del par, quitar el otro
+    let tagsFinal = [...tags];
+    TAG_EXCLUSIVOS.forEach(([a, b]) => {
+        const tieneA = tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === a.toLowerCase());
+        const tieneB = tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === b.toLowerCase());
+        if (tieneA && tieneB) {
+            // Quedarse con el último añadido (el que está más al final del array)
+            const idxA = tagsFinal.map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase()).lastIndexOf(a.toLowerCase());
+            const idxB = tagsFinal.map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase()).lastIndexOf(b.toLowerCase());
+            const quitar = idxA > idxB ? b : a;
+            tagsFinal = tagsFinal.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== quitar.toLowerCase());
+        }
+    });
+
     const { error } = await supabase.from('personajes_refinados')
-        .update({ tags }).eq('id', grupoId);
+        .update({ tags: tagsFinal }).eq('id', grupoId);
     if (error) return { ok: false, msg: error.message };
     const g = gruposGlobal.find(x => x.id === grupoId);
-    if (g) g.tags = tags;
+    if (g) g.tags = tagsFinal;
     return { ok: true };
 }
 
