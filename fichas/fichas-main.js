@@ -184,11 +184,13 @@ function exponerGlobales() {
 
     window._fichasSetTipo = (tipo) => {
         const panel = document.getElementById('fichas-upload-panel');
-        if (!panel) return;
+        if (!panel || panel.style.display === 'none') return;
         panel.dataset.tipo = tipo;
-        // Re-render the panel to update buttons and preview
+        // Forzar re-render sin pasar por el toggle: temporalmente cambiar grupo
         const nombreGrupo = panel.dataset.grupo;
-        if (nombreGrupo) renderUploadPanel(nombreGrupo);
+        if (!nombreGrupo) return;
+        panel.dataset.grupo = ''; // evitar que renderUploadPanel lo cierre por toggle
+        renderUploadPanel(nombreGrupo);
     };
 
     window._fichasHandleDrop = async (e) => {
