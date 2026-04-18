@@ -461,8 +461,14 @@ export function exponerGlobalesOP() {
         // Montar markup en textareas de lore cuando se activa tab 2
         if (i === 2) {
             setTimeout(() => {
+                // Textareas con markup completo
                 ['op-descripcion','op-lore','op-personalidad','op-quirk'].forEach(id => {
                     const el = document.getElementById(id);
+                    if (el) initMarkupTextarea(el);
+                });
+                // Campos de info_extra también soportan markup
+                ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'].forEach(k => {
+                    const el = document.getElementById('op-info-' + k);
                     if (el) initMarkupTextarea(el);
                 });
             }, 60);
