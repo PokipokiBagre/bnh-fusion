@@ -85,12 +85,13 @@ export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, ag
     return { ok: true };
 }
 
-export async function guardarLoreGrupo(grupoId, { lore, quirk }) {
-    const { error } = await supabase.from('personajes_refinados')
-        .update({ lore, quirk }).eq('id', grupoId);
+export async function guardarLoreGrupo(grupoId, { descripcion, lore, personalidad, quirk, info_extra }) {
+    const payload = { descripcion: descripcion||'', lore: lore||'', personalidad: personalidad||'', quirk: quirk||'' };
+    if (info_extra !== undefined) payload.info_extra = info_extra;
+    const { error } = await supabase.from('personajes_refinados').update(payload).eq('id', grupoId);
     if (error) return { ok: false, msg: error.message };
     const g = gruposGlobal.find(x => x.id === grupoId);
-    if (g) { g.lore = lore; g.quirk = quirk; }
+    if (g) Object.assign(g, payload);
     return { ok: true };
 }
 

@@ -138,20 +138,94 @@ export function abrirPanelOP(nombreGrupo) {
     <!-- TAB 2: LORE -->
     <div id="op-p2" style="display:none;">
         <div style="font-size:0.72em;color:var(--gray-500);margin-bottom:8px;line-height:1.6;">
-            <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha del personaje &nbsp;·&nbsp;
-            <span style="color:var(--red);font-weight:700;">#Tag</span> → página de tags &nbsp;·&nbsp;
-            <span style="color:#1a4a80;font-weight:700;">!Medalla</span> → página de medallas<br>
-            <span style="color:var(--gray-400);">Tab / Enter para autocompletar · ↑↓ para navegar sugerencias</span>
+            <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha &nbsp;·&nbsp;
+            <span style="color:var(--red);font-weight:700;">#Tag</span> → tags &nbsp;·&nbsp;
+            <span style="color:#1a4a80;font-weight:700;">!Medalla</span> → medallas<br>
+            <span style="color:var(--gray-400);">Tab/Enter = autocompletar · ↑↓ = navegar</span>
         </div>
-        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:5px;">Historia / Lore</label>
-        <textarea id="op-lore" rows="7" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.lore||'')}</textarea>
-        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin:10px 0 5px;">Quirk</label>
-        <textarea id="op-quirk" rows="5" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.quirk||'')}</textarea>
-        <button class="op-btn op-btn-green" style="margin-top:10px;" onclick="window._opGuardarLore('${g.id}')">💾 Guardar</button>
+
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Descripción</label>
+        <textarea id="op-descripcion" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;margin-bottom:10px;">${escTA(g.descripcion||'')}</textarea>
+
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Historia / Lore</label>
+        <textarea id="op-lore" rows="5" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;margin-bottom:10px;">${escTA(g.lore||'')}</textarea>
+
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Personalidad</label>
+        <textarea id="op-personalidad" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;margin-bottom:10px;">${escTA(g.personalidad||'')}</textarea>
+
+        <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Quirk / Habilidad</label>
+        <textarea id="op-quirk" rows="4" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;margin-bottom:12px;">${escTA(g.quirk||'')}</textarea>
+
+        <hr style="border:none;border-top:1px solid var(--gray-200);margin:0 0 12px;">
+        <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">
+            Información extra <span style="font-weight:400;color:var(--gray-400);">(opcional — solo aparece si tiene contenido)</span>
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Estado</span>
+            <input type="text" id="op-info-estado" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['estado']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Edad</span>
+            <input type="text" id="op-info-edad" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['edad']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Altura</span>
+            <input type="text" id="op-info-altura" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['altura']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Peso</span>
+            <input type="text" id="op-info-peso" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['peso']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Género</span>
+            <input type="text" id="op-info-genero" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['genero']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Lugar de nacimiento</span>
+            <input type="text" id="op-info-lugar_nac" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['lugar_nac']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Ocupación</span>
+            <input type="text" id="op-info-ocupacion" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['ocupacion']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Afiliación</span>
+            <input type="text" id="op-info-afiliacion" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['afiliacion']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Familia</span>
+            <input type="text" id="op-info-familia" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['familia']||'')}">
+        </div>
+        <div class="op-row" style="margin-bottom:6px;">
+            <span class="op-label" style="min-width:110px;font-size:0.72em;">Nota extra</span>
+            <input type="text" id="op-info-nota" class="op-input" placeholder="Opcional…"
+                style="flex:1;padding:5px 8px;font-size:0.82em;"
+                value="${escTA((g.info_extra||{})['nota']||'')}">
+        </div>
+
+        <button class="op-btn op-btn-green" style="margin-top:12px;" onclick="window._opGuardarLore('${g.id}')">💾 Guardar</button>
         <div id="msg-lore" class="op-msg"></div>
     </div>
 
-    <!-- TAB 3: FUSIÓN -->
+        <!-- TAB 3: FUSIÓN -->
     <div id="op-p3" style="display:none;">${_fusionHTML(nombreGrupo)}</div>
 
     <!-- TAB 4: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
@@ -387,10 +461,10 @@ export function exponerGlobalesOP() {
         // Montar markup en textareas de lore cuando se activa tab 2
         if (i === 2) {
             setTimeout(() => {
-                const loreEl  = document.getElementById('op-lore');
-                const quirkEl = document.getElementById('op-quirk');
-                if (loreEl)  initMarkupTextarea(loreEl);
-                if (quirkEl) initMarkupTextarea(quirkEl);
+                ['op-descripcion','op-lore','op-personalidad','op-quirk'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) initMarkupTextarea(el);
+                });
             }, 60);
         }
         [0,1,2,3,4].forEach(j=>{
@@ -521,9 +595,18 @@ export function exponerGlobalesOP() {
     };
 
     window._opGuardarLore = async (grupoId) => {
-        const lore=document.getElementById('op-lore')?.value||'';
-        const quirk=document.getElementById('op-quirk')?.value||'';
-        const res=await guardarLoreGrupo(grupoId,{lore,quirk});
+        const descripcion  = document.getElementById('op-descripcion')?.value||'';
+        const lore         = document.getElementById('op-lore')?.value||'';
+        const personalidad = document.getElementById('op-personalidad')?.value||'';
+        const quirk        = document.getElementById('op-quirk')?.value||'';
+        // Recoger campos de info_extra (solo los que tienen valor)
+        const INFO_KEYS = ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'];
+        const info_extra = {};
+        INFO_KEYS.forEach(k => {
+            const v = document.getElementById('op-info-'+k)?.value?.trim();
+            if (v) info_extra[k] = v;
+        });
+        const res=await guardarLoreGrupo(grupoId,{descripcion,lore,personalidad,quirk,info_extra});
         setMsg('msg-lore',res.ok?'✅ Guardado':'❌ '+res.msg,res.ok);
         if(res.ok) window.sincronizarVista?.();
     };
