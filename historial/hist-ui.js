@@ -7,6 +7,23 @@ import {
 } from './hist-state.js';
 import { formatearMinutos, fmtFecha, limpiarHTML } from './hist-logic.js';
 import { renderOpcionesPanel, guardarOpcion } from '../bnh-opciones-tags.js';
+import { currentConfig } from '../bnh-auth.js';
+
+// Imagen de personaje (siempre por nombre_refinado, los aliases no tienen imagen)
+const _norm = s => String(s||'').trim().toLowerCase()
+    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+    .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+
+function imgPJ(nombreRefinado) {
+    if (!currentConfig?.storageUrl || !nombreRefinado) return '';
+    return `${currentConfig.storageUrl}/imgpersonajes/${_norm(nombreRefinado)}icon.png`;
+}
+
+const _fallbackImg = currentConfig?.storageUrl
+    ? `${currentConfig.storageUrl}/imginterfaz/no_encontrado.png` : '';
+const _onErr = `this.onerror=null;this.src='${_fallbackImg}';this.style.opacity='0.3';`;
 
 const $ = (id) => document.getElementById(id);
 
@@ -128,40 +145,47 @@ export function renderRanking() {
     </div>`;
 
     if (modoActual === 'grupos') {
-        // ── VISTA GRUPOS ──
-        const top3g = rankingGrupos.slice(0, 3);
-        const podioG = top3g.length >= 3 ? [top3g[1], top3g[0], top3g[2]] : top3g;
-        html += `<div class="ranking-podio">`;
-        podioG.forEach(r => {
-            if (!r) return;
-            const pos = rankingGrupos.indexOf(r) + 1;
-            const h = pos===1?'120px':pos===2?'90px':'70px';
-            html += `<div class="podio-slot podio-${pos}">
-                <div class="podio-name">${r.nombre}</div>
-                <div class="podio-pts">${r.total_posts} posts</div>
-                <div class="podio-base" style="height:${h}">${medalla(pos)}</div>
+        // ── VISTA GRUPOS — cards con imagen ──
+        html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">`;
+        rankingGrupos.forEach((r, i) => {
+            const img = imgPJ(r.nombre);
+            const ptHtml = ptTagState[r.nombre]
+                ? Object.entries(ptTagState[r.nombre]).sort((a,b)=>b[1]-a[1]).slice(0,4)
+                    .map(([tag,pts])=>`<span style="background:rgba(0,180,216,0.12);border:1px solid #00b4d8;
+                        color:#00b4d8;padding:1px 5px;border-radius:8px;font-size:0.66em;
+                        font-weight:600;white-space:nowrap;">${tag} ${pts}</span>`).join('')
+                : '<span style="color:#999;font-size:0.72em;">Sin PT</span>';
+            const medallaHtml = i < 3
+                ? `<div style="position:absolute;top:4px;left:4px;background:${i===0?'#f1c40f':i===1?'#bdc3c7':'#cd6133'};
+                    color:${i===0?'#7d6608':'white'};font-size:0.7em;font-weight:800;padding:1px 6px;
+                    border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,0.2);">${medalla(i+1)}</div>` : '';
+            const posHtml = i >= 3
+                ? `<div style="position:absolute;top:4px;left:4px;background:rgba(0,0,0,0.45);
+                    color:white;font-size:0.68em;font-weight:700;padding:1px 5px;border-radius:8px;">#${i+1}</div>` : '';
+            html += `<div style="background:white;border:1px solid #e9ecef;border-radius:10px;
+                overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);position:relative;">
+                ${medallaHtml}${posHtml}
+                ${img ? `<img src="${img}" onerror="${_onErr}" style="width:100%;height:90px;object-fit:cover;object-position:top;display:block;">` : `<div style="width:100%;height:90px;background:#f1f3f4;"></div>`}
+                <div style="padding:6px 8px;">
+                    <div style="font-weight:700;font-size:0.82em;color:#1e8449;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${r.nombre}">${r.nombre}</div>
+                    <div style="font-size:0.72em;color:#888;margin-bottom:4px;">${r.total_posts} posts</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:2px;">${ptHtml}</div>
+                </div>
             </div>`;
         });
-        html += `</div>
-        <table class="tabla-ranking"><thead><tr>
-            <th>#</th><th>Personaje</th><th>Posts</th><th>PT Ganados en este hilo</th><th class="hide-sm">Aliases</th>
-        </tr></thead><tbody>`;
-        rankingGrupos.forEach((r, i) => {
-            const ptHtml = ptTagState[r.nombre]
-                ? Object.entries(ptTagState[r.nombre]).sort((a,b)=>b[1]-a[1])
-                    .map(([tag,pts])=>`<span style="background:rgba(0,180,216,0.1);border:1px solid #00b4d8;
-                        color:#00b4d8;padding:2px 7px;border-radius:12px;font-size:0.72em;
-                        font-weight:600;margin:2px;">${tag} <b>${pts}</b></span>`).join('')
-                : '<span style="color:#666;font-size:0.8em;">Sin PT en este hilo</span>';
-            html += `<tr class="${i<3?'top-row top-'+(i+1):''}">
-                <td class="col-pos">${medalla(i+1)}</td>
-                <td class="col-nombre"><div class="poster-nombre">${r.nombre}</div></td>
-                <td class="col-puntos">${r.total_posts}</td>
-                <td style="min-width:200px">${ptHtml}</td>
-                <td class="hide-sm" style="font-size:0.78em;color:#888;">${[...(aliasesPorGrupo[r.nombre] || [])].join(', ')}</td>
-            </tr>`;
-        });
-        html += `</tbody></table>`;
+        html += `</div>`;
+        // Aliases sin grupo registrado: tabla compacta debajo
+        const sinGrupo = rankingState.filter(r => resolverGrupos(r.poster_name).length === 0);
+        if (sinGrupo.length && estadoUI.esAdmin) {
+            html += `<details style="margin-top:4px;"><summary style="font-size:0.78em;color:#aaa;cursor:pointer;">
+                ${sinGrupo.length} alias(es) sin grupo (OP)</summary>
+                <table class="tabla-ranking" style="margin-top:6px;font-size:0.8em;"><tbody>`;
+            sinGrupo.forEach(r => {
+                html += `<tr><td style="color:#999;">${r.poster_name}</td><td>${r.total_posts}</td></tr>`;
+            });
+            html += `</tbody></table></details>`;
+        }
+
     } else {
         // ── VISTA ALIASES (solo OP) ──
         html += `<table class="tabla-ranking"><thead><tr>
@@ -300,10 +324,15 @@ export function renderTimeline() {
             font-size:0.87em;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
 
             <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">
-                <div>
-                    <span style="font-weight:700;color:#1e8449;">${nombreDisplay}</span>
-                    ${post.poster_id?`<span style="background:#f1f3f4;color:#888;font-size:0.72em;
-                        padding:1px 5px;border-radius:4px;margin-left:4px;">${post.poster_id}</span>`:''}
+                <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+                    ${gruposPost.length ? `<img src="${imgPJ(gruposPost[0])}" onerror="${_onErr}"
+                        style="width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:top;
+                        flex-shrink:0;border:1.5px solid #27ae60;">` : ''}
+                    <div style="min-width:0;">
+                        <span style="font-weight:700;color:#1e8449;">${nombreDisplay}</span>
+                        ${post.poster_id?`<span style="background:#f1f3f4;color:#888;font-size:0.72em;
+                            padding:1px 5px;border-radius:4px;margin-left:4px;">${post.poster_id}</span>`:''}
+                    </div>
                 </div>
                 <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                     <span style="color:#aaa;font-size:0.72em;cursor:pointer;"
