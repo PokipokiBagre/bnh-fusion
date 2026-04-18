@@ -39,7 +39,6 @@ export async function guardarMedalla(datos) {
 
     const payload = {
         nombre:                datos.nombre,
-        tags:                  tagsDerivados,  // derivado de requisitos_base
         costo_ctl:             Number(datos.costo_ctl) || 0,
         efecto_desc:           datos.efecto_base || '',
         tipo,
