@@ -13,7 +13,7 @@ export async function cargarTodo() {
     ] = await Promise.all([
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
-        supabase.from('tags_catalogo').select('nombre, descripcion').order('nombre'),
+        supabase.from('tags_catalogo').select('nombre, descripcion, baneado').order('nombre'),
         supabase.from('medallas_catalogo').select('nombre, tags, costo_ctl, efecto_desc, tipo').order('nombre'),
     ]);
     setGrupos(gr || []);
@@ -31,10 +31,29 @@ export async function guardarDescripcionTag(nombre, descripcion) {
 
 // Canje: gasta PT de un tag y aplica el efecto
 // tipo: 'stat_pot' | 'stat_agi' | 'stat_ctl' | 'tres_tags'
+// Banear/desbanear un tag
+export async function guardarBaneoTag(nombre, baneado) {
+    const { error } = await supabase.from('tags_catalogo')
+        .upsert({ nombre, baneado }, { onConflict: 'nombre' });
+    return error ? { ok: false, msg: error.message } : { ok: true };
+}
+
 export async function canjearPT(personajeNombre, tag, tipo) {
+    // Importar catalogoTags para verificar si está baneado
+    const { catalogoTags } = await import('./tags-state.js');
+    const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    if (catEntry?.baneado) return { ok: false, msg: `El tag ${tag} está baneado y no permite canjes.` };
+
     const COSTOS = { stat_pot: 50, stat_agi: 50, stat_ctl: 50, tres_tags: 100 };
     const costo = COSTOS[tipo];
     if (!costo) return { ok: false, msg: 'Tipo de canje desconocido.' };
+
+    // Verificar si el tag está baneado
+    const { catalogoTags } = await import('./tags-state.js');
+    const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    if (catEntry?.baneado) return { ok: false, msg: `El tag ${tag} está baneado — no permite canjes.` };
 
     // Registrar gasto en log_puntos_tag y descontar de puntos_tag
     const { error: eLog } = await supabase.from('log_puntos_tag').insert({

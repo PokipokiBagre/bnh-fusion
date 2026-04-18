@@ -20,6 +20,7 @@
         <button class="nav-tab active" id="tab-progresion"   onclick="window._tagsTab('progresion')">📈 Progresión</button>
         <button class="nav-tab"        id="tab-catalogo"     onclick="window._tagsTab('catalogo')">📖 Catálogo</button>
         <button class="nav-tab"        id="tab-estadisticas" onclick="window._tagsTab('estadisticas')">📊 Estadísticas</button>
+        <button class="nav-tab"        id="tab-baneados"     onclick="window._tagsTab('baneados')" style="display:none;">🚫 Tags Baneados</button>
     </nav>
 </header>
 
@@ -33,11 +34,14 @@
         <div id="vista-progresion"></div>
         <div id="vista-catalogo"     class="oculto"></div>
         <div id="vista-estadisticas" class="oculto"></div>
+        <div id="vista-baneados"     class="oculto"></div>
     </div>
 </main>
 
-<div id="toast-msg"></div>
+<!-- Tag detalle modal -->
+<div id="tag-detalle-modal" style="display:none;"></div>
 
+<div id="toast-msg"></div>
 <script type="module" src="tags-main.js"></script>
 </body>
 </html>

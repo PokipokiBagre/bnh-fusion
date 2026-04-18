@@ -2,89 +2,83 @@
 // tags/tags-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { tagsState, STORAGE_URL, grupos } from './tags-state.js';
-import { cargarTodo, guardarDescripcionTag, canjearPT } from './tags-data.js';
-import { renderProgresion, renderCatalogo, renderEstadisticas, toast } from './tags-ui.js';
+import { tagsState, STORAGE_URL, grupos, catalogoTags } from './tags-state.js';
+import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, canjearPT } from './tags-data.js';
+import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
 
 window.onload = async () => {
-    // Favicon dinámico
     const fav = document.getElementById('dynamic-favicon');
     if (fav) fav.href = `${STORAGE_URL}/imginterfaz/icon.png?v=${Date.now()}`;
 
-    // Auth
     await bnhAuth.init();
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     tagsState.esAdmin = bnhAuth.esAdmin();
 
-    // Cargar datos
+    // Tab baneados: solo OP
+    const tabBan = document.getElementById('tab-baneados');
+    if (tabBan) tabBan.style.display = tagsState.esAdmin ? '' : 'none';
+
     try {
         await cargarTodo();
         initMarkup({ grupos });
-    } catch (e) {
-        document.getElementById('pantalla-carga').innerHTML =
-            `<p style="color:red;">Error de carga: ${e.message}</p>`;
+    } catch(e) {
+        document.getElementById('pantalla-carga').innerHTML = `<p style="color:red;">Error: ${e.message}</p>`;
         return;
     }
 
     document.getElementById('pantalla-carga').classList.add('oculto');
     document.getElementById('interfaz-tags').classList.remove('oculto');
-
-    // Render inicial
     renderTab('progresion');
     _exponerGlobales();
 };
 
 function renderTab(tab) {
     tagsState.tabActual = tab;
-
-    // Tabs nav
     document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
     document.getElementById(`tab-${tab}`)?.classList.add('active');
-
-    // Vistas
-    ['progresion','catalogo','estadisticas'].forEach(t => {
+    ['progresion','catalogo','estadisticas','baneados'].forEach(t => {
         document.getElementById(`vista-${t}`)?.classList.toggle('oculto', t !== tab);
     });
-
     if (tab === 'progresion')   renderProgresion();
     if (tab === 'catalogo')     renderCatalogo();
     if (tab === 'estadisticas') renderEstadisticas();
+    if (tab === 'baneados')     renderBaneados();
 }
 
 function _exponerGlobales() {
-    // Nav tabs
-    window._tagsTab = (tab) => renderTab(tab);
+    window._tagsTab = renderTab;
 
-    // Seleccionar PJ en progresión
     window._tagsSelPJ = (nombre) => {
         tagsState.pjSeleccionado = tagsState.pjSeleccionado === nombre ? null : nombre;
         renderProgresion();
     };
 
-    // Canjear PT (solo OP)
-    window._tagsCanjear = async (pj, tag, tipo) => {
-        if (!tagsState.esAdmin) return;
-        const labels = {
-            stat_pot: '+1 POT',  stat_agi: '+1 AGI',  stat_ctl: '+1 CTL',
-            medalla: 'Medalla',  tres_tags: '3 tags nuevos'
-        };
-        const costos = { stat_pot:50, stat_agi:50, stat_ctl:50, medalla:75, tres_tags:100 };
-        if (!confirm(`Canjear ${costos[tipo]} PT de ${tag} de ${pj} por ${labels[tipo]}?`)) return;
-        const res = await canjearPT(pj, tag, tipo);
-        if (res.ok) {
-            toast(`✅ Canje aplicado. PT restantes en ${tag}: ${res.nueva}`, 'ok');
-            await cargarTodo();
-            initMarkup({ grupos });
-            renderProgresion();
-            if (tagsState.tabActual === 'estadisticas') renderEstadisticas();
-        } else {
-            toast('❌ ' + res.msg, 'error');
-        }
+    // Abrir detalle de tag (modal)
+    window._tagsVerDetalle = (tag) => {
+        renderTagDetalle(tag);
     };
 
-    // Guardar descripción de tag (catálogo)
+    window._tagsCloseDetalle = () => {
+        const el = document.getElementById('tag-detalle-modal');
+        if (el) el.style.display = 'none';
+    };
+
+    // Guardar descripción desde detalle modal
+    window._tagsGuardarDescDetalle = async (tagKey) => {
+        const el = document.getElementById('detalle-desc-inp');
+        if (!el) return;
+        const res = await guardarDescripcionTag(tagKey, el.value.trim());
+        if (res.ok) {
+            toast(`✅ Descripción guardada`, 'ok');
+            await cargarTodo(); initMarkup({ grupos });
+            renderTagDetalle('#' + tagKey);
+            if (tagsState.tabActual === 'catalogo') renderCatalogo();
+        } else toast('❌ ' + res.msg, 'error');
+    };
+
+    // Guardar descripción desde catálogo (inline)
     window._tagsGuardarDesc = async (tag) => {
         const key = tag.startsWith('#') ? tag.slice(1) : tag;
         const el  = document.getElementById(`desc-${key}`);
@@ -92,21 +86,51 @@ function _exponerGlobales() {
         const res = await guardarDescripcionTag(key, el.value.trim());
         if (res.ok) {
             toast(`✅ Descripción de ${tag} guardada`, 'ok');
-            await cargarTodo();
+            await cargarTodo(); initMarkup({ grupos });
             renderCatalogo();
-        } else {
-            toast('❌ ' + res.msg, 'error');
-        }
+        } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Buscar en catálogo (preserva foco)
+    // Banear/desbanear tag
+    window._tagsToggleBan = async (nombre, baneado) => {
+        const res = await guardarBaneoTag(nombre, baneado);
+        if (res.ok) {
+            toast(`${baneado?'🚫 Baneado':'✅ Desbaneado'}: #${nombre}`, 'ok');
+            await cargarTodo(); initMarkup({ grupos });
+            renderBaneados();
+        } else toast('❌ ' + res.msg, 'error');
+    };
+
+    // Buscar en catálogo
     window._tagsBuscarCat = (v) => {
         tagsState.busquedaCat = v;
         renderCatalogo();
+    };
+
+    // Canjear PT
+    window._tagsCanjear = async (pj, tag, tipo) => {
+        if (!tagsState.esAdmin) return;
+        const costos = { stat_pot:50, stat_agi:50, stat_ctl:50, medalla:75, tres_tags:100 };
+        const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL', medalla:'Medalla', tres_tags:'3 tags nuevos' };
+        if (!confirm(`Canjear ${costos[tipo]} PT de ${tag} de ${pj} por ${labels[tipo]}?`)) return;
+        const res = await canjearPT(pj, tag, tipo);
+        if (res.ok) {
+            toast(`✅ Canje aplicado. PT restantes en ${tag}: ${res.nueva}`, 'ok');
+            await cargarTodo(); initMarkup({ grupos });
+            renderProgresion();
+        } else toast('❌ ' + res.msg, 'error');
     };
 
     // Ir a fichas filtrado por tag
     window._tagsIrAFichas = (tag) => {
         window.location.href = `../fichas/index.html?tag=${encodeURIComponent(tag)}`;
     };
+
+    // Cerrar modal con ESC o click en fondo
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') window._tagsCloseDetalle();
+    });
+    document.getElementById('tag-detalle-modal')?.addEventListener('click', e => {
+        if (e.target === e.currentTarget) window._tagsCloseDetalle();
+    });
 }
