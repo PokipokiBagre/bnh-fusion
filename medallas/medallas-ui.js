@@ -5,6 +5,9 @@ import { buildGraph, initGrafo, resetGrafoView } from './medallas-grafo.js';
 import { renderMarkup } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 
+// Tags de una medalla derivados de sus requisitos_base (fuente única de verdad)
+const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
+
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 let _grafoCargado = false;
@@ -111,8 +114,7 @@ function _attachTagAC(input, { multiComma = false } = {}) {
 
 // Montar AC en todos los inputs de tag del form activo
 function _mountFormAC() {
-    const fmTags = document.getElementById('fm-tags');
-    if (fmTags) _attachTagAC(fmTags, { multiComma: true });
+    // fm-tags ya no existe: tags se derivan de requisitos_base
     document.querySelectorAll('[id^="req-tag-"]').forEach(el => _attachTagAC(el));
     document.querySelectorAll('[id^="cond-tag-"]').forEach(el => _attachTagAC(el));
 }
@@ -129,7 +131,7 @@ export function renderCatalogo() {
     if (!wrap) return;
 
     const lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
-    const allTags = [...new Set(medallas.flatMap(m => (m.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t))))].sort();
+    const allTags = [...new Set(medallas.flatMap(m => mTags(m)))].sort();
 
     wrap.innerHTML = `
         <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
@@ -154,7 +156,7 @@ export function renderCatalogo() {
 }
 
 function _renderCard(m) {
-    const tagLabel = (m.tags||[]).map(t => `<span class="medalla-tag">${t.startsWith('#')?t:'#'+t}</span>`).join(' ');
+    const tagLabel = mTags(m).map(t => `<span class="medalla-tag">${t}</span>`).join(' ');
     const tieneReqs  = (m.requisitos_base||[]).length > 0;
     const tieneConds = (m.efectos_condicionales||[]).length > 0;
 
@@ -229,7 +231,7 @@ export function renderPersonaje() {
 
         const secciones = tagsDelPJ.map(tag => {
             const medallasDeltag = medallas.filter(m =>
-                (m.tags||[]).some(t => ('#'+(t.startsWith('#')?t.slice(1):t)).toLowerCase() === tag.toLowerCase())
+                mTags(m).some(t => t.toLowerCase() === tag.toLowerCase())
             );
             if (!medallasDeltag.length) return '';
             const pts = ptsMapa[tag] || ptsMapa[tag.slice(1)] || 0;
@@ -277,7 +279,7 @@ export function renderDetalleMedalla(m, pjNombre = null) {
     const el = document.getElementById('medalla-modal');
     if (!el) return;
 
-    const tagHtml = (m.tags||[]).map(t => `<span class="medalla-tag">${t.startsWith('#')?t:'#'+t}</span>`).join(' ');
+    const tagHtml = mTags(m).map(t => `<span class="medalla-tag">${t}</span>`).join(' ');
 
     const reqsHtml = (m.requisitos_base||[]).map(r =>
         `<div style="font-size:0.82em;padding:5px 0;border-bottom:1px solid var(--gray-100);">
@@ -372,15 +374,7 @@ export function renderFormMedalla(m = null) {
                         </div>
                     </div>
 
-                    <div>
-                        <label class="form-label">Tags de la medalla</label>
-                        <input class="inp" id="fm-tags" value="${_esc((m?.tags||[]).join(', '))}"
-                            placeholder="#Tag1, #Tag2 — separados por coma" autocomplete="off">
-                        <div style="font-size:0.75em;color:var(--gray-500);margin-top:3px;">
-                            El primer tag es el principal. Escribe <b>#</b> para ver sugerencias.
-                            Tags nuevos se crean automáticamente al guardar.
-                        </div>
-                    </div>
+                    <!-- Tags se derivan automáticamente de los requisitos -->
 
                     <div>
                         <label class="form-label">Efecto base</label>

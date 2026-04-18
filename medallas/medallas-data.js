@@ -28,9 +28,10 @@ export async function guardarMedalla(datos) {
     const tipo = ['activa','pasiva'].includes(datos.tipo) ? datos.tipo : 'activa';
 
     // Asegurar que todos los tags referenciados existen en el catálogo
+    // tags se derivan de requisitos_base (fuente única de verdad)
+    const tagsDerivados = (datos.requisitos_base || []).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
     const todosLosTags = [
-        ...(datos.tags || []),
-        ...(datos.requisitos_base || []).map(r => r.tag),
+        ...tagsDerivados,
         ...(datos.efectos_condicionales || []).map(ec => ec.tag),
     ].filter(Boolean);
 
@@ -38,7 +39,7 @@ export async function guardarMedalla(datos) {
 
     const payload = {
         nombre:                datos.nombre,
-        tags:                  datos.tags || [],
+        tags:                  tagsDerivados,  // derivado de requisitos_base
         costo_ctl:             Number(datos.costo_ctl) || 0,
         efecto_desc:           datos.efecto_base || '',
         tipo,

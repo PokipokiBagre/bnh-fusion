@@ -2,6 +2,9 @@
 import { medallas, medallaState, STORAGE_URL, norm } from './medallas-state.js';
 import { guardarPosicionesGrafo } from './medallas-data.js';
 
+// Tags de una medalla derivados de sus requisitos_base
+const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
+
 const CAM = { x: 0, y: 0, zoom: 1, minZ: 0.15, maxZ: 3 };
 const NODO_R = 36;        // radio base de nodo
 const INTER_R = 18;       // radio para nodos de tag-cluster label
@@ -47,7 +50,7 @@ export function buildGraph() {
     // 1. Cluster de tags (nodos grandes de categoría)
     const tagMap = {};
     medallas.forEach(m => {
-        (m.tags||[]).forEach(t => {
+        mTags(m).forEach(t => {
             const k = '#' + (t.startsWith('#') ? t.slice(1) : t);
             if (!tagMap[k]) tagMap[k] = { tag: k, ms: [] };
             tagMap[k].ms.push(m);
@@ -75,7 +78,7 @@ export function buildGraph() {
 
     // 2. Medallas: posición guardada o distribuida alrededor de su primer tag
     medallas.forEach((m, i) => {
-        const mainTag = m.tags?.[0] ? '#' + (m.tags[0].startsWith('#') ? m.tags[0].slice(1) : m.tags[0]) : null;
+        const mainTag = mTags(m)[0] ? (mTags(m)[0].startsWith('#') ? mTags(m)[0] : '#'+mTags(m)[0]) : null;
         const cluster = mainTag ? tagMap[mainTag] : null;
         let mx = m.pos_x, my = m.pos_y;
         if (!mx && !my) {
@@ -101,8 +104,8 @@ export function buildGraph() {
     medallas.forEach(m => {
         const mn = nodos.find(n => n.id === m.id);
         if (!mn) return;
-        // tags base
-        (m.tags||[]).forEach(t => {
+        // tags base (derivados de requisitos_base)
+        mTags(m).forEach(t => {
             const tk = '#' + (t.startsWith('#') ? t.slice(1) : t);
             const tn = nodos.find(n => n.id === 'tag_' + tk);
             if (tn) edges.push({ from: tn, to: mn, tipo: 'req' });
@@ -111,7 +114,8 @@ export function buildGraph() {
         (m.efectos_condicionales||[]).forEach(ec => {
             const tk = '#' + (ec.tag.startsWith('#') ? ec.tag.slice(1) : ec.tag);
             const tn = nodos.find(n => n.id === 'tag_' + tk);
-            if (tn && tn.id !== ('tag_' + (m.tags?.[0]?.startsWith('#') ? m.tags[0] : '#'+m.tags?.[0]))) {
+            const _mainTag = mTags(m)[0] || '';
+            if (tn && tn.id !== ('tag_' + (_mainTag.startsWith('#') ? _mainTag.slice(1) : _mainTag))) {
                 edges.push({ from: tn, to: mn, tipo: 'cond' });
             }
         });

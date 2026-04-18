@@ -1,6 +1,9 @@
 // medallas/medallas-logic.js
 import { medallas, grupos, puntosAll } from './medallas-state.js';
 
+// Tags de una medalla = los tags de sus requisitos_base
+const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
+
 // PT de un PJ por tag
 export function getPuntosPJ(nombrePJ) {
     const m = {};
@@ -30,11 +33,8 @@ export function estadoMedallaPJ(medalla, nombrePJ) {
         if (pts < (req.pts_minimos || 0)) return 'parcial';
     }
 
-    // Si no hay requisitos_base: verificar al menos el tag principal (tags[0])
-    if (!reqs.length && medalla.tags?.length) {
-        const tagPrincipal = norm(medalla.tags[0]).toLowerCase();
-        if (!tagsGrupo.includes(tagPrincipal)) return 'bloqueada';
-    }
+    // Si no hay requisitos, no hay restricción de tag
+    if (!reqs.length) return 'activable';
 
     return 'activable';
 }
@@ -59,7 +59,7 @@ export function efectosActivosPJ(medalla, nombrePJ) {
 export function getTagsClusters() {
     const map = {};
     medallas.forEach(m => {
-        (m.tags||[]).forEach(t => {
+        mTags(m).forEach(t => {
             const k = norm(t);
             if (!map[k]) map[k] = { tag: k, medallas: [] };
             map[k].medallas.push(m);
@@ -74,8 +74,8 @@ export function filtrarMedallas({ busqueda = '', tag = '' } = {}) {
         const q = busqueda.toLowerCase();
         const matchBusq = !q || m.nombre.toLowerCase().includes(q) ||
             (m.efecto_desc||'').toLowerCase().includes(q) ||
-            (m.tags||[]).some(t => t.toLowerCase().includes(q));
-        const matchTag  = !tag  || (m.tags||[]).some(t => norm(t).toLowerCase() === norm(tag).toLowerCase());
+            mTags(m).some(t => t.toLowerCase().includes(q));
+        const matchTag  = !tag  || mTags(m).some(t => norm(t).toLowerCase() === norm(tag).toLowerCase());
         return matchBusq && matchTag;
     });
 }

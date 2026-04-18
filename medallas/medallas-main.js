@@ -101,11 +101,7 @@ function _exponerGlobales() {
         const nombre = document.getElementById('fm-nombre')?.value.trim();
         if (!nombre) { document.getElementById('fm-msg').textContent = 'El nombre es obligatorio.'; return; }
 
-        // Tags de la medalla
-        const tagsRaw = document.getElementById('fm-tags')?.value || '';
-        const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
-            .map(t => t.startsWith('#') ? t : '#'+t);
-
+        // Tags se derivan de los requisitos al guardar en data.js
         // Requisitos (sección unificada)
         const reqs = [];
         document.querySelectorAll('[id^="req-tag-"]').forEach(el => {
@@ -128,7 +124,6 @@ function _exponerGlobales() {
         const datos = {
             id:                    document.getElementById('fm-id')?.value || undefined,
             nombre,
-            tags,
             costo_ctl:             Number(document.getElementById('fm-ctl')?.value || 1),
             efecto_base:           document.getElementById('fm-efecto')?.value.trim() || '',
             tipo:                  document.getElementById('fm-tipo')?.value || 'activa',
