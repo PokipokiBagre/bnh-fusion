@@ -325,22 +325,6 @@ export function renderDetalle(nombreGrupo) {
         ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.lore)}</div></div>`:''}
         ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:''}
         ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
-        ${Object.values(g.info_extra||{}).some(v=>v)?`
-        <div class="wiki-section">
-            <div class="wiki-section-header">Información</div>
-            <table style="width:100%;border-collapse:collapse;">
-                    ${(g.info_extra||{})['estado'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Estado</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['estado']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['edad'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Edad</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['edad']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['altura'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Altura</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['altura']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['peso'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Peso</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['peso']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['genero'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Género</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['genero']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['lugar_nac'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Lugar de nacimiento</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['lugar_nac']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['ocupacion'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Ocupación</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['ocupacion']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['afiliacion'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Afiliación</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['afiliacion']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['familia'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Familia</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['familia']}</td></tr>` : ''}
-                    ${(g.info_extra||{})['nota'] ? `<tr><td style="font-weight:600;color:var(--gray-700);font-size:0.82em;background:var(--gray-100);padding:5px 10px;white-space:nowrap;">Nota extra</td><td style="padding:5px 10px;font-size:0.85em;">${(g.info_extra||{})['nota']}</td></tr>` : ''}
-            </table>
-        </div>`:'' }
 
         ${Object.keys(ptG).length?`
         <div class="wiki-section">
@@ -379,6 +363,22 @@ export function renderDetalle(nombreGrupo) {
             <div class="infobox-tags">
                 ${(g.tags||[]).map(t=>`<span style="background:var(--gray-100);border:1px solid var(--booru-border);color:var(--booru-link);padding:2px 6px;border-radius:3px;font-size:0.72em;">${t.startsWith('#')?t:'#'+t}</span>`).join('')||'<span style="color:var(--gray-400);font-size:0.78em;">—</span>'}
             </div>
+            ${Object.values(g.info_extra||{}).some(v=>v)?`
+            <div style="border-top:1px solid var(--gray-200);">
+                <div style="padding:6px 10px 4px;font-size:0.72em;font-weight:700;color:var(--gray-700);text-transform:uppercase;">Información</div>
+                <table style="width:100%;border-collapse:collapse;">
+                ${(g.info_extra||{})['estado'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Estado</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['estado'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['edad'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Edad</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['edad'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['altura'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Altura</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['altura'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['peso'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Peso</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['peso'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['genero'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Género</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['genero'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['lugar_nac'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Lugar de nacimiento</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['lugar_nac'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['ocupacion'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Ocupación</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['ocupacion'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['afiliacion'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Afiliación</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['afiliacion'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['familia'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Familia</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['familia'])}</td></tr>` : ''}
+                ${(g.info_extra||{})['nota'] ? `<tr><td style="font-size:0.72em;font-weight:700;color:var(--gray-700);background:var(--gray-100);padding:4px 8px;white-space:nowrap;">Nota extra</td><td style="padding:4px 8px;font-size:0.78em;">${renderMarkup((g.info_extra||{})['nota'])}</td></tr>` : ''}
+                </table>
+            </div>`:'' }
             ${misAliases.length?`
             <div style="padding:6px 10px 8px;border-top:1px solid var(--gray-200);">
                 <div style="font-size:0.72em;font-weight:700;color:var(--gray-700);text-transform:uppercase;margin-bottom:4px;">Aliases en hilo</div>
