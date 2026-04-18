@@ -364,3 +364,77 @@ export function renderDetalle(nombreGrupo) {
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ── Panel lateral de subida de imagen ─────────────────────────
+export function renderUploadPanel(nombreGrupo) {
+    const panel = document.getElementById('fichas-upload-panel');
+    if (!panel) return;
+
+    if (panel.dataset.grupo === nombreGrupo && panel.style.display !== 'none') {
+        cerrarUploadPanel();
+        return;
+    }
+
+    panel.dataset.grupo = nombreGrupo;
+    panel.dataset.tipo  = panel.dataset.tipo || 'icon';
+    panel.style.display = 'flex';
+
+    const SURL = STORAGE_URL;
+    const tipo = panel.dataset.tipo;
+
+    panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-weight:700;color:var(--green-dark);font-family:'Cinzel',serif;font-size:0.95em;">
+            📷 ${nombreGrupo}
+        </span>
+        <button onclick="window._fichasCerrarUpload()"
+            style="background:none;border:none;font-size:1.4em;cursor:pointer;color:#aaa;line-height:1;">×</button>
+    </div>
+
+    <div class="upload-tipo-sel">
+        <button class="upload-tipo-btn ${tipo==='icon'?'active':''}"
+            onclick="window._fichasSetTipo('icon')">
+            🖼 Icono<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Tarjeta · 512px</span>
+        </button>
+        <button class="upload-tipo-btn ${tipo==='profile'?'active':''}"
+            onclick="window._fichasSetTipo('profile')">
+            👤 Profile<br><span style="font-weight:400;font-size:0.85em;color:var(--gray-500);">Detalle · 800px</span>
+        </button>
+    </div>
+
+    <div style="margin-bottom:10px;text-align:center;">
+        <img id="upload-preview-img"
+            src="${tipo==='icon'
+                ? SURL+'/imgpersonajes/'+norm(nombreGrupo)+'icon.png'
+                : SURL+'/imgpersonajes/'+norm(nombreGrupo)+'profile.png'}?v=${Date.now()}"
+            onerror="this.onerror=null;this.src='${SURL}/imginterfaz/no_encontrado.png';"
+            style="width:100%;max-height:150px;object-fit:cover;object-position:top;
+                   border-radius:6px;border:1px solid var(--booru-border);">
+        <div style="font-size:0.7em;color:var(--gray-400);margin-top:4px;">Actual</div>
+    </div>
+
+    <div class="fichas-dropzone" id="fichas-drop-zone"
+        onclick="document.getElementById('fichas-file-input').click()"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="window._fichasHandleDrop(event)">
+        <div style="font-size:1.6em;margin-bottom:4px;">🖼️</div>
+        <div style="font-size:0.8em;color:var(--green-dark);font-weight:600;">Arrastra aquí o click</div>
+        <div style="font-size:0.7em;color:var(--gray-400);margin-top:2px;">JPG · PNG · WEBP</div>
+    </div>
+
+    <input type="file" id="fichas-file-input" accept="image/*" style="display:none"
+        onchange="window._fichasHandleFile(event)">
+
+    <div id="fichas-upload-progress" style="display:none;margin-bottom:8px;">
+        <div class="fichas-prog-bar">
+            <div id="fichas-prog-fill" class="fichas-prog-fill"></div>
+        </div>
+        <div id="fichas-prog-msg" style="font-size:0.72em;text-align:center;color:var(--gray-500);"></div>
+    </div>`;
+}
+
+export function cerrarUploadPanel() {
+    const panel = document.getElementById('fichas-upload-panel');
+    if (panel) { panel.style.display = 'none'; panel.dataset.grupo = ''; }
+}
