@@ -1,19 +1,17 @@
 // ============================================================
-// tags/tags-logic.js — Cálculos de progresión y estadísticas
+// tags/tags-logic.js
 // ============================================================
 import { grupos, puntosAll, catalogoTags, medallasCat } from './tags-state.js';
 
-// Umbrales de canje
 export const UMBRALES = [
-    { pts: 50,  tipo: 'stat_pot', label: '50 → +1 POT', color: 'prog-green'  },
-    { pts: 50,  tipo: 'stat_agi', label: '50 → +1 AGI', color: 'prog-green'  },
-    { pts: 50,  tipo: 'stat_ctl', label: '50 → +1 CTL', color: 'prog-green'  },
-    { pts: 75,  tipo: 'medalla',  label: '75 → Medalla', color: 'prog-orange' },
-    { pts: 100, tipo: 'tres_tags',label: '100 → 3 tags', color: 'prog-red'    },
+    { pts: 50,  tipo: 'stat_pot', label: '50 → +1 POT' },
+    { pts: 50,  tipo: 'stat_agi', label: '50 → +1 AGI' },
+    { pts: 50,  tipo: 'stat_ctl', label: '50 → +1 CTL' },
+    { pts: 75,  tipo: 'medalla',  label: '75 → Medalla' },
+    { pts: 100, tipo: 'tres_tags',label: '100 → 3 tags' },
 ];
 export const UMBRAL_MAX = 100;
 
-// Puntos de un PJ por tag
 export function getPuntosPJ(nombrePJ) {
     const mapa = {};
     puntosAll.filter(p => p.personaje_nombre === nombrePJ)
@@ -21,30 +19,23 @@ export function getPuntosPJ(nombrePJ) {
     return mapa;
 }
 
-// Tags que tiene el PJ (de gruposGlobal), con sus PT
 export function getTagsConPuntos(nombrePJ) {
     const g = grupos.find(x => x.nombre_refinado === nombrePJ);
     if (!g) return [];
     const ptsMapa = getPuntosPJ(nombrePJ);
-    return (g.tags || [])
-        .map(t => {
-            const tag = t.startsWith('#') ? t : '#' + t;
-            const pts = ptsMapa[tag] || ptsMapa[tag.slice(1)] || 0;
-            return { tag, pts };
-        })
-        .sort((a, b) => b.pts - a.pts);
+    return (g.tags || []).map(t => {
+        const tNorm = t.startsWith('#') ? t : '#' + t;
+        const p = ptsMapa[tNorm] || ptsMapa[tNorm.slice(1)] || 0;
+        return { tag: tNorm, pts: p };
+    }).sort((a, b) => b.pts - a.pts || a.tag.localeCompare(b.tag));
 }
 
-// Estado de un tag respecto a sus umbrales
-export function estadoUmbral(pts) {
-    const pct = Math.min(pts / UMBRAL_MAX, 1);
-    if (pts >= UMBRAL_MAX)   return { clase: 'done',  texto: '¡Listo para canjear!' };
-    if (pts >= 75)           return { clase: 'done',  texto: `${pts}/100` };
-    if (pts >= UMBRAL_MAX * 0.6) return { clase: 'close', texto: `${pts}/100` };
-    return { clase: 'far', texto: `${pts}/100` };
+export function descDe(tagNombre) {
+    const t = tagNombre.startsWith('#') ? tagNombre.slice(1) : tagNombre;
+    const item = catalogoTags.find(c => c.nombre.toLowerCase() === t.toLowerCase());
+    return item ? item.descripcion : '';
 }
 
-// Lista de PJs ordenados por total de PT
 export function rankingPorPT() {
     const totales = {};
     puntosAll.forEach(p => {
@@ -55,7 +46,6 @@ export function rankingPorPT() {
         .sort((a, b) => b.total - a.total);
 }
 
-// Tags más comunes entre todos los PJs
 export function tagsMasComunes(n = 20) {
     const mapa = {};
     grupos.forEach(g => (g.tags || []).forEach(t => {
@@ -68,7 +58,6 @@ export function tagsMasComunes(n = 20) {
         .map(([tag, count]) => ({ tag, count }));
 }
 
-// Tags más cerca de canje (pts entre 80-99 o >= 100)
 export function tagsCercaDeCanje() {
     const res = [];
     puntosAll.forEach(p => {
@@ -79,16 +68,35 @@ export function tagsCercaDeCanje() {
     return res.sort((a, b) => b.pts - a.pts).slice(0, 30);
 }
 
-// Para un tag dado, qué medallas están asociadas
 export function medallasDe(tagNombre) {
-    const t = tagNombre.startsWith('#') ? tagNombre.slice(1) : tagNombre;
-    return medallasCat.filter(m =>
-        (m.tags || []).some(mt => (mt.startsWith('#') ? mt.slice(1) : mt).toLowerCase() === t.toLowerCase())
+    const t = tagNombre.startsWith('#') ? tagNombre : '#' + tagNombre;
+    return medallasCat.filter(m => 
+        (m.requisitos_base || []).some(r => 
+            (r.tag.startsWith('#') ? r.tag : '#' + r.tag).toLowerCase() === t.toLowerCase()
+        ) ||
+        (m.efectos_condicionales || []).some(ec => 
+            (ec.tag.startsWith('#') ? ec.tag : '#' + ec.tag).toLowerCase() === t.toLowerCase()
+        )
     );
 }
 
-// Descripción del catálogo para un tag
-export function descDe(tagNombre) {
-    const t = tagNombre.startsWith('#') ? tagNombre.slice(1) : tagNombre;
-    return catalogoTags.find(c => c.nombre.toLowerCase() === t.toLowerCase())?.descripcion || '';
+// Nueva función: Extraer medallas accesibles (que cumplan requisitos)
+export function getMedallasAccesibles(nombrePJ) {
+    const g = grupos.find(x => x.nombre_refinado === nombrePJ);
+    if (!g) return [];
+    const ptsMapa = getPuntosPJ(nombrePJ);
+    const tagsGrupo = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+
+    return medallasCat.filter(m => {
+        if (m.propuesta) return false;
+        const reqs = m.requisitos_base || [];
+        if (reqs.length === 0) return false; 
+        for (const r of reqs) {
+            const tNorm = (r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
+            if (!tagsGrupo.includes(tNorm)) return false;
+            const pts = ptsMapa[tNorm] || ptsMapa[tNorm.slice(1)] || 0;
+            if (pts < (r.pts_minimos||0)) return false;
+        }
+        return true;
+    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
