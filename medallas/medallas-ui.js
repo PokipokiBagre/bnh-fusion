@@ -1,7 +1,6 @@
 // medallas/medallas-ui.js
 import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './medallas-state.js';
 import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ } from './medallas-logic.js';
-import { buildGraph, initGrafo, resetGrafoView } from './medallas-grafo.js';
 import { renderMarkup } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 
