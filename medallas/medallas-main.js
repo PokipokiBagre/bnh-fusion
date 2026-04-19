@@ -58,6 +58,85 @@ function _exponerGlobales() {
     window._medFiltroRolPJ = v => { medallaState.filtroRolPJ = v; renderPersonaje(); };
     window._medFiltroEstPJ = v => { medallaState.filtroEstadoPJ = v; renderPersonaje(); };
 
+    // Filtros bloques
+    window._medBloquesFiltroRol = v => { medallaState.filtroRolBloques = v; renderGrafo(); };
+    window._medBloquesFiltroEst = v => { medallaState.filtroEstBloques = v; renderGrafo(); };
+
+    // Seleccionar PJ en bloques → activa sus tags
+    window._medBloqueSelPJ = nombre => {
+        if (!nombre) {
+            // Quitar PJ: limpiar tags del PJ del selector
+            if (medallaState.pjBloquesSel) {
+                const g = grupos.find(x => x.nombre_refinado === medallaState.pjBloquesSel);
+                const tagsDelPJ = (g?.tags||[]).map(t => t.startsWith('#') ? t : '#'+t);
+                medallaState.grafoTagsSel = medallaState.grafoTagsSel.filter(t => !tagsDelPJ.includes(t));
+            }
+            medallaState.pjBloquesSel = null;
+            renderGrafo();
+            return;
+        }
+        const g = grupos.find(x => x.nombre_refinado === nombre);
+        if (!g) return;
+        const tagsDelPJ = (g.tags||[]).map(t => t.startsWith('#') ? t : '#'+t);
+        if (medallaState.pjBloquesSel === nombre) {
+            // Click de nuevo en el mismo PJ → quitar sus tags
+            medallaState.grafoTagsSel = medallaState.grafoTagsSel.filter(t => !tagsDelPJ.includes(t));
+            medallaState.pjBloquesSel = null;
+        } else {
+            // Nuevo PJ: añadir sus tags a los seleccionados (sin duplicar)
+            medallaState.pjBloquesSel = nombre;
+            tagsDelPJ.forEach(t => {
+                if (!medallaState.grafoTagsSel.includes(t)) medallaState.grafoTagsSel.push(t);
+            });
+        }
+        renderGrafo();
+    };
+
+    // Equipación
+    window._medEquiparToggle = (id, mObj) => {
+        const eq = medallaState.equipacion || [];
+        const idx = eq.findIndex(e => e.id === id);
+        if (idx >= 0) {
+            eq.splice(idx, 1);
+        } else {
+            // Buscar el objeto medalla si no se pasó
+            const m = mObj || medallas.find(x => x.id === id);
+            if (m) eq.push(m);
+        }
+        medallaState.equipacion = eq;
+        renderPersonaje();
+    };
+
+    window._medLimpiarEquipacion = () => {
+        medallaState.equipacion = [];
+        renderPersonaje();
+    };
+
+    window._medGuardarEquipacion = async () => {
+        if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
+        // Guardar en personajes_refinados.equipacion (campo JSON) si existe, o notificar
+        const eq = medallaState.equipacion || [];
+        const ids = eq.map(m => m.id);
+        const { error } = await supabase.from('personajes_refinados')
+            .update({ equipacion: ids })
+            .eq('nombre_refinado', medallaState.pjSeleccionado);
+        if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
+        toast(`✅ Equipación de ${medallaState.pjSeleccionado} guardada`, 'ok');
+    };
+
+    window._medProponerEquipacion = () => {
+        if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
+        const eq = medallaState.equipacion || [];
+        if (!eq.length) { toast('No hay medallas equipadas que proponer', 'info'); return; }
+        const lista = eq.map(m => `• ${m.nombre} (${m.costo_ctl} CTL)`).join('\n');
+        alert(`Propuesta de equipación para ${medallaState.pjSeleccionado}:\n\n${lista}\n\nCopia este mensaje y envíalo al OP.`);
+    };
+
+    window._medPJBuscar = v => {
+        medallaState.pjBusqueda = v;
+        renderPersonaje();
+    };
+
     // Propuestas
     window._medTogglePropuestas = () => {
         medallaState.filtroPropuestas = !medallaState.filtroPropuestas;
@@ -89,13 +168,22 @@ function _exponerGlobales() {
             if (tag) reqs.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts });
         });
 
+        const conds = [];
+        document.querySelectorAll('#prop-conds [id^="cond-tag-"]').forEach(el => {
+            const idx = el.id.replace('cond-tag-', '');
+            const tag = el.value.trim();
+            const pts = Number(document.getElementById('cond-pts-' + idx)?.value || 0);
+            const efe = document.getElementById('cond-efecto-' + idx)?.value.trim() || '';
+            if (tag) conds.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts, efecto: efe });
+        });
+
         const datos = {
             nombre,
             costo_ctl:       Number(document.getElementById('prop-ctl')?.value || 1),
             efecto_base:     document.getElementById('prop-efecto')?.value.trim() || '',
             tipo:            document.getElementById('prop-tipo')?.value || 'activa',
             requisitos_base: reqs,
-            efectos_condicionales: [],
+            efectos_condicionales: conds,
             propuesta:       true,
             propuesta_por:   document.getElementById('prop-autor')?.value.trim() || '',
         };

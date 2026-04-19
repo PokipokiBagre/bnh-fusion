@@ -8,18 +8,22 @@ export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 export const medallaState = {
-    tabActual:         'catalogo',   // 'catalogo' | 'grafo' | 'personaje'
+    tabActual:         'catalogo',
     esAdmin:           false,
     busqueda:          '',
     filtroTag:         '',
-    filtroPropuestas:  false,        // mostrar solo propuestas (OP)
+    filtroPropuestas:  false,
     pjSeleccionado:    null,
-    filtroRolPJ:       '#Jugador',   // filtro pool personajes en tab Personaje
+    filtroRolPJ:       '#Jugador',
     filtroEstadoPJ:    '#Activo',
-    // Grafo: tags seleccionados (array de strings con #)
     grafoTagsSel:      [],
-    grafoTagPagina:    0,            // paginación del selector de tags
+    grafoTagPagina:    0,
     grafoBusqueda:     '',
+    pjBloquesSel:      null,         // PJ seleccionado en tab Bloques
+    filtroRolBloques:  '#Jugador',
+    filtroEstBloques:  '#Activo',
+    equipacion:        [],           // medallas equipadas en tab Personaje
+    pjBusqueda:        '',           // buscador en tab Personaje
 };
 
 // Datos globales
