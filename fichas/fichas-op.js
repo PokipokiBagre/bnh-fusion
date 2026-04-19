@@ -22,9 +22,10 @@ function abrirModal(titulo, html) {
         ov = document.createElement('div');
         ov.id = 'op-overlay';
         ov.className = 'op-modal-overlay';
-        ov.onclick = e => { if (e.target===ov) cerrarModal(); };
         document.body.appendChild(ov);
     }
+    // Siempre reasignar onclick para que cerrar-al-hacer-click-fuera funcione
+    ov.onclick = e => { if (e.target===ov) cerrarModal(); };
     ov.innerHTML = `
     <div class="op-modal">
         <div class="op-modal-header">
