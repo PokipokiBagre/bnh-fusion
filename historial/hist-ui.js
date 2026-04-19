@@ -196,9 +196,9 @@ export function renderTimeline() {
     <div style="display:flex;gap:16px;align-items:flex-start;">
 
         <!-- Panel izquierdo: selección de posts -->
-        <div id="panel-sel-posts" style="position:sticky;top:80px;width:${selPostsState.activo?'300px':'0'};
-            min-width:${selPostsState.activo?'300px':'0'};overflow:hidden;
-            transition:width 0.25s,min-width 0.25s;flex-shrink:0;">
+        <div id="panel-sel-posts" style="width:${selPostsState.activo?'280px':'0'};
+            min-width:${selPostsState.activo?'280px':'0'};overflow:hidden;
+            transition:width 0.25s,min-width 0.25s;flex-shrink:0;align-self:flex-start;">
             ${panelSeleccion}
         </div>
 
@@ -444,6 +444,26 @@ function _renderPanelSeleccion() {
             <b>Gris</b> = exclusivo · <b style="color:var(--green)">Verde</b> = compartido · <b style="color:#00b4d8">Celeste</b> = lectura
         </div>
     </div>`;
+}
+
+// ── Actualizar solo el panel lateral (sin re-render de posts) ──
+export function actualizarPanelSel() {
+    const el = document.getElementById('panel-sel-posts');
+    if (!el) return;
+    const html = _renderPanelSeleccion();
+    el.innerHTML = html;
+    // Actualizar el botón del header de selección
+    const btn = document.querySelector('[onclick="window._histToggleSelPosts()"]');
+    if (btn) {
+        const { selPostsState } = window._selPostsStateRef || {};
+        const state = window._selPostsStateRef;
+        if (state) {
+            btn.textContent = state.activo
+                ? `✓ Seleccionando (${state.postsSel.size})`
+                : '☑ Seleccionar posts';
+            btn.className = `btn btn-sm ${state.activo ? 'btn-green' : 'btn-outline'}`;
+        }
+    }
 }
 
 // ============================================================

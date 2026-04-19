@@ -14,7 +14,8 @@ import {
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
-    renderHeaderInfo, renderOpcionesModal, toast
+    renderHeaderInfo, renderOpcionesModal, toast,
+    actualizarPanelSel
 } from './hist-ui.js';
 import { initOpciones, OPCIONES } from '../bnh-opciones-tags.js';
 
@@ -83,8 +84,9 @@ async function init() {
 // ── Exponer referencias para el panel de selección ───────────
 // hist-ui.js las lee para preseleccionar PJs nativos del post
 function _exponerReferencias() {
-    window._histPostsRef   = postsState;
-    window._histMapaAlias  = mapaAliasAGrupo;
+    window._histPostsRef       = postsState;
+    window._histMapaAlias      = mapaAliasAGrupo;
+    window._selPostsStateRef   = selPostsState;
 }
 
 // ── Cargar datos del hilo activo ──────────────────────────────
@@ -358,8 +360,10 @@ window._histToggleSelPosts = function() {
     if (!selPostsState.activo) {
         selPostsState.postsSel.clear();
         selPostsState.personajesExtra = [];
+        mostrarVista('timeline'); // rebuild completo al cerrar (para quitar el panel)
+    } else {
+        mostrarVista('timeline'); // rebuild completo al abrir (para mostrar el panel)
     }
-    mostrarVista('timeline');
 };
 
 window._histCancelarSel = function() {
@@ -371,23 +375,45 @@ window._histCancelarSel = function() {
 
 window._histLimpiarPosts = function() {
     selPostsState.postsSel.clear();
-    mostrarVista('timeline');
+    _exponerReferencias();
+    actualizarPanelSel();
 };
 
 window._histTogglePostSel = function(postNo) {
     if (selPostsState.postsSel.has(postNo)) selPostsState.postsSel.delete(postNo);
     else selPostsState.postsSel.add(postNo);
-    mostrarVista('timeline');
+    _exponerReferencias();
+    // Actualizar visual del post (borde + check) sin re-render completo
+    const el = document.getElementById('post-' + postNo);
+    if (el) {
+        const sel = selPostsState.postsSel.has(postNo);
+        el.style.borderColor = sel ? '#00b4d8' : '#e9ecef';
+        el.style.borderWidth = sel ? '2px' : '1px';
+        el.style.background  = sel ? 'rgba(0,180,216,0.05)' : 'white';
+        // Check badge
+        let chk = el.querySelector('.post-sel-check');
+        if (sel && !chk) {
+            chk = document.createElement('div');
+            chk.className = 'post-sel-check';
+            chk.style.cssText = 'position:absolute;top:6px;right:8px;background:#00b4d8;color:white;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.7em;font-weight:800;';
+            chk.textContent = '✓';
+            el.appendChild(chk);
+        } else if (!sel && chk) {
+            chk.remove();
+        }
+    }
+    // Actualizar solo el panel lateral
+    actualizarPanelSel();
 };
 
 window._histFiltroRol = function(v) {
     selPostsState.filtroRol = v;
-    mostrarVista('timeline');
+    actualizarPanelSel();
 };
 
 window._histFiltroEst = function(v) {
     selPostsState.filtroEstado = v;
-    mostrarVista('timeline');
+    actualizarPanelSel();
 };
 
 window._histTogglePJExtra = async function(nombre) {
@@ -454,7 +480,8 @@ window._histTogglePJExtra = async function(nombre) {
             }
         }
     }
-    mostrarVista('timeline');
+    _exponerReferencias();
+    actualizarPanelSel();
 };
 
 // ── Calcular PT extra para posts seleccionados ────────────────
