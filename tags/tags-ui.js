@@ -432,7 +432,7 @@ export function renderCatalogo() {
                     ${tipoLabel[tipo]||'🏷 Extra'}
                 </span>
             </div>
-            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
+            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${renderMarkup(desc)}</div>` : ''}
         </div>`;
     }).join('');
 
