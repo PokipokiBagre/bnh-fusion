@@ -284,14 +284,22 @@ const adminDescForm = tagsState.esAdmin ? `
                         <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Medallas (${medallas.length}${medallas.length>15?' — mostrando 15':''})</div>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:320px;overflow-y:auto;">${medallaCards}</div>
                     </div>` : ''}
-                    <div>
+                        <div>
                         <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Tienen este tag (${personajes.length})</div>
                         <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:2px;">
                             ${personajes.map(g => {
                                 const img = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
-                                return '<div class="char-thumb" style="cursor:pointer;" onclick="window._tagsIrAFichas(\''+tag.replace(/'/g,"\\'")+'\');window._tagsCloseDetalle();">'+
+                                const safeN = g.nombre_refinado.replace(/'/g,"\\'");
+                                const safeT = tag.replace(/'/g,"\\'");
+                                
+                                // El botón de "x" que solo se muestra para los OP
+                                const btnQuitar = tagsState.esAdmin 
+                                    ? '<b onclick="event.stopPropagation();window._tagsQuitarDesdeDetalle(\''+g.id+'\',\''+safeN+'\',\''+safeT+'\')" style="color:var(--red);margin-left:6px;font-size:1.2em;line-height:0.8;padding:0 2px;" title="Quitar tag">×</b>' 
+                                    : '';
+                                    
+                                return '<div class="char-thumb" style="cursor:pointer;" onclick="window._tagsIrAFichas(\''+safeT+'\');window._tagsCloseDetalle();">'+
                                     '<img src="'+img+'" onerror="this.onerror=null;this.src=\''+fb()+'\';">'+
-                                    '<span>'+g.nombre_refinado+'</span></div>';
+                                    '<span>'+g.nombre_refinado+'</span>'+btnQuitar+'</div>';
                             }).join('') || '<span style="color:var(--gray-400);font-size:0.85em;">Ninguno aún.</span>'}
                         </div>
                     </div>
