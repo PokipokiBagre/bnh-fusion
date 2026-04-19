@@ -119,25 +119,9 @@ function mostrarVista(vista) {
 window._histSelHiloInline = async function(valor) {
     if (!valor) return;
     const [board, threadId] = valor.split('|');
-    const hilo = hilosState.find(h => h.board === valor.split('|')[0] && h.thread_id == valor.split('|')[1]);
-    if (!hilo) return;
-
-    estadoUI.hiloActivo = {
-        board,
-        thread_id:  Number(threadId),
-        thread_url: hilo.thread_url,
-        titulo:     hilo.titulo
-    };
-    sessionStorage.setItem('hist_hilo_activo', JSON.stringify(estadoUI.hiloActivo));
-    renderHeaderInfo();
-    // Mostrar spinner inmediato
-    const cont = document.getElementById('contenido-principal');
-    if (cont) cont.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div class="spinner" style="width:28px;height:28px;margin:0 auto 12px;"></div><p style="color:#888;">Cargando posts…</p></div>';
-    // Cargar datos y luego renderizar
-    await cargarHiloActivo();
-    _exponerReferencias();
-    renderTimeline();
-    renderHeaderInfo();
+    // Forzar que quede en timeline al seleccionar desde el dropdown inline
+    estadoUI.vistaActual = 'timeline';
+    await window.seleccionarHilo(board, Number(threadId));
 };
 
 // ── Seleccionar hilo ──────────────────────────────────────────
@@ -156,7 +140,9 @@ window.seleccionarHilo = async function(board, threadId) {
     await cargarHiloActivo();
     renderHeaderInfo();
     toast(`Hilo "${hilo.titulo}" seleccionado`, 'ok');
-    mostrarVista(estadoUI.vistaActual);
+    // Si venimos del inline selector o de Hilos, ir a timeline
+    const vistaDestino = estadoUI.vistaActual === 'hilos' ? 'timeline' : estadoUI.vistaActual;
+    mostrarVista(vistaDestino);
 };
 
 // ── Scrape automático ─────────────────────────────────────────
