@@ -24,12 +24,13 @@ export let grupos        = [];   // personajes_refinados completos
 export let puntosAll     = [];   // [{ personaje_nombre, tag, cantidad }]
 export let catalogoTags  = [];   // [{ nombre, descripcion, baneado }] de tags_catalogo
 export let medallasCat   = [];   // [{ nombre, tags[], costo_ctl, efecto_desc }]
+export let solicitudes   = [];   // [{ id, personaje_nombre, tipo, costo_pt, datos }] pendientes
 
 export function setGrupos(d)       { grupos       = d; }
 export function setPuntosAll(d)    { puntosAll    = d; }
 export function setCatalogoTags(d) { catalogoTags = d; }
 export function setMedallasCat(d)  { medallasCat  = d; }
+export function setSolicitudes(d)  { solicitudes  = d; }
 
-// Tag seleccionado para vista detalle
 export let tagDetalle = null;
-export function setTagDetalle(t) { tagDetalle = t; }
+export function setTagDetalle(v) { tagDetalle = v; }
