@@ -1,10 +1,16 @@
-// medallas/bloques.js — Motor Tetris 2.0 (Persistencia, Empaquetado y Regiones)
-const NUM_COLS = 12; // 12 slots horizontales
+// medallas/bloques.js — Motor Tetris 2.0 (Grid 16x20 y Tooltips)
+const NUM_COLS = 16; // 16 slots horizontales (ancho)
+const NUM_ROWS = 20; // 20 slots verticales (alto)
 const GAP = 4;
 
 let canvas, ctx;
-let bloques = []; // { id, clusterId, clusterColor, isTag, text, data, col, visualY, targetY, w, h }
+let bloques = []; 
 let _animId = null;
+
+// Variables para el Tooltip
+let mouseX = -100;
+let mouseY = -100;
+let hoveredBlock = null;
 
 export function initBloques(canvasEl) {
     canvas = canvasEl;
@@ -14,19 +20,33 @@ export function initBloques(canvasEl) {
 
     // Interacción de click en los bloques
     canvas.addEventListener('click', e => {
+        if (hoveredBlock && !hoveredBlock.isTag && window._medallasAbrirDetalle) {
+            window._medallasAbrirDetalle(hoveredBlock.data);
+        }
+    });
+
+    // Rastrear el mouse para el Tooltip
+    canvas.addEventListener('mousemove', e => {
         const r = canvas.getBoundingClientRect();
-        const mx = e.clientX - r.left;
-        const my = e.clientY - r.top;
+        mouseX = e.clientX - r.left;
+        mouseY = e.clientY - r.top;
         
+        hoveredBlock = null;
         for (let i = bloques.length - 1; i >= 0; i--) {
             const b = bloques[i];
-            if (mx >= b.visualX && mx <= b.visualX + b.w && my >= b.visualY && my <= b.visualY + b.h) {
-                if (!b.isTag && window._medallasAbrirDetalle) {
-                    window._medallasAbrirDetalle(b.data);
-                }
+            if (mouseX >= b.visualX && mouseX <= b.visualX + b.w && mouseY >= b.visualY && mouseY <= b.visualY + b.h) {
+                hoveredBlock = b;
                 break;
             }
         }
+        canvas.style.cursor = (hoveredBlock && !hoveredBlock.isTag) ? 'pointer' : 'default';
+    });
+
+    // Limpiar Tooltip si el mouse sale del canvas
+    canvas.addEventListener('mouseleave', () => {
+        hoveredBlock = null;
+        mouseX = -100;
+        mouseY = -100;
     });
 
     if (!_animId) loop();
@@ -44,24 +64,19 @@ export function updateBloques(tagsData) {
     if (!canvas) return;
     _resize();
     
-    // 1. Encontrar qué tags están seleccionados ahora
     const currentClusterIds = tagsData.map(g => g.tag);
-    
-    // 2. Eliminar los bloques de los tags que fueron deseleccionados
     bloques = bloques.filter(b => currentClusterIds.includes(b.clusterId));
     
-    // 3. Identificar qué tags son NUEVOS (aún no están en la pantalla)
     const existingIds = new Set(bloques.map(b => b.clusterId));
     const newClusters = tagsData.filter(g => !existingIds.has(g.tag));
 
-    // 4. Instanciar los nuevos bloques (nacen arriba y caerán)
     newClusters.forEach((grupo) => {
         const cColor = getColorForTag(grupo.tag);
         
         // Elegir una columna aleatoria central para el bloque Tag
         const C = Math.floor(Math.random() * (NUM_COLS - 2)) + 1; 
         
-        let spawnY = -60; // Empieza a nacer justo arriba de la pantalla
+        let spawnY = -60; 
         
         // Instanciar el Tag
         bloques.push({
@@ -77,7 +92,7 @@ export function updateBloques(tagsData) {
         
         // Instanciar sus medallas de forma aleatoria alrededor
         grupo.medallas.forEach((m, idx) => {
-            spawnY -= (60 + Math.random() * 80); // Distanciados verticalmente para que caigan en secuencia
+            spawnY -= (40 + Math.random() * 60); 
             
             // Elegir columna al azar: misma, izquierda o derecha
             let colOffset = 0;
@@ -108,28 +123,25 @@ function loop() {
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
     
-    // Dimensiones dinámicas
+    // Dimensiones dinámicas basadas en Grid de 16 x 20
     const BLOCK_W = (W - (NUM_COLS + 1) * GAP) / NUM_COLS;
-    const BLOCK_H = Math.max(30, BLOCK_W * 0.55); // Más cuadrados, menos anchos
+    const BLOCK_H = (H - (NUM_ROWS + 1) * GAP) / NUM_ROWS; 
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
     // --- FÍSICA Y GRAVEDAD INDEPENDIENTE ---
-    // Agrupamos los bloques por columna para calcular su caída
     let blocksByCol = Array.from({length: NUM_COLS}, () => []);
     bloques.forEach(b => blocksByCol[b.col].push(b));
     
     blocksByCol.forEach(colBlocks => {
-        // Ordenamos de abajo hacia arriba visualmente (mayor Y a menor Y)
         colBlocks.sort((a, b) => b.visualY - a.visualY);
-        
-        let currentFloor = H - GAP; // El piso inicial
+        let currentFloor = H - GAP; 
         
         colBlocks.forEach(b => {
             b.targetY = currentFloor - BLOCK_H;
-            currentFloor = b.targetY - GAP; // El nuevo piso para el bloque de más arriba
+            currentFloor = b.targetY - GAP; 
             
             b.w = BLOCK_W;
             b.h = BLOCK_H;
@@ -160,10 +172,9 @@ function loop() {
             if (b.visualY + b.h > maxY) maxY = b.visualY + b.h;
         });
         
-        // Dibujar el marco relacionador
-        const P = 8; // Padding del marco
-        ctx.fillStyle = `${color}1A`;   // 10% opacidad de fondo
-        ctx.strokeStyle = `${color}80`; // 50% opacidad de borde
+        const P = 8;
+        ctx.fillStyle = `${color}1A`;   
+        ctx.strokeStyle = `${color}80`; 
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.roundRect(minX - P, minY - P, (maxX - minX) + P*2, (maxY - minY) + P*2, 10);
@@ -178,21 +189,20 @@ function loop() {
         ctx.lineWidth = 1.5;
         
         ctx.beginPath();
-        ctx.roundRect(b.visualX, b.visualY, b.w, b.h, 6);
+        ctx.roundRect(b.visualX, b.visualY, b.w, b.h, 4);
         ctx.fill();
         ctx.stroke();
 
-        // Indicador de propuesta
         if (b.data?.propuesta) {
             ctx.fillStyle = '#f39c12';
             ctx.beginPath();
-            ctx.arc(b.visualX + b.w - 10, b.visualY + 10, 4, 0, Math.PI * 2);
+            ctx.arc(b.visualX + b.w - 8, b.visualY + 8, 3, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // Texto
+        // Texto achicado para la nueva grid
         ctx.fillStyle = b.isTag ? '#f39c12' : '#ffffff';
-        ctx.font = b.isTag ? 'bold 12px Inter' : '11px Inter';
+        ctx.font = b.isTag ? 'bold 11px Inter' : '10px Inter';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
@@ -203,12 +213,45 @@ function loop() {
             let words = label.split(' ');
             let l1 = words.slice(0, Math.ceil(words.length/2)).join(' ');
             let l2 = words.slice(Math.ceil(words.length/2)).join(' ');
-            ctx.fillText(l1, b.visualX + b.w / 2, b.visualY + b.h / 2 - 6);
-            if(l2) ctx.fillText(l2, b.visualX + b.w / 2, b.visualY + b.h / 2 + 8);
+            ctx.fillText(l1, b.visualX + b.w / 2, b.visualY + b.h / 2 - 5);
+            if(l2) ctx.fillText(l2, b.visualX + b.w / 2, b.visualY + b.h / 2 + 7);
         } else {
             ctx.fillText(label, b.visualX + b.w / 2, b.visualY + b.h / 2);
         }
     });
+
+    // --- DIBUJAR TOOLTIP (Siempre al final para que quede por encima de todo) ---
+    if (hoveredBlock) {
+        const txt = hoveredBlock.text;
+        ctx.font = '600 12px Inter';
+        const txtW = ctx.measureText(txt).width;
+        
+        const padX = 10, padY = 6;
+        const ttW = txtW + padX * 2;
+        const ttH = 14 + padY * 2;
+        
+        let tx = mouseX + 15;
+        let ty = mouseY + 15;
+        
+        // Prevenir que el tooltip se salga de los bordes del canvas
+        if (tx + ttW > W) tx = mouseX - ttW - 10;
+        if (ty + ttH > H) ty = mouseY - ttH - 10;
+
+        // Fondo oscuro semitransparente
+        ctx.fillStyle = 'rgba(13, 17, 23, 0.95)'; 
+        ctx.strokeStyle = hoveredBlock.isTag ? '#f39c12' : hoveredBlock.clusterColor;
+        ctx.lineWidth = 1.5;
+        
+        ctx.beginPath();
+        ctx.roundRect(tx, ty, ttW, ttH, 6);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(txt, tx + padX, ty + ttH / 2);
+    }
 }
 
 export function clearBloques() {
