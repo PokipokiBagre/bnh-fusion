@@ -7,7 +7,6 @@ import {
     renderDetalleMedalla, renderFormMedalla, renderProponerMedalla,
     _htmlReqRow, _htmlCondRow, toast, mountNewTagAC
 } from './medallas-ui.js';
-import { buildGraph } from './medallas-grafo.js';
 import { initMarkup } from '../bnh-markup.js';
 import { initTags } from '../bnh-tags.js';
 
