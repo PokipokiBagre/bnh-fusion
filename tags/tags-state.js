@@ -11,10 +11,10 @@ export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 export const tagsState = {
-    tabActual:      'progresion',   // Ahora arranca en progresión
+    tabActual:      'progresion',
     pjSeleccionado: null,           
     busquedaCat:    '',             
-    busquedaMedallasAcc: '',        // Buscador de medallas accesibles
+    busquedaMedallasAcc: '',
     esAdmin:        false,
     filtroRol:      '#Jugador',     
     filtroEstado:   '#Activo',      
