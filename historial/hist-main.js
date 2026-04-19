@@ -279,9 +279,32 @@ window._histTogglePJExtra = async function(nombre) {
     if (idx >= 0) {
         selPostsState.personajesExtra.splice(idx, 1);
         if (estadoUI.hiloActivo && selPostsState.postsSel.size > 0) {
-            toast('⏳ Revirtiendo PT de ' + nombre + '…', 'info');
-            const { thread_id } = estadoUI.hiloActivo;
+            const { board, thread_id } = estadoUI.hiloActivo;
             const postNos = [...selPostsState.postsSel];
+
+            // 1. Quitar del poster_name en DB y memoria
+            for (const postNo of postNos) {
+                const postLocal = postsState.find(p => p.post_no === postNo);
+                if (!postLocal) continue;
+                const partes = postLocal.poster_name.split(',').map(s => s.trim()).filter(Boolean);
+                // Quitar el nombre exacto y sus aliases que resuelvan a este grupo
+                const nuevasPartes = partes.filter(p => {
+                    if (p === nombre) return false;
+                    const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
+                    return g !== nombre;
+                });
+                if (nuevasPartes.length === partes.length) continue; // no estaba
+                const nuevoPosterName = nuevasPartes.join(', ');
+                try {
+                    await supabase.from('historial_posts')
+                        .update({ poster_name: nuevoPosterName })
+                        .eq('board', board).eq('thread_id', thread_id).eq('post_no', postNo);
+                    postLocal.poster_name = nuevoPosterName;
+                } catch(e) { console.warn('[togglePJExtra quitar] poster_name:', e); }
+            }
+
+            // 2. Revertir PT
+            toast('⏳ Revirtiendo PT de ' + nombre + '…', 'info');
             const hijos = postsState.filter(p => {
                 const refs = []; let m; const re = />>(\d+)/g; const txt = p.contenido || '';
                 while ((m = re.exec(txt)) !== null) refs.push(Number(m[1]));

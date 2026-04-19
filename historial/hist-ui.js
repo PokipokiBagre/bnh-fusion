@@ -351,7 +351,18 @@ function _renderPanelSeleccion() {
         });
     }
 
-    const pjCards = pool.map(g => {
+    // Ordenar: nativos del post → extras añadidos → resto alfabético
+    const poolOrdenado = [
+        ...pool.filter(g => pjsNativos.has(g.nombre_refinado)),
+        ...pool.filter(g => !pjsNativos.has(g.nombre_refinado) && personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)),
+        ...pool.filter(g => !pjsNativos.has(g.nombre_refinado) && !personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)),
+    ];
+
+    // Separador visual entre grupos
+    const nNativos = pool.filter(g => pjsNativos.has(g.nombre_refinado)).length;
+    const nExtras  = pool.filter(g => !pjsNativos.has(g.nombre_refinado) && personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)).length;
+
+    const pjCards = poolOrdenado.map((g, i) => {
         const esNativo  = pjsNativos.has(g.nombre_refinado);
         const esExtra   = personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado);
         const marcado   = esNativo || esExtra;
@@ -364,7 +375,13 @@ function _renderPanelSeleccion() {
             : esExtra
             ? `<span style="margin-left:auto;font-size:0.7em;color:var(--green);font-weight:800;">✓</span>`
             : '';
-        return `<div onclick="window._histTogglePJExtra('${g.nombre_refinado.replace(/'/g,"\\'")}')"
+        // Separador visual entre secciones
+        const sep = (i === nNativos && nNativos > 0 && nExtras > 0)
+            ? `<div style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Añadir extra</div>`
+            : (i === nNativos + nExtras && (nNativos > 0 || nExtras > 0))
+            ? `<div style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Otros</div>`
+            : '';
+        return sep + `<div onclick="window._histTogglePJExtra('${g.nombre_refinado.replace(/'/g,"\\'")}')"
             style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;
                    background:${bg};border:1.5px solid ${border};transition:background 0.12s,border 0.12s;">
             <img src="${img}" onerror="${_onErr}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
