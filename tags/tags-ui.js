@@ -2,15 +2,14 @@
 // tags/tags-ui.js
 // ============================================================
 import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, solicitudes, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
-import { getTagsConPuntos, estadoUmbral, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT } from './tags-logic.js';
+import { getTagsConPuntos, estadoUmbral, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles } from './tags-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
 async function _recargarCatalogo() {
-    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop
-        ?? window.scrollY;
+    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop ?? window.scrollY;
     const { cargarTodo } = await import('./tags-data.js');
     const { initMarkup } = await import('../bnh-markup.js');
     const { grupos: g2 } = await import('./tags-state.js');
@@ -37,6 +36,7 @@ export function renderProgresion() {
         const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
         return rolOk && estOk;
     });
+
     const btnRol = (val, label) => {
         const a = tagsState.filtroRol === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
@@ -45,6 +45,7 @@ export function renderProgresion() {
         const a = tagsState.filtroEstado === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
     };
+
     const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
@@ -65,13 +66,17 @@ export function renderProgresion() {
             const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
             const baneado = catEntry?.baneado;
             const pct   = Math.min((pts / UMBRAL_MAX) * 100, 100);
-            const color = pts >= 75 ? 'prog-red' : pts >= 50 ? 'prog-orange' : 'prog-green';
+            
+            // Colores arreglados: verde -> verdiazul -> azul
+            let colorBg = '';
+            if (pts >= 100) colorBg = '#3498db'; // Azul brillante
+            else if (pts >= 75) colorBg = '#1abc9c'; // Verdiazul (Teal)
+            else colorBg = '#2ecc71'; // Verde
 
             let canjeHtml = '';
             if (baneado) {
                 canjeHtml = '';
             } else if (pts > 0) {
-                // OP y Usuario ven botones similares, pero generan Solicitudes
                 canjeHtml = `<div class="thresh-badges">`;
                 if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" style="background:var(--orange);border-color:var(--orange);color:white;" onclick="window._tagsAbrirCanjeTresTags('${_esc(pj)}','${tag}')">−100 → 🎁 3 tags</button>`;
                 if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" style="background:#1a4a80;border-color:#1a4a80;color:white;" onclick="window._tagsAbrirCanjeMedialla('${_esc(pj)}','${tag}')">−75 → 🏅 Medalla</button>`;
@@ -80,7 +85,6 @@ export function renderProgresion() {
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_agi')">−50→+AGI</button>
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_ctl')">−50→+CTL</button>`;
                 
-                // Si no hay suficientes PT para nada, pintamos las metas en gris
                 if (pts < 50) {
                     [[50,'🗡 +stat'],[75,'🏅 medalla'],[100,'🎁 3 tags']].forEach(([thr,lbl]) => {
                         const cl = pts>=thr?'done':pts>=thr*0.6?'close':'far';
@@ -97,10 +101,42 @@ export function renderProgresion() {
                     </span>
                     <span class="tag-pts">${pts} / ${UMBRAL_MAX} PT</span>
                 </div>
-                <div class="prog-bar"><div class="prog-fill ${color}" style="width:${pct}%"></div></div>
+                <div class="prog-bar"><div class="prog-fill" style="width:${pct}%; background:${colorBg};"></div></div>
                 ${canjeHtml}
             </div>`;
         }).join('');
+    }
+
+    // ── Medallas Accesibles ──
+    let secMedallas = '';
+    if (pj) {
+        const accMedallas = getMedallasAccesibles(pj);
+        const busqMed = (tagsState.busquedaMedallasAcc || '').toLowerCase();
+        const filtradas = accMedallas.filter(m => m.nombre.toLowerCase().includes(busqMed) || (m.efecto_desc||'').toLowerCase().includes(busqMed));
+        
+        const mHtml = filtradas.length ? filtradas.map(m => {
+            const tagsD = (m.requisitos_base||[]).map(r => `<span style="font-size:0.68em;background:var(--gray-100);color:var(--blue);border:1px solid var(--gray-300);padding:1px 5px;border-radius:4px;">${r.tag.startsWith('#')?r.tag:'#'+r.tag}</span>`).join(' ');
+            return `
+            <div class="medalla-card activable" style="cursor:pointer; border-color:var(--green); background:rgba(39,174,96,0.04);"
+                onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')">
+                <div class="medalla-status">✅</div>
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+                    <div class="medalla-nombre" style="font-size:0.85em;">${m.nombre}</div>
+                    <div style="font-size:0.8em;font-weight:800;color:var(--purple);white-space:nowrap;">${m.costo_ctl} CTL</div>
+                </div>
+                ${tagsD ? `<div style="margin:bottom:4px;">${tagsD}</div>` : ''}
+                <div class="medalla-efecto" style="font-size:0.75em;">${renderMarkup(m.efecto_desc||'')}</div>
+            </div>`;
+        }).join('') : '<p class="empty-state" style="grid-column:1/-1;">No se encontraron medallas.</p>';
+
+        secMedallas = `
+        <div class="card" style="margin-top:16px;">
+            <div class="card-title">Medallas Posibles Accesibles (${filtradas.length})</div>
+            <input class="inp" placeholder="🔍 Buscar medalla accesible..." value="${_esc(tagsState.busquedaMedallasAcc)}" oninput="window._tagsBuscarMedallasAcc(this.value)" style="margin-bottom:12px;width:100%;max-width:300px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+                ${mHtml}
+            </div>
+        </div>`;
     }
 
     const rankingHtml = rankingPorPT().slice(0, 5).map(({ nombre, total }, i) => {
@@ -124,15 +160,22 @@ export function renderProgresion() {
                         <span style="width:1px;background:var(--gray-200);margin:0 3px;display:inline-block;"></span>
                         ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
                     </div>
-                    <div class="char-grid">${charHtml}</div>
+                    <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
                 </div>
-                ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
+                ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>${secMedallas}` : barrasHtml}
             </div>
+
             <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;">
                 ${pj ? `<div class="card"><div class="card-title">Resumen</div>${_resumenPJ(pj)}</div>` : ''}
                 ${pj ? _renderSolicitudes(pj) : ''}
-                <div class="card"><div class="card-title">🏆 Ranking Top 5</div>${rankingHtml}</div>
-                <div class="card"><div class="card-title">⚡ Cerca de canje</div>${_cercaDeCanje()}</div>
+                <div class="card">
+                    <div class="card-title">🏆 Ranking Top 5</div>
+                    ${rankingHtml}
+                </div>
+                <div class="card">
+                    <div class="card-title">⚡ Cerca de canje</div>
+                    ${_cercaDeCanje()}
+                </div>
             </div>
         </div>`;
 }
@@ -148,15 +191,15 @@ function _renderSolicitudes(pj) {
         else if (r.tipo === 'stat_ctl') lbl = '🧠 +1 CTL';
         else if (r.tipo === 'medalla') lbl = `🏅 Medalla Propuesta: <b>${r.datos?.nombre_medalla||'Desconocida'}</b>`;
         else if (r.tipo === 'tres_tags') {
-            lbl = `🎁 Tags: ${r.datos.cambios.map(c=>c.tipo==='remover'?'-'+c.tag:'+'+c.tag).join(', ')}`;
+            lbl = `🎁 Tags: ${r.datos.cambios.map(c=>c.tipo==='remover'?'-'+c.tag:c.tipo==='anadir'?'+'+c.tag:'✨'+c.tag).join(', ')}`;
         }
 
         const adminBtns = tagsState.esAdmin ? `
             <button onclick="window._tagsAprobarReq(${r.id})" class="btn btn-green btn-sm" style="flex:1;">✅ Aprobar</button>
             <button onclick="window._tagsCancelarReq(${r.id})" class="btn btn-red btn-sm" style="flex:1;">❌ Rechazar</button>
         ` : `
-            ${r.tipo === 'tres_tags' ? `<button onclick="window._tagsAbrirEditTresTags(${r.id})" class="btn btn-outline btn-sm" style="border-color:var(--orange);color:var(--orange);flex:1;">✏️ Editar</button>` : ''}
-            ${r.tipo === 'medalla' ? `<div style="font-size:0.7em;color:var(--gray-500);width:100%;margin-bottom:4px;">* Edita la medalla desde la pestaña Catálogo de Medallas.</div>` : ''}
+            ${r.tipo === 'tres_tags' ? `<button onclick="window._tagsAbrirEditTresTags(${r.id})" class="btn btn-outline btn-sm" style="border-color:var(--orange);color:var(--orange);flex:1;">✏️ Editar Solicitud</button>` : ''}
+            ${r.tipo === 'medalla' ? `<button onclick="window._tagsAbrirEditMedalla(${r.id})" class="btn btn-outline btn-sm" style="border-color:var(--orange);color:var(--orange);flex:1;">✏️ Editar Propuesta</button>` : ''}
             <button onclick="window._tagsCancelarReq(${r.id})" class="btn btn-red btn-sm" style="flex:1;">🗑️ Retirar / Devolver PT</button>
         `;
 
@@ -239,15 +282,18 @@ function _resumenPJ(pj) {
 function _cercaDeCanje() {
     const lista = tagsCercaDeCanje().slice(0,8);
     if (!lista.length) return `<div class="empty-state" style="padding:12px;"><p>Nadie cerca aún.</p></div>`;
-    return lista.map(({pj,tag,pts}) => `
+    return lista.map(({pj,tag,pts}) => {
+        let colorTxt = pts >= 100 ? '#3498db' : pts >= 75 ? '#1abc9c' : '#2ecc71';
+        return `
         <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--gray-100);font-size:0.82em;">
             <div><span style="font-weight:600;">${pj}</span>
                 <span class="tag-pill" style="margin-left:5px;cursor:pointer;" onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}')">
                     ${tag}
                 </span>
             </div>
-            <span style="font-weight:700;color:${pts>=100?'var(--red)':pts>=75?'var(--orange)':'var(--green)'};">${pts}</span>
-        </div>`).join('');
+            <span style="font-weight:700;color:${colorTxt};">${pts} PT</span>
+        </div>`;
+    }).join('');
 }
 
 // ── Tag Detalle (modal) ───────────────────────────────────────
@@ -1100,7 +1146,7 @@ export function renderEstadisticas() {
                                     ${tag}
                                 </span>
                             </div>
-                            <span style="font-weight:700;color:${pts>=100?'var(--red)':'var(--orange)'};">${pts} PT</span>
+                            <span style="font-weight:700;color:${pts>=100?'#3498db':pts>=75?'#1abc9c':'#2ecc71'};">${pts} PT</span>
                         </div>`).join('') || `<div class="empty-state" style="padding:12px;"><p>Nadie cerca todavía.</p></div>`}
                 </div>
             </div>
