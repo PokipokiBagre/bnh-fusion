@@ -394,38 +394,107 @@ export function abrirEditarLore(nombreGrupo) {
     const escTA = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
     ov.innerHTML = `
-    <div class="op-modal">
+    <div class="op-modal" style="max-width:820px;width:95%;">
         <div class="op-modal-header">
             <span class="op-modal-title">📝 ${g.nombre_refinado} — Editar Lore</span>
             <button class="op-modal-close" onclick="document.getElementById('op-overlay').style.display='none'">×</button>
         </div>
-        <div id="op-body" style="padding:16px;display:flex;flex-direction:column;gap:12px;">
-            <div style="font-size:0.72em;color:var(--gray-500);line-height:1.6;">
+        <div id="op-body" style="padding:16px;">
+            <div style="font-size:0.72em;color:var(--gray-500);line-height:1.6;margin-bottom:12px;">
                 <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha &nbsp;·&nbsp;
                 <span style="color:var(--red);font-weight:700;">#Tag</span> → tags &nbsp;·&nbsp;
                 <span style="color:#1a4a80;font-weight:700;">!Medalla!</span> → medallas<br>
                 <span style="color:var(--gray-400);">Tab/Enter = autocompletar</span>
             </div>
-            <div>
-                <label class="op-label" style="display:block;margin-bottom:4px;">Descripción</label>
-                <textarea id="lore-descripcion" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.descripcion||'')}</textarea>
-            </div>
-            <div>
-                <label class="op-label" style="display:block;margin-bottom:4px;">Historia / Lore</label>
-                <textarea id="lore-lore" rows="5" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.lore||'')}</textarea>
-            </div>
-            <div>
-                <label class="op-label" style="display:block;margin-bottom:4px;">Personalidad</label>
-                <textarea id="lore-personalidad" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.personalidad||'')}</textarea>
-            </div>
-            <div>
-                <label class="op-label" style="display:block;margin-bottom:4px;">Quirk / Habilidad</label>
-                <textarea id="lore-quirk" rows="4" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.quirk||'')}</textarea>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center;">
-                <button class="op-btn op-btn-green" onclick="window._loreGuardar('${g.id}')">💾 Guardar</button>
-                <button class="op-btn op-btn-gray" onclick="document.getElementById('op-overlay').style.display='none'">Cancelar</button>
-                <div id="msg-lore-modal" class="op-msg" style="flex:1;"></div>
+            <div style="display:grid;grid-template-columns:1fr 220px;gap:16px;align-items:start;">
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <div>
+                        <label class="op-label" style="display:block;margin-bottom:4px;">Descripción</label>
+                        <textarea id="lore-descripcion" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.descripcion||'')}</textarea>
+                    </div>
+                    <div>
+                        <label class="op-label" style="display:block;margin-bottom:4px;">Historia / Lore</label>
+                        <textarea id="lore-lore" rows="5" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.lore||'')}</textarea>
+                    </div>
+                    <div>
+                        <label class="op-label" style="display:block;margin-bottom:4px;">Personalidad</label>
+                        <textarea id="lore-personalidad" rows="3" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.personalidad||'')}</textarea>
+                    </div>
+                    <div>
+                        <label class="op-label" style="display:block;margin-bottom:4px;">Quirk / Habilidad</label>
+                        <textarea id="lore-quirk" rows="4" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.quirk||'')}</textarea>
+                    </div>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="op-btn op-btn-green" onclick="window._loreGuardar('${g.id}')">💾 Guardar</button>
+                        <button class="op-btn op-btn-gray" onclick="document.getElementById('op-overlay').style.display='none'">Cancelar</button>
+                        <div id="msg-lore-modal" class="op-msg" style="flex:1;"></div>
+                    </div>
+                </div>
+                <div>
+                    <div style="font-size:0.72em;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
+                        Información extra <span style="font-weight:400;color:var(--gray-400);">(opcional)</span>
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">ESTADO</label>
+                        <input id="lore-info-estado" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['estado']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">EDAD</label>
+                        <input id="lore-info-edad" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['edad']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">ALTURA</label>
+                        <input id="lore-info-altura" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['altura']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">PESO</label>
+                        <input id="lore-info-peso" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['peso']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">GÉNERO</label>
+                        <input id="lore-info-genero" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['genero']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">LUGAR DE NACIMIENTO</label>
+                        <input id="lore-info-lugar_nac" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['lugar_nac']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">OCUPACIÓN</label>
+                        <input id="lore-info-ocupacion" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['ocupacion']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">AFILIACIÓN</label>
+                        <input id="lore-info-afiliacion" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['afiliacion']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">FAMILIA</label>
+                        <input id="lore-info-familia" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['familia']||'')}">
+                    </div>
+                    <div style="margin-bottom:7px;">
+                        <label style="font-size:0.72em;font-weight:600;color:var(--gray-600);display:block;margin-bottom:2px;">NOTA EXTRA</label>
+                        <input id="lore-info-nota" type="text" class="op-input" placeholder="Opcional..."
+                            style="padding:5px 8px;font-size:0.82em;width:100%;box-sizing:border-box;"
+                            value="${escTA((g.info_extra||{})['nota']||'')}">
+                    </div>
+                </div>
             </div>
         </div>
     </div>`;
@@ -591,11 +660,17 @@ export function exponerGlobalesOP() {
         const lore         = document.getElementById('lore-lore')?.value||'';
         const personalidad = document.getElementById('lore-personalidad')?.value||'';
         const quirk        = document.getElementById('lore-quirk')?.value||'';
+        const INFO_KEYS = ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'];
+        const info_extra = {};
+        INFO_KEYS.forEach(k => {
+            const v = document.getElementById('lore-info-' + k)?.value?.trim();
+            if (v) info_extra[k] = v;
+        });
         const setM = (ok, msg) => {
             const el = document.getElementById('msg-lore-modal');
             if (el) { el.className='op-msg '+(ok?'ok':'err'); el.textContent=msg; }
         };
-        const res = await guardarLoreGrupo(grupoId, {descripcion, lore, personalidad, quirk});
+        const res = await guardarLoreGrupo(grupoId, {descripcion, lore, personalidad, quirk, info_extra});
         setM(res.ok, res.ok ? '✅ Guardado' : '❌ ' + res.msg);
         if (res.ok) {
             setTimeout(() => {

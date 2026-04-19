@@ -93,6 +93,11 @@ function exponerGlobales() {
         fichasUI.seleccionado = null;
         sincronizarVista();
         window.scrollTo(0, 0);
+        // Enfocar buscador de nombre al volver al catálogo
+        setTimeout(() => {
+            const inp = document.getElementById('nombre-buscar-inp');
+            if (inp) inp.focus();
+        }, 100);
     };
 
     window.abrirPanelOP         = abrirPanelOP;
