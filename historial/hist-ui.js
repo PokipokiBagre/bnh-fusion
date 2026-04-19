@@ -336,17 +336,40 @@ function _renderPanelSeleccion() {
                    background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${lbl}</button>`;
     };
 
+    // PJs nativos de los posts seleccionados (ya están en el poster_name)
+    const pjsNativos = new Set();
+    if (selPostsState.postsSel.size > 0) {
+        const { postsState } = selPostsState._postsRef || {};
+        const posts = window._histPostsRef || [];
+        posts.forEach(p => {
+            if (!selPostsState.postsSel.has(p.post_no)) return;
+            p.poster_name.split(',').map(s => s.trim()).filter(Boolean).forEach(alias => {
+                const grupo = (window._histMapaAlias || {})[alias]
+                           || (window._histMapaAlias || {})[alias.replace(/##?\S+/, '').trim()];
+                if (grupo) pjsNativos.add(grupo);
+            });
+        });
+    }
+
     const pjCards = pool.map(g => {
-        const yaEsta = personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado);
+        const esNativo  = pjsNativos.has(g.nombre_refinado);
+        const esExtra   = personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado);
+        const marcado   = esNativo || esExtra;
         const img = imgPJ(g.nombre_refinado);
+        const bg     = esNativo  ? 'rgba(0,180,216,0.08)' : esExtra ? 'rgba(39,174,96,0.1)' : 'white';
+        const border = esNativo  ? '#00b4d8'              : esExtra ? 'var(--green)'         : '#dee2e6';
+        const textC  = esNativo  ? '#0097b2'              : esExtra ? 'var(--green-dark)'    : '#333';
+        const badge  = esNativo
+            ? `<span style="margin-left:auto;font-size:0.65em;color:#00b4d8;font-weight:800;background:rgba(0,180,216,0.1);padding:1px 5px;border-radius:4px;">post</span>`
+            : esExtra
+            ? `<span style="margin-left:auto;font-size:0.7em;color:var(--green);font-weight:800;">✓</span>`
+            : '';
         return `<div onclick="window._histTogglePJExtra('${g.nombre_refinado.replace(/'/g,"\\'")}')"
             style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;
-                   background:${yaEsta?'rgba(39,174,96,0.1)':'white'};
-                   border:1.5px solid ${yaEsta?'var(--green)':'#dee2e6'};
-                   transition:background 0.12s,border 0.12s;">
+                   background:${bg};border:1.5px solid ${border};transition:background 0.12s,border 0.12s;">
             <img src="${img}" onerror="${_onErr}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
-            <span style="font-size:0.78em;font-weight:${yaEsta?700:500};color:${yaEsta?'var(--green-dark)':'#333'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.nombre_refinado}</span>
-            ${yaEsta?`<span style="margin-left:auto;font-size:0.7em;color:var(--green);font-weight:800;">✓</span>`:''}
+            <span style="font-size:0.78em;font-weight:${marcado?700:500};color:${textC};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.nombre_refinado}</span>
+            ${badge}
         </div>`;
     }).join('');
 
@@ -356,7 +379,7 @@ function _renderPanelSeleccion() {
 
     return `
     <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:12px;
-        display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 120px);overflow-y:auto;">
+        display:flex;flex-direction:column;gap:10px;">
 
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <b style="font-size:0.85em;color:var(--green-dark);">☑ Selección de posts</b>
@@ -412,7 +435,7 @@ function _renderPanelSeleccion() {
                     ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                 </div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;">
+            <div style="display:flex;flex-direction:column;gap:4px;">
                 ${pjCards || '<span style="font-size:0.78em;color:#aaa;">Sin personajes</span>'}
             </div>
         </div>

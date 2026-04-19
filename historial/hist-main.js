@@ -80,6 +80,13 @@ async function init() {
     mostrarVista('timeline'); // timeline es la vista principal
 }
 
+// ── Exponer referencias para el panel de selección ───────────
+// hist-ui.js las lee para preseleccionar PJs nativos del post
+function _exponerReferencias() {
+    window._histPostsRef   = postsState;
+    window._histMapaAlias  = mapaAliasAGrupo;
+}
+
 // ── Cargar datos del hilo activo ──────────────────────────────
 async function cargarHiloActivo() {
     if (!estadoUI.hiloActivo) return;
@@ -89,6 +96,7 @@ async function cargarHiloActivo() {
         cargarRankingDB(board, thread_id),
         cargarPTTagDelHilo(thread_id)
     ]);
+    _exponerReferencias();
 }
 
 // ── Navegación ────────────────────────────────────────────────
@@ -409,7 +417,42 @@ window._histTogglePJExtra = async function(nombre) {
         }
     } else {
         const pj = selPostsState.todosPJs.find(g => g.nombre_refinado === nombre);
-        if (pj) selPostsState.personajesExtra.push({ nombre_refinado: pj.nombre_refinado, tags: pj.tags || [] });
+        if (pj) {
+            selPostsState.personajesExtra.push({ nombre_refinado: pj.nombre_refinado, tags: pj.tags || [] });
+
+            // Actualizar poster_name en DB para cada post seleccionado
+            // para que el PJ extra aparezca en el nombre y en los avatares
+            if (estadoUI.hiloActivo && selPostsState.postsSel.size > 0) {
+                const { board, thread_id } = estadoUI.hiloActivo;
+                for (const postNo of selPostsState.postsSel) {
+                    const postLocal = postsState.find(p => p.post_no === postNo);
+                    if (!postLocal) continue;
+                    // Verificar que el PJ no esté ya en el poster_name
+                    const partesActuales = postLocal.poster_name.split(',').map(s => s.trim());
+                    const yaApareceComoAlias = partesActuales.some(p => {
+                        const grupo = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/, '').trim()];
+                        return grupo === nombre;
+                    });
+                    if (yaApareceComoAlias) continue;
+                    // Añadir el nombre_refinado al poster_name
+                    const nuevoPosterName = postLocal.poster_name + ', ' + nombre;
+                    try {
+                        await supabase.from('historial_posts')
+                            .update({ poster_name: nuevoPosterName })
+                            .eq('board', board)
+                            .eq('thread_id', thread_id)
+                            .eq('post_no', postNo);
+                        // Actualizar en memoria también
+                        postLocal.poster_name = nuevoPosterName;
+                        // Asegurar que el alias está en el mapa
+                        mapaAliasAGrupo[nombre] = nombre;
+                    } catch(e) {
+                        console.warn('[togglePJExtra] Error actualizando poster_name:', e);
+                    }
+                }
+                _exponerReferencias();
+            }
+        }
     }
     mostrarVista('timeline');
 };
