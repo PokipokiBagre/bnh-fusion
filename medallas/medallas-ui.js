@@ -133,11 +133,11 @@ function _renderCard(m) {
 }
 
 // ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
+// ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
 export function renderGrafo() {
     const wrap = document.getElementById('vista-grafo');
     if (!wrap) return;
 
-    // 1. Construir índice de tags → cuántas medallas tienen
     const tagConteo = {};
     medallas.filter(m => !m.propuesta || medallaState.esAdmin).forEach(m => {
         const mTagsArr = (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
@@ -148,7 +148,6 @@ export function renderGrafo() {
         .sort((a,b) => b[1]-a[1])
         .map(([tag, cnt]) => ({ tag, cnt }));
 
-    // Buscador
     const busq = medallaState.grafoBusqueda.toLowerCase();
     if (busq) {
         const match = todosLosTags.filter(t => t.tag.toLowerCase().includes(busq));
@@ -188,43 +187,62 @@ export function renderGrafo() {
             <button onclick="window._medGrafoClearTags()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.85em;margin-left:4px;">✕ Limpiar</button>
            </div>` : '';
 
-    // HTML Base con el Canvas
-    wrap.innerHTML = `
-        <div style="display:flex;flex-direction:column;gap:10px;">
-            <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;">
-                <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-                    <b style="font-size:0.85em;color:var(--gray-700);">Selecciona tags para soltar los bloques</b>
-                    <input id="grafo-buscar-tag" placeholder="🔍 Buscar tag…"
-                        value="${_esc(medallaState.grafoBusqueda)}"
-                        oninput="window._medGrafoBuscarTag(this.value)"
-                        style="padding:4px 10px;font-size:0.8em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;max-width:200px;">
+    // ¡CRÍTICO PARA EVITAR EL PARPADEO!
+    // Solo construimos el Canvas HTML si no existe todavía en la pantalla
+    let canvasContainer = document.getElementById('bloques-canvas-wrap');
+    if (!canvasContainer) {
+        wrap.innerHTML = `
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;"></div>
+                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:12px;overflow:hidden;height:650px;">
+                    <canvas id="bloques-canvas" style="display:block; cursor:pointer; width:100%; height:100%;"></canvas>
+                    <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">← Selecciona tags para ver caer las figuras</div>
                 </div>
-                <div style="display:flex;flex-wrap:wrap;gap:6px;">
-                    ${tagBtns || '<span style="color:#aaa;font-size:0.82em;">Sin tags con medallas</span>'}
-                </div>
-                ${paginacion}
-                ${selHtml}
-            </div>
+            </div>`;
+    }
 
-            <div style="position:relative;background:#0d1117;border-radius:12px;overflow:hidden;">
-                <canvas id="bloques-canvas" style="display:block; cursor:pointer;"></canvas>
-                ${!selTags.length ? `<div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">← Selecciona un tag para ver caer los bloques</div>` : ''}
+    // Actualizamos ÚNICAMENTE el panel de botones, sin tocar el canvas
+    const controles = document.getElementById('grafo-controles');
+    if (controles) {
+        controles.innerHTML = `
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+                <b style="font-size:0.85em;color:var(--gray-700);">Selecciona tags para soltar las figuras</b>
+                <input id="grafo-buscar-tag" placeholder="🔍 Buscar tag…"
+                    value="${_esc(medallaState.grafoBusqueda)}"
+                    oninput="window._medGrafoBuscarTag(this.value)"
+                    style="padding:4px 10px;font-size:0.8em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;max-width:200px;">
             </div>
-        </div>`;
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${tagBtns || '<span style="color:#aaa;font-size:0.82em;">Sin tags con medallas</span>'}
+            </div>
+            ${paginacion}
+            ${selHtml}
+        `;
+        // Para no perder el foco si estabas escribiendo en el buscador
+        if (document.activeElement.id === 'grafo-buscar-tag') {
+            const inp = document.getElementById('grafo-buscar-tag');
+            inp.focus();
+            inp.setSelectionRange(inp.value.length, inp.value.length);
+        }
+    }
 
-    // Inicializar el canvas y mandarle la data
+    // Ocultar/Mostrar el texto placeholder del canvas
+    const placeholder = document.getElementById('bloques-placeholder');
+    if (placeholder) {
+        placeholder.style.display = selTags.length ? 'none' : 'flex';
+    }
+
+    // Finalmente, decirle al motor que dispare los bloques
     setTimeout(() => {
         const c = document.getElementById('bloques-canvas');
         if (!c) return;
         
-        // Evitamos reiniciar los listeners si ya estaba cargado
         if (!c.dataset.init) {
             initBloques(c);
             c.dataset.init = "true";
         }
 
         if (selTags.length > 0) {
-            // Estructurar la data para bloques.js
             const datosParaBloques = selTags.map(tag => {
                 const medallasDeltag = medallas.filter(m =>
                     (!m.propuesta || medallaState.esAdmin) &&
@@ -240,7 +258,7 @@ export function renderGrafo() {
         } else {
             clearBloques();
         }
-    }, 50);
+    }, 10);
 }
 
 // ── Tab Personaje — con filtros rol/estado ────────────────────
