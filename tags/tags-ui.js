@@ -67,7 +67,7 @@ export function renderProgresion() {
             const baneado = catEntry?.baneado;
             const pct   = Math.min((pts / UMBRAL_MAX) * 100, 100);
             
-            // Nuevos colores escalonados
+            // Colores escalonados y amigables (Verde -> Verdiazul -> Azul Brillante)
             let colorBg = '';
             if (pts >= 100) colorBg = '#3498db'; // Azul brillante
             else if (pts >= 75) colorBg = '#1abc9c'; // Verdiazul (Teal)
