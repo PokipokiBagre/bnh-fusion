@@ -55,12 +55,14 @@ function renderTab(tab) {
 
 function _exponerGlobales() {
     window._tagsTab = renderTab;
-    // Exponer initMarkupTextarea para uso en modales dinámicos
-    window._initMarkupTA = initMarkupTextarea;
-    // Exponer attachTagAC para inputs dinámicos de tags en modales
+    
+    window._initMarkupTA = window._initMarkupTA || (async (el) => {
+        const { initMarkupTextarea } = await import('../bnh-markup.js');
+        initMarkupTextarea(el);
+    });
+
     window._attachTagAC_tags = (input) => {
         if (!input || input._acMounted) return;
-        // Reusar el mismo AC de bnh-tags
         const { sugerirTags } = window._sugerirTagsFn || {};
         if (!sugerirTags) return;
         input._acMounted = true;
@@ -84,11 +86,8 @@ function _exponerGlobales() {
     };
 
     window._tagsSelPJ = (nombre) => {
-        // Usar requestAnimationFrame para garantizar que el estado quede
-        // seteado antes de que cualquier bubbling additional lo modifique
         tagsState.pjSeleccionado = nombre;
         requestAnimationFrame(() => {
-            // Verificar que sigue siendo el mismo (por si hay doble disparo)
             if (tagsState.pjSeleccionado !== nombre) {
                 tagsState.pjSeleccionado = nombre;
             }
@@ -96,7 +95,6 @@ function _exponerGlobales() {
         });
     };
 
-    // Abrir detalle de tag (modal)
     window._tagsVerDetalle = (tag) => {
         renderTagDetalle(tag);
     };
@@ -106,7 +104,6 @@ function _exponerGlobales() {
         if (el) el.style.display = 'none';
     };
 
-    // Guardar descripción desde detalle modal
     window._tagsGuardarDescDetalle = async (tagKey) => {
         const el   = document.getElementById('detalle-desc-inp');
         const sel  = document.getElementById('detalle-tipo-sel');
@@ -121,7 +118,6 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Guardar descripción desde catálogo (inline)
     window._tagsGuardarDesc = async (tag) => {
         const key = tag.startsWith('#') ? tag.slice(1) : tag;
         const el  = document.getElementById(`desc-${key}`);
@@ -134,7 +130,6 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Banear/desbanear tag
     window._tagsToggleBan = async (nombre, baneado) => {
         const res = await guardarBaneoTag(nombre, baneado);
         if (res.ok) {
@@ -144,13 +139,11 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Buscar en catálogo
     window._tagsBuscarCat = (v) => {
         tagsState.busquedaCat = v;
         renderCatalogo();
     };
 
-    // Canjear PT (stats)
     window._tagsCanjear = async (pj, tag, tipo) => {
         if (!tagsState.esAdmin) return;
         const costos = { stat_pot:50, stat_agi:50, stat_ctl:50, medalla:75, tres_tags:100 };
@@ -164,7 +157,6 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Modal canje "3 tags" — gestor visual de tags del PJ
     window._tagsAbrirCanjeTresTags = (pj, tag) => {
         const g = grupos.find(x => x.nombre_refinado === pj);
         if (!g) return;
@@ -189,7 +181,6 @@ function _exponerGlobales() {
                 Puedes <b>añadir</b> tags nuevos o <b>remover</b> tags actuales. Máximo 3 operaciones.
             </div>
             <div style="padding:16px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex:1;">
-                <!-- Columna izquierda: tags actuales -->
                 <div>
                     <div style="font-size:0.75em;font-weight:700;color:#888;text-transform:uppercase;margin-bottom:8px;">Tags actuales (${tagsActuales.length})</div>
                     <div style="display:flex;flex-direction:column;gap:3px;max-height:300px;overflow-y:auto;">
@@ -200,7 +191,6 @@ function _exponerGlobales() {
                         </div>`).join('')}
                     </div>
                 </div>
-                <!-- Columna central: cambios programados -->
                 <div>
                     <div style="font-size:0.75em;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:8px;">Cambios (máx. 3)</div>
                     <div id="tres-cambios" style="display:flex;flex-direction:column;gap:6px;min-height:80px;max-height:260px;overflow-y:auto;background:rgba(243,156,18,0.05);border:1.5px dashed #f39c12;border-radius:8px;padding:8px;margin-bottom:10px;">
@@ -216,7 +206,6 @@ function _exponerGlobales() {
                         <button onclick="window._treesTagsNuevo()" style="padding:4px 10px;font-size:0.78em;background:var(--green);border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">+</button>
                     </div>
                 </div>
-                <!-- Columna derecha: tags disponibles para añadir -->
                 <div>
                     <div style="font-size:0.75em;font-weight:700;color:var(--green);text-transform:uppercase;margin-bottom:4px;">Añadir tag existente</div>
                     <input id="tres-buscar" placeholder="Buscar…" oninput="window._tresBuscar(this.value)"
@@ -291,7 +280,6 @@ function _exponerGlobales() {
             window._tresActualizarContador();
         };
 
-        // Añadir un tag existente de la columna derecha
         window._treesTagsAnadir = (nuevoTag) => {
             if (window._tresCambios.length >= 3) { toast('Máximo 3 operaciones', 'info'); return; }
             if (window._tresCambios.some(c => c.tag === nuevoTag)) return;
@@ -299,7 +287,6 @@ function _exponerGlobales() {
             window._tresRenderCambios();
         };
 
-        // Remover un tag actual
         window._tresRemover = (tagViejo) => {
             if (window._tresCambios.length >= 3) { toast('Máximo 3 operaciones', 'info'); return; }
             if (window._tresCambios.some(c => c.tipo === 'remover' && c.tag === tagViejo)) return;
@@ -307,7 +294,6 @@ function _exponerGlobales() {
             window._tresRenderCambios();
         };
 
-        // Crear un tag completamente nuevo
         window._treesTagsNuevo = () => {
             const inp = document.getElementById('tres-nuevo-tag');
             if (!inp) return;
@@ -340,11 +326,9 @@ function _exponerGlobales() {
                         (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase()
                     );
                 } else {
-                    // anadir o nuevo
                     if (!tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tagNorm.toLowerCase())) {
                         tagsFinal.push(tagNorm);
                     }
-                    // Registrar en catálogo si es nuevo
                     if (cam.tipo === 'nuevo') {
                         const tagKey = tagNorm.slice(1);
                         await supabase.from('tags_catalogo').upsert(
@@ -365,15 +349,11 @@ function _exponerGlobales() {
         };
     };
 
-    // Modal canje "Medalla" — propuesta completa con markup y todos los campos
     window._tagsAbrirCanjeMedialla = (pj, tag) => {
         const modal = document.createElement('div');
         modal.id = 'modal-proponer-medalla-tags';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto;';
         modal.onclick = e => { if(e.target===modal) modal.remove(); };
-
-        // Contador de requisitos dinámico
-        let reqCount = 0;
 
         modal.innerHTML = `
         <div style="background:white;border-radius:12px;max-width:700px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);overflow:hidden;border:2px solid #e67e22;">
@@ -445,7 +425,6 @@ function _exponerGlobales() {
         </div>`;
         document.body.appendChild(modal);
 
-        // Contadores para filas dinámicas
         window._mpropReqCount  = 0;
         window._mpropCondCount = 0;
 
@@ -477,7 +456,6 @@ function _exponerGlobales() {
             );
         };
 
-        // Montar markup en efecto base al hover (lazy)
         setTimeout(() => {
             const ef = document.getElementById('mprop-efecto');
             if (ef && window._initMarkupTA) window._initMarkupTA(ef);
@@ -492,7 +470,6 @@ function _exponerGlobales() {
         const msgEl   = document.getElementById('mprop-msg');
         if (!nombre) { if(msgEl) msgEl.textContent='El nombre es obligatorio.'; return; }
 
-        // Recoger requisitos
         const reqs = [];
         document.querySelectorAll('#mprop-reqs [id^="mprop-req-tag-"]').forEach(el => {
             const idx = el.id.replace('mprop-req-tag-','');
@@ -501,7 +478,6 @@ function _exponerGlobales() {
             if (t) reqs.push({ tag: t.startsWith('#')?t:'#'+t, pts_minimos: pts });
         });
 
-        // Recoger condicionales
         const conds = [];
         document.querySelectorAll('#mprop-conds [id^="mprop-cond-tag-"]').forEach(el => {
             const idx = el.id.replace('mprop-cond-tag-','');
@@ -535,7 +511,6 @@ function _exponerGlobales() {
         renderProgresion();
     };
 
-// Asignar tag desde el detalle modal (OP)
     window._tagsAsignarDesdeDetalle = async (grupoId, nombreGrupo, tag) => {
         const { supabase } = await import('../bnh-auth.js');
         const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
@@ -552,14 +527,12 @@ function _exponerGlobales() {
             const gLocal = grupos.find(x => x.id === grupoId);
             if (gLocal) gLocal.tags = nuevosTags;
             toast(`✅ ${tagNorm} asignado a ${nombreGrupo}`, 'ok');
-            // Refresca la ventana para que el personaje suba a la lista inmediatamente
             window._tagsVerDetalle(tagNorm); 
         } else {
             toast('❌ ' + error.message, 'error');
         }
     };
 
-    // Quitar tag desde el detalle modal (OP)
     window._tagsQuitarDesdeDetalle = async (grupoId, nombreGrupo, tag) => {
         if (!confirm(`¿Quitar el tag ${tag} de ${nombreGrupo}?`)) return;
         const { supabase } = await import('../bnh-auth.js');
@@ -569,9 +542,7 @@ function _exponerGlobales() {
             .select('tags').eq('id', grupoId).maybeSingle();
         if (!g) return;
 
-        // Filtramos para quitar el tag específico
         const nuevosTags = (g.tags || []).filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase());
-
         const { error } = await supabase.from('personajes_refinados')
             .update({ tags: nuevosTags }).eq('id', grupoId);
 
@@ -579,25 +550,21 @@ function _exponerGlobales() {
             const gLocal = grupos.find(x => x.id === grupoId);
             if (gLocal) gLocal.tags = nuevosTags;
             toast(`🗑️ ${tagNorm} removido de ${nombreGrupo}`, 'ok');
-            // Refresca la ventana para que el personaje baje a la lista inmediatamente
             window._tagsVerDetalle(tagNorm); 
         } else {
             toast('❌ ' + error.message, 'error');
         }
     };
 
-    // Ir a fichas filtrado por tag
     window._tagsIrAFichas = (tag) => {
         window.location.href = `../fichas/index.html?tag=${encodeURIComponent(tag)}`;
     };
 
-    // Multi-select asignación desde detalle
     window._tagsModoMulti = (activo) => {
         window._tagsModoMultiActivo = activo;
         window._tagsModoMultiSel    = new Set();
         const btn = document.getElementById('btn-asignar-multi');
         if (btn) btn.style.display = activo ? '' : 'none';
-        // Reset visual selection
         document.querySelectorAll('#sinTag-grid .char-thumb').forEach(el => {
             el.style.outline = '';
             el.style.opacity = '0.65';
@@ -606,7 +573,6 @@ function _exponerGlobales() {
 
     window._tagsAsignarClick = async (id, nombre, tag, el) => {
         if (window._tagsModoMultiActivo) {
-            // Toggle selection
             if (window._tagsModoMultiSel.has(id)) {
                 window._tagsModoMultiSel.delete(id);
                 el.style.outline = '';
@@ -619,7 +585,6 @@ function _exponerGlobales() {
             const btn = document.getElementById('btn-asignar-multi');
             if (btn) btn.textContent = `✅ Asignar seleccionados (${window._tagsModoMultiSel.size})`;
         } else {
-            // Single assign
             await window._tagsAsignarDesdeDetalle(id, nombre, tag);
         }
     };
@@ -651,11 +616,9 @@ function _exponerGlobales() {
         if (btn) { btn.disabled = false; btn.textContent = '✅ Asignar seleccionados'; }
     };
 
-    // Filtros rol/estado en progresión
     window._tagsFiltroRol    = (v) => { tagsState.filtroRol    = v; renderProgresion(); };
     window._tagsFiltroEstado = (v) => { tagsState.filtroEstado = v; renderProgresion(); };
 
-    // Renombrar tag (drop y actualiza en toda la BD)
     window._tagsRenombrar = async (tag) => {
         const nuevoNombre = prompt(`Renombrar ${tag} → nuevo nombre (sin #):`);
         if (!nuevoNombre || nuevoNombre.trim() === '' || nuevoNombre.trim() === tag.replace('#','')) return;
@@ -671,7 +634,6 @@ function _exponerGlobales() {
         }
     };
 
-    // Eliminar tag de todos los personajes y el catálogo
     window._tagsEliminar = async (tag, count) => {
         const msg = count > 0
             ? `¿Eliminar ${tag}? Se quitará de ${count} personaje${count!==1?'s':''} y del catálogo. Esta acción no se puede deshacer.`
@@ -687,7 +649,6 @@ function _exponerGlobales() {
         }
     };
 
-    // Descargar lista de tags como .txt
     window._tagsDescargar = (orden) => {
         const tagMapa = {};
         grupos.forEach(g => (g.tags||[]).forEach(t => {
@@ -713,7 +674,6 @@ function _exponerGlobales() {
         URL.revokeObjectURL(url);
     };
 
-    // Cerrar modal con ESC o click en fondo
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') window._tagsCloseDetalle();
     });
