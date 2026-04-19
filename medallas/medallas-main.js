@@ -49,9 +49,36 @@ function _exponerGlobales() {
     window._medTab        = _renderTab;
     window._medBuscar     = v => { medallaState.busqueda  = v; renderCatalogo(); };
     window._medFiltroTag  = v => { medallaState.filtroTag = v; renderCatalogo(); };
-    window._medSelPJ      = n => {
-        medallaState.pjSeleccionado = medallaState.pjSeleccionado === n ? null : n;
-        renderPersonaje();
+    window._medSelPJ = async n => {
+        if (medallaState.pjSeleccionado === n) {
+            // Deseleccionar
+            medallaState.pjSeleccionado = null;
+            medallaState.equipacion = [];
+            medallaState.equipacionDetalleId = null;
+            renderPersonaje();
+        } else {
+            // Seleccionar nuevo
+            medallaState.pjSeleccionado = n;
+            medallaState.equipacion = []; 
+            medallaState.equipacionDetalleId = null;
+            renderPersonaje(); // Renderiza rápido en blanco
+            
+            // Consultar la base de datos (tabla medallas_inventario)
+            const { data, error } = await supabase
+                .from('medallas_inventario')
+                .select('medalla_id')
+                .eq('personaje_nombre', n)
+                .eq('equipada', true)
+                .order('slot_orden');
+                
+            if (!error && data) {
+                // Relacionar los IDs con los datos completos de las medallas
+                medallaState.equipacion = data
+                    .map(row => medallas.find(m => m.id === row.medalla_id))
+                    .filter(Boolean); // Eliminar nulos por si alguna medalla fue borrada
+                renderPersonaje(); // Re-renderizar con los datos reales
+            }
+        }
     };
 
     // Filtros personaje
@@ -121,7 +148,7 @@ function _exponerGlobales() {
     };
 
     // Guardar solo las medallas que caben dentro del CTL (de arriba a abajo)
-    window._medGuardarEquipacionValida = async () => {
+        window._medGuardarEquipacionValida = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
         const ctl = g?.ctl || 0;
@@ -137,11 +164,24 @@ function _exponerGlobales() {
             if (!ok) return;
         }
         medallaState.equipacion = validas;
-        const ids = validas.map(m => m.id);
-        const { error } = await supabase.from('personajes_refinados')
-            .update({ equipacion: ids })
-            .eq('nombre_refinado', medallaState.pjSeleccionado);
-        if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
+        
+        // 1. Borramos la equipación anterior de este personaje
+        await supabase.from('medallas_inventario')
+            .delete()
+            .eq('personaje_nombre', medallaState.pjSeleccionado);
+
+        // 2. Insertamos la nueva equipación en los slots correctos
+        if (validas.length > 0) {
+            const inserts = validas.map((m, index) => ({
+                personaje_nombre: medallaState.pjSeleccionado,
+                medalla_id: m.id,
+                slot_orden: index + 1,
+                equipada: true
+            }));
+            const { error } = await supabase.from('medallas_inventario').insert(inserts);
+            if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
+        }
+        
         toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
         renderPersonaje();
     };
