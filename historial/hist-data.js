@@ -643,3 +643,52 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
         return { ok: false, msg: e.message };
     }
 }
+
+// ── Revertir PT de un personaje extra en posts específicos ────
+// Borra del log_puntos_tag las entradas de ese personaje en esos posts,
+// luego reconstruye puntos_tag desde el log limpio.
+export async function revertirPTExtraParaPosts(threadId, nombrePJ, postNos) {
+    if (!postNos.length) return { ok: true };
+    try {
+        // Borrar del log en lotes de 50
+        const LOTE = 50;
+        for (let i = 0; i < postNos.length; i += LOTE) {
+            const lote = postNos.slice(i, i + LOTE);
+            await supabase.from('log_puntos_tag')
+                .delete()
+                .eq('origen_thread_id', threadId)
+                .eq('personaje_nombre', nombrePJ)
+                .in('origen_post_no', lote);
+        }
+
+        // Reconstruir puntos_tag desde el log completo
+        const { data: log } = await supabase
+            .from('log_puntos_tag')
+            .select('personaje_nombre, tag, delta')
+            .eq('personaje_nombre', nombrePJ);
+
+        // Borrar todas las entradas del PJ en puntos_tag
+        await supabase.from('puntos_tag')
+            .delete()
+            .eq('personaje_nombre', nombrePJ);
+
+        // Reinsertar sumando desde el log restante
+        if (log && log.length) {
+            const sumas = {};
+            log.forEach(r => {
+                sumas[r.tag] = (sumas[r.tag] || 0) + r.delta;
+            });
+            const rows = Object.entries(sumas)
+                .filter(([, v]) => v > 0)
+                .map(([tag, cantidad]) => ({ personaje_nombre: nombrePJ, tag, cantidad }));
+            if (rows.length) {
+                await supabase.from('puntos_tag').insert(rows);
+            }
+        }
+
+        return { ok: true };
+    } catch(e) {
+        console.error('[revertirPTExtraParaPosts]', e);
+        return { ok: false, msg: e.message };
+    }
+}

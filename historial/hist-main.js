@@ -10,7 +10,7 @@ import {
     cargarHilos, cargarPostsDB, cargarRankingDB,
     cargarPTTagDelHilo, scrapearHilo, calcularPTHilo, eliminarPTHilo,
     agregarHilo, eliminarHilo, toggleHiloActivo,
-    calcularPTExtraParaPosts
+    calcularPTExtraParaPosts, revertirPTExtraParaPosts
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
@@ -382,10 +382,31 @@ window._histFiltroEst = function(v) {
     mostrarVista('timeline');
 };
 
-window._histTogglePJExtra = function(nombre) {
+window._histTogglePJExtra = async function(nombre) {
     const idx = selPostsState.personajesExtra.findIndex(e => e.nombre_refinado === nombre);
     if (idx >= 0) {
+        // Quitar personaje extra: revertir sus PT en posts seleccionados Y en posts hijos
+        const pjExtra = selPostsState.personajesExtra[idx];
         selPostsState.personajesExtra.splice(idx, 1);
+
+        if (estadoUI.hiloActivo && selPostsState.postsSel.size > 0) {
+            toast('⏳ Revirtiendo PT de ' + nombre + '…', 'info');
+            const { board, thread_id } = estadoUI.hiloActivo;
+            const postNos = [...selPostsState.postsSel];
+
+            // Posts hijos: posts del hilo que citan a alguno de los seleccionados
+            const { postsState } = await import('./hist-state.js');
+            const postNosHijos = postsState.filter(p => {
+                const refs = []; let m; const re = />>(\d+)/g; const txt = p.contenido || '';
+                while ((m = re.exec(txt)) !== null) refs.push(Number(m[1]));
+                return refs.some(r => postNos.includes(r));
+            }).map(p => p.post_no);
+
+            const todosLosPostsAfectados = [...new Set([...postNos, ...postNosHijos])];
+            await revertirPTExtraParaPosts(thread_id, nombre, todosLosPostsAfectados);
+            await cargarPTTagDelHilo(thread_id);
+            toast('✅ PT de ' + nombre + ' revertidos (' + todosLosPostsAfectados.length + ' posts)', 'ok');
+        }
     } else {
         const pj = selPostsState.todosPJs.find(g => g.nombre_refinado === nombre);
         if (pj) selPostsState.personajesExtra.push({ nombre_refinado: pj.nombre_refinado, tags: pj.tags || [] });

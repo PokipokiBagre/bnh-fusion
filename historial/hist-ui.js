@@ -101,62 +101,53 @@ const MOTI_COLOR = {
 };
 
 function renderPTBadgesConOrigen(ptEstePost, opciones) {
-    // Agrupar: { personaje_nombre → { tag → { interaccion: N, compartido: N, lectura: N } } }
+    // Agrupar: { personaje_nombre → { motivo → [{ tag, delta }] } }
+    // Orden fijo: interaccion (gris) → compartido (verde) → lectura (celeste)
     const porPJ = {};
     ptEstePost.forEach(e => {
-        if (!porPJ[e.personaje_nombre]) porPJ[e.personaje_nombre] = {};
-        const t = porPJ[e.personaje_nombre];
-        if (!t[e.tag]) t[e.tag] = {};
-        t[e.tag][e.motivo] = (t[e.tag][e.motivo] || 0) + e.delta;
+        if (!porPJ[e.personaje_nombre]) porPJ[e.personaje_nombre] = { interaccion: [], compartido: [], lectura: [] };
+        const bucket = porPJ[e.personaje_nombre][e.motivo];
+        if (bucket) {
+            // Agrupar por tag dentro del mismo motivo
+            const existing = bucket.find(x => x.tag === e.tag);
+            if (existing) existing.delta += e.delta;
+            else bucket.push({ tag: e.tag, delta: e.delta });
+        }
     });
 
     if (!Object.keys(porPJ).length) return '';
 
-    // Límites por categoría (de opciones o defaults)
     const limites = {
         interaccion: opciones?.max_no_compartidos ?? 5,
         compartido:  opciones?.max_compartidos    ?? 5,
         lectura:     opciones?.max_lectura        ?? 5,
     };
 
-    // Totales acumulados por personaje y motivo (para calcular n/max)
-    const acumPJMotivo = {};
-    ptEstePost.forEach(e => {
-        const key = `${e.personaje_nombre}||${e.motivo}`;
-        acumPJMotivo[key] = (acumPJMotivo[key] || 0) + e.delta;
-    });
-
-    const lineas = Object.entries(porPJ).map(([pj, tags]) => {
-        // Agrupar badges por motivo para mostrar el n/max
-        const porMotivo = { interaccion: [], compartido: [], lectura: [] };
-        Object.entries(tags).forEach(([tag, motivos]) => {
-            Object.entries(motivos).forEach(([motivo, delta]) => {
-                if (porMotivo[motivo]) porMotivo[motivo].push({ tag, delta });
-            });
-        });
-
-        const grupos = ['interaccion','compartido','lectura'].map(motivo => {
+    const lineas = Object.entries(porPJ).map(([pj, porMotivo]) => {
+        // Cada motivo en su propia línea, orden Gris → Verde → Azul
+        const filas = ['interaccion','compartido','lectura'].map(motivo => {
             const items = porMotivo[motivo];
             if (!items.length) return '';
             const c = MOTI_COLOR[motivo];
-            const totalMotivoEnPost = items.reduce((s, x) => s + x.delta, 0);
+            // n/max: cantidad de TAGS DISTINTOS obtenidos (slots usados), no suma de PT
+            const slotsUsados = items.length;
             const limite = limites[motivo];
             const badges = items.map(({ tag, delta }) => {
                 const tagCorto = tag.length > 16 ? tag.substring(0, 14) + '…' : tag;
                 return `<span style="background:${c.bg};border:1px solid ${c.border};color:${c.text};
                     padding:2px 6px;border-radius:8px;font-size:0.7em;font-weight:700;
                     white-space:nowrap;display:inline-flex;align-items:center;gap:2px;"
-                    title="${tag} (${c.label})">+${delta} ${tagCorto}</span>`;
-            }).join('');
-            return `<span style="display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap;">
+                    title="${tag}">+${delta} ${tagCorto}</span>`;
+            }).join(' ');
+            return `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                 ${badges}
-                <span style="font-size:0.65em;color:${c.text};opacity:0.8;white-space:nowrap;font-weight:600;">${totalMotivoEnPost}/${limite}</span>
-            </span>`;
-        }).filter(Boolean).join('<span style="color:#ccc;margin:0 2px;">|</span>');
+                <span style="font-size:0.65em;color:${c.text};opacity:0.85;white-space:nowrap;font-weight:700;">${slotsUsados}/${limite}</span>
+            </div>`;
+        }).filter(Boolean).join('');
 
-        return `<div style="display:flex;align-items:flex-start;gap:5px;flex-wrap:wrap;margin-bottom:2px;">
-            <span style="font-size:0.7em;color:#555;font-weight:700;white-space:nowrap;padding-top:3px;">${pj}:</span>
-            <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;">${grupos}</div>
+        return `<div style="margin-bottom:3px;">
+            <span style="font-size:0.7em;color:#555;font-weight:700;">${pj}:</span>
+            <div style="display:flex;flex-direction:column;gap:2px;margin-top:2px;padding-left:4px;">${filas}</div>
         </div>`;
     }).join('');
 
@@ -396,8 +387,9 @@ function _renderPanelSeleccion() {
         ${hayExtra && hayPosts ? `
         <div style="display:flex;flex-direction:column;gap:6px;">
             <button onclick="window._histCalcPTExtra()"
-                style="background:var(--blue);color:white;border:none;border-radius:8px;
-                       padding:7px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;">
+                style="background:#1a4a80;color:white;border:2px solid #2980b9;border-radius:8px;
+                       padding:8px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;
+                       box-shadow:0 2px 6px rgba(26,74,128,0.3);">
                 ⚡ Calcular PT para posts seleccionados
             </button>
             <button onclick="window._histCalcPTCitas()"
@@ -412,9 +404,13 @@ function _renderPanelSeleccion() {
         <!-- Pool de personajes -->
         <div>
             <div style="font-size:0.72em;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Añadir personaje extra</div>
-            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
-                ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
-                ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;">
+                <div style="display:flex;gap:4px;">
+                    ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
+                </div>
+                <div style="display:flex;gap:4px;">
+                    ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
+                </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;">
                 ${pjCards || '<span style="font-size:0.78em;color:#aaa;">Sin personajes</span>'}
