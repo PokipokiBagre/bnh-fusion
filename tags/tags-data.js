@@ -15,7 +15,7 @@ export async function cargarTodo() {
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
         supabase.from('tags_catalogo').select('nombre, descripcion, baneado, tipo').order('nombre'),
-        supabase.from('medallas_catalogo').select('nombre, costo_ctl, efecto_desc, tipo, requisitos_base').order('nombre'),
+        supabase.from('medallas_catalogo').select('id, nombre, costo_ctl, efecto_desc, tipo, requisitos_base, efectos_condicionales, propuesta').order('nombre'),
         supabase.from('solicitudes_tag').select('*').order('creado_en'),
     ]);
     setGrupos(gr || []);
@@ -25,18 +25,14 @@ export async function cargarTodo() {
     setSolicitudes(sol || []);
 }
 
-// Guarda o actualiza la descripción de un tag en tags_catalogo
 export async function guardarDescripcionTag(nombre, descripcion, tipo) {
     const payload = { nombre, descripcion };
     if (tipo) payload.tipo = tipo;
-    const { error } = await supabase.from('tags_catalogo')
-        .upsert(payload, { onConflict: 'nombre' });
+    const { error } = await supabase.from('tags_catalogo').upsert(payload, { onConflict: 'nombre' });
     return error ? { ok: false, msg: error.message } : { ok: true };
 }
 
 // ── SISTEMA DE SOLICITUDES ──────────────────────────────────────────
-
-// Envía una solicitud pendiente y descuenta los PT
 export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}) {
     const { data: ptRow } = await supabase.from('puntos_tag')
         .select('cantidad').eq('personaje_nombre', pj).ilike('tag', tagSource).maybeSingle();
@@ -56,22 +52,16 @@ export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}) {
     if (ePT) return { ok: false, msg: 'Error al descontar PT.' };
 
     const { error: eReq } = await supabase.from('solicitudes_tag').insert({
-        personaje_nombre: pj,
-        tag_origen: tagSource,
-        tipo,
-        costo_pt: costo,
-        datos
+        personaje_nombre: pj, tag_origen: tagSource, tipo, costo_pt: costo, datos
     });
 
     if (eReq) {
-        // Rollback (mejor esfuerzo)
         await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
         return { ok: false, msg: 'Error al registrar la solicitud.' };
     }
     return { ok: true, nueva: nuevaCantidad };
 }
 
-// OP aprueba la solicitud y aplica los cambios reales
 export async function aprobarSolicitud(reqId) {
     const { data: req } = await supabase.from('solicitudes_tag').select('*').eq('id', reqId).maybeSingle();
     if (!req) return { ok: false, msg: 'Solicitud no encontrada.' };
@@ -79,7 +69,7 @@ export async function aprobarSolicitud(reqId) {
     const pj = req.personaje_nombre;
 
     if (req.tipo.startsWith('stat_')) {
-        const statField = req.tipo.split('_')[1]; // pot, agi, ctl
+        const statField = req.tipo.split('_')[1]; 
         const { data: pData } = await supabase.from('personajes_refinados').select(statField).eq('nombre_refinado', pj).single();
         const newVal = (pData[statField] || 0) + 1;
         await supabase.from('personajes_refinados').update({ [statField]: newVal }).eq('nombre_refinado', pj);
@@ -107,16 +97,13 @@ export async function aprobarSolicitud(reqId) {
     }
     else if (req.tipo === 'medalla') {
         const medId = req.datos.medalla_id;
-        if (medId) {
-            await supabase.from('medallas_catalogo').update({ propuesta: false, propuesta_por: '' }).eq('id', medId);
-        }
+        if (medId) await supabase.from('medallas_catalogo').update({ propuesta: false, propuesta_por: '' }).eq('id', medId);
     }
 
     await supabase.from('solicitudes_tag').delete().eq('id', reqId);
     return { ok: true };
 }
 
-// Cancela la solicitud (OP o Anon), devuelve PT y borra medalla propuesta
 export async function cancelarSolicitud(reqId) {
     const { data: req } = await supabase.from('solicitudes_tag').select('*').eq('id', reqId).maybeSingle();
     if (!req) return { ok: false, msg: 'Solicitud no encontrada.' };
@@ -133,10 +120,7 @@ export async function cancelarSolicitud(reqId) {
             .eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen);
     } else {
         await supabase.from('puntos_tag').insert({
-            personaje_nombre: req.personaje_nombre,
-            tag: req.tag_origen,
-            cantidad: req.costo_pt,
-            actualizado_en: new Date().toISOString()
+            personaje_nombre: req.personaje_nombre, tag: req.tag_origen, cantidad: req.costo_pt, actualizado_en: new Date().toISOString()
         });
     }
 
@@ -150,13 +134,10 @@ export async function editarSolicitudTresTags(reqId, nuevosCambios) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-
 export async function guardarBaneoTag(nombre, baneado) {
-    const { data: cat } = await supabase.from('tags_catalogo')
-        .select('descripcion').eq('nombre', nombre).maybeSingle();
+    const { data: cat } = await supabase.from('tags_catalogo').select('descripcion').eq('nombre', nombre).maybeSingle();
     const desc = cat ? cat.descripcion : '';
-    const { error } = await supabase.from('tags_catalogo')
-        .upsert({ nombre, baneado, descripcion: desc }, { onConflict: 'nombre' });
+    const { error } = await supabase.from('tags_catalogo').upsert({ nombre, baneado, descripcion: desc }, { onConflict: 'nombre' });
     return error ? { ok: false, msg: error.message } : { ok: true };
 }
 
@@ -172,23 +153,18 @@ export async function renameTag(viejoNombre, nuevoNombre) {
             (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === viejoTag.toLowerCase())
         ).map(p => {
             const arr = p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== viejoTag.toLowerCase());
-            if (!arr.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === nuevoTag.toLowerCase())) {
-                arr.push(nuevoTag);
-            }
+            if (!arr.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === nuevoTag.toLowerCase())) arr.push(nuevoTag);
             return { id: p.id, tags: arr };
         });
 
-        for (const u of updates) 
-            await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
+        for (const u of updates) await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
 
         const { data: ptRows } = await supabase.from('puntos_tag').select('*').ilike('tag', viejoTag);
         for (const row of (ptRows||[])) {
             const { data: exist } = await supabase.from('puntos_tag')
                 .select('*').eq('personaje_nombre', row.personaje_nombre).ilike('tag', nuevoTag).maybeSingle();
             if (exist) {
-                await supabase.from('puntos_tag')
-                    .update({ cantidad: exist.cantidad + row.cantidad })
-                    .eq('id', exist.id);
+                await supabase.from('puntos_tag').update({ cantidad: exist.cantidad + row.cantidad }).eq('id', exist.id);
                 await supabase.from('puntos_tag').delete().eq('id', row.id);
             } else {
                 await supabase.from('puntos_tag').update({ tag: nuevoTag }).eq('id', row.id);
@@ -198,10 +174,7 @@ export async function renameTag(viejoNombre, nuevoNombre) {
         const { data: catOld } = await supabase.from('tags_catalogo').select('*').ilike('nombre', viejoKey).maybeSingle();
         if (catOld) {
             await supabase.from('tags_catalogo').delete().ilike('nombre', viejoKey);
-            await supabase.from('tags_catalogo').upsert(
-                { nombre: nuevoKey, descripcion: catOld.descripcion, baneado: catOld.baneado, tipo: catOld.tipo },
-                { onConflict: 'nombre' }
-            );
+            await supabase.from('tags_catalogo').upsert({ nombre: nuevoKey, descripcion: catOld.descripcion, baneado: catOld.baneado, tipo: catOld.tipo }, { onConflict: 'nombre' });
         }
         return { ok: true, afectados: updates.length };
     } catch(e) { return { ok: false, msg: e.message }; }
@@ -218,8 +191,7 @@ export async function deleteTag(nombre) {
             id: p.id,
             tags: p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase())
         }));
-        for (const u of updates)
-            await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
+        for (const u of updates) await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
         
         await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
         await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
