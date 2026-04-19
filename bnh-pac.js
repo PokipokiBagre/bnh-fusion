@@ -112,3 +112,70 @@ export function fmtTag(tag) {
     const t = tag.trim();
     return t.startsWith('#') ? t : '#' + t;
 }
+
+// ── Equipación de personajes (fuente: medallas_inventario) ──────────
+// Cache en memoria para la sesión actual
+const _equipCache = {};
+let _supabaseRef = null;
+
+/**
+ * Inyectar la referencia de supabase (llamar una vez al init de cada página).
+ * import { setSupabaseRef } from '../bnh-pac.js';
+ * setSupabaseRef(supabase);
+ */
+export function setSupabaseRef(sb) {
+    _supabaseRef = sb;
+}
+
+/**
+ * Obtiene las medallas equipadas de un personaje desde medallas_inventario.
+ * Devuelve array de objetos medalla: [{ id, nombre, costo_ctl, tipo, ... }]
+ * Usa cache por personaje para evitar queries repetidas.
+ */
+export async function getEquipacionPJ(nombrePJ, { forzar = false } = {}) {
+    if (!_supabaseRef) return [];
+    if (!forzar && _equipCache[nombrePJ]) return _equipCache[nombrePJ];
+
+    try {
+        const { data, error } = await _supabaseRef
+            .from('medallas_inventario')
+            .select('medalla_id, equipada, medallas_catalogo!inner(id, nombre, costo_ctl, tipo, efecto_desc, requisitos_base, efectos_condicionales)')
+            .eq('personaje_nombre', nombrePJ)
+            .eq('equipada', true);
+
+        if (error) { console.warn('[bnh-pac] getEquipacionPJ:', error.message); return []; }
+
+        const medallas = (data || []).map(row => row.medallas_catalogo).filter(Boolean);
+        _equipCache[nombrePJ] = medallas;
+        return medallas;
+    } catch(e) {
+        console.warn('[bnh-pac] getEquipacionPJ exception:', e);
+        return [];
+    }
+}
+
+/**
+ * Invalida el cache de equipación de un personaje (llamar tras guardar equipación).
+ */
+export function invalidarCacheEquipacion(nombrePJ) {
+    if (nombrePJ) delete _equipCache[nombrePJ];
+    else Object.keys(_equipCache).forEach(k => delete _equipCache[k]);
+}
+
+/**
+ * Calcula el CTL usado por la equipación actual de un personaje.
+ * Async: hace query si no está en cache.
+ */
+export async function calcCTLUsadoPJ(nombrePJ) {
+    const medallas = await getEquipacionPJ(nombrePJ);
+    return calcCTLUsado(medallas);
+}
+
+/**
+ * Calcula el CTL libre (disponible) de un personaje.
+ * ctlTotal: el stat CTL base del personaje.
+ */
+export async function calcCTLLibrePJ(nombrePJ, ctlTotal) {
+    const usado = await calcCTLUsadoPJ(nombrePJ);
+    return Math.max(0, ctlTotal - usado);
+}
