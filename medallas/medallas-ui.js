@@ -184,9 +184,10 @@ export function renderGrafo() {
         </div>` : '';
 
     const selHtml = selTags.length
-        ? `<div style="margin-top:8px;font-size:0.75em;color:#888;">
-            Seleccionados: ${selTags.map(t=>`<span style="background:rgba(243,156,18,0.15);border:1px solid #f39c12;padding:1px 6px;border-radius:8px;color:#d68910;margin-right:4px;">${t}</span>`).join('')}
-            <button onclick="window._medGrafoClearTags()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.85em;margin-left:4px;">✕ Limpiar</button>
+        ? `<div style="margin-top:8px;display:flex;flex-wrap:wrap;align-items:center;gap:4px;max-width:100%;">
+            <span style="font-size:0.75em;color:#888;white-space:nowrap;">Seleccionados:</span>
+            ${selTags.map(t=>`<span style="background:rgba(243,156,18,0.15);border:1px solid #f39c12;padding:2px 8px;border-radius:8px;color:#d68910;font-size:0.75em;white-space:nowrap;">${t}</span>`).join('')}
+            <button onclick="window._medGrafoClearTags()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.78em;padding:2px 4px;white-space:nowrap;">✕ Limpiar</button>
            </div>` : '';
 
     // ¡CRÍTICO PARA EVITAR EL PARPADEO!
@@ -196,7 +197,7 @@ export function renderGrafo() {
         wrap.innerHTML = `
             <div style="display:flex;flex-direction:column;gap:0;">
                 <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px 12px 0 0;padding:14px;position:sticky;top:0;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
-                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:0 0 12px 12px;overflow:hidden;height:calc(100vh - 320px);min-height:600px;">
+                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:0 0 12px 12px;overflow:hidden;height:720px;transition:height 0.5s ease;">
                     <canvas id="bloques-canvas" style="display:block; cursor:pointer; width:100%; height:100%;"></canvas>
                     <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">Selecciona tags para ver caer las figuras</div>
                 </div>
