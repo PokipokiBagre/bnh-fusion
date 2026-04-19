@@ -141,7 +141,7 @@ function _exponerGlobales() {
         const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL' };
         if (!confirm(`¿Proponer gastar 50 PT de ${tag} para obtener ${labels[tipo]}?`)) return;
         
-        // Se le pasa tagsState.esAdmin para registrar si se cobran los PT ahora o no
+        // Enviar con esAdmin para indicar si descuenta de inmediato o no
         const res = await enviarSolicitud(pj, tag, tipo, 50, {}, tagsState.esAdmin);
         if (res.ok) {
             toast(`✅ Solicitud enviada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
@@ -166,7 +166,7 @@ function _exponerGlobales() {
     };
 
     window._tagsCancelarReq = async (id) => {
-        if (!confirm('¿Seguro que deseas retirar esta solicitud?')) return;
+        if (!confirm('¿Seguro que deseas retirar esta solicitud? Se devolverán los PT si aplica.')) return;
         const btn = event.target;
         btn.disabled = true; btn.textContent = '⏳';
         const res = await cancelarSolicitud(id);
@@ -266,7 +266,6 @@ function _exponerGlobales() {
         window._tresPjActual = pj;
         window._tresTagSource= tag;
 
-        // Si es edición, cargar datos previos
         if (isEdit) {
             const req = solicitudes.find(s => s.id === reqIdToEdit);
             if (req && req.datos && req.datos.cambios) {
@@ -386,7 +385,6 @@ function _exponerGlobales() {
             renderProgresion();
         };
 
-        // Render inicial si es edición
         if (isEdit) window._tresRenderCambios();
     };
 
@@ -509,7 +507,7 @@ function _exponerGlobales() {
             reqsInitial.forEach(r => window._mpropAddReq(r));
             condsInitial.forEach(c => window._mpropAddCond(c));
         } else {
-            window._mpropAddReq(); // Add one default empty
+            window._mpropAddReq(); 
         }
 
         setTimeout(() => {
@@ -550,7 +548,6 @@ function _exponerGlobales() {
         const { supabase } = await import('../bnh-auth.js');
 
         if (reqIdEdit) {
-            // Editar propuesta existente
             const req = solicitudes.find(s => s.id === reqIdEdit);
             if (!req) return;
             
@@ -570,7 +567,6 @@ function _exponerGlobales() {
             return;
         }
 
-        // Nueva propuesta
         const { data: medData, error: eMed } = await supabase.from('medallas_catalogo').insert({
             nombre, efecto_desc: efecto, costo_ctl: ctl, tipo, requisitos_base: reqs, efectos_condicionales: conds, propuesta: true, propuesta_por: pj,
         }).select('id').single();
@@ -704,13 +700,17 @@ function _exponerGlobales() {
         if (!nuevoNombre || nuevoNombre.trim() === '' || nuevoNombre.trim() === tag.replace('#','')) return;
         const btn = event?.target;
         if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        
+        const { renameTag, cargarTodo } = await import('./tags-data.js');
         const res = await renameTag(tag, nuevoNombre.trim());
+        
         if (res.ok) {
             toast(`✅ ${tag} renombrado a #${nuevoNombre.trim()} en ${res.afectados} personajes`, 'ok');
             await cargarTodo(); await _refreshMarkup();
             renderCatalogo();
         } else {
             toast('❌ ' + res.msg, 'error');
+            if (btn) { btn.disabled = false; btn.textContent = '✏️'; }
         }
     };
 
@@ -719,7 +719,10 @@ function _exponerGlobales() {
             ? `¿Eliminar ${tag}? Se quitará de ${count} personaje${count!==1?'s':''} y del catálogo. Esta acción no se puede deshacer.`
             : `¿Eliminar ${tag} del catálogo?`;
         if (!confirm(msg)) return;
+        
+        const { deleteTag, cargarTodo } = await import('./tags-data.js');
         const res = await deleteTag(tag);
+        
         if (res.ok) {
             toast(`🗑️ ${tag} eliminado de ${res.afectados} personajes`, 'ok');
             await cargarTodo(); await _refreshMarkup();
