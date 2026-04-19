@@ -2,7 +2,7 @@
 // tags/tags-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { tagsState, STORAGE_URL, grupos, catalogoTags } from './tags-state.js';
+import { tagsState, STORAGE_URL, grupos, catalogoTags, medallasCat } from './tags-state.js';
 import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, canjearPT, renameTag, deleteTag } from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
@@ -22,7 +22,7 @@ window.onload = async () => {
 
     try {
         await cargarTodo();
-        initMarkup({ grupos });
+        initMarkup({ grupos, medallas: medallasCat });
     } catch(e) {
         document.getElementById('pantalla-carga').innerHTML = `<p style="color:red;">Error: ${e.message}</p>`;
         return;
@@ -74,7 +74,7 @@ function _exponerGlobales() {
         const res  = await guardarDescripcionTag(tagKey, el.value.trim(), tipo);
         if (res.ok) {
             toast('✅ Descripción guardada', 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderTagDetalle('#' + tagKey);
             if (tagsState.tabActual === 'catalogo') renderCatalogo();
         } else toast('❌ ' + res.msg, 'error');
@@ -88,7 +88,7 @@ function _exponerGlobales() {
         const res = await guardarDescripcionTag(key, el.value.trim());
         if (res.ok) {
             toast(`✅ Descripción de ${tag} guardada`, 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderCatalogo();
         } else toast('❌ ' + res.msg, 'error');
     };
@@ -98,7 +98,7 @@ function _exponerGlobales() {
         const res = await guardarBaneoTag(nombre, baneado);
         if (res.ok) {
             toast(`${baneado?'🚫 Baneado':'✅ Desbaneado'}: #${nombre}`, 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderBaneados();
         } else toast('❌ ' + res.msg, 'error');
     };
@@ -118,7 +118,7 @@ function _exponerGlobales() {
         const res = await canjearPT(pj, tag, tipo);
         if (res.ok) {
             toast(`✅ Canje aplicado. PT restantes en ${tag}: ${res.nueva}`, 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderProgresion();
         } else toast('❌ ' + res.msg, 'error');
     };
@@ -225,7 +225,7 @@ function _exponerGlobales() {
         const res = await renameTag(tag, nuevoNombre.trim());
         if (res.ok) {
             toast(`✅ ${tag} renombrado a #${nuevoNombre.trim()} en ${res.afectados} personajes`, 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderCatalogo();
         } else {
             toast('❌ ' + res.msg, 'error');
@@ -241,7 +241,7 @@ function _exponerGlobales() {
         const res = await deleteTag(tag);
         if (res.ok) {
             toast(`🗑️ ${tag} eliminado de ${res.afectados} personajes`, 'ok');
-            await cargarTodo(); initMarkup({ grupos });
+            await cargarTodo(); initMarkup({ grupos, medallas: medallasCat });
             renderCatalogo();
         } else {
             toast('❌ ' + res.msg, 'error');
