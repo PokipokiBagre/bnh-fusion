@@ -80,7 +80,6 @@ export function medallasDe(tagNombre) {
     );
 }
 
-// Nueva función: Extraer medallas accesibles (que cumplan requisitos)
 export function getMedallasAccesibles(nombrePJ) {
     const g = grupos.find(x => x.nombre_refinado === nombrePJ);
     if (!g) return [];
