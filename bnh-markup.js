@@ -106,21 +106,21 @@ export function renderMarkup(texto) {
         if (tok.tipo === 'br')    return '<br>';
         if (tok.tipo === 'texto') return escTxt(tok.valor);
 
-        if (tok.tipo === 'persona') {
+       if (tok.tipo === 'persona') {
             const n = tok.valor;
-            return `<a href="#" onclick="event.preventDefault();window._markupIrAFicha('${n.replace(/'/g,"\\'")}');return false;"
+            return `<a href="#" onclick="event.preventDefault();event.stopPropagation();window._markupIrAFicha('${n.replace(/'/g,"\\'")}');return false;"
                 style="color:var(--green,#1e8449);font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver ficha de ${escTxt(n)}">${escTxt(n)}</a>`;
         }
         if (tok.tipo === 'tag') {
             const tag = tok.valor;
-            return `<a href="#" onclick="event.preventDefault();window._markupIrATag('${tag.replace(/'/g,"\'")}');return false;"
+            return `<a href="#" onclick="event.preventDefault();event.stopPropagation();window._markupIrATag('${tag.replace(/'/g,"\'")}');return false;"
                 style="color:var(--red,#c0392b);font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver tag #${escTxt(tag)}">#${escTxt(tag)}</a>`;
         }
         if (tok.tipo === 'medalla') {
             const m = tok.valor;
-            return `<a href="../medallas/index.html#${encodeURIComponent(m)}"
+            return `<a href="../medallas/index.html#${encodeURIComponent(m)}" onclick="event.stopPropagation();"
                 style="color:#1a4a80;font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver medalla ${escTxt(m)}">${escTxt(m)}</a>`;
         }
