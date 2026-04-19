@@ -9,11 +9,8 @@ import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
-// Recarga invisible del catálogo: recarga datos y re-renderiza
-// manteniendo la posición del scroll y el estado multi-select.
 async function _recargarCatalogo() {
-    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop
-        ?? window.scrollY;
+    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop ?? window.scrollY;
     const { cargarTodo } = await import('./tags-data.js');
     const { initMarkup } = await import('../bnh-markup.js');
     const { grupos: g2 } = await import('./tags-state.js');
@@ -40,6 +37,7 @@ export function renderProgresion() {
         const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
         return rolOk && estOk;
     });
+
     const btnRol = (val, label) => {
         const a = tagsState.filtroRol === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
@@ -48,6 +46,7 @@ export function renderProgresion() {
         const a = tagsState.filtroEstado === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
     };
+
     const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
@@ -104,6 +103,19 @@ export function renderProgresion() {
         }).join('');
     }
 
+    // RANKING SEGURO (Generado antes de inyectar)
+    const rankingHtml = rankingPorPT().slice(0, 5).map(({ nombre, total }, i) => {
+        const medal = ['🥇','🥈','🥉'][i] || `${i+1}.`;
+        const img   = `${STORAGE_URL}/imgpersonajes/${norm(nombre)}icon.png`;
+        return `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--gray-100);">
+            <span style="width:26px;text-align:center;font-size:1.1em;">${medal}</span>
+            <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';" style="width:24px;height:24px;border-radius:50%;object-fit:cover;object-position:top;">
+            <span style="flex:1;font-weight:600;font-size:0.85em;">${nombre}</span>
+            <span style="font-weight:800;color:var(--green-dark);font-size:0.85em;">${total} PT</span>
+        </div>`;
+    }).join('');
+
+    // ESTRUCTURA PERFECTA (Ambas columnas seguras)
     wrap.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
             <div style="display:flex;flex-direction:column;gap:16px;">
@@ -114,13 +126,21 @@ export function renderProgresion() {
                         <span style="width:1px;background:var(--gray-200);margin:0 3px;display:inline-block;"></span>
                         ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
                     </div>
-                    <div class="char-grid">${charHtml}</div>
+                    <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
                 </div>
                 ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
             </div>
+
             <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;">
                 ${pj ? `<div class="card"><div class="card-title">Resumen</div>${_resumenPJ(pj)}</div>` : ''}
-                <div class="card"><div class="card-title">⚡ Cerca de canje</div>${_cercaDeCanje()}</div>
+                <div class="card">
+                    <div class="card-title">🏆 Ranking Top 5</div>
+                    ${rankingHtml}
+                </div>
+                <div class="card">
+                    <div class="card-title">⚡ Cerca de canje</div>
+                    ${_cercaDeCanje()}
+                </div>
             </div>
         </div>`;
 }
@@ -141,29 +161,22 @@ function _resumenPJ(pj) {
         return              { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
     const cambios = Math.floor(agi/4);
-    // Bono correcto: TIER 1=5, TIER 2=10, TIER 3=15, TIER 4=20
     const bonoPV  = [5,10,15,20][tierData.tier-1] || 5;
     const pvMax   = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV + (g.pv_max_delta||0);
     const pvActual = g.pv_actual ?? pvMax;
-    // Imagen profile
-    const norm = s => s.toString().trim().toLowerCase()
-        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
-        .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
-        .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+    
     const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'profile.png';
     const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'icon.png';
     const noImg      = STORAGE_URL + '/imginterfaz/no_encontrado.png';
+    
     return `
     <div style="display:flex;flex-direction:column;gap:0;">
-        <!-- Imagen profile extendible -->
         <div style="border-radius:8px;overflow:hidden;background:#f8f9fa;margin-bottom:12px;max-height:320px;">
             <img src="${profileUrl}" onerror="this.src='${iconUrl}';this.onerror=()=>this.src='${noImg}'"
                 style="width:100%;display:block;object-fit:cover;object-position:top;">
         </div>
-        <!-- Tier destacado -->
         <div style="text-align:center;font-family:'Cinzel',serif;font-size:1em;font-weight:800;
             color:${tierData.color};letter-spacing:1px;margin-bottom:10px;">${tierData.label}</div>
-        <!-- Stats individuales -->
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
             <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
@@ -178,7 +191,6 @@ function _resumenPJ(pj) {
                 <div style="font-size:1.1em;font-weight:800;color:#27ae60;">${ctl}</div>
             </div>
         </div>
-        <!-- Línea de datos clave -->
         <div style="display:flex;flex-direction:column;gap:5px;font-size:0.82em;border-top:1px solid var(--gray-200);padding-top:8px;">
             <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
             <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
@@ -230,7 +242,7 @@ export function renderTagDetalle(tagNombre) {
     const tipoBg    = { quirk:'#f5eeff',  atributo:'#ebf5fb',  extra:'#d5f5e3' };
     const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atributo', extra:'🏷 Extra' };
 
-const adminDescForm = tagsState.esAdmin ? `
+    const adminDescForm = tagsState.esAdmin ? `
         <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;">
             <div style="flex:1;">
                 <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Nombre:</label>
@@ -266,7 +278,6 @@ const adminDescForm = tagsState.esAdmin ? `
         ${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;">${renderMarkup(desc)}</div>`
                : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`}`;
 
-    // ── Medallas: hasta 15, con detalle de req/cond del tag actual ──
     const medallaCards = medallas.slice(0, 15).map(m => {
         const reqsEsteTag  = (m.requisitos_base||[]).filter(r =>
             ('#'+(r.tag.startsWith('#')?r.tag.slice(1):r.tag)).toLowerCase() === tag.toLowerCase());
@@ -278,11 +289,11 @@ const adminDescForm = tagsState.esAdmin ? `
             .join(' ');
         return `<div style="background:var(--blue-pale);border:1.5px solid var(--blue);
                     border-radius:var(--radius);padding:10px 12px;flex:1;min-width:160px;max-width:230px;cursor:pointer;"
-                onclick="window.open('../medallas/index.html#${encodeURIComponent(m.nombre)}','_blank')">
+                onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')">
             <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:3px;">🏅 ${_esc(m.nombre)}</div>
             ${m.costo_ctl?`<div style="font-size:0.72em;color:var(--gray-500);margin-bottom:3px;">${m.costo_ctl} CTL</div>`:''}
             ${otrosTags?`<div style="margin-bottom:4px;">${otrosTags}</div>`:''}
-            ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);line-height:1.4;margin-bottom:3px;">${_esc(m.efecto_desc)}</div>`:''}
+            ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);line-height:1.4;margin-bottom:3px;">${renderMarkup(m.efecto_desc)}</div>`:''}
             ${reqsEsteTag.length?`<div style="font-size:0.72em;background:#d5f5e3;color:var(--green-dark);padding:2px 6px;border-radius:4px;margin-top:3px;">📋 Req: ${reqsEsteTag.map(r=>r.pts_minimos+' PT').join(', ')}</div>`:''}
             ${condsEsteTag.length?`<div style="font-size:0.72em;background:var(--orange-pale);color:var(--orange);padding:3px 6px;border-radius:4px;margin-top:3px;">⚡ ${_esc(condsEsteTag[0].efecto||'Efecto condicional')}</div>`:''}
         </div>`;
@@ -319,7 +330,6 @@ const adminDescForm = tagsState.esAdmin ? `
             </div>` : `<div style="font-size:0.82em;color:var(--green-dark);">✅ Todos tienen este tag.</div>`}
         </div>` : '';
 
-    // overflow-x:hidden en el wrapper elimina el scroll horizontal fantasma
     el.innerHTML = `
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;overflow-x:hidden;"
             onclick="if(event.target===this)window._tagsCloseDetalle()">
@@ -348,7 +358,6 @@ const adminDescForm = tagsState.esAdmin ? `
                                 const safeN = g.nombre_refinado.replace(/'/g,"\\'");
                                 const safeT = tag.replace(/'/g,"\\'");
                                 
-                                // El botón de "x" que solo se muestra para los OP
                                 const btnQuitar = tagsState.esAdmin 
                                     ? '<b onclick="event.stopPropagation();window._tagsQuitarDesdeDetalle(\''+g.id+'\',\''+safeN+'\',\''+safeT+'\')" style="color:var(--red);margin-left:6px;font-size:1.2em;line-height:0.8;padding:0 2px;" title="Quitar tag">×</b>' 
                                     : '';
@@ -365,11 +374,10 @@ const adminDescForm = tagsState.esAdmin ? `
         </div>`;
     el.style.display = 'block';
 
-    // ── Montar markup textarea con autocompletado real ────────
     if (tagsState.esAdmin) {
         setTimeout(() => {
             const ta = document.getElementById('detalle-desc-inp');
-            if (ta) initMarkupTextarea(ta);
+            if (ta && window._initMarkupTA) window._initMarkupTA(ta);
         }, 60);
     }
 
@@ -377,9 +385,6 @@ const adminDescForm = tagsState.esAdmin ? `
     window._tagsModoMultiSel    = new Set();
 }
 
-
-// Filtrado in-place: oculta/muestra cards sin re-renderizar el DOM.
-// Evita que el input pierda el foco y los caracteres lleguen invertidos.
 window._catFiltrarInPlace = (v) => {
     tagsState.busquedaCat = v;
     const q = v.trim().toLowerCase();
@@ -408,7 +413,6 @@ export function renderCatalogo() {
         if (!tagMapa[k]) tagMapa[k] = { count: 0 };
         tagMapa[k].count++;
     }));
-    // Include catalog tags with 0 personajes
     catalogoTags.forEach(ct => {
         const k = '#' + (ct.nombre.startsWith('#') ? ct.nombre.slice(1) : ct.nombre);
         if (!tagMapa[k]) tagMapa[k] = { count: 0 };
@@ -434,7 +438,6 @@ export function renderCatalogo() {
     const tipoBg    = { quirk:'#f5eeff',  atributo:'var(--blue-pale)', extra:'var(--green-pale)' };
     const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atrib.', extra:'🏷 Extra' };
 
-    // ── Toolbar selección múltiple (solo OP) ──────────────────
     const multiToolbar = tagsState.esAdmin ? `
         <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
             border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;
@@ -530,7 +533,6 @@ export function renderCatalogo() {
         if (el && tagsState.busquedaCat) el.focus();
     }, 10);
 
-    // Restaurar modo multi si estaba activo
     if (window._catMultiActivo) {
         requestAnimationFrame(() => {
             const toolbar = document.getElementById('cat-multi-toolbar');
@@ -539,7 +541,6 @@ export function renderCatalogo() {
             document.querySelectorAll('.cat-card-actions').forEach(el => el.style.display = 'none');
             const btn = document.getElementById('btn-cat-multi');
             if (btn) btn.style.display = 'none';
-            // Remarcar los ya seleccionados
             window._catMultiSel.forEach(t => {
                 const cb = document.querySelector(`[data-cat-card="${_esc(t)}"] .cat-card-check input`);
                 if (cb) cb.checked = true;
@@ -550,12 +551,10 @@ export function renderCatalogo() {
 }
 
 
-// ── Catálogo OP: crear nuevo tag ─────────────────────────────
 window._catNuevoTag = () => {
     const container = document.getElementById('cat-inline-modal');
     if (!container) return;
 
-    // Lista de grupos para asignación múltiple
     const { grupos: gList, STORAGE_URL: SU, norm: normFn } = window._tagsUiImports || {};
     const gruposDisp = gList || [];
     const fb2 = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -613,13 +612,11 @@ window._catNuevoTag = () => {
             </div>
         </div>`;
 
-    // Poblar grid de personajes y montar markup en textarea
     setTimeout(() => {
         const grid = document.getElementById('nt-pj-grid');
         if (!grid) return;
-        // Montar autocompletado markup en la descripción
         const ntDesc = document.getElementById('nt-desc');
-        if (ntDesc) initMarkupTextarea(ntDesc);
+        if (ntDesc && window._initMarkupTA) window._initMarkupTA(ntDesc);
         grid.innerHTML = grupos.map(g => {
             const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
             return `<div id="nt-pj-${g.id}"
@@ -652,11 +649,9 @@ window._catCrearTagEjecutar = async () => {
     const { guardarDescripcionTag } = await import('./tags-data.js');
     const { supabase } = await import('../bnh-auth.js');
 
-    // 1. Crear en tags_catalogo
     const res = await guardarDescripcionTag(tagKey, desc, tipo);
     if (!res.ok) { if(msgEl) msgEl.textContent = '❌ ' + res.msg; return; }
 
-    // 2. Asignar a personajes seleccionados
     const selDivs = document.querySelectorAll('#nt-pj-grid [data-sel="1"]');
     let asignados = 0;
     for (const div of selDivs) {
@@ -675,7 +670,6 @@ window._catCrearTagEjecutar = async () => {
     await _recargarCatalogo();
 };
 
-// ── Catálogo OP: edición inline ───────────────────────────────
 window._catEditarInline = (tagKey) => {
     const tag      = '#' + tagKey;
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
@@ -729,10 +723,9 @@ window._catEditarInline = (tagKey) => {
             </div>
         </div>`;
 
-    // Montar autocompletado markup en el textarea
     setTimeout(() => {
         const ta = document.getElementById('ci-desc');
-        if (ta) initMarkupTextarea(ta);
+        if (ta && window._initMarkupTA) window._initMarkupTA(ta);
     }, 60);
 };
 
@@ -744,23 +737,18 @@ window._catGuardarInline = async (tagKey) => {
     
     if (msgEl) msgEl.textContent = '⏳ Guardando…';
 
-    // Importamos la función renameTag que ya tienes en tags-data.js
     const { guardarDescripcionTag, renameTag } = await import('./tags-data.js');
 
     let actualKey = tagKey;
-
-    // 1. Si el nombre cambió en el input, renombramos primero en toda la BD
     if (nuevoNom && nuevoNom !== '#' + tagKey && nuevoNom !== tagKey) {
         const resRename = await renameTag('#' + tagKey, nuevoNom);
         if (!resRename.ok) {
             if (msgEl) msgEl.textContent = '❌ Error al renombrar: ' + resRename.msg;
             return;
         }
-        // Actualizamos la key con el nuevo nombre sin el '#'
         actualKey = nuevoNom.startsWith('#') ? nuevoNom.slice(1) : nuevoNom;
     }
 
-    // 2. Guardamos la nueva descripción y tipo usando la key final (nueva o vieja)
     const res = await guardarDescripcionTag(actualKey, desc, tipo);
     
     if (res.ok) {
@@ -772,7 +760,6 @@ window._catGuardarInline = async (tagKey) => {
     }
 };
 
-// ── Catálogo OP: selección múltiple ──────────────────────────
 window._catMultiActivo = false;
 window._catMultiSel    = new Set();
 
@@ -811,15 +798,11 @@ window._catToggleCheck = (tag, checked) => {
     _catUpdateCount();
 };
 
-// Radio toggle: la lógica está inline en el onclick del HTML generado
-// Esta función se llama solo cuando un radio se activa (no cuando se deselecciona)
-
 window._catTipoRadio = async (tipo) => {
     if (!window._catMultiSel.size) {
         toast('⚠️ Selecciona al menos un tag primero', 'info');
         return;
     }
-    // Capturar el Set ANTES de cualquier re-render para no perderlo
     const tagsACambiar = [...window._catMultiSel];
     let ok = 0;
     for (const tag of tagsACambiar) {
@@ -829,7 +812,6 @@ window._catTipoRadio = async (tipo) => {
         if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
     }
     toast(`✅ Tipo "${tipo}" aplicado a ${ok} tag${ok!==1?'s':''}`, 'ok');
-    // Mantener selección activa tras re-render (recarga invisible)
     await _recargarCatalogo();
 };
 
@@ -850,7 +832,6 @@ window._catEliminarSeleccionados = async () => {
     await _recargarCatalogo();
 };
 
-// ── Combinar tags ────────────────────────────────────────────
 window._catCombinarTags = () => {
     const count = window._catMultiSel.size;
     if (count < 2) { toast('⚠️ Selecciona al menos 2 tags para combinar', 'info'); return; }
@@ -909,7 +890,6 @@ window._catCombinarTags = () => {
         </div>`;
 
     setTimeout(() => document.getElementById('comb-nombre')?.focus(), 80);
-    // Guardar tags origen en el modal para acceder desde _catEjecutarCombinar
     window._catCombinarOrigen = tagsOrigen;
 };
 
@@ -931,8 +911,6 @@ window._catEjecutarCombinar = async () => {
     const { initMarkup } = await import('../bnh-markup.js');
 
     try {
-        // 1. Para cada personaje: si tiene alguno de los tags origen → asignar nuevo tag
-        //    y sumar sus PT en puntos_tag
         const { data: pjs } = await supabase.from('personajes_refinados').select('id, nombre_refinado, tags');
 
         for (const pj of (pjs || [])) {
@@ -940,7 +918,6 @@ window._catEjecutarCombinar = async () => {
             const tieneAlguno = tagsOrigen.some(to => tagsActuales.some(ta => ta.toLowerCase() === to.toLowerCase()));
             if (!tieneAlguno) continue;
 
-            // Nuevo array de tags: quitar los origen, añadir nuevo (sin duplicar)
             const nuevosTags = [
                 ...tagsActuales.filter(ta => !tagsOrigen.some(to => to.toLowerCase() === ta.toLowerCase())),
                 nuevoTag,
@@ -948,7 +925,6 @@ window._catEjecutarCombinar = async () => {
 
             await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('id', pj.id);
 
-            // Sumar PT de todos los tags origen para este personaje
             let ptTotal = 0;
             for (const tagOrigen of tagsOrigen) {
                 const { data: ptRow } = await supabase.from('puntos_tag')
@@ -958,7 +934,6 @@ window._catEjecutarCombinar = async () => {
             }
 
             if (ptTotal > 0) {
-                // Verificar si ya existe registro para el nuevo tag
                 const { data: ptExist } = await supabase.from('puntos_tag')
                     .select('cantidad').eq('personaje_nombre', pj.nombre_refinado)
                     .ilike('tag', nuevoTag).maybeSingle();
@@ -970,16 +945,13 @@ window._catEjecutarCombinar = async () => {
             }
         }
 
-        // 2. Eliminar puntos_tag y log de los tags origen
         for (const tagOrigen of tagsOrigen) {
             await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
             await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
-            // Eliminar de tags_catalogo
             const key = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
             await supabase.from('tags_catalogo').delete().ilike('nombre', key);
         }
 
-        // 3. Crear/actualizar el nuevo tag en catálogo
         const nuevoKey = nuevoTag.startsWith('#') ? nuevoTag.slice(1) : nuevoTag;
         await supabase.from('tags_catalogo').upsert(
             { nombre: nuevoKey, tipo, descripcion: '' },
