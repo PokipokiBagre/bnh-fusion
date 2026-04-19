@@ -36,7 +36,7 @@ window.onload = async () => {
 
     document.getElementById('pantalla-carga').classList.add('oculto');
     document.getElementById('interfaz-tags').classList.remove('oculto');
-    renderTab('progresion');
+    renderTab('catalogo');
     _exponerGlobales();
 };
 
