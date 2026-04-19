@@ -174,20 +174,26 @@ export function renderTagDetalle(tagNombre) {
     const tipoBg    = { quirk:'#f5eeff',  atributo:'#ebf5fb',  extra:'#d5f5e3' };
     const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atributo', extra:'🏷 Extra' };
 
-    const adminDescForm = tagsState.esAdmin ? `
-        <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
-            <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);white-space:nowrap;">Tipo:</label>
-            <select id="detalle-tipo-sel" class="inp" style="max-width:140px;padding:5px 8px;font-size:0.82em;">
-                <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
-                <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
-                <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
-            </select>
+const adminDescForm = tagsState.esAdmin ? `
+        <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;">
+            <div style="flex:1;">
+                <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Nombre:</label>
+                <input id="detalle-nombre-inp" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;font-size:0.85em;">
+            </div>
+            <div>
+                <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Tipo:</label>
+                <select id="detalle-tipo-sel" class="inp" style="min-width:140px;padding:5px 8px;font-size:0.82em;">
+                    <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
+                    <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
+                    <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
+                </select>
+            </div>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;">
             <textarea id="detalle-desc-inp" class="inp" rows="3"
                 placeholder="Descripción… @Nombre@, #Tag, !Medalla"
                 style="flex:1;font-family:monospace;font-size:0.85em;resize:vertical;">${_esc(desc)}</textarea>
-            <button class="btn btn-green btn-sm" style="margin-top:2px;"
+            <button class="btn btn-green" style="margin-top:2px;padding:8px 12px;"
                 onclick="window._tagsGuardarDescDetalle('${tagKey.replace(/'/g,"\\'")}')">💾</button>
         </div>
         <div style="font-size:0.7em;color:var(--gray-400);margin-top:3px;">
