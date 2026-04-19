@@ -9,6 +9,24 @@ import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
+// Recarga invisible del catálogo: recarga datos y re-renderiza
+// manteniendo la posición del scroll y el estado multi-select.
+async function _recargarCatalogo() {
+    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop
+        ?? window.scrollY;
+    const { cargarTodo } = await import('./tags-data.js');
+    const { initMarkup } = await import('../bnh-markup.js');
+    const { grupos: g2 } = await import('./tags-state.js');
+    await cargarTodo();
+    initMarkup({ grupos: g2 });
+    renderCatalogo();
+    requestAnimationFrame(() => {
+        const main = document.getElementById('vista-catalogo')?.closest('.app-main');
+        if (main) main.scrollTop = scrollY;
+        else window.scrollTo(0, scrollY);
+    });
+}
+
 // ── Tab Progresión ────────────────────────────────────────────
 export function renderProgresion() {
     const wrap = document.getElementById('vista-progresion');
@@ -324,7 +342,8 @@ export function renderCatalogo() {
     // ── Toolbar selección múltiple (solo OP) ──────────────────
     const multiToolbar = tagsState.esAdmin ? `
         <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
-            border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+            border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;
+            position:sticky;top:64px;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,0.10);">
             <span id="cat-multi-count" style="font-weight:700;font-size:0.88em;color:var(--green-dark);">0 seleccionados</span>
             <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.78em;color:var(--gray-700);font-weight:600;">Tipo:</span>
@@ -399,8 +418,11 @@ export function renderCatalogo() {
                 oninput="window._tagsBuscarCat(this.value)"
                 style="max-width:360px;">
             <span style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
-            ${tagsState.esAdmin ? `<button class="btn btn-outline btn-sm" id="btn-cat-multi"
-                onclick="window._catIniciarMulti()">☑️ Selección múltiple</button>` : ''}
+            ${tagsState.esAdmin ? `
+                <button class="btn btn-green btn-sm" onclick="window._catNuevoTag()">✨ Nuevo tag</button>
+                <button class="btn btn-outline btn-sm" id="btn-cat-multi"
+                    onclick="window._catIniciarMulti()">☑️ Selección múltiple</button>
+            ` : ''}
         </div>
         ${multiToolbar}
         <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
@@ -431,6 +453,129 @@ export function renderCatalogo() {
         });
     }
 }
+
+
+// ── Catálogo OP: crear nuevo tag ─────────────────────────────
+window._catNuevoTag = () => {
+    const container = document.getElementById('cat-inline-modal');
+    if (!container) return;
+
+    // Lista de grupos para asignación múltiple
+    const { grupos: gList, STORAGE_URL: SU, norm: normFn } = window._tagsUiImports || {};
+    const gruposDisp = gList || [];
+    const fb2 = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+
+    container.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:flex-start;
+                    justify-content:center;padding:40px 16px;overflow-y:auto;"
+            onclick="if(event.target===this)document.getElementById('cat-inline-modal').innerHTML=''">
+            <div style="background:white;border-radius:var(--radius-lg);max-width:600px;width:100%;
+                        box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
+                <div style="background:var(--green-dark);color:white;padding:14px 18px;
+                            display:flex;justify-content:space-between;align-items:center;">
+                    <b style="font-family:'Cinzel',serif;font-size:1.05em;">✨ Nuevo Tag</b>
+                    <button onclick="document.getElementById('cat-inline-modal').innerHTML=''"
+                        style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;
+                               width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
+                </div>
+                <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:180px;">
+                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Nombre del tag *</label>
+                            <input id="nt-nombre" class="inp" placeholder="#NuevoTag" autocomplete="off"
+                                onkeydown="if(event.key==='Enter')document.getElementById('nt-desc').focus()">
+                            <div style="font-size:0.72em;color:var(--gray-400);margin-top:2px;">El # se añade automáticamente.</div>
+                        </div>
+                        <div style="min-width:160px;">
+                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Tipo</label>
+                            <select id="nt-tipo" class="inp" style="max-width:180px;">
+                                <option value="extra">🏷 Extra</option>
+                                <option value="quirk">⚡ Quirk</option>
+                                <option value="atributo">📊 Atributo</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Descripción</label>
+                        <textarea id="nt-desc" class="inp" rows="3"
+                            placeholder="Descripción del tag… @Nombre@, #Tag, !Medalla"
+                            style="font-family:monospace;font-size:0.85em;resize:vertical;"></textarea>
+                    </div>
+                    <div>
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:6px;">
+                            Asignar a personajes <span style="font-weight:400;color:var(--gray-400);">(opcional — click para marcar)</span>
+                        </label>
+                        <div id="nt-pj-grid" style="display:flex;flex-wrap:wrap;gap:6px;max-height:180px;overflow-y:auto;
+                            background:var(--gray-100);border-radius:var(--radius);padding:8px;">
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-green" onclick="window._catCrearTagEjecutar()">✅ Crear tag</button>
+                        <button class="btn btn-outline" onclick="document.getElementById('cat-inline-modal').innerHTML=''">Cancelar</button>
+                    </div>
+                    <div id="nt-msg" style="font-size:0.82em;color:var(--red);min-height:16px;"></div>
+                </div>
+            </div>
+        </div>`;
+
+    // Poblar grid de personajes
+    setTimeout(() => {
+        const grid = document.getElementById('nt-pj-grid');
+        if (!grid) return;
+        grid.innerHTML = grupos.map(g => {
+            const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
+            return `<div id="nt-pj-${g.id}"
+                onclick="this.dataset.sel=this.dataset.sel==='1'?'0':'1';
+                         this.style.outline=this.dataset.sel==='1'?'2px solid var(--green)':'';
+                         this.style.opacity=this.dataset.sel==='1'?'1':'0.55';"
+                class="char-thumb"
+                style="cursor:pointer;opacity:0.55;transition:opacity .15s;"
+                data-id="${g.id}" data-nombre="${_esc(g.nombre_refinado)}" data-sel="0">
+                <img src="${img}" onerror="this.src='${fb2}'">
+                <span>${g.nombre_refinado}</span>
+            </div>`;
+        }).join('');
+        document.getElementById('nt-nombre')?.focus();
+    }, 60);
+};
+
+window._catCrearTagEjecutar = async () => {
+    const nombreRaw = document.getElementById('nt-nombre')?.value.trim();
+    const tipo      = document.getElementById('nt-tipo')?.value || 'extra';
+    const desc      = document.getElementById('nt-desc')?.value.trim() || '';
+    const msgEl     = document.getElementById('nt-msg');
+
+    if (!nombreRaw) { if(msgEl) msgEl.textContent = 'El nombre es obligatorio.'; return; }
+    const tagNorm = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
+    const tagKey  = tagNorm.slice(1);
+
+    if(msgEl) msgEl.textContent = '⏳ Creando…';
+
+    const { guardarDescripcionTag } = await import('./tags-data.js');
+    const { supabase } = await import('../bnh-auth.js');
+
+    // 1. Crear en tags_catalogo
+    const res = await guardarDescripcionTag(tagKey, desc, tipo);
+    if (!res.ok) { if(msgEl) msgEl.textContent = '❌ ' + res.msg; return; }
+
+    // 2. Asignar a personajes seleccionados
+    const selDivs = document.querySelectorAll('#nt-pj-grid [data-sel="1"]');
+    let asignados = 0;
+    for (const div of selDivs) {
+        const id     = div.dataset.id;
+        const nombre = div.dataset.nombre;
+        const { data: g } = await supabase.from('personajes_refinados')
+            .select('tags').eq('id', id).maybeSingle();
+        if (!g) continue;
+        const nuevosTags = [...new Set([...(g.tags||[]), tagNorm])];
+        await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('id', id);
+        asignados++;
+    }
+
+    document.getElementById('cat-inline-modal').innerHTML = '';
+    toast(`✅ Tag ${tagNorm} creado${asignados ? ` y asignado a ${asignados} personaje${asignados!==1?'s':''}` : ''}`, 'ok');
+    await _recargarCatalogo();
+};
 
 // ── Catálogo OP: edición inline ───────────────────────────────
 window._catEditarInline = (tagKey) => {
@@ -498,7 +643,7 @@ window._catGuardarInline = async (tagKey) => {
         if (entry) { entry.descripcion = desc; entry.tipo = tipo; }
         document.getElementById('cat-inline-modal').innerHTML = '';
         toast('✅ Tag actualizado', 'ok');
-        renderCatalogo();
+        await _recargarCatalogo();
     } else {
         if (msgEl) msgEl.textContent = '❌ ' + res.msg;
     }
@@ -561,8 +706,8 @@ window._catTipoRadio = async (tipo) => {
         if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
     }
     toast(`✅ Tipo "${tipo}" aplicado a ${ok} tag${ok!==1?'s':''}`, 'ok');
-    // Mantener selección activa tras re-render
-    renderCatalogo();
+    // Mantener selección activa tras re-render (recarga invisible)
+    await _recargarCatalogo();
 };
 
 window._catEliminarSeleccionados = async () => {
@@ -579,10 +724,7 @@ window._catEliminarSeleccionados = async () => {
     toast(`🗑️ ${count} tag${count!==1?'s':''} eliminado${count!==1?'s':''}`, 'ok');
     window._catMultiActivo = false;
     window._catMultiSel    = new Set();
-    await cargarTodo();
-    const { grupos: g2 } = await import('./tags-state.js');
-    initMarkup({ grupos: g2 });
-    renderCatalogo();
+    await _recargarCatalogo();
 };
 
 // ── Combinar tags ────────────────────────────────────────────
@@ -726,10 +868,7 @@ window._catEjecutarCombinar = async () => {
 
         window._catMultiActivo = false;
         window._catMultiSel    = new Set();
-        await cargarTodo();
-        const { grupos: g2 } = await import('./tags-state.js');
-        initMarkup({ grupos: g2 });
-        renderCatalogo();
+        await _recargarCatalogo();
 
     } catch(e) {
         if (msgEl) msgEl.textContent = '❌ Error: ' + e.message;
