@@ -133,7 +133,6 @@ function _renderCard(m) {
 }
 
 // ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
-// ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
 export function renderGrafo() {
     const wrap = document.getElementById('vista-grafo');
     if (!wrap) return;
@@ -407,7 +406,8 @@ export function renderDetalleMedalla(m, pjNombre = null) {
         </div>` : '';
 
     el.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+             onclick="if(event.target===this)window._medallasCloseModal()">
             <div style="background:white;border-radius:var(--radius-lg);max-width:620px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;${isProp?'border:2px solid #e67e22;':''}">
                 ${propBanner}
                 <div style="background:${isProp?'#f39c12':'var(--green-dark)'};color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
@@ -445,7 +445,8 @@ export function renderProponerMedalla() {
     const reqs = [{}];
 
     el.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+             onclick="if(event.target===this)window._medallasCloseModal()">
             <div style="background:white;border-radius:var(--radius-lg);max-width:700px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border:2px solid #e67e22;">
                 <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
                     <h3 style="margin:0;font-family:'Cinzel',serif;">📝 Proponer Medalla</h3>
@@ -525,7 +526,8 @@ export function renderFormMedalla(m = null) {
     const conds = m?.efectos_condicionales || [];
 
     el.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+             onclick="if(event.target===this)window._medallasCloseModal()">
             <div style="background:white;border-radius:var(--radius-lg);max-width:700px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;">
                 <div class="modal-header">
                     <h3>${isEdit ? '✏️ Editar' : '✨ Nueva'} Medalla</h3>
