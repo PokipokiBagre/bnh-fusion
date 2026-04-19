@@ -1,22 +1,18 @@
-// medallas/bloques.js — Motor Tetris 2.0 (Grid 20 cols, bloques proporcionales, canvas reactivo)
+// medallas/bloques.js — Motor Tetris 2.0 (Caída inteligente, sin recortes)
 const NUM_COLS = 20; // 20 slots horizontales (ancho)
 const GAP = 4;
-// Altura mínima de bloque en px — los bloques nunca serán más cortos que esto
 const MIN_BLOCK_H = 44;
 
-// Altura base y dinámica del canvas (en "filas")
-const ROWS_BASE = 15;      // altura inicial: 15 filas
-const ROWS_MAX  = 30;      // límite máximo de expansión
-// Umbral de bloques apilados en la columna más alta para expandir
-// Cada EXPAND_STEP bloques de altura → +EXPAND_ADD filas al canvas
+const ROWS_BASE = 15;      
+const ROWS_MAX  = 30;      
 const EXPAND_STEP = 5;
 const EXPAND_ADD  = 5;
 
 let canvas, ctx;
 let bloques = [];
 let _animId = null;
-let _currentRows = ROWS_BASE; // filas actuales del canvas
-let _expandCooldown = 0;       // evita expandir cada frame
+let _currentRows = ROWS_BASE; 
+let _expandCooldown = 0;       
 
 // Variables para el Tooltip
 let mouseX = -100;
@@ -77,10 +73,30 @@ export function updateBloques(tagsData) {
     const existingIds = new Set(bloques.map(b => b.clusterId));
     const newClusters = tagsData.filter(g => !existingIds.has(g.tag));
 
+    // 1. Calcular la altura actual de cada columna para saber dónde hay huecos
+    let colHeights = Array(NUM_COLS).fill(0);
+    bloques.forEach(b => {
+        if (b.col >= 0 && b.col < NUM_COLS) colHeights[b.col]++;
+    });
+
     newClusters.forEach((grupo) => {
         const cColor = getColorForTag(grupo.tag);
-        const C = Math.floor(Math.random() * (NUM_COLS - 2)) + 1;
+        
+        // 2. Buscar la columna más vacía para soltar el Tag principal
+        let minH = Infinity;
+        let bestCols = [];
+        for (let i = 1; i < NUM_COLS - 1; i++) { // Evitar bordes extremos para que las medallas tengan espacio
+            if (colHeights[i] < minH) {
+                minH = colHeights[i];
+                bestCols = [i];
+            } else if (colHeights[i] === minH) {
+                bestCols.push(i);
+            }
+        }
+        const C = bestCols.length ? bestCols[Math.floor(Math.random() * bestCols.length)] : Math.floor(NUM_COLS / 2);
+        
         let spawnY = -60;
+        colHeights[C]++; // Reservar el espacio
 
         bloques.push({
             id: 'tag_' + grupo.tag,
@@ -95,11 +111,27 @@ export function updateBloques(tagsData) {
 
         grupo.medallas.forEach((m) => {
             spawnY -= (40 + Math.random() * 60);
-            let colOffset = 0;
-            const rand = Math.random();
-            if (rand < 0.33) colOffset = -1;
-            else if (rand > 0.66) colOffset = 1;
-            const finalCol = Math.max(0, Math.min(NUM_COLS - 1, C + colOffset));
+            
+            // 3. Buscar el hueco más profundo alrededor del Tag para soltar la medalla
+            let bestOffset = 0;
+            let minCH = Infinity;
+            let validOffsets = [];
+            
+            [-1, 0, 1].forEach(offset => {
+                const cIdx = C + offset;
+                if (cIdx >= 0 && cIdx < NUM_COLS) {
+                    if (colHeights[cIdx] < minCH) {
+                        minCH = colHeights[cIdx];
+                        validOffsets = [offset];
+                    } else if (colHeights[cIdx] === minCH) {
+                        validOffsets.push(offset);
+                    }
+                }
+            });
+            
+            bestOffset = validOffsets[Math.floor(Math.random() * validOffsets.length)];
+            const finalCol = C + bestOffset;
+            colHeights[finalCol]++; // Reservar el espacio para la siguiente medalla
 
             bloques.push({
                 id: m.id,
@@ -119,6 +151,9 @@ function loop() {
     _animId = requestAnimationFrame(loop);
     if (!canvas || !ctx) return;
 
+    // Se asegura de que la resolución interna acompañe siempre a la transición CSS
+    _resize();
+
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
 
@@ -133,12 +168,13 @@ function loop() {
     let blocksByCol = Array.from({length: NUM_COLS}, () => []);
     bloques.forEach(b => blocksByCol[b.col].push(b));
 
-    // Calcular la altura máxima de bloques apilados (en número de bloques)
     let maxStackHeight = 0;
 
     blocksByCol.forEach(colBlocks => {
         colBlocks.sort((a, b) => b.visualY - a.visualY);
-        let currentFloor = H - GAP;
+        
+        // PISO: Separado del fondo para evitar que el border-radius de CSS corte el dibujo
+        let currentFloor = H - GAP - 14; 
 
         colBlocks.forEach(b => {
             b.targetY = currentFloor - BLOCK_H;
@@ -154,30 +190,17 @@ function loop() {
     });
 
     // --- EXPANSIÓN REACTIVA DEL CANVAS ---
-    // Cada EXPAND_STEP bloques de altura, añadir EXPAND_ADD filas
     _expandCooldown--;
     if (_expandCooldown <= 0 && bloques.length > 0) {
-        _expandCooldown = 60; // solo revisar cada ~1s
-        const targetRows = Math.min(
-            ROWS_MAX,
-            ROWS_BASE + Math.floor(maxStackHeight / EXPAND_STEP) * EXPAND_ADD
-        );
-        
+        _expandCooldown = 60; 
+        const targetRows = Math.min(ROWS_MAX, ROWS_BASE + Math.floor(maxStackHeight / EXPAND_STEP) * EXPAND_ADD);
         if (targetRows !== _currentRows) {
             _currentRows = targetRows;
             const wrap = canvas.parentElement;
             if (wrap) {
-                // Calcular altura en px según BLOCK_H actual
                 const newH = _currentRows * (BLOCK_H + GAP) + GAP;
                 wrap.style.height = newH + 'px';
                 _resize();
-                
-                // Mantener la cámara enfocada en el piso cuando el canvas se expande
-                setTimeout(() => {
-                    const main = document.querySelector('.app-main');
-                    if (main) main.scrollTop = main.scrollHeight;
-                    window.scrollTo(0, document.body.scrollHeight);
-                }, 50);
             }
         }
     }
@@ -226,7 +249,6 @@ function loop() {
             ctx.fill();
         }
 
-        // Texto con padding para no tocar el borde
         const fontSz = b.isTag ? 11 : 10;
         ctx.font = `${b.isTag ? 'bold ' : ''}${fontSz}px Inter`;
         ctx.fillStyle = b.isTag ? '#f39c12' : '#ffffff';
@@ -236,13 +258,11 @@ function loop() {
         const PAD_X = 8;
         const maxW = b.w - PAD_X * 2;
         let label = b.text;
-        
         while (label.length > 3 && ctx.measureText(label).width > maxW) {
             label = label.slice(0, -1);
         }
         if (label !== b.text && label.length > 1) label = label.slice(0, -1) + '\u2026';
 
-        // Si el bloque es suficientemente alto, intentar dos líneas
         if (!b.isTag && b.h >= 36 && label === b.text) {
             const words = label.split(' ');
             if (words.length > 1) {
@@ -269,10 +289,8 @@ function loop() {
         const ttH = 14 + padY * 2;
         let tx = mouseX + 15;
         let ty = mouseY + 15;
-        
         if (tx + ttW > W) tx = mouseX - ttW - 10;
         if (ty + ttH > H) ty = mouseY - ttH - 10;
-        
         ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
         ctx.strokeStyle = hoveredBlock.isTag ? '#f39c12' : hoveredBlock.clusterColor;
         ctx.lineWidth = 1.5;
@@ -290,7 +308,6 @@ function loop() {
 export function clearBloques() {
     bloques = [];
     _currentRows = ROWS_BASE;
-    // Reset canvas height
     if (canvas?.parentElement) {
         canvas.parentElement.style.height = '';
     }
@@ -303,7 +320,6 @@ function _resize() {
     if (!parent) return;
     const w = parent.clientWidth;
     const h = parent.clientHeight;
-    
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
         canvas.width = w * dpr;
         canvas.height = h * dpr;
