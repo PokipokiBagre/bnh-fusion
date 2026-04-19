@@ -251,7 +251,10 @@ export function initMarkupTextarea(textarea) {
                 found  = true;
                 break;
             }
-            if (c===' ' || c==='\n') break;
+            // For @ and ! (names/medallas can have spaces), only break on newline
+            // For # (tags have no spaces), break on space too
+            if (c==='\n') break;
+            if (c===' ' && _sym !== '!' && _sym !== '@') break;
         }
         if (!found) close(); else render();
     });
