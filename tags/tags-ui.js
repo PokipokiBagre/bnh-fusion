@@ -368,7 +368,7 @@ export function renderCatalogo() {
     const multiToolbar = tagsState.esAdmin ? `
         <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
             border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;
-            position:sticky;top:64px;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,0.10);">
+            position:sticky;top:130px;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.10);">
             <span id="cat-multi-count" style="font-weight:700;font-size:0.88em;color:var(--green-dark);">0 seleccionados</span>
             <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.78em;color:var(--gray-700);font-weight:600;">Tipo:</span>
