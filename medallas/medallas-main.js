@@ -28,8 +28,8 @@ window.onload = async () => {
     }
 
     document.getElementById('pantalla-carga').classList.add('oculto');
-    document.getElementById('interfaz-medallas').classList.remove('oculto');
-    _renderTab('catalogo');
+document.getElementById('interfaz-medallas').classList.remove('oculto');
+    _renderTab('personaje');
     _exponerGlobales();
 };
 
