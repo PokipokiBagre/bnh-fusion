@@ -11,20 +11,20 @@ export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 export const tagsState = {
-    tabActual:      'catalogo',   // 'progresion' | 'catalogo' | 'estadisticas'
-    pjSeleccionado: null,           // nombre_refinado activo en tab Progresión
-    busquedaCat:    '',             // filtro texto en Catálogo
+    tabActual:      'progresion',   // Ahora arranca en progresión
+    pjSeleccionado: null,           
+    busquedaCat:    '',             
+    busquedaMedallasAcc: '',        // Buscador de medallas accesibles
     esAdmin:        false,
-    filtroRol:      '#Jugador',     // 'todos' | '#Jugador' | '#NPC'
-    filtroEstado:   '#Activo',      // 'todos' | '#Activo' | '#Inactivo'
+    filtroRol:      '#Jugador',     
+    filtroEstado:   '#Activo',      
 };
 
-// Datos globales cargados una sola vez
-export let grupos        = [];   // personajes_refinados completos
-export let puntosAll     = [];   // [{ personaje_nombre, tag, cantidad }]
-export let catalogoTags  = [];   // [{ nombre, descripcion, baneado }] de tags_catalogo
-export let medallasCat   = [];   // [{ nombre, tags[], costo_ctl, efecto_desc }]
-export let solicitudes   = [];   // [{ id, personaje_nombre, tipo, costo_pt, datos }] pendientes
+export let grupos        = [];   
+export let puntosAll     = [];   
+export let catalogoTags  = [];   
+export let medallasCat   = [];   
+export let solicitudes   = [];   
 
 export function setGrupos(d)       { grupos       = d; }
 export function setPuntosAll(d)    { puntosAll    = d; }
