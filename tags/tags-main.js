@@ -2,12 +2,11 @@
 // tags/tags-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { tagsState, STORAGE_URL, grupos, catalogoTags } from './tags-state.js';
-import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, canjearPT, renameTag, deleteTag } from './tags-data.js';
+import { tagsState, STORAGE_URL, grupos, catalogoTags, solicitudes } from './tags-state.js';
+import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, renameTag, deleteTag, enviarSolicitud, aprobarSolicitud, cancelarSolicitud, editarSolicitudTresTags } from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
 
-// Lee medallasCat en el momento de la llamada (evita el problema de live bindings)
 async function _refreshMarkup() {
     const state = await import('./tags-state.js');
     initMarkup({ grupos: state.grupos, medallas: state.medallasCat });
@@ -22,7 +21,6 @@ window.onload = async () => {
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     tagsState.esAdmin = bnhAuth.esAdmin();
 
-    // Tab baneados: solo OP
     const tabBan = document.getElementById('tab-baneados');
     if (tabBan) tabBan.style.display = tagsState.esAdmin ? '' : 'none';
 
@@ -55,7 +53,6 @@ function renderTab(tab) {
 
 function _exponerGlobales() {
     window._tagsTab = renderTab;
-    
     window._initMarkupTA = window._initMarkupTA || (async (el) => {
         const { initMarkupTextarea } = await import('../bnh-markup.js');
         initMarkupTextarea(el);
@@ -95,10 +92,7 @@ function _exponerGlobales() {
         });
     };
 
-    window._tagsVerDetalle = (tag) => {
-        renderTagDetalle(tag);
-    };
-
+    window._tagsVerDetalle = (tag) => { renderTagDetalle(tag); };
     window._tagsCloseDetalle = () => {
         const el = document.getElementById('tag-detalle-modal');
         if (el) el.style.display = 'none';
@@ -144,20 +138,52 @@ function _exponerGlobales() {
         renderCatalogo();
     };
 
+    // SOLICITUDES: Botones de Stats (POT/AGI/CTL)
     window._tagsCanjear = async (pj, tag, tipo) => {
-        if (!tagsState.esAdmin) return;
-        const costos = { stat_pot:50, stat_agi:50, stat_ctl:50, medalla:75, tres_tags:100 };
-        const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL', medalla:'Medalla', tres_tags:'3 tags nuevos' };
-        if (!confirm(`Canjear ${costos[tipo]} PT de ${tag} de ${pj} por ${labels[tipo]}?`)) return;
-        const res = await canjearPT(pj, tag, tipo);
+        const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL' };
+        if (!confirm(`¿Proponer gastar 50 PT de ${tag} para obtener ${labels[tipo]}?`)) return;
+        
+        const res = await enviarSolicitud(pj, tag, tipo, 50);
         if (res.ok) {
-            toast(`✅ Canje aplicado. PT restantes en ${tag}: ${res.nueva}`, 'ok');
+            toast(`✅ Solicitud enviada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
             await cargarTodo(); await _refreshMarkup();
             renderProgresion();
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    window._tagsAbrirCanjeTresTags = (pj, tag) => {
+    // SOLICITUDES: OP Aprobar y Rechazar
+    window._tagsAprobarReq = async (id) => {
+        const btn = event.target;
+        btn.disabled = true; btn.textContent = '⏳';
+        const res = await aprobarSolicitud(id);
+        if (res.ok) {
+            toast('✅ Solicitud aprobada y aplicada', 'ok');
+            await cargarTodo(); await _refreshMarkup();
+            renderProgresion();
+        } else {
+            toast('❌ ' + res.msg, 'error');
+            btn.disabled = false; btn.textContent = '✅ Aprobar';
+        }
+    };
+
+    window._tagsCancelarReq = async (id) => {
+        if (!confirm('¿Seguro que deseas eliminar esta solicitud? Se devolverán los PT al personaje.')) return;
+        const btn = event.target;
+        btn.disabled = true; btn.textContent = '⏳';
+        const res = await cancelarSolicitud(id);
+        if (res.ok) {
+            toast('🗑️ Solicitud eliminada. PT devueltos.', 'ok');
+            await cargarTodo(); await _refreshMarkup();
+            renderProgresion();
+        } else {
+            toast('❌ ' + res.msg, 'error');
+            btn.disabled = false;
+        }
+    };
+
+    // ───────────────────────────────────────────────────────────
+
+    window._tagsAbrirCanjeTresTags = (pj, tag, reqIdToEdit = null) => {
         const g = grupos.find(x => x.nombre_refinado === pj);
         if (!g) return;
         const tagsActuales    = (g.tags||[]).map(t => t.startsWith('#')?t:'#'+t);
@@ -171,14 +197,17 @@ function _exponerGlobales() {
         modal.onclick = e => { if(e.target===modal) modal.remove(); };
 
         const esc = s => String(s).replace(/'/g,"\\'");
+        const isEdit = !!reqIdToEdit;
+
         modal.innerHTML = `
         <div style="background:white;border-radius:12px;max-width:860px;width:95%;box-shadow:0 8px 32px rgba(0,0,0,0.25);overflow:hidden;max-height:90vh;display:flex;flex-direction:column;">
             <div style="background:var(--orange,#e67e22);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
-                <b style="font-family:'Cinzel',serif;">🎁 ${pj} — Canje 3 Tags (−100 PT de ${tag})</b>
+                <b style="font-family:'Cinzel',serif;">${isEdit?'✏️ Editar Solicitud Tags':'🎁 Canje Tags (−100 PT de '+tag+')'} — ${pj}</b>
                 <button onclick="this.closest('[style*=fixed]').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
             </div>
             <div style="padding:8px 16px;background:#fef9f0;border-bottom:1px solid #fde0aa;font-size:0.78em;color:#888;flex-shrink:0;">
-                Puedes <b>añadir</b> tags nuevos o <b>remover</b> tags actuales. Máximo 3 operaciones.
+                Puedes <b>añadir</b> tags nuevos o <b>remover</b> tags actuales. <br>
+                <b style="color:var(--orange);">Regla:</b> Máximo 6 operaciones totales. (Máximo 3 agregados y 3 removidos).
             </div>
             <div style="padding:16px;overflow-y:auto;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;flex:1;">
                 <div>
@@ -192,7 +221,7 @@ function _exponerGlobales() {
                     </div>
                 </div>
                 <div>
-                    <div style="font-size:0.75em;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:8px;">Cambios (máx. 3)</div>
+                    <div style="font-size:0.75em;font-weight:700;color:var(--orange);text-transform:uppercase;margin-bottom:8px;">Cambios Programados</div>
                     <div id="tres-cambios" style="display:flex;flex-direction:column;gap:6px;min-height:80px;max-height:260px;overflow-y:auto;background:rgba(243,156,18,0.05);border:1.5px dashed #f39c12;border-radius:8px;padding:8px;margin-bottom:10px;">
                         <div id="tres-cambios-empty" style="color:#aaa;font-size:0.78em;text-align:center;padding:16px 0;">
                             ← Haz click en "Remover" o en un tag disponible →
@@ -221,10 +250,10 @@ function _exponerGlobales() {
                 </div>
             </div>
             <div style="padding:12px 16px;border-top:1px solid #f0f0f0;display:flex;gap:8px;justify-content:flex-end;flex-shrink:0;">
-                <span id="tres-contador" style="font-size:0.82em;color:#888;align-self:center;flex:1;">0/3 operaciones</span>
+                <span id="tres-contador" style="font-size:0.82em;color:#888;align-self:center;flex:1;">0 operaciones</span>
                 <button onclick="this.closest('[style*=fixed]').remove()" style="padding:6px 14px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;cursor:pointer;font-size:0.82em;">Cancelar</button>
-                <button id="tres-confirmar" onclick="window._treesTagsConfirmar('${esc(pj)}','${esc(tag)}',this.closest('[style*=fixed]'))" disabled
-                    style="padding:6px 14px;background:#ccc;border:none;border-radius:6px;color:white;cursor:not-allowed;font-size:0.82em;font-weight:600;">Confirmar canje</button>
+                <button id="tres-confirmar" onclick="window._treesTagsConfirmar('${esc(pj)}','${esc(tag)}',this.closest('[style*=fixed]'), ${reqIdToEdit})" disabled
+                    style="padding:6px 14px;background:#ccc;border:none;border-radius:6px;color:white;cursor:not-allowed;font-size:0.82em;font-weight:600;">${isEdit?'💾 Guardar Cambios':'Enviar Propuesta'}</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -233,12 +262,18 @@ function _exponerGlobales() {
         window._tresPjActual = pj;
         window._tresTagSource= tag;
 
+        // Si es edición, cargar datos previos
+        if (isEdit) {
+            const req = solicitudes.find(s => s.id === reqIdToEdit);
+            if (req && req.datos && req.datos.cambios) {
+                window._tresCambios = [...req.datos.cambios];
+            }
+        }
+
         window._tresBuscar = (q) => {
             const disp = document.getElementById('tres-disponibles');
             if (!disp) return;
-            const filtrado = q
-                ? tagsDisponibles.filter(t => t.toLowerCase().includes(q.toLowerCase()))
-                : tagsDisponibles;
+            const filtrado = q ? tagsDisponibles.filter(t => t.toLowerCase().includes(q.toLowerCase())) : tagsDisponibles;
             disp.innerHTML = filtrado.slice(0,60).map(t =>
                 `<div class="tres-disp-item" data-tag="${t}" onclick="window._treesTagsAnadir('${esc(t)}')"
                     style="padding:4px 8px;border-radius:5px;cursor:pointer;font-size:0.8em;background:#f0fff4;border:1px solid #d5f5e3;color:var(--green-dark);">${t}</div>`
@@ -249,9 +284,13 @@ function _exponerGlobales() {
             const el  = document.getElementById('tres-contador');
             const btn = document.getElementById('tres-confirmar');
             const n   = window._tresCambios.length;
-            if (el)  el.textContent  = `${n}/3 operaciones`;
+            const ag  = window._tresCambios.filter(c => c.tipo==='anadir' || c.tipo==='nuevo').length;
+            const rem = window._tresCambios.filter(c => c.tipo==='remover').length;
+            
+            if (el) el.innerHTML = `Total: ${n}/6 <span style="margin-left:8px;color:var(--green);">Agregados: ${ag}/3</span> <span style="margin-left:8px;color:var(--red);">Removidos: ${rem}/3</span>`;
+            
             if (btn) {
-                const listo = n > 0 && n <= 3;
+                const listo = n > 0 && n <= 6 && ag <= 3 && rem <= 3;
                 btn.disabled         = !listo;
                 btn.style.background = listo ? 'var(--orange,#e67e22)' : '#ccc';
                 btn.style.cursor     = listo ? 'pointer' : 'not-allowed';
@@ -281,14 +320,18 @@ function _exponerGlobales() {
         };
 
         window._treesTagsAnadir = (nuevoTag) => {
-            if (window._tresCambios.length >= 3) { toast('Máximo 3 operaciones', 'info'); return; }
+            const ag = window._tresCambios.filter(c => c.tipo==='anadir' || c.tipo==='nuevo').length;
+            if (ag >= 3) { toast('Máximo 3 tags agregados', 'info'); return; }
+            if (window._tresCambios.length >= 6) { toast('Límite de 6 operaciones alcanzado', 'info'); return; }
             if (window._tresCambios.some(c => c.tag === nuevoTag)) return;
             window._tresCambios.push({ tipo: 'anadir', tag: nuevoTag });
             window._tresRenderCambios();
         };
 
         window._tresRemover = (tagViejo) => {
-            if (window._tresCambios.length >= 3) { toast('Máximo 3 operaciones', 'info'); return; }
+            const rem = window._tresCambios.filter(c => c.tipo==='remover').length;
+            if (rem >= 3) { toast('Máximo 3 tags removidos', 'info'); return; }
+            if (window._tresCambios.length >= 6) { toast('Límite de 6 operaciones alcanzado', 'info'); return; }
             if (window._tresCambios.some(c => c.tipo === 'remover' && c.tag === tagViejo)) return;
             window._tresCambios.push({ tipo: 'remover', tag: tagViejo });
             window._tresRenderCambios();
@@ -299,7 +342,9 @@ function _exponerGlobales() {
             if (!inp) return;
             const val = inp.value.trim().replace(/^#+/, '');
             if (!val) return;
-            if (window._tresCambios.length >= 3) { toast('Máximo 3 operaciones', 'info'); return; }
+            const ag = window._tresCambios.filter(c => c.tipo==='anadir' || c.tipo==='nuevo').length;
+            if (ag >= 3) { toast('Máximo 3 tags agregados', 'info'); return; }
+            if (window._tresCambios.length >= 6) { toast('Límite de 6 operaciones alcanzado', 'info'); return; }
             const tagNorm = '#' + val;
             if (window._tresCambios.some(c => c.tag === tagNorm)) return;
             window._tresCambios.push({ tipo: 'nuevo', tag: tagNorm });
@@ -307,46 +352,44 @@ function _exponerGlobales() {
             window._tresRenderCambios();
         };
 
-        window._treesTagsConfirmar = async (pjLocal, tagSource, modalEl) => {
+        window._treesTagsConfirmar = async (pjLocal, tagSource, modalEl, reqIdEdit) => {
             if (!window._tresCambios?.length) return;
-            if (!confirm(`¿Confirmar ${window._tresCambios.length} operación(es) y gastar 100 PT de ${tagSource}?`)) return;
-
-            const res = await canjearPT(pjLocal, tagSource, 'tres_tags');
-            if (!res.ok) { toast('❌ ' + res.msg, 'error'); return; }
-
-            const { supabase } = await import('../bnh-auth.js');
-            const { data: gData } = await supabase.from('personajes_refinados')
-                .select('tags').eq('nombre_refinado', pjLocal).maybeSingle();
-            let tagsFinal = [...(gData?.tags || [])];
-
-            for (const cam of window._tresCambios) {
-                const tagNorm = cam.tag.startsWith('#') ? cam.tag : '#' + cam.tag;
-                if (cam.tipo === 'remover') {
-                    tagsFinal = tagsFinal.filter(t =>
-                        (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase()
-                    );
-                } else {
-                    if (!tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tagNorm.toLowerCase())) {
-                        tagsFinal.push(tagNorm);
-                    }
-                    if (cam.tipo === 'nuevo') {
-                        const tagKey = tagNorm.slice(1);
-                        await supabase.from('tags_catalogo').upsert(
-                            { nombre: tagKey }, { onConflict: 'nombre', ignoreDuplicates: true }
-                        );
-                    }
-                }
+            
+            if (reqIdEdit) {
+                const btn = event.target;
+                btn.disabled = true; btn.textContent = '⏳';
+                const res = await editarSolicitudTresTags(reqIdEdit, window._tresCambios);
+                if (res.ok) {
+                    toast('✅ Cambios guardados', 'ok');
+                    modalEl.remove();
+                    await cargarTodo(); await _refreshMarkup();
+                    renderProgresion();
+                } else toast('❌ ' + res.msg, 'error');
+                return;
             }
 
-            await supabase.from('personajes_refinados').update({ tags: tagsFinal }).eq('nombre_refinado', pjLocal);
-            const resumen = window._tresCambios.map(c =>
-                c.tipo === 'remover' ? `− ${c.tag}` : `+ ${c.tag}`
-            ).join(', ');
-            toast(`✅ ${resumen}`, 'ok');
+            if (!confirm(`¿Confirmar solicitud y descontar 100 PT de ${tagSource}?`)) return;
+
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = '⏳';
+
+            const res = await enviarSolicitud(pjLocal, tagSource, 'tres_tags', 100, { cambios: window._tresCambios });
+            if (!res.ok) { toast('❌ ' + res.msg, 'error'); btn.disabled = false; btn.textContent = 'Reintentar'; return; }
+
+            toast(`✅ Solicitud de tags enviada. PT de ${tagSource}: ${res.nueva}`, 'ok');
             modalEl.remove();
             await cargarTodo(); await _refreshMarkup();
             renderProgresion();
         };
+
+        // Render inicial si es edición
+        if (isEdit) window._tresRenderCambios();
+    };
+
+    window._tagsAbrirEditTresTags = (reqId) => {
+        const req = solicitudes.find(s => s.id === reqId);
+        if (!req) return;
+        window._tagsAbrirCanjeTresTags(req.personaje_nombre, req.tag_origen, req.id);
     };
 
     window._tagsAbrirCanjeMedialla = (pj, tag) => {
@@ -416,7 +459,7 @@ function _exponerGlobales() {
 
                 <div style="display:flex;gap:8px;margin-top:4px;">
                     <button onclick="window._tagsConfirmarMedalla('${pj.replace(/'/g,"\\'")}','${tag.replace(/'/g,"\\'")}',document.getElementById('modal-proponer-medalla-tags'))"
-                        style="padding:8px 16px;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">🏅 Proponer y canjear</button>
+                        style="padding:8px 16px;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">🏅 Proponer Medalla</button>
                     <button onclick="document.getElementById('modal-proponer-medalla-tags').remove()"
                         style="padding:8px 16px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;cursor:pointer;">Cancelar</button>
                 </div>
@@ -487,10 +530,13 @@ function _exponerGlobales() {
             if (t) conds.push({ tag: t.startsWith('#')?t:'#'+t, pts_minimos: pts, efecto: efe });
         });
 
-        if (msgEl) msgEl.textContent = '⏳ Enviando…';
+        if (msgEl) msgEl.textContent = '⏳ Registrando propuesta y descontando PT…';
+        const btn = event.target;
+        btn.disabled = true;
 
         const { supabase } = await import('../bnh-auth.js');
-        const { error: eMed } = await supabase.from('medallas_catalogo').insert({
+        // 1. Insertamos en medallas_catalogo como propuesta
+        const { data: medData, error: eMed } = await supabase.from('medallas_catalogo').insert({
             nombre,
             efecto_desc:           efecto,
             costo_ctl:             ctl,
@@ -499,13 +545,24 @@ function _exponerGlobales() {
             efectos_condicionales: conds,
             propuesta:             true,
             propuesta_por:         pj,
-        });
-        if (eMed) { if(msgEl) msgEl.textContent='❌ '+eMed.message; return; }
+        }).select('id').single();
 
-        const res = await canjearPT(pj, tag, 'medalla');
-        if (!res.ok) { if(msgEl) msgEl.textContent='Medalla guardada pero error PT: '+res.msg; return; }
+        if (eMed) { 
+            if(msgEl) msgEl.textContent='❌ Error medalla: '+eMed.message; 
+            btn.disabled = false;
+            return; 
+        }
 
-        toast(`🏅 Medalla "${nombre}" propuesta. PT de ${tag}: ${res.nueva}`, 'ok');
+        // 2. Enviamos la solicitud para descontar PT
+        const res = await enviarSolicitud(pj, tag, 'medalla', 75, { medalla_id: medData.id, nombre_medalla: nombre });
+        if (!res.ok) { 
+            if(msgEl) msgEl.textContent='Medalla propuesta, pero falló descuento PT: '+res.msg; 
+            await supabase.from('medallas_catalogo').delete().eq('id', medData.id); // Rollback
+            btn.disabled = false;
+            return; 
+        }
+
+        toast(`🏅 Medalla propuesta registrada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
         modalEl.remove();
         await cargarTodo(); await _refreshMarkup();
         renderProgresion();
@@ -543,6 +600,7 @@ function _exponerGlobales() {
         if (!g) return;
 
         const nuevosTags = (g.tags || []).filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase());
+
         const { error } = await supabase.from('personajes_refinados')
             .update({ tags: nuevosTags }).eq('id', grupoId);
 
