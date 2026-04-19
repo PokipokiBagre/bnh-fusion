@@ -141,7 +141,9 @@ function _resumenPJ(pj) {
         return              { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
     const cambios = Math.floor(agi/4);
-    const pvMax   = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+tierData.tier;
+    // Bono correcto: TIER 1=5, TIER 2=10, TIER 3=15, TIER 4=20
+    const bonoPV  = [5,10,15,20][tierData.tier-1] || 5;
+    const pvMax   = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV + (g.pv_max_delta||0);
     const pvActual = g.pv_actual ?? pvMax;
     // Imagen profile
     const norm = s => s.toString().trim().toLowerCase()
