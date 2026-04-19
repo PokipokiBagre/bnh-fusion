@@ -33,7 +33,8 @@ export async function guardarDescripcionTag(nombre, descripcion, tipo) {
 }
 
 // ── SISTEMA DE SOLICITUDES ──────────────────────────────────────────
-export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}) {
+
+export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}, esAdmin = false) {
     const { data: ptRow } = await supabase.from('puntos_tag')
         .select('cantidad').eq('personaje_nombre', pj).ilike('tag', tagSource).maybeSingle();
     
@@ -45,21 +46,31 @@ export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}) {
         if (exist) return { ok: false, msg: 'Solo puede haber una solicitud de canje de tags pendiente por personaje.' };
     }
 
-    const nuevaCantidad = ptRow.cantidad - costo;
-    const { error: ePT } = await supabase.from('puntos_tag')
-        .update({ cantidad: nuevaCantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
-    
-    if (ePT) return { ok: false, msg: 'Error al descontar PT.' };
+    // 1. Guardamos en los datos si la petición descontó PT (solo el OP puede descontar)
+    datos.pt_descontados = esAdmin;
 
+    // 2. Si es OP, descuenta el PT inmediatamente
+    if (esAdmin) {
+        const nuevaCantidad = ptRow.cantidad - costo;
+        const { error: ePT } = await supabase.from('puntos_tag')
+            .update({ cantidad: nuevaCantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
+        if (ePT) return { ok: false, msg: 'Error al descontar PT.' };
+    }
+
+    // 3. Crear la solicitud
     const { error: eReq } = await supabase.from('solicitudes_tag').insert({
         personaje_nombre: pj, tag_origen: tagSource, tipo, costo_pt: costo, datos
     });
 
     if (eReq) {
-        await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
+        // Rollback si falló al crear la solicitud y éramos OP
+        if (esAdmin) {
+            await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
+        }
         return { ok: false, msg: 'Error al registrar la solicitud.' };
     }
-    return { ok: true, nueva: nuevaCantidad };
+
+    return { ok: true, nueva: esAdmin ? (ptRow.cantidad - costo) : ptRow.cantidad };
 }
 
 export async function aprobarSolicitud(reqId) {
@@ -68,6 +79,21 @@ export async function aprobarSolicitud(reqId) {
 
     const pj = req.personaje_nombre;
 
+    // 1. Si la hizo un anónimo, los PT nunca se descontaron. ¡El OP los descuenta AHORA!
+    if (!req.datos.pt_descontados) {
+        const { data: ptRow } = await supabase.from('puntos_tag')
+            .select('cantidad').eq('personaje_nombre', pj).ilike('tag', req.tag_origen).maybeSingle();
+        
+        if (!ptRow || ptRow.cantidad < req.costo_pt) {
+            return { ok: false, msg: 'El personaje ya no tiene PT suficientes para aprobar esta solicitud.' };
+        }
+        
+        const { error: ePT } = await supabase.from('puntos_tag')
+            .update({ cantidad: ptRow.cantidad - req.costo_pt }).eq('personaje_nombre', pj).ilike('tag', req.tag_origen);
+        if (ePT) return { ok: false, msg: 'Error al descontar los PT durante la aprobación.' };
+    }
+
+    // 2. Aplicar los beneficios de la solicitud
     if (req.tipo.startsWith('stat_')) {
         const statField = req.tipo.split('_')[1]; 
         const { data: pData } = await supabase.from('personajes_refinados').select(statField).eq('nombre_refinado', pj).single();
@@ -108,20 +134,24 @@ export async function cancelarSolicitud(reqId) {
     const { data: req } = await supabase.from('solicitudes_tag').select('*').eq('id', reqId).maybeSingle();
     if (!req) return { ok: false, msg: 'Solicitud no encontrada.' };
 
+    // Si había una medalla propuesta ligada, la destruimos
     if (req.tipo === 'medalla' && req.datos.medalla_id) {
         await supabase.from('medallas_catalogo').delete().eq('id', req.datos.medalla_id);
     }
 
-    const { data: ptRow } = await supabase.from('puntos_tag')
-        .select('cantidad').eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen).maybeSingle();
-    
-    if (ptRow) {
-        await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad + req.costo_pt })
-            .eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen);
-    } else {
-        await supabase.from('puntos_tag').insert({
-            personaje_nombre: req.personaje_nombre, tag: req.tag_origen, cantidad: req.costo_pt, actualizado_en: new Date().toISOString()
-        });
+    // SOLO devolvemos PT si realmente se descontaron al crear la solicitud (es decir, si la hizo el OP)
+    if (req.datos.pt_descontados) {
+        const { data: ptRow } = await supabase.from('puntos_tag')
+            .select('cantidad').eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen).maybeSingle();
+        
+        if (ptRow) {
+            await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad + req.costo_pt })
+                .eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen);
+        } else {
+            await supabase.from('puntos_tag').insert({
+                personaje_nombre: req.personaje_nombre, tag: req.tag_origen, cantidad: req.costo_pt, actualizado_en: new Date().toISOString()
+            });
+        }
     }
 
     await supabase.from('solicitudes_tag').delete().eq('id', reqId);
