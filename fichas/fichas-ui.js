@@ -8,6 +8,7 @@ import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
 import { renderMarkup } from './fichas-markup.js';
 
+import { getEquipacionPJ, calcCTLUsado, setSupabaseRef } from '../bnh-pac.js';
 // Inicializar tags del catálogo en cuanto carga el módulo
 initTags();
 
@@ -322,12 +323,11 @@ export function renderDetalle(nombreGrupo) {
     const misAliases = aliasesGlobal.filter(a=>a.refinado_id===g.id).map(a=>a.nombre);
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
-    // CTL usado = suma costo_ctl de medallas equipadas
-    const ctlEquip = ((g.equipacion||[]).reduce((sum, id) => {
-        const m = (window._medallasCatRef || []).find(x => x.id === id);
-        return sum + (m?.costo_ctl || 0);
-    }, 0));
-    const ctlA = ctlEquip; // CTL usado por equipación
+    // CTL usado = desde medallas_inventario (vía cache de bnh-pac)
+    // Nota: renderDetalle es sync, usamos el cache si está disponible, sino 0
+    const _cachedEquip = window._equipCache?.[nombreGrupo] || [];
+    const ctlEquip = calcCTLUsado(_cachedEquip);
+    const ctlA = ctlEquip;
 
     function statDisplay(total, actual) {
         return actual === total ? `${total}` : `<span style="color:#2980b9;">${actual}</span>/${total}`;

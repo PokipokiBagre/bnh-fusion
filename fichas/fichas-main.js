@@ -9,11 +9,16 @@ import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle, rend
 import { subirImagenGrupo } from './fichas-upload.js';
 import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP, abrirEditarLore } from './fichas-op.js';
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
-import { initMarkup } from './fichas-markup.js';
+import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
+import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
 
 let postersDelHilo = null;
 
 async function init() {
+    // Inyectar supabase en bnh-pac para getEquipacionPJ
+    const { supabase } = await import('../bnh-auth.js');
+    setSupabaseRef(supabase);
+
     const favicon = document.getElementById('dynamic-favicon');
     if (favicon && currentConfig) favicon.href = `${currentConfig.storageUrl}/imginterfaz/icon.png?v=${Date.now()}`;
 
@@ -79,9 +84,13 @@ function sincronizarVista() {
 }
 
 function exponerGlobales() {
-    window.abrirFicha = (nombreGrupo) => {
+    window.abrirFicha = async (nombreGrupo) => {
         const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
         if (!g) return;
+        // Pre-cargar equipación en cache de bnh-pac para que fichas-ui la lea sync
+        const medEq = await getEquipacionPJ(nombreGrupo, { forzar: true });
+        window._equipCache = window._equipCache || {};
+        window._equipCache[nombreGrupo] = medEq;
         fichasUI.vistaActual  = 'detalle';
         fichasUI.seleccionado = nombreGrupo;
         sincronizarVista();

@@ -3,6 +3,7 @@
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { calcPVMax, fmtTag } from './fichas-logic.js';
+import { getEquipacionPJ, calcCTLUsado, setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import {
     guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo, borrarPTDeTag,
     renombrarGrupo, eliminarGrupo,
@@ -46,7 +47,7 @@ function setMsg(id, txt, ok) {
 }
 
 // ── Panel principal del GRUPO ─────────────────────────────────
-export function abrirPanelOP(nombreGrupo) {
+export async function abrirPanelOP(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
 
@@ -55,11 +56,9 @@ export function abrirPanelOP(nombreGrupo) {
     const pvMax   = calcPVMax(pot, agi, ctl) + pvDelta;
     const potA    = g.pot_actual ?? pot;
     const agiA    = g.agi_actual ?? agi;
-    // CTL actual = suma de costo_ctl de las medallas equipadas (nunca de BD)
-    const ctlEquipacion = ((g.equipacion||[]).reduce((sum, id) => {
-        const m = (window._medallasCatRef || []).find(x => x.id === id);
-        return sum + (m?.costo_ctl || 0);
-    }, 0));
+    // CTL usado = suma costo_ctl de medallas equipadas desde medallas_inventario
+    const medallaEquipadas = await getEquipacionPJ(nombreGrupo, { forzar: true });
+    const ctlEquipacion = calcCTLUsado(medallaEquipadas);
 
     const tabs = ['Stats','Tags & PT','Fusión','Grupo'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
@@ -515,6 +514,8 @@ export function abrirEditarLore(nombreGrupo) {
 
 // ── Exponer globales ──────────────────────────────────────────
 export function exponerGlobalesOP() {
+    // Inyectar supabase en bnh-pac para que getEquipacionPJ funcione
+    setSupabaseRef(supabase);
 
     window._opTab = i => {
         // Tabs: 0=Stats, 1=Tags&PT, 2=Fusión, 3=Grupo
