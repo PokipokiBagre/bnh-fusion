@@ -145,7 +145,10 @@ window._markupIrAFicha = (nombreGrupo) => {
     if (window.abrirFicha) {
         window.abrirFicha(nombreGrupo);
     } else {
-        window.location.href = `fichas/index.html`;
+        // Detecta si estás en /tags/ para retroceder un nivel
+        window.location.href = window.location.pathname.includes('/tags/')
+            ? '../fichas/index.html'
+            : 'fichas/index.html';
     }
 };
 
