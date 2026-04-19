@@ -1,44 +1,20 @@
 // ============================================================
 // bnh-markup.js — Sistema de markup enriquecido para lore/quirk
 // Colocar en la RAÍZ del proyecto.
-//
-// Sintaxis en el editor:
-//   @Nombre        → link verde al personaje (nombre sin espacios)
-//   @Nombre Comp@  → link verde (nombre con espacios, delimitado)
-//   #Tag           → link rojo al tag en /tags/
-//   !Medalla       → link azul a la medalla (sin espacios)
-//   !Med Comp!     → link azul (con espacios, delimitado)
-//
-// Vista pública: símbolo oculto, texto coloreado con link.
-// Editor: símbolo visible antes (y después si delimitado).
-//
-// Uso:
-//   import { initMarkup, renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
-//   initMarkup({ grupos: gruposGlobal }); // llamar al cargar datos
-//   renderMarkup(texto);                  // para mostrar
-//   initMarkupTextarea(textareaEl);       // para el editor
 // ============================================================
 
-// ── Estado interno (inyectado por cada página) ────────────────
-let _grupos   = [];  // [{ nombre_refinado, tags[] }]
-let _medallas = [];  // [{ nombre }]
+let _grupos   = [];  
+let _medallas = [];  
 
-/**
- * Inicializar con los datos disponibles.
- * Llamar después de cargar los datos de Supabase.
- * Es seguro llamarlo varias veces (actualiza la referencia).
- */
 export function initMarkup({ grupos = [], medallas = [] } = {}) {
     _grupos   = grupos;
     _medallas = medallas;
 }
 
-// ── Helpers ───────────────────────────────────────────────────
 function escTxt(s) {
     return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-// ── Renderizado ───────────────────────────────────────────────
 export function renderMarkup(texto) {
     if (!texto) return '';
     const t = String(texto);
@@ -50,52 +26,27 @@ export function renderMarkup(texto) {
 
         if (ch === '@') {
             const rest = t.slice(i + 1);
-            // @Nombre con espacios@ (delimitado)
             const mD = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ ._-]+?)@/);
-            if (mD) {
-                tokens.push({ tipo: 'persona', valor: mD[1].trim() });
-                i += 1 + mD[1].length + 1;
-                continue;
-            }
-            // @NombreSimple
+            if (mD) { tokens.push({ tipo: 'persona', valor: mD[1].trim() }); i += 1 + mD[1].length + 1; continue; }
             const mS = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*)/);
-            if (mS) {
-                tokens.push({ tipo: 'persona', valor: mS[1].trim() });
-                i += 1 + mS[1].length;
-                continue;
-            }
+            if (mS) { tokens.push({ tipo: 'persona', valor: mS[1].trim() }); i += 1 + mS[1].length; continue; }
         }
 
         if (ch === '#') {
             const mS = t.slice(i + 1).match(/^([\wÀ-ɏ][\wÀ-ɏ_.]*)/);
-            if (mS) {
-                tokens.push({ tipo: 'tag', valor: mS[1] });
-                i += 1 + mS[1].length;
-                continue;
-            }
+            if (mS) { tokens.push({ tipo: 'tag', valor: mS[1] }); i += 1 + mS[1].length; continue; }
         }
 
         if (ch === '!') {
             const rest = t.slice(i + 1);
-            // !Medalla con espacios! (delimitado)
             const mD = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ ._-]+?)!/);
-            if (mD) {
-                tokens.push({ tipo: 'medalla', valor: mD[1].trim() });
-                i += 1 + mD[1].length + 1;
-                continue;
-            }
-            // !MedallaSimple
+            if (mD) { tokens.push({ tipo: 'medalla', valor: mD[1].trim() }); i += 1 + mD[1].length + 1; continue; }
             const mS = rest.match(/^([\wÀ-ɏ][\wÀ-ɏ._-]*)/);
-            if (mS) {
-                tokens.push({ tipo: 'medalla', valor: mS[1].trim() });
-                i += 1 + mS[1].length;
-                continue;
-            }
+            if (mS) { tokens.push({ tipo: 'medalla', valor: mS[1].trim() }); i += 1 + mS[1].length; continue; }
         }
 
         if (ch === '\n') { tokens.push({ tipo: 'br' }); i++; continue; }
 
-        // Texto plano
         let j = i + 1;
         while (j < t.length && t[j] !== '@' && t[j] !== '#' && t[j] !== '!' && t[j] !== '\n') j++;
         tokens.push({ tipo: 'texto', valor: t.slice(i, j) });
@@ -120,7 +71,7 @@ export function renderMarkup(texto) {
         }
         if (tok.tipo === 'medalla') {
             const m = tok.valor;
-            return `<a href="../medallas/index.html#${encodeURIComponent(m)}" onclick="event.stopPropagation();"
+            return `<a href="#" onclick="event.preventDefault();event.stopPropagation();window._markupIrAMedalla('${m.replace(/'/g,"\\'")}');return false;"
                 style="color:#1a4a80;font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver medalla ${escTxt(m)}">${escTxt(m)}</a>`;
         }
@@ -128,27 +79,33 @@ export function renderMarkup(texto) {
     }).join('');
 }
 
-// Handler global para navegar a una ficha (la página destino lo implementa)
+// Handler global para navegar a un TAG
 window._markupIrATag = (tag) => {
     if (window._tagsVerDetalle) {
-        // We're inside the tags page — open the detail modal
         window._tagsVerDetalle(tag.startsWith('#') ? tag : '#' + tag);
     } else {
-        // Navigate to tags page
-        window.location.href = (window.location.pathname.includes('/fichas/')
-            ? '../tags/index.html'
-            : 'tags/index.html') + '?tag=' + encodeURIComponent(tag);
+        const isSub = window.location.pathname.includes('/fichas/') || window.location.pathname.includes('/medallas/');
+        window.location.href = (isSub ? '../tags/' : 'tags/') + 'index.html?tag=' + encodeURIComponent(tag);
     }
 };
 
-window._markupIrAFicha = (nombreGrupo) => {
+// Handler global para navegar a FICHAS
+window._markupIrAFicha = (nombre) => {
     if (window.abrirFicha) {
-        window.abrirFicha(nombreGrupo);
+        window.abrirFicha(nombre);
     } else {
-        // Detecta si estás en /tags/ para retroceder un nivel
-        window.location.href = window.location.pathname.includes('/tags/')
-            ? '../fichas/index.html'
-            : 'fichas/index.html';
+        const isSub = window.location.pathname.includes('/tags/') || window.location.pathname.includes('/medallas/');
+        window.location.href = (isSub ? '../fichas/' : 'fichas/') + 'index.html?ficha=' + encodeURIComponent(nombre);
+    }
+};
+
+// Handler global para navegar a MEDALLAS
+window._markupIrAMedalla = (nombre) => {
+    if (window._medallasAbrirDetalleByName) {
+        window._medallasAbrirDetalleByName(nombre);
+    } else {
+        const isSub = window.location.pathname.includes('/tags/') || window.location.pathname.includes('/fichas/');
+        window.location.href = (isSub ? '../medallas/' : 'medallas/') + 'index.html?medalla=' + encodeURIComponent(nombre);
     }
 };
 
@@ -172,21 +129,13 @@ export function initMarkupTextarea(textarea) {
 
     function getCandidatos(sym, q) {
         q = q.toLowerCase();
-        if (sym === '@') {
-            return _grupos.map(g => g.nombre_refinado)
-                .filter(n => n.toLowerCase().includes(q)).slice(0, 8);
-        }
+        if (sym === '@') return _grupos.map(g => g.nombre_refinado).filter(n => n.toLowerCase().includes(q)).slice(0, 8);
         if (sym === '#') {
             const set = new Set();
-            _grupos.forEach(g => (g.tags||[]).forEach(t => {
-                set.add(t.startsWith('#') ? t.slice(1) : t);
-            }));
+            _grupos.forEach(g => (g.tags||[]).forEach(t => set.add(t.startsWith('#') ? t.slice(1) : t)));
             return [...set].filter(t => t.toLowerCase().includes(q)).sort().slice(0, 8);
         }
-        if (sym === '!') {
-            return _medallas.map(m => m.nombre)
-                .filter(n => n.toLowerCase().includes(q)).slice(0, 8);
-        }
+        if (sym === '!') return _medallas.map(m => m.nombre).filter(n => n.toLowerCase().includes(q)).slice(0, 8);
         return [];
     }
 
@@ -204,58 +153,36 @@ export function initMarkupTextarea(textarea) {
         sug.style.display = 'block';
         const col = _sym==='@' ? '#1e8449' : _sym==='#' ? '#c0392b' : '#1a4a80';
         sug.innerHTML = _items.map((it, i) => `
-            <div data-i="${i}" style="padding:7px 12px;cursor:pointer;
-                background:${i===_sel?'#d5f5e3':'white'};
-                color:${i===_sel?'#145a32':col};
-                font-weight:${i===_sel?700:500};
-                border-bottom:1px solid #f1f3f4;">
+            <div data-i="${i}" style="padding:7px 12px;cursor:pointer;background:${i===_sel?'#d5f5e3':'white'};color:${i===_sel?'#145a32':col};font-weight:${i===_sel?700:500};border-bottom:1px solid #f1f3f4;">
                 <span style="opacity:.4;">${_sym}</span>${it}
             </div>`).join('');
-        sug.querySelectorAll('[data-i]').forEach(el => {
-            el.onmousedown = e => { e.preventDefault(); apply(_items[+el.dataset.i]); };
-        });
+        sug.querySelectorAll('[data-i]').forEach(el => { el.onmousedown = e => { e.preventDefault(); apply(_items[+el.dataset.i]); }; });
     }
 
     function apply(item) {
         _applying = true;
-        const v   = textarea.value;
-        const cur = textarea.selectionStart;
-        const needsDelim = item.includes(' ');
-        const symPos     = _start - 1;        // position of @ # !
-        const textBefore = v.slice(0, symPos); // text before the symbol
-        const textAfter  = v.slice(cur);       // text after the typed partial
-        // Always add closing delimiter for @ and !
-        // # never needs delimiter (tags have no spaces)
-        const insertion = _sym === '#'
-            ? `#${item} `
-            : `${_sym}${item}${_sym} `;
+        const v = textarea.value, cur = textarea.selectionStart;
+        const symPos = _start - 1;        
+        const textBefore = v.slice(0, symPos); 
+        const textAfter  = v.slice(cur);       
+        const insertion = _sym === '#' ? `#${item} ` : `${_sym}${item}${_sym} `;
         textarea.value = textBefore + insertion + textAfter;
         const pos = textBefore.length + insertion.length;
         textarea.setSelectionRange(pos, pos);
         close();
         textarea.focus();
-        // Reset flag after microtask so input event (if fired) is ignored
         Promise.resolve().then(() => { _applying = false; });
     }
 
     function close() { sug.style.display='none'; _items=[]; _sym=''; _sel=0; }
 
     textarea.addEventListener('input', () => {
-        if (_applying) return; // ignore synthetic input from apply()
+        if (_applying) return; 
         const v = textarea.value, cur = textarea.selectionStart;
         let found = false;
         for (let i = cur - 1; i >= 0; i--) {
             const c = v[i];
-            if (c==='@' || c==='#' || c==='!') {
-                _sym   = c;
-                _start = i + 1;
-                _items = getCandidatos(c, v.slice(i+1, cur));
-                _sel   = 0;
-                found  = true;
-                break;
-            }
-            // For @ and ! (names/medallas can have spaces), only break on newline
-            // For # (tags have no spaces), break on space too
+            if (c==='@' || c==='#' || c==='!') { _sym = c; _start = i + 1; _items = getCandidatos(c, v.slice(i+1, cur)); _sel = 0; found = true; break; }
             if (c==='\n') break;
             if (c===' ' && _sym !== '!' && _sym !== '@') break;
         }
