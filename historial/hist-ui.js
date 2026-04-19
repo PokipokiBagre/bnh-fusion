@@ -195,25 +195,25 @@ export function renderTimeline() {
     let html = selectorHilo + `
     <div style="display:flex;gap:16px;align-items:flex-start;">
 
-        <!-- Panel izquierdo: selección de posts -->
-        <div id="panel-sel-posts" style="width:${selPostsState.activo?'280px':'0'};
+        <!-- Panel izquierdo: selección de posts (solo OP) -->
+        ${estadoUI.esAdmin ? `<div id="panel-sel-posts" style="width:${selPostsState.activo?'280px':'0'};
             min-width:${selPostsState.activo?'280px':'0'};overflow:hidden;
             transition:width 0.25s,min-width 0.25s;flex-shrink:0;align-self:flex-start;">
             ${panelSeleccion}
-        </div>
+        </div>` : ''}
 
         <!-- Contenido principal -->
         <div style="flex:1;min-width:0;">
             <div style="display:flex;justify-content:space-between;align-items:center;
                 padding:4px 0 10px;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
                 <span style="font-size:0.85em;color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
-                <button class="btn btn-sm ${selPostsState.activo?'btn-green':'btn-outline'}"
+                ${estadoUI.esAdmin ? `<button class="btn btn-sm ${selPostsState.activo?'btn-green':'btn-outline'}"
                     onclick="window._histToggleSelPosts()"
                     style="font-size:0.78em;">
                     ${selPostsState.activo
-                        ? `✓ Seleccionando (${selPostsState.postsSel.size})`
+                        ? '✓ Seleccionando (' + selPostsState.postsSel.size + ')'
                         : '☑ Seleccionar posts'}
-                </button>
+                </button>` : ''}
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">`;
@@ -311,7 +311,7 @@ export function renderTimeline() {
 
 // ── Panel lateral de selección de posts ───────────────────────
 function _renderPanelSeleccion() {
-    if (!selPostsState.activo) return '';
+    if (!selPostsState.activo || !estadoUI.esAdmin) return '';
 
     const { filtroRol, filtroEstado, todosPJs, personajesExtra, postsSel } = selPostsState;
 
