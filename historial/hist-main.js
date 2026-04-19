@@ -376,44 +376,26 @@ window._histCancelarSel = function() {
 window._histLimpiarPosts = function() {
     selPostsState.postsSel.clear();
     _exponerReferencias();
-    actualizarPanelSel();
+    renderTimeline();
 };
 
 window._histTogglePostSel = function(postNo) {
     if (selPostsState.postsSel.has(postNo)) selPostsState.postsSel.delete(postNo);
     else selPostsState.postsSel.add(postNo);
     _exponerReferencias();
-    // Actualizar visual del post (borde + check) sin re-render completo
-    const el = document.getElementById('post-' + postNo);
-    if (el) {
-        const sel = selPostsState.postsSel.has(postNo);
-        el.style.borderColor = sel ? '#00b4d8' : '#e9ecef';
-        el.style.borderWidth = sel ? '2px' : '1px';
-        el.style.background  = sel ? 'rgba(0,180,216,0.05)' : 'white';
-        // Check badge
-        let chk = el.querySelector('.post-sel-check');
-        if (sel && !chk) {
-            chk = document.createElement('div');
-            chk.className = 'post-sel-check';
-            chk.style.cssText = 'position:absolute;top:6px;right:8px;background:#00b4d8;color:white;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:0.7em;font-weight:800;';
-            chk.textContent = '✓';
-            el.appendChild(chk);
-        } else if (!sel && chk) {
-            chk.remove();
-        }
-    }
-    // Actualizar solo el panel lateral
-    actualizarPanelSel();
+    renderTimeline();
 };
 
 window._histFiltroRol = function(v) {
     selPostsState.filtroRol = v;
-    actualizarPanelSel();
+    _exponerReferencias();
+    renderTimeline();
 };
 
 window._histFiltroEst = function(v) {
     selPostsState.filtroEstado = v;
-    actualizarPanelSel();
+    _exponerReferencias();
+    renderTimeline();
 };
 
 window._histTogglePJExtra = async function(nombre) {
@@ -481,7 +463,7 @@ window._histTogglePJExtra = async function(nombre) {
         }
     }
     _exponerReferencias();
-    actualizarPanelSel();
+    renderTimeline();
 };
 
 // ── Calcular PT extra para posts seleccionados ────────────────
