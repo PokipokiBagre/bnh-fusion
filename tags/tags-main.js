@@ -129,25 +129,52 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    // Asignar tag desde el detalle modal (OP)
+// Asignar tag desde el detalle modal (OP)
     window._tagsAsignarDesdeDetalle = async (grupoId, nombreGrupo, tag) => {
         const { supabase } = await import('../bnh-auth.js');
         const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
-        // Fetch current tags
+        
         const { data: g } = await supabase.from('personajes_refinados')
             .select('tags').eq('id', grupoId).maybeSingle();
         if (!g) return;
+        
         const nuevosTags = [...new Set([...(g.tags||[]), tagNorm])];
         const { error } = await supabase.from('personajes_refinados')
             .update({ tags: nuevosTags }).eq('id', grupoId);
+            
         if (!error) {
-            // Update in-memory
             const gLocal = grupos.find(x => x.id === grupoId);
             if (gLocal) gLocal.tags = nuevosTags;
-            // Visual feedback: fade out the thumb
-            const el = document.getElementById('assign-' + grupoId);
-            if (el) { el.style.opacity = '0.2'; el.style.pointerEvents = 'none'; el.querySelector('span').textContent = '✅'; }
             toast(`✅ ${tagNorm} asignado a ${nombreGrupo}`, 'ok');
+            // Refresca la ventana para que el personaje suba a la lista inmediatamente
+            window._tagsVerDetalle(tagNorm); 
+        } else {
+            toast('❌ ' + error.message, 'error');
+        }
+    };
+
+    // Quitar tag desde el detalle modal (OP)
+    window._tagsQuitarDesdeDetalle = async (grupoId, nombreGrupo, tag) => {
+        if (!confirm(`¿Quitar el tag ${tag} de ${nombreGrupo}?`)) return;
+        const { supabase } = await import('../bnh-auth.js');
+        const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+
+        const { data: g } = await supabase.from('personajes_refinados')
+            .select('tags').eq('id', grupoId).maybeSingle();
+        if (!g) return;
+
+        // Filtramos para quitar el tag específico
+        const nuevosTags = (g.tags || []).filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase());
+
+        const { error } = await supabase.from('personajes_refinados')
+            .update({ tags: nuevosTags }).eq('id', grupoId);
+
+        if (!error) {
+            const gLocal = grupos.find(x => x.id === grupoId);
+            if (gLocal) gLocal.tags = nuevosTags;
+            toast(`🗑️ ${tagNorm} removido de ${nombreGrupo}`, 'ok');
+            // Refresca la ventana para que el personaje baje a la lista inmediatamente
+            window._tagsVerDetalle(tagNorm); 
         } else {
             toast('❌ ' + error.message, 'error');
         }
