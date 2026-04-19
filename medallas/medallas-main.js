@@ -191,7 +191,7 @@ function _exponerGlobales() {
 
     window._medGuardarEquipacion = window._medGuardarEquipacionValida; // alias por compatibilidad
 
-window._medProponerEquipacion = async () => {
+window._medProponerEquipacion = () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
         const ctl = g?.ctl || 0;
@@ -207,6 +207,43 @@ window._medProponerEquipacion = async () => {
             if (!ok) return;
         }
 
+        if (validas.length === 0) { toast('No hay medallas que quepan en el CTL para proponer', 'info'); return; }
+
+        // Mostrar modal bonito en lugar de prompt/alert
+        const el = document.getElementById('medalla-modal');
+        el.innerHTML = `
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+                 onclick="if(event.target===this)window._medallasCloseModal()">
+                <div style="background:white;border-radius:var(--radius-lg);max-width:450px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border:2px solid #e67e22;">
+                    <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+                        <h3 style="margin:0;font-family:'Cinzel',serif;">📝 Enviar Propuesta</h3>
+                        <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
+                    </div>
+                    <div style="padding:20px;">
+                        <p style="font-size:0.9em;color:var(--gray-700);margin-bottom:15px;line-height:1.4;">
+                            Se enviará una propuesta con <b>${validas.length} medallas</b> para el personaje <b>${medallaState.pjSeleccionado}</b>.
+                        </p>
+                        <label class="form-label">Tu nombre (opcional)</label>
+                        <input class="inp" id="prop-eq-autor" placeholder="¿Cómo te llamamos?" autocomplete="off" onkeydown="if(event.key==='Enter')window._medEjecutarPropuestaEq()">
+                        <div style="display:flex;gap:10px;margin-top:20px;">
+                            <button class="btn btn-sm" style="background:#e67e22;border-color:#e67e22;color:white;" onclick="window._medEjecutarPropuestaEq()">Enviar propuesta</button>
+                            <button class="btn btn-outline btn-sm" onclick="window._medallasCloseModal()">Cancelar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        el.style.display = 'block';
+        window._tempValidasEq = validas; // Guardamos temporalmente las medallas válidas
+        setTimeout(() => document.getElementById('prop-eq-autor')?.focus(), 50);
+    };
+
+    // Función que realmente envía la info a Supabase
+    window._medEjecutarPropuestaEq = async () => {
+        const autor = document.getElementById('prop-eq-autor')?.value.trim() || 'Anónimo';
+        const validas = window._tempValidasEq || [];
+        const btn = event.target;
+        btn.disabled = true; btn.textContent = '⏳ Enviando...';
+
         // Borrar propuesta anterior
         await supabase.from('medallas_inventario')
             .delete()
@@ -214,22 +251,50 @@ window._medProponerEquipacion = async () => {
             .eq('propuesta', true);
 
         // Insertar nueva propuesta
-        if (validas.length > 0) {
-            const autor = prompt('Tu nombre (opcional) para identificar la propuesta:') || 'Anónimo';
-            const inserts = validas.map((m, index) => ({
-                personaje_nombre: medallaState.pjSeleccionado,
-                medalla_id: m.id,
-                slot_orden: index + 1,
-                equipada: true,
-                propuesta: true,
-                propuesta_por: autor
-            }));
-            const { error } = await supabase.from('medallas_inventario').insert(inserts);
-            if (error) { toast('❌ Error enviando propuesta: ' + error.message, 'error'); return; }
+        const inserts = validas.map((m, index) => ({
+            personaje_nombre: medallaState.pjSeleccionado,
+            medalla_id: m.id,
+            slot_orden: index + 1,
+            equipada: true,
+            propuesta: true,
+            propuesta_por: autor
+        }));
+        
+        const { error } = await supabase.from('medallas_inventario').insert(inserts);
+        
+        if (error) { 
+            toast('❌ Error enviando propuesta: ' + error.message, 'error'); 
+            btn.disabled = false; btn.textContent = 'Enviar propuesta'; 
+            return; 
         }
         
         toast(`✅ Propuesta enviada (${validas.length} medallas)`, 'ok');
+        window._medallasCloseModal();
         window._medSelPJ(medallaState.pjSeleccionado); // Recargar para ver la caja naranja
+    };
+
+    // OP: Aprobar propuesta (Borra la normal, y convierte la propuesta en normal)
+    window._medAprobarPropuestaEq = async () => {
+        const pj = medallaState.pjSeleccionado;
+        const btn = event.target;
+        btn.textContent = '⏳'; btn.disabled = true;
+        
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', false);
+        await supabase.from('medallas_inventario').update({ propuesta: false, propuesta_por: null }).eq('personaje_nombre', pj).eq('propuesta', true);
+        
+        toast('✅ Propuesta de equipación aprobada', 'ok');
+        window._medSelPJ(pj); 
+    };
+
+    // Rechazar / Retirar propuesta
+    window._medRechazarPropuestaEq = async () => {
+        const pj = medallaState.pjSeleccionado;
+        if (!confirm('¿Seguro que deseas eliminar/retirar esta propuesta de equipación?')) return;
+        
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', true);
+        
+        toast('🗑️ Propuesta eliminada', 'ok');
+        window._medSelPJ(pj); 
     };
 
     window._medAprobarPropuestaEq = async () => {
