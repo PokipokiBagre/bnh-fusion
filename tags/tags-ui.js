@@ -2,7 +2,7 @@
 // tags/tags-ui.js
 // ============================================================
 import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, solicitudes, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
-import { getTagsConPuntos, estadoUmbral, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles } from './tags-logic.js';
+import { getTagsConPuntos, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles } from './tags-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
