@@ -657,6 +657,8 @@ export function renderPersonaje() {
         </div>`;
     }
 
+    // 1. Guardar si el buscador tenía el foco ANTES de redibujar
+    const prevFocus = document.activeElement?.id === 'pj-med-buscar';
     wrap.innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
