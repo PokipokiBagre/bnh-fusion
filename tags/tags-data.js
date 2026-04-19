@@ -32,8 +32,7 @@ export async function guardarDescripcionTag(nombre, descripcion, tipo) {
     return error ? { ok: false, msg: error.message } : { ok: true };
 }
 
-// ── SISTEMA DE SOLICITUDES ──────────────────────────────────────────
-
+// ── SISTEMA DE SOLICITUDES ESTRICTO ──────────────────────────────────────────
 export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}, esAdmin = false) {
     const { data: ptRow } = await supabase.from('puntos_tag')
         .select('cantidad').eq('personaje_nombre', pj).ilike('tag', tagSource).maybeSingle();
@@ -46,28 +45,24 @@ export async function enviarSolicitud(pj, tagSource, tipo, costo, datos = {}, es
         if (exist) return { ok: false, msg: 'Solo puede haber una solicitud de canje de tags pendiente por personaje.' };
     }
 
-    // 1. Guardamos en los datos si la petición descontó PT (solo el OP puede descontar)
     datos.pt_descontados = esAdmin;
 
-    // 2. Si es OP, descuenta el PT inmediatamente
     if (esAdmin) {
         const nuevaCantidad = ptRow.cantidad - costo;
         const { error: ePT } = await supabase.from('puntos_tag')
             .update({ cantidad: nuevaCantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
-        if (ePT) return { ok: false, msg: 'Error al descontar PT.' };
+        if (ePT) return { ok: false, msg: 'Error al descontar PT: ' + ePT.message };
     }
 
-    // 3. Crear la solicitud
     const { error: eReq } = await supabase.from('solicitudes_tag').insert({
         personaje_nombre: pj, tag_origen: tagSource, tipo, costo_pt: costo, datos
     });
 
     if (eReq) {
-        // Rollback si falló al crear la solicitud y éramos OP
         if (esAdmin) {
             await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad }).eq('personaje_nombre', pj).ilike('tag', tagSource);
         }
-        return { ok: false, msg: 'Error al registrar la solicitud.' };
+        return { ok: false, msg: 'Error al registrar la solicitud: ' + eReq.message };
     }
 
     return { ok: true, nueva: esAdmin ? (ptRow.cantidad - costo) : ptRow.cantidad };
@@ -79,7 +74,6 @@ export async function aprobarSolicitud(reqId) {
 
     const pj = req.personaje_nombre;
 
-    // 1. Si la hizo un anónimo, los PT nunca se descontaron. ¡El OP los descuenta AHORA!
     if (!req.datos.pt_descontados) {
         const { data: ptRow } = await supabase.from('puntos_tag')
             .select('cantidad').eq('personaje_nombre', pj).ilike('tag', req.tag_origen).maybeSingle();
@@ -90,15 +84,15 @@ export async function aprobarSolicitud(reqId) {
         
         const { error: ePT } = await supabase.from('puntos_tag')
             .update({ cantidad: ptRow.cantidad - req.costo_pt }).eq('personaje_nombre', pj).ilike('tag', req.tag_origen);
-        if (ePT) return { ok: false, msg: 'Error al descontar los PT durante la aprobación.' };
+        if (ePT) return { ok: false, msg: 'Error al descontar los PT durante la aprobación: ' + ePT.message };
     }
 
-    // 2. Aplicar los beneficios de la solicitud
     if (req.tipo.startsWith('stat_')) {
         const statField = req.tipo.split('_')[1]; 
         const { data: pData } = await supabase.from('personajes_refinados').select(statField).eq('nombre_refinado', pj).single();
         const newVal = (pData[statField] || 0) + 1;
-        await supabase.from('personajes_refinados').update({ [statField]: newVal }).eq('nombre_refinado', pj);
+        const { error } = await supabase.from('personajes_refinados').update({ [statField]: newVal }).eq('nombre_refinado', pj);
+        if (error) return { ok: false, msg: 'Error aplicando STAT: ' + error.message };
     }
     else if (req.tipo === 'tres_tags') {
         const cambios = req.datos.cambios || [];
@@ -119,14 +113,20 @@ export async function aprobarSolicitud(reqId) {
                 }
             }
         }
-        await supabase.from('personajes_refinados').update({ tags: tagsFinal }).eq('nombre_refinado', pj);
+        const { error } = await supabase.from('personajes_refinados').update({ tags: tagsFinal }).eq('nombre_refinado', pj);
+        if (error) return { ok: false, msg: 'Error aplicando tags: ' + error.message };
     }
     else if (req.tipo === 'medalla') {
         const medId = req.datos.medalla_id;
-        if (medId) await supabase.from('medallas_catalogo').update({ propuesta: false, propuesta_por: '' }).eq('id', medId);
+        if (medId) {
+            const { error } = await supabase.from('medallas_catalogo').update({ propuesta: false, propuesta_por: '' }).eq('id', medId);
+            if (error) return { ok: false, msg: 'Error aprobando medalla: ' + error.message };
+        }
     }
 
-    await supabase.from('solicitudes_tag').delete().eq('id', reqId);
+    const { error: eDel } = await supabase.from('solicitudes_tag').delete().eq('id', reqId);
+    if (eDel) return { ok: false, msg: 'Error eliminando solicitud tras aprobar: ' + eDel.message };
+    
     return { ok: true };
 }
 
@@ -134,27 +134,30 @@ export async function cancelarSolicitud(reqId) {
     const { data: req } = await supabase.from('solicitudes_tag').select('*').eq('id', reqId).maybeSingle();
     if (!req) return { ok: false, msg: 'Solicitud no encontrada.' };
 
-    // Si había una medalla propuesta ligada, la destruimos
     if (req.tipo === 'medalla' && req.datos.medalla_id) {
-        await supabase.from('medallas_catalogo').delete().eq('id', req.datos.medalla_id);
+        const { error: eMed } = await supabase.from('medallas_catalogo').delete().eq('id', req.datos.medalla_id);
+        if (eMed) return { ok: false, msg: 'Error de permisos al eliminar la medalla propuesta: ' + eMed.message };
     }
 
-    // SOLO devolvemos PT si realmente se descontaron al crear la solicitud (es decir, si la hizo el OP)
     if (req.datos.pt_descontados) {
         const { data: ptRow } = await supabase.from('puntos_tag')
             .select('cantidad').eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen).maybeSingle();
         
         if (ptRow) {
-            await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad + req.costo_pt })
+            const { error: ePT } = await supabase.from('puntos_tag').update({ cantidad: ptRow.cantidad + req.costo_pt })
                 .eq('personaje_nombre', req.personaje_nombre).ilike('tag', req.tag_origen);
+            if (ePT) return { ok: false, msg: 'Error de permisos al devolver PT: ' + ePT.message };
         } else {
-            await supabase.from('puntos_tag').insert({
+            const { error: eIns } = await supabase.from('puntos_tag').insert({
                 personaje_nombre: req.personaje_nombre, tag: req.tag_origen, cantidad: req.costo_pt, actualizado_en: new Date().toISOString()
             });
+            if (eIns) return { ok: false, msg: 'Error de permisos al restaurar registro de PT: ' + eIns.message };
         }
     }
 
-    await supabase.from('solicitudes_tag').delete().eq('id', reqId);
+    const { error: eDel } = await supabase.from('solicitudes_tag').delete().eq('id', reqId);
+    if (eDel) return { ok: false, msg: 'Error al eliminar el registro de solicitud: ' + eDel.message };
+    
     return { ok: true };
 }
 
