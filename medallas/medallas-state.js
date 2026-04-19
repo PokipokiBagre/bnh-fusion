@@ -23,6 +23,7 @@ export const medallaState = {
     filtroRolBloques:  '#Jugador',
     filtroEstBloques:  '#Activo',
     equipacion:        [],           // medallas equipadas en tab Personaje
+    equipacionPropuesta: [],         // propuesta pendiente
     equipacionDetalleId: null,       // id de medalla seleccionada para ver detalle en panel
     pjBusqueda:        '',           // buscador en tab Personaje
 };
