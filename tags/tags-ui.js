@@ -4,7 +4,7 @@
 import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
 import { getTagsConPuntos, estadoUmbral, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT } from './tags-logic.js';
 import { guardarDescripcionTag, guardarBaneoTag, canjearPT } from './tags-data.js';
-import { renderMarkup } from '../bnh-markup.js';
+import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -16,7 +16,6 @@ export function renderProgresion() {
     const pj = tagsState.pjSeleccionado;
     const tagsConPts = pj ? getTagsConPuntos(pj) : [];
 
-    // Filter by rol/estado
     const gruposFiltrados = grupos.filter(g => {
         const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
         const rolOk = tagsState.filtroRol === 'todos' || tags.includes(tagsState.filtroRol.toLowerCase());
@@ -34,7 +33,7 @@ export function renderProgresion() {
     const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
-        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\'")}')">
+        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
             <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
             <span>${g.nombre_refinado}</span>
         </div>`;
@@ -55,7 +54,7 @@ export function renderProgresion() {
 
             let canjeHtml = '';
             if (baneado) {
-                canjeHtml = ''; // símbolo 🚫 ya aparece en el nombre del tag
+                canjeHtml = '';
             } else if (tagsState.esAdmin && pts > 0) {
                 canjeHtml = `<div class="thresh-badges">`;
                 if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','tres_tags')">−100 → 🎁 3 tags</button>`;
@@ -137,15 +136,15 @@ function _cercaDeCanje() {
         </div>`).join('');
 }
 
-// ── Tag Detalle (modal/vista) ─────────────────────────────────
+// ── Tag Detalle (modal) ───────────────────────────────────────
 export function renderTagDetalle(tagNombre) {
-    const tag = tagNombre.startsWith('#') ? tagNombre : '#' + tagNombre;
+    const tag    = tagNombre.startsWith('#') ? tagNombre : '#' + tagNombre;
     const tagKey = tag.slice(1);
-    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
-    const baneado  = catEntry?.baneado || false;
-    const desc     = catEntry?.descripcion || '';
-    const tipo     = catEntry?.tipo || 'extra';
-    const medallas = medallasDe(tag);
+    const catEntry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    const baneado   = catEntry?.baneado || false;
+    const desc      = catEntry?.descripcion || '';
+    const tipo      = catEntry?.tipo || 'extra';
+    const medallas  = medallasDe(tag);
     const personajes = grupos.filter(g =>
         (g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
     );
@@ -187,18 +186,25 @@ export function renderTagDetalle(tagNombre) {
         ${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;">${renderMarkup(desc)}</div>`
                : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`}`;
 
-    const medallaCards = medallas.map(m => {
+    // ── Medallas: hasta 15, con detalle de req/cond del tag actual ──
+    const medallaCards = medallas.slice(0, 15).map(m => {
         const reqsEsteTag  = (m.requisitos_base||[]).filter(r =>
             ('#'+(r.tag.startsWith('#')?r.tag.slice(1):r.tag)).toLowerCase() === tag.toLowerCase());
         const condsEsteTag = (m.efectos_condicionales||[]).filter(ec =>
             ('#'+(ec.tag.startsWith('#')?ec.tag.slice(1):ec.tag)).toLowerCase() === tag.toLowerCase());
+        const otrosTags = (m.requisitos_base||[])
+            .filter(r => ('#'+(r.tag.startsWith('#')?r.tag.slice(1):r.tag)).toLowerCase() !== tag.toLowerCase())
+            .map(r => `<span style="font-size:0.68em;background:var(--gray-100);color:var(--blue);border:1px solid var(--gray-300);padding:1px 5px;border-radius:4px;">${r.tag.startsWith('#')?r.tag:'#'+r.tag}</span>`)
+            .join(' ');
         return `<div style="background:var(--blue-pale);border:1.5px solid var(--blue);
-                    border-radius:var(--radius);padding:10px 12px;flex:1;min-width:160px;max-width:230px;">
-            <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:4px;">🏅 ${m.nombre}</div>
+                    border-radius:var(--radius);padding:10px 12px;flex:1;min-width:160px;max-width:230px;cursor:pointer;"
+                onclick="window.open('../medallas/index.html#${encodeURIComponent(m.nombre)}','_blank')">
+            <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:3px;">🏅 ${_esc(m.nombre)}</div>
             ${m.costo_ctl?`<div style="font-size:0.72em;color:var(--gray-500);margin-bottom:3px;">${m.costo_ctl} CTL</div>`:''}
-            ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);line-height:1.4;margin-bottom:3px;">${m.efecto_desc}</div>`:''}
+            ${otrosTags?`<div style="margin-bottom:4px;">${otrosTags}</div>`:''}
+            ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);line-height:1.4;margin-bottom:3px;">${_esc(m.efecto_desc)}</div>`:''}
             ${reqsEsteTag.length?`<div style="font-size:0.72em;background:#d5f5e3;color:var(--green-dark);padding:2px 6px;border-radius:4px;margin-top:3px;">📋 Req: ${reqsEsteTag.map(r=>r.pts_minimos+' PT').join(', ')}</div>`:''}
-            ${condsEsteTag.length?`<div style="font-size:0.72em;background:var(--orange-pale);color:var(--orange);padding:3px 6px;border-radius:4px;margin-top:3px;">⚡ ${condsEsteTag[0].efecto||'Efecto condicional'}</div>`:''}
+            ${condsEsteTag.length?`<div style="font-size:0.72em;background:var(--orange-pale);color:var(--orange);padding:3px 6px;border-radius:4px;margin-top:3px;">⚡ ${_esc(condsEsteTag[0].efecto||'Efecto condicional')}</div>`:''}
         </div>`;
     }).join('');
 
@@ -233,8 +239,9 @@ export function renderTagDetalle(tagNombre) {
             </div>` : `<div style="font-size:0.82em;color:var(--green-dark);">✅ Todos tienen este tag.</div>`}
         </div>` : '';
 
+    // overflow-x:hidden en el wrapper elimina el scroll horizontal fantasma
     el.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;overflow-x:hidden;"
             onclick="if(event.target===this)window._tagsCloseDetalle()">
             <div style="background:white;border-radius:var(--radius-lg);max-width:760px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.18);overflow:hidden;">
                 <div style="background:var(--green-dark);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
@@ -250,8 +257,8 @@ export function renderTagDetalle(tagNombre) {
                         ${adminDescForm}
                     </div>
                     ${medallas.length ? `<div>
-                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Medallas (${medallas.length})</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:280px;overflow-y:auto;">${medallaCards}</div>
+                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Medallas (${medallas.length}${medallas.length>15?' — mostrando 15':''})</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:320px;overflow-y:auto;">${medallaCards}</div>
                     </div>` : ''}
                     <div>
                         <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Tienen este tag (${personajes.length})</div>
@@ -270,15 +277,14 @@ export function renderTagDetalle(tagNombre) {
         </div>`;
     el.style.display = 'block';
 
-    // Mount markup textarea for OP
+    // ── Montar markup textarea con autocompletado real ────────
     if (tagsState.esAdmin) {
         setTimeout(() => {
             const ta = document.getElementById('detalle-desc-inp');
-            if (ta && window.initMarkupTextarea) window.initMarkupTextarea(ta);
+            if (ta) initMarkupTextarea(ta);
         }, 60);
     }
 
-    // Multi-select state
     window._tagsModoMultiActivo = false;
     window._tagsModoMultiSel    = new Set();
 }
@@ -301,8 +307,9 @@ export function renderCatalogo() {
             desc: descDe(tag),
             medallas: medallasDe(tag),
             baneado: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.baneado || false,
+            tipo: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.tipo || 'extra',
         }))
-        .filter(e => !e.baneado) // hide banned from public catalog
+        .filter(e => !e.baneado)
         .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
 
     if (tagsState.busquedaCat) {
@@ -310,52 +317,281 @@ export function renderCatalogo() {
         entradas = entradas.filter(e => e.tag.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q));
     }
 
-    // Grid of tag cards (4 columns)
-    const cards = entradas.map(({ tag, count, desc, medallas }) => `
-        <div onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}');"
+    const tipoColor = { quirk:'#6c3483', atributo:'var(--blue)', extra:'var(--green-dark)' };
+    const tipoBg    = { quirk:'#f5eeff',  atributo:'var(--blue-pale)', extra:'var(--green-pale)' };
+    const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atrib.', extra:'🏷 Extra' };
+
+    // ── Toolbar selección múltiple (solo OP) ──────────────────
+    const multiToolbar = tagsState.esAdmin ? `
+        <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
+            border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span id="cat-multi-count" style="font-weight:700;font-size:0.88em;color:var(--green-dark);">0 seleccionados</span>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <span style="font-size:0.78em;color:var(--gray-700);font-weight:600;">Tipo:</span>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
+                    <input type="radio" name="cat-tipo-radio" value="quirk"
+                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('quirk');}"> ⚡ Quirk
+                </label>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
+                    <input type="radio" name="cat-tipo-radio" value="atributo"
+                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('atributo');}"> 📊 Atributo
+                </label>
+                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
+                    <input type="radio" name="cat-tipo-radio" value="extra"
+                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('extra');}"> 🏷 Extra
+                </label>
+            </div>
+            <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
+            <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
+        </div>` : '';
+
+    const cards = entradas.map(({ tag, count, desc, medallas, tipo }) => {
+        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+        const adminBtns = tagsState.esAdmin ? `
+            <div class="cat-card-actions" style="display:none;position:absolute;top:6px;right:6px;gap:4px;z-index:2;">
+                <button class="btn btn-sm btn-outline" style="padding:3px 7px;font-size:0.72em;"
+                    onclick="event.stopPropagation();window._catEditarInline('${_esc(tagKey)}')">✏️</button>
+                <button class="btn btn-sm" style="padding:3px 7px;font-size:0.72em;background:var(--red-pale);color:var(--red);border-color:var(--red);"
+                    onclick="event.stopPropagation();window._tagsEliminar('${_esc(tag)}',${count})">🗑️</button>
+            </div>
+            <div class="cat-card-check" style="display:none;position:absolute;top:8px;left:8px;z-index:2;">
+                <input type="checkbox" data-tag="${_esc(tag)}"
+                    onchange="window._catToggleCheck('${_esc(tag)}',this.checked)"
+                    onclick="event.stopPropagation()"
+                    style="width:16px;height:16px;cursor:pointer;accent-color:var(--green);">
+            </div>` : '';
+
+        return `
+        <div data-cat-card="${_esc(tag)}"
+            onclick="if(!window._catMultiActivo){window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}');}"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
-                   padding:12px;cursor:pointer;transition:0.15s;"
-            onmouseover="this.style.borderColor='var(--blue)';this.style.transform='translateY(-2px)'"
-            onmouseout="this.style.borderColor='var(--gray-200)';this.style.transform=''">
-            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:3px;">${tag}</div>
-            <div style="font-size:0.72em;color:var(--gray-500);margin-bottom:${desc?'5px':'0'};">
-                ${count} personaje${count!==1?'s':''}
-                ${medallas.length ? `· 🏅${medallas.length}` : ''}
+                   padding:12px;cursor:pointer;transition:border-color 0.15s,transform 0.15s;position:relative;"
+            onmouseover="
+                this.style.borderColor='var(--blue)';
+                this.style.transform='translateY(-2px)';
+                ${tagsState.esAdmin ? `var a=this.querySelector('.cat-card-actions');if(a&&!window._catMultiActivo)a.style.display='flex';` : ''}
+            "
+            onmouseout="
+                this.style.borderColor='var(--gray-200)';
+                this.style.transform='';
+                ${tagsState.esAdmin ? `var a=this.querySelector('.cat-card-actions');if(a&&!window._catMultiActivo)a.style.display='none';` : ''}
+            ">
+            ${adminBtns}
+            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:2px;padding-right:${tagsState.esAdmin?'60px':'0'};">${tag}</div>
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:${desc?'5px':'0'};">
+                <span style="font-size:0.7em;color:var(--gray-500);">${count} personaje${count!==1?'s':''}</span>
+                ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
+                <span style="font-size:0.68em;padding:1px 5px;border-radius:4px;font-weight:700;
+                    background:${tipoBg[tipo]||'var(--gray-100)'};color:${tipoColor[tipo]||'var(--gray-500)'};">
+                    ${tipoLabel[tipo]||'🏷 Extra'}
+                </span>
             </div>
             ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
-        </div>`).join('');
+        </div>`;
+    }).join('');
 
     wrap.innerHTML = `
-        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;">
+        <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
             <input class="inp" id="cat-search" placeholder="🔍 Buscar tag o descripción…"
                 value="${_esc(tagsState.busquedaCat)}"
                 oninput="window._tagsBuscarCat(this.value)"
                 style="max-width:360px;">
             <span style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
+            ${tagsState.esAdmin ? `<button class="btn btn-outline btn-sm" id="btn-cat-multi"
+                onclick="window._catIniciarMulti()">☑️ Selección múltiple</button>` : ''}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
+        ${multiToolbar}
+        <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
             ${cards || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
-        </div>`;
+        </div>
+        <div id="cat-inline-modal"></div>`;
 
     setTimeout(() => {
         const el = document.getElementById('cat-search');
         if (el && tagsState.busquedaCat) el.focus();
     }, 10);
+
+    // Restaurar modo multi si estaba activo
+    if (window._catMultiActivo) {
+        requestAnimationFrame(() => {
+            const toolbar = document.getElementById('cat-multi-toolbar');
+            if (toolbar) toolbar.style.display = 'flex';
+            document.querySelectorAll('.cat-card-check').forEach(el => el.style.display = 'block');
+            document.querySelectorAll('.cat-card-actions').forEach(el => el.style.display = 'none');
+            const btn = document.getElementById('btn-cat-multi');
+            if (btn) btn.style.display = 'none';
+            // Remarcar los ya seleccionados
+            window._catMultiSel.forEach(t => {
+                const cb = document.querySelector(`[data-cat-card="${_esc(t)}"] .cat-card-check input`);
+                if (cb) cb.checked = true;
+            });
+            _catUpdateCount();
+        });
+    }
 }
+
+// ── Catálogo OP: edición inline ───────────────────────────────
+window._catEditarInline = (tagKey) => {
+    const tag      = '#' + tagKey;
+    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    const desc     = catEntry?.descripcion || '';
+    const tipo     = catEntry?.tipo || 'extra';
+
+    const container = document.getElementById('cat-inline-modal');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;"
+            onclick="if(event.target===this)document.getElementById('cat-inline-modal').innerHTML=''">
+            <div style="background:white;border-radius:var(--radius-lg);max-width:500px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden;">
+                <div style="background:var(--green-dark);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+                    <b style="font-family:'Cinzel',serif;">Editar ${tag}</b>
+                    <button onclick="document.getElementById('cat-inline-modal').innerHTML=''"
+                        style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
+                </div>
+                <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);white-space:nowrap;">Tipo:</label>
+                        <select id="ci-tipo" class="inp" style="max-width:160px;padding:5px 8px;font-size:0.85em;">
+                            <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
+                            <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
+                            <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);">Descripción:</label>
+                        <textarea id="ci-desc" class="inp" rows="3"
+                            style="margin-top:4px;font-family:monospace;font-size:0.85em;resize:vertical;"
+                            placeholder="@Nombre@, #Tag, !Medalla">${_esc(desc)}</textarea>
+                        <div style="font-size:0.7em;color:var(--gray-400);margin-top:2px;">
+                            <span style="color:var(--green);font-weight:700;">@Nombre@</span> ·
+                            <span style="color:var(--red);font-weight:700;">#Tag</span> ·
+                            <span style="color:#1a4a80;font-weight:700;">!Medalla!</span>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-green btn-sm" onclick="window._catGuardarInline('${_esc(tagKey)}')">💾 Guardar</button>
+                        <button class="btn btn-outline btn-sm" onclick="document.getElementById('cat-inline-modal').innerHTML=''">Cancelar</button>
+                    </div>
+                    <div id="ci-msg" style="font-size:0.8em;color:var(--red);min-height:16px;"></div>
+                </div>
+            </div>
+        </div>`;
+
+    // Montar autocompletado markup en el textarea
+    setTimeout(() => {
+        const ta = document.getElementById('ci-desc');
+        if (ta) initMarkupTextarea(ta);
+    }, 60);
+};
+
+window._catGuardarInline = async (tagKey) => {
+    const desc    = document.getElementById('ci-desc')?.value.trim() || '';
+    const tipo    = document.getElementById('ci-tipo')?.value || 'extra';
+    const msgEl   = document.getElementById('ci-msg');
+    if (msgEl) msgEl.textContent = '⏳ Guardando…';
+    const res = await guardarDescripcionTag(tagKey, desc, tipo);
+    if (res.ok) {
+        const entry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+        if (entry) { entry.descripcion = desc; entry.tipo = tipo; }
+        document.getElementById('cat-inline-modal').innerHTML = '';
+        toast('✅ Tag actualizado', 'ok');
+        renderCatalogo();
+    } else {
+        if (msgEl) msgEl.textContent = '❌ ' + res.msg;
+    }
+};
+
+// ── Catálogo OP: selección múltiple ──────────────────────────
+window._catMultiActivo = false;
+window._catMultiSel    = new Set();
+
+function _catUpdateCount() {
+    const el = document.getElementById('cat-multi-count');
+    if (el) el.textContent = `${window._catMultiSel.size} seleccionado${window._catMultiSel.size!==1?'s':''}`;
+}
+
+window._catIniciarMulti = () => {
+    window._catMultiActivo = true;
+    window._catMultiSel    = new Set();
+    const toolbar = document.getElementById('cat-multi-toolbar');
+    if (toolbar) toolbar.style.display = 'flex';
+    document.querySelectorAll('.cat-card-check').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.cat-card-actions').forEach(el => el.style.display = 'none');
+    const btn = document.getElementById('btn-cat-multi');
+    if (btn) btn.style.display = 'none';
+    _catUpdateCount();
+};
+
+window._catCancelMulti = () => {
+    window._catMultiActivo = false;
+    window._catMultiSel    = new Set();
+    document.querySelectorAll('.cat-card-check input[type=checkbox]').forEach(cb => { cb.checked = false; });
+    document.querySelectorAll('.cat-card-check').forEach(el => el.style.display = 'none');
+    const toolbar = document.getElementById('cat-multi-toolbar');
+    if (toolbar) toolbar.style.display = 'none';
+    const btn = document.getElementById('btn-cat-multi');
+    if (btn) btn.style.display = '';
+    document.querySelectorAll('input[name="cat-tipo-radio"]').forEach(r => r.checked = false);
+};
+
+window._catToggleCheck = (tag, checked) => {
+    if (checked) window._catMultiSel.add(tag);
+    else         window._catMultiSel.delete(tag);
+    _catUpdateCount();
+};
+
+// Radio toggle: la lógica está inline en el onclick del HTML generado
+// Esta función se llama solo cuando un radio se activa (no cuando se deselecciona)
+
+window._catTipoRadio = async (tipo) => {
+    if (!window._catMultiSel.size) {
+        toast('⚠️ Selecciona al menos un tag primero', 'info');
+        // La lógica de desmarcar ya está en el onclick inline
+        return;
+    }
+    let ok = 0;
+    for (const tag of window._catMultiSel) {
+        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+        const entry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+        const res    = await guardarDescripcionTag(tagKey, entry?.descripcion || '', tipo);
+        if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
+    }
+    toast(`✅ Tipo "${tipo}" aplicado a ${ok} tag${ok!==1?'s':''}`, 'ok');
+    renderCatalogo();
+};
+
+window._catEliminarSeleccionados = async () => {
+    const count = window._catMultiSel.size;
+    if (!count) { toast('⚠️ Nada seleccionado', 'info'); return; }
+    if (!confirm(`¿Eliminar ${count} tag${count!==1?'s':''} seleccionado${count!==1?'s':''}?\nSe quitarán de todos los personajes. Esta acción no se puede deshacer.`)) return;
+    const { deleteTag, cargarTodo } = await import('./tags-data.js');
+    const { initMarkup }            = await import('../bnh-markup.js');
+    let total = 0;
+    for (const tag of window._catMultiSel) {
+        const res = await deleteTag(tag);
+        if (res.ok) total += res.afectados;
+    }
+    toast(`🗑️ ${count} tag${count!==1?'s':''} eliminado${count!==1?'s':''}`, 'ok');
+    window._catMultiActivo = false;
+    window._catMultiSel    = new Set();
+    await cargarTodo();
+    const { grupos: g2 } = await import('./tags-state.js');
+    initMarkup({ grupos: g2 });
+    renderCatalogo();
+};
 
 // ── Tab Tags Baneados (solo OP) ───────────────────────────────
 export function renderBaneados() {
     const wrap = document.getElementById('vista-baneados');
     if (!wrap) return;
 
-    // All tags that exist in grupos (with count) marked as baneado or not
     const tagMapa = {};
     grupos.forEach(g => (g.tags||[]).forEach(t => {
         const k = (t.startsWith('#') ? t.slice(1) : t);
         tagMapa[k] = (tagMapa[k]||0) + 1;
     }));
 
-    // Merge with catalogoTags
     const allTags = Object.entries(tagMapa).map(([nombre, count]) => {
         const cat = catalogoTags.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
         return { nombre, count, baneado: cat?.baneado||false, desc: cat?.descripcion||'' };
