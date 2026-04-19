@@ -52,7 +52,7 @@ export function renderProgresion() {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
         return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
-            <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
+            <img src="${img}" onerror="this.onerror=null;this.src='${fb()}'" onclick="event.stopPropagation();window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')" style="cursor:pointer;">
             <span>${g.nombre_refinado}</span>
         </div>`;
     }).join('');

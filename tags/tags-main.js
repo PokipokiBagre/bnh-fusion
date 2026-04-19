@@ -84,7 +84,7 @@ function _exponerGlobales() {
     };
 
     window._tagsSelPJ = (nombre) => {
-        tagsState.pjSeleccionado = tagsState.pjSeleccionado === nombre ? null : nombre;
+        tagsState.pjSeleccionado = nombre;
         renderProgresion();
     };
 
