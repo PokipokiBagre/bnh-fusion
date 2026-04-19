@@ -194,9 +194,9 @@ export function renderGrafo() {
     let canvasContainer = document.getElementById('bloques-canvas-wrap');
     if (!canvasContainer) {
         wrap.innerHTML = `
-            <div style="display:flex;flex-direction:column;gap:10px;">
-                <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;"></div>
-                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:12px;overflow:hidden;height:650px;">
+            <div style="display:flex;flex-direction:column;gap:0;">
+                <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px 12px 0 0;padding:14px;position:sticky;top:64px;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:0 0 12px 12px;overflow:hidden;height:720px;">
                     <canvas id="bloques-canvas" style="display:block; cursor:pointer; width:100%; height:100%;"></canvas>
                     <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">← Selecciona tags para ver caer las figuras</div>
                 </div>
@@ -254,10 +254,12 @@ export function renderGrafo() {
             </div>
         `;
         // Para no perder el foco si estabas escribiendo en el buscador
-        if (document.activeElement.id === 'grafo-buscar-tag') {
-            const inp = document.getElementById('grafo-buscar-tag');
-            inp.focus();
-            inp.setSelectionRange(inp.value.length, inp.value.length);
+        const wasSearchFocused = document.activeElement.id === 'grafo-buscar-tag';
+        if (wasSearchFocused) {
+            requestAnimationFrame(() => {
+                const inp = document.getElementById('grafo-buscar-tag');
+                if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+            });
         }
     }
 
@@ -411,44 +413,113 @@ export function renderPersonaje() {
         const ctl    = gEq?.ctl || 0;
         const equipados = medallaState.equipacion || [];
         const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
+        const ctlRatio  = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
+        const ctlColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
+        const barColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
 
         const filaEq = equipados.length
             ? equipados.map(m => `
-                <div style="display:flex;align-items:center;gap:5px;padding:4px 0;border-bottom:1px solid #f5f5f5;">
-                    <span style="font-size:0.68em;padding:1px 4px;border-radius:3px;font-weight:700;
-                        background:${m.tipo==='activa'?'rgba(26,74,128,0.1)':'rgba(108,52,131,0.1)'};
+                <div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:4px;
+                            background:${m.tipo==='activa'?'rgba(26,74,128,0.05)':'rgba(108,52,131,0.05)'};
+                            border:1px solid ${m.tipo==='activa'?'rgba(26,74,128,0.15)':'rgba(108,52,131,0.15)'};">
+                    <span style="font-size:0.65em;padding:2px 5px;border-radius:4px;font-weight:700;flex-shrink:0;
+                        background:${m.tipo==='activa'?'rgba(26,74,128,0.12)':'rgba(108,52,131,0.12)'};
                         color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};
-                        border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};
-                        white-space:nowrap;">${m.tipo==='activa'?'⚡A':'🛡P'}</span>
-                    <span style="flex:1;font-size:0.75em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${m.nombre}</span>
-                    <span style="font-size:0.7em;color:var(--purple);font-weight:700;">${m.costo_ctl}CTL</span>
+                        border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡ A':'🛡 P'}</span>
+                    <span style="flex:1;font-size:0.78em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;">${m.nombre}</span>
+                    <span style="font-size:0.72em;color:var(--purple);font-weight:800;white-space:nowrap;">${m.costo_ctl} CTL</span>
                     <button onclick="window._medEquiparToggle('${m.id}')"
-                        style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.82em;padding:0;">✕</button>
+                        style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;line-height:1;flex-shrink:0;" title="Quitar">✕</button>
                 </div>`).join('')
-            : '<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin medallas equipadas</div>';
+            : `<div style="font-size:0.78em;color:#bbb;text-align:center;padding:16px 0;border:1.5px dashed #eee;border-radius:8px;">
+                Sin medallas equipadas<br><span style="font-size:0.85em;">Usa "+ Equipar" en las tarjetas</span>
+               </div>`;
+
+        // Pool de medallas sugeridas: las que el PJ PUEDE equipar (activable) y aún no tiene equipadas
+        const tagsDelPJ = (gEq?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
+        const equipadosIds = new Set(equipados.map(m => m.id));
+        const sugeridas = medallas.filter(m =>
+            !m.propuesta &&
+            !equipadosIds.has(m.id) &&
+            mTags(m).some(t => tagsDelPJ.some(tp => tp.toLowerCase() === t.toLowerCase()))
+        ).sort((a,b) => {
+            // Primero activables, luego parciales, luego bloqueadas
+            const { estadoMedallaPJ: eMed } = window._pjLogicRef || {};
+            return 0;
+        }).slice(0, 30);
+
+        const poolHtml = sugeridas.length
+            ? sugeridas.map(m => {
+                const equipada = equipadosIds.has(m.id);
+                const ctlLibre = ctl - ctlUsado;
+                const puedeFit = m.costo_ctl <= ctlLibre;
+                return `<div style="display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
+                                border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
+                                background:${puedeFit?'white':'#fff8f8'};"
+                         onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})">
+                    <span style="font-size:0.6em;padding:1px 4px;border-radius:3px;font-weight:700;flex-shrink:0;
+                        background:${m.tipo==='activa'?'rgba(26,74,128,0.1)':'rgba(108,52,131,0.1)'};
+                        color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡':'🛡'}</span>
+                    <span style="flex:1;font-size:0.75em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                                 color:${puedeFit?'#333':'#aaa'};">${m.nombre}</span>
+                    <span style="font-size:0.68em;color:${puedeFit?'var(--purple)':'#e74c3c'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
+                </div>`;
+            }).join('')
+            : `<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin sugerencias disponibles</div>`;
 
         const guardarBtn = medallaState.esAdmin
-            ? `<button onclick="window._medGuardarEquipacion()" style="width:100%;margin-top:8px;padding:5px;font-size:0.75em;background:var(--green);border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">💾 Guardar</button>`
-            : `<button onclick="window._medProponerEquipacion()" style="width:100%;margin-top:8px;padding:5px;font-size:0.75em;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">📝 Proponer</button>`;
+            ? `<button onclick="window._medGuardarEquipacion()"
+                style="width:100%;padding:8px;font-size:0.8em;background:var(--green);border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">💾 Guardar equipación</button>`
+            : `<button onclick="window._medProponerEquipacion()"
+                style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">📝 Proponer equipación</button>`;
 
         equipHtml = `
-        <div style="background:white;border:1.5px solid #dee2e6;border-radius:10px;padding:12px;
-                    position:sticky;top:72px;width:220px;flex-shrink:0;align-self:flex-start;">
-            <div style="font-size:0.72em;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">⚔ Equipación</div>
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <div style="font-size:0.8em;">CTL: <b style="color:${ctlUsado>ctl?'#c0392b':'var(--green-dark)'};">${ctlUsado}/${ctl}</b></div>
-                ${ctlUsado > 0 ? `<button onclick="window._medLimpiarEquipacion()" style="font-size:0.68em;background:none;border:none;color:#c0392b;cursor:pointer;">✕ Limpiar</button>` : ''}
+        <div style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:72px;
+                    display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 90px);overflow:hidden;">
+
+            <!-- CTL y equipadas -->
+            <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;overflow:hidden;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">⚔ Equipación</span>
+                    ${ctlUsado > 0 ? `<button onclick="window._medLimpiarEquipacion()"
+                        style="font-size:0.7em;background:none;border:1px solid #e74c3c;color:#c0392b;cursor:pointer;padding:2px 6px;border-radius:5px;font-weight:600;">✕ Limpiar</button>` : ''}
+                </div>
+                <!-- Barra CTL -->
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:0.75em;color:#888;">CTL usado</span>
+                        <span style="font-size:0.82em;font-weight:800;color:${ctlColor};">${ctlUsado} / ${ctl}</span>
+                    </div>
+                    <div style="height:6px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                        <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
+                    </div>
+                </div>
+                <!-- Medallas equipadas (scrollable) -->
+                <div style="max-height:240px;overflow-y:auto;margin-bottom:10px;padding-right:2px;">
+                    ${filaEq}
+                </div>
+                ${guardarBtn}
             </div>
-            <div>${filaEq}</div>
-            ${guardarBtn}
-            <div style="font-size:0.67em;color:#ccc;margin-top:6px;line-height:1.3;">Click "Equipar" en una medalla para añadirla aquí.</div>
+
+            <!-- Pool de sugeridas -->
+            <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;
+                        display:flex;flex-direction:column;overflow:hidden;min-height:0;flex:1;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">💡 Sugeridas</span>
+                    <span style="font-size:0.68em;color:#bbb;">${sugeridas.length} disponibles</span>
+                </div>
+                <div style="font-size:0.7em;color:#aaa;margin-bottom:8px;">Medallas de tus tags · Click para equipar · <span style="color:#e74c3c;">Rojo = CTL insuficiente</span></div>
+                <div style="overflow-y:auto;flex:1;">
+                    ${poolHtml}
+                </div>
+            </div>
         </div>`;
     }
 
     wrap.innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
-                <div class="card">
+                <div class="card" style="position:sticky;top:64px;z-index:15;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
                     <div class="card-title">Personaje</div>
                     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
                         ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
@@ -456,11 +527,11 @@ export function renderPersonaje() {
                         ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                     </div>
                     <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
+                    ${pj ? `<input id="pj-med-buscar" placeholder="🔍 Filtrar medallas o tags…"
+                        oninput="window._medPJBuscar(this.value)"
+                        value="${_esc(medallaState.pjBusqueda||'')}"
+                        style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">` : ''}
                 </div>
-                ${pj ? `<input id="pj-med-buscar" placeholder="🔍 Filtrar medallas o tags…"
-                    oninput="window._medPJBuscar(this.value)"
-                    value="${_esc(medallaState.pjBusqueda||'')}"
-                    style="padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">` : ''}
                 ${pj ? `<div>${content}</div>` : content}
             </div>
             ${equipHtml}

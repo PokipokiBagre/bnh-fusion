@@ -1,6 +1,6 @@
-// medallas/bloques.js — Motor Tetris 2.0 (Grid 16x20 y Tooltips)
+// medallas/bloques.js — Motor Tetris 2.0 (Grid 20x36 y Tooltips)
 const NUM_COLS = 20; // 20 slots horizontales (ancho)
-const NUM_ROWS = 20; // 20 slots verticales (alto)
+const NUM_ROWS = 36; // 36 slots verticales (alto)
 const GAP = 4;
 
 let canvas, ctx;
@@ -200,21 +200,28 @@ function loop() {
             ctx.fill();
         }
 
-        // Texto achicado para la nueva grid
+        // Texto con padding interno para no pegar al borde
         ctx.fillStyle = b.isTag ? '#f39c12' : '#ffffff';
         ctx.font = b.isTag ? 'bold 11px Inter' : '10px Inter';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
+        const PAD_X = 6; // padding horizontal mínimo
+        const maxW = b.w - PAD_X * 2;
         let label = b.text;
-        if (label.length > 20) label = label.substring(0, 18) + '…';
+        // Truncar si el texto es muy largo para el ancho del bloque
+        ctx.font = b.isTag ? 'bold 11px Inter' : '10px Inter';
+        while (label.length > 3 && ctx.measureText(label).width > maxW) {
+            label = label.slice(0, -1);
+        }
+        if (label !== b.text && label.length > 1) label = label.slice(0, -1) + '…';
         
         if (label.length > 12 && !b.isTag) {
             let words = label.split(' ');
             let l1 = words.slice(0, Math.ceil(words.length/2)).join(' ');
             let l2 = words.slice(Math.ceil(words.length/2)).join(' ');
-            ctx.fillText(l1, b.visualX + b.w / 2, b.visualY + b.h / 2 - 5);
-            if(l2) ctx.fillText(l2, b.visualX + b.w / 2, b.visualY + b.h / 2 + 7);
+            ctx.fillText(l1, b.visualX + b.w / 2, b.visualY + b.h / 2 - 6);
+            if(l2) ctx.fillText(l2, b.visualX + b.w / 2, b.visualY + b.h / 2 + 6);
         } else {
             ctx.fillText(label, b.visualX + b.w / 2, b.visualY + b.h / 2);
         }
