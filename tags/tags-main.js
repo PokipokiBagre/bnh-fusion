@@ -84,8 +84,16 @@ function _exponerGlobales() {
     };
 
     window._tagsSelPJ = (nombre) => {
+        // Usar requestAnimationFrame para garantizar que el estado quede
+        // seteado antes de que cualquier bubbling additional lo modifique
         tagsState.pjSeleccionado = nombre;
-        renderProgresion();
+        requestAnimationFrame(() => {
+            // Verificar que sigue siendo el mismo (por si hay doble disparo)
+            if (tagsState.pjSeleccionado !== nombre) {
+                tagsState.pjSeleccionado = nombre;
+            }
+            renderProgresion();
+        });
     };
 
     // Abrir detalle de tag (modal)
