@@ -1,10 +1,9 @@
-// medallas/bloques.js — Motor de piezas tipo Tetris
+// medallas/bloques.js — Motor Tetris 2.0 (Persistencia, Empaquetado y Regiones)
 const NUM_COLS = 12; // 12 slots horizontales
 const GAP = 4;
 
 let canvas, ctx;
-let bloques = []; // Todos los bloques individuales en pantalla
-let cols    = []; // Altura disponible actual de cada columna
+let bloques = []; // { id, clusterId, clusterColor, isTag, text, data, col, visualY, targetY, w, h }
 let _animId = null;
 
 export function initBloques(canvasEl) {
@@ -19,10 +18,9 @@ export function initBloques(canvasEl) {
         const mx = e.clientX - r.left;
         const my = e.clientY - r.top;
         
-        // Revisamos desde los últimos (los que están más arriba visualmente)
         for (let i = bloques.length - 1; i >= 0; i--) {
             const b = bloques[i];
-            if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+            if (mx >= b.visualX && mx <= b.visualX + b.w && my >= b.visualY && my <= b.visualY + b.h) {
                 if (!b.isTag && window._medallasAbrirDetalle) {
                     window._medallasAbrirDetalle(b.data);
                 }
@@ -34,112 +32,71 @@ export function initBloques(canvasEl) {
     if (!_animId) loop();
 }
 
-export function buildBloques(tagsData) {
+// Función hash para asignar siempre el mismo color a un mismo Tag
+function getColorForTag(tagStr) {
+    let hash = 0;
+    for (let i = 0; i < tagStr.length; i++) hash = tagStr.charCodeAt(i) + ((hash << 5) - hash);
+    const paletas = ['#00b4d8', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f1c40f', '#e67e22', '#3498db', '#e84393'];
+    return paletas[Math.abs(hash) % paletas.length];
+}
+
+export function updateBloques(tagsData) {
     if (!canvas) return;
     _resize();
     
-    bloques = [];
-    const W = canvas.clientWidth;
-    const H = canvas.clientHeight;
+    // 1. Encontrar qué tags están seleccionados ahora
+    const currentClusterIds = tagsData.map(g => g.tag);
     
-    // Calcular ancho para 12 columnas y un alto más cuadrado
-    const BLOCK_W = (W - (NUM_COLS + 1) * GAP) / NUM_COLS;
-    const BLOCK_H = BLOCK_W * 0.65; 
+    // 2. Eliminar los bloques de los tags que fueron deseleccionados
+    bloques = bloques.filter(b => currentClusterIds.includes(b.clusterId));
     
-    // Reiniciar las alturas de las columnas (H es el piso, crecen hacia 0)
-    cols = Array(NUM_COLS).fill(H - GAP);
+    // 3. Identificar qué tags son NUEVOS (aún no están en la pantalla)
+    const existingIds = new Set(bloques.map(b => b.clusterId));
+    const newClusters = tagsData.filter(g => !existingIds.has(g.tag));
 
-    const paletas = ['#00b4d8', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f1c40f', '#e67e22'];
-
-    tagsData.forEach((grupo, tIdx) => {
-        const colorMedalla = paletas[tIdx % paletas.length];
-
-        // 1. Crear el "Cluster" (El Tag en el centro, y medallas pegadas al azar a los lados)
-        let localBlocks = [];
-        localBlocks.push({ cx: 0, cy: 0, isTag: true, text: grupo.tag, color: '#f39c12', data: null });
-
-        let filled = new Set(['0,0']); // Para no sobreponer bloques de la misma pieza
+    // 4. Instanciar los nuevos bloques (nacen arriba y caerán)
+    newClusters.forEach((grupo) => {
+        const cColor = getColorForTag(grupo.tag);
         
-        grupo.medallas.forEach(m => {
-            let validSpots = [];
-            // Buscar todos los espacios adyacentes vacíos alrededor de los bloques ya colocados
-            localBlocks.forEach(lb => {
-                [[1,0], [-1,0], [0,1], [0,-1]].forEach(dir => {
-                    let nx = lb.cx + dir[0];
-                    let ny = lb.cy + dir[1];
-                    if (!filled.has(`${nx},${ny}`)) validSpots.push({cx: nx, cy: ny});
-                });
-            });
-            
-            // Eliminar duplicados
-            let uniqueSpots = [];
-            let seen = new Set();
-            validSpots.forEach(s => {
-                let key = `${s.cx},${s.cy}`;
-                if(!seen.has(key)) { seen.add(key); uniqueSpots.push(s); }
-            });
-            
-            // Escoger uno al azar
-            let spot = uniqueSpots[Math.floor(Math.random() * uniqueSpots.length)];
-            filled.add(`${spot.cx},${spot.cy}`);
-            localBlocks.push({ cx: spot.cx, cy: spot.cy, isTag: false, text: m.nombre, color: colorMedalla, data: m });
-        });
-
-        // 2. Normalizar el cluster para que las coordenadas cx y cy empiecen desde 0
-        let min_cx = Math.min(...localBlocks.map(b => b.cx));
-        let max_cx = Math.max(...localBlocks.map(b => b.cx));
-        let min_cy = Math.min(...localBlocks.map(b => b.cy));
-        let max_cy = Math.max(...localBlocks.map(b => b.cy));
+        // Elegir una columna aleatoria central para el bloque Tag
+        const C = Math.floor(Math.random() * (NUM_COLS - 2)) + 1; 
         
-        localBlocks.forEach(b => {
-            b.cx -= min_cx;
-            b.cy -= min_cy;
+        let spawnY = -60; // Empieza a nacer justo arriba de la pantalla
+        
+        // Instanciar el Tag
+        bloques.push({
+            id: 'tag_' + grupo.tag,
+            clusterId: grupo.tag,
+            clusterColor: cColor,
+            isTag: true,
+            text: grupo.tag,
+            data: null,
+            col: C,
+            visualY: spawnY
         });
-
-        let cWidth = max_cx - min_cx + 1;
-        let cHeight = max_cy - min_cy + 1;
-
-        // 3. Escoger una columna aleatoria donde quepa toda la figura
-        let max_C = NUM_COLS - cWidth;
-        if (max_C < 0) max_C = 0; // Por seguridad si la pieza es anormalmente ancha
-        let C = Math.floor(Math.random() * (max_C + 1));
-
-        // 4. Calcular hasta qué altura cae la pieza sin chocar con las de abajo
-        let Y_base = H;
-        localBlocks.forEach(b => {
-            let blockCol = C + b.cx;
-            if (blockCol >= NUM_COLS) return;
-            let obstacleY = cols[blockCol];
-            let max_base_for_this = obstacleY - (b.cy + 1) * (BLOCK_H + GAP);
-            if (max_base_for_this < Y_base) Y_base = max_base_for_this;
-        });
-
-        // 5. Instanciar los bloques desde el cielo cayendo a su posición final
-        let spawn_Y_base = - (cHeight * (BLOCK_H + GAP)) - Math.random() * 300 - 100;
-
-        localBlocks.forEach(b => {
-            let blockCol = C + b.cx;
-            if (blockCol >= NUM_COLS) return;
+        
+        // Instanciar sus medallas de forma aleatoria alrededor
+        grupo.medallas.forEach((m, idx) => {
+            spawnY -= (60 + Math.random() * 80); // Distanciados verticalmente para que caigan en secuencia
             
-            let finalY = Y_base + b.cy * (BLOCK_H + GAP);
-            let startY = spawn_Y_base + b.cy * (BLOCK_H + GAP);
-            let finalX = GAP + blockCol * (BLOCK_W + GAP);
+            // Elegir columna al azar: misma, izquierda o derecha
+            let colOffset = 0;
+            const rand = Math.random();
+            if (rand < 0.33) colOffset = -1;
+            else if (rand > 0.66) colOffset = 1;
             
+            const finalCol = Math.max(0, Math.min(NUM_COLS - 1, C + colOffset));
+
             bloques.push({
-                id: Math.random().toString(),
-                w: BLOCK_W,
-                h: BLOCK_H,
-                x: finalX,
-                y: startY,
-                targetY: finalY,
-                text: b.text,
-                color: b.color,
-                isTag: b.isTag,
-                data: b.data
+                id: m.id,
+                clusterId: grupo.tag,
+                clusterColor: cColor,
+                isTag: false,
+                text: m.nombre,
+                data: m,
+                col: finalCol,
+                visualY: spawnY
             });
-            
-            // Actualizar la cima de esta columna para las siguientes piezas
-            cols[blockCol] = Math.min(cols[blockCol], finalY);
         });
     });
 }
@@ -150,23 +107,78 @@ function loop() {
     
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
-    ctx.clearRect(0, 0, W, H);
     
+    // Dimensiones dinámicas
+    const BLOCK_W = (W - (NUM_COLS + 1) * GAP) / NUM_COLS;
+    const BLOCK_H = Math.max(30, BLOCK_W * 0.55); // Más cuadrados, menos anchos
+
+    ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
-    bloques.forEach(b => {
-        // Físicas de caída
-        b.y += (b.targetY - b.y) * 0.12;
-        if (Math.abs(b.targetY - b.y) < 0.5) b.y = b.targetY;
+    // --- FÍSICA Y GRAVEDAD INDEPENDIENTE ---
+    // Agrupamos los bloques por columna para calcular su caída
+    let blocksByCol = Array.from({length: NUM_COLS}, () => []);
+    bloques.forEach(b => blocksByCol[b.col].push(b));
+    
+    blocksByCol.forEach(colBlocks => {
+        // Ordenamos de abajo hacia arriba visualmente (mayor Y a menor Y)
+        colBlocks.sort((a, b) => b.visualY - a.visualY);
+        
+        let currentFloor = H - GAP; // El piso inicial
+        
+        colBlocks.forEach(b => {
+            b.targetY = currentFloor - BLOCK_H;
+            currentFloor = b.targetY - GAP; // El nuevo piso para el bloque de más arriba
+            
+            b.w = BLOCK_W;
+            b.h = BLOCK_H;
+            b.visualX = GAP + b.col * (BLOCK_W + GAP);
+            
+            // Animación suave de caída
+            b.visualY += (b.targetY - b.visualY) * 0.2;
+            if (Math.abs(b.targetY - b.visualY) < 0.5) b.visualY = b.targetY;
+        });
+    });
 
-        // Dibujar el bloque
-        ctx.fillStyle = b.isTag ? 'rgba(243,156,18,0.25)' : `${b.color}25`;
-        ctx.strokeStyle = b.color;
+    // --- DIBUJAR MARCOS DE REGIÓN (Bounding Boxes) ---
+    const clusters = {};
+    bloques.forEach(b => {
+        if (!clusters[b.clusterId]) clusters[b.clusterId] = [];
+        clusters[b.clusterId].push(b);
+    });
+
+    for (const cid in clusters) {
+        const clusterBlocks = clusters[cid];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        const color = clusterBlocks[0].clusterColor;
+        
+        clusterBlocks.forEach(b => {
+            if (b.visualX < minX) minX = b.visualX;
+            if (b.visualY < minY) minY = b.visualY;
+            if (b.visualX + b.w > maxX) maxX = b.visualX + b.w;
+            if (b.visualY + b.h > maxY) maxY = b.visualY + b.h;
+        });
+        
+        // Dibujar el marco relacionador
+        const P = 8; // Padding del marco
+        ctx.fillStyle = `${color}1A`;   // 10% opacidad de fondo
+        ctx.strokeStyle = `${color}80`; // 50% opacidad de borde
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(minX - P, minY - P, (maxX - minX) + P*2, (maxY - minY) + P*2, 10);
+        ctx.fill();
+        ctx.stroke();
+    }
+
+    // --- DIBUJAR BLOQUES ---
+    bloques.forEach(b => {
+        ctx.fillStyle = b.isTag ? 'rgba(243,156,18,0.25)' : `${b.clusterColor}25`;
+        ctx.strokeStyle = b.isTag ? '#f39c12' : b.clusterColor;
         ctx.lineWidth = 1.5;
         
         ctx.beginPath();
-        ctx.roundRect(b.x, b.y, b.w, b.h, 6);
+        ctx.roundRect(b.visualX, b.visualY, b.w, b.h, 6);
         ctx.fill();
         ctx.stroke();
 
@@ -174,7 +186,7 @@ function loop() {
         if (b.data?.propuesta) {
             ctx.fillStyle = '#f39c12';
             ctx.beginPath();
-            ctx.arc(b.x + b.w - 10, b.y + 10, 4, 0, Math.PI * 2);
+            ctx.arc(b.visualX + b.w - 10, b.visualY + 10, 4, 0, Math.PI * 2);
             ctx.fill();
         }
 
@@ -187,15 +199,14 @@ function loop() {
         let label = b.text;
         if (label.length > 20) label = label.substring(0, 18) + '…';
         
-        // Dividir en 2 líneas si el texto no es el tag
         if (label.length > 12 && !b.isTag) {
             let words = label.split(' ');
             let l1 = words.slice(0, Math.ceil(words.length/2)).join(' ');
             let l2 = words.slice(Math.ceil(words.length/2)).join(' ');
-            ctx.fillText(l1, b.x + b.w / 2, b.y + b.h / 2 - 6);
-            if(l2) ctx.fillText(l2, b.x + b.w / 2, b.y + b.h / 2 + 8);
+            ctx.fillText(l1, b.visualX + b.w / 2, b.visualY + b.h / 2 - 6);
+            if(l2) ctx.fillText(l2, b.visualX + b.w / 2, b.visualY + b.h / 2 + 8);
         } else {
-            ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
+            ctx.fillText(label, b.visualX + b.w / 2, b.visualY + b.h / 2);
         }
     });
 }
@@ -212,7 +223,6 @@ function _resize() {
     const w = parent.clientWidth;
     const h = parent.clientHeight;
     
-    // Solo redimensionar si el contenedor cambió de tamaño (evita parpadeos)
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
         canvas.width = w * dpr; 
         canvas.height = h * dpr;
