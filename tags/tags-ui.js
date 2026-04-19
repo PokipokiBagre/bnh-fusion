@@ -324,9 +324,9 @@ export function renderCatalogo() {
     // ── Toolbar selección múltiple (solo OP) ──────────────────
     const multiToolbar = tagsState.esAdmin ? `
         <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
-            border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:12px;flex-wrap:wrap;">
+            border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
             <span id="cat-multi-count" style="font-weight:700;font-size:0.88em;color:var(--green-dark);">0 seleccionados</span>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:center;">
                 <span style="font-size:0.78em;color:var(--gray-700);font-weight:600;">Tipo:</span>
                 <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
                     <input type="radio" name="cat-tipo-radio" value="quirk"
@@ -341,6 +341,8 @@ export function renderCatalogo() {
                         onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('extra');}"> 🏷 Extra
                 </label>
             </div>
+            <button class="btn btn-sm" style="background:#6c3483;color:white;border-color:#6c3483;"
+                onclick="window._catCombinarTags()">🔀 Combinar</button>
             <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
             <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
         </div>` : '';
@@ -354,16 +356,16 @@ export function renderCatalogo() {
                 <button class="btn btn-sm" style="padding:3px 7px;font-size:0.72em;background:var(--red-pale);color:var(--red);border-color:var(--red);"
                     onclick="event.stopPropagation();window._tagsEliminar('${_esc(tag)}',${count})">🗑️</button>
             </div>
-            <div class="cat-card-check" style="display:none;position:absolute;top:8px;left:8px;z-index:2;">
-                <input type="checkbox" data-tag="${_esc(tag)}"
+            <div class="cat-card-check" style="display:none;position:absolute;top:8px;right:8px;z-index:2;">
+                <input type="checkbox" id="chk-${_esc(tag)}" data-tag="${_esc(tag)}"
                     onchange="window._catToggleCheck('${_esc(tag)}',this.checked)"
                     onclick="event.stopPropagation()"
-                    style="width:16px;height:16px;cursor:pointer;accent-color:var(--green);">
+                    style="width:17px;height:17px;cursor:pointer;accent-color:var(--green);">
             </div>` : '';
 
         return `
         <div data-cat-card="${_esc(tag)}"
-            onclick="if(!window._catMultiActivo){window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}');}"
+            onclick="if(window._catMultiActivo){var cb=this.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;window._catToggleCheck(cb.dataset.tag,cb.checked);}}else{window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}')}"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
                    padding:12px;cursor:pointer;transition:border-color 0.15s,transform 0.15s;position:relative;"
             onmouseover="
@@ -377,7 +379,7 @@ export function renderCatalogo() {
                 ${tagsState.esAdmin ? `var a=this.querySelector('.cat-card-actions');if(a&&!window._catMultiActivo)a.style.display='none';` : ''}
             ">
             ${adminBtns}
-            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:2px;padding-right:${tagsState.esAdmin?'60px':'0'};">${tag}</div>
+            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:2px;">${tag}</div>
             <div style="display:flex;align-items:center;gap:5px;margin-bottom:${desc?'5px':'0'};">
                 <span style="font-size:0.7em;color:var(--gray-500);">${count} personaje${count!==1?'s':''}</span>
                 ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
@@ -547,17 +549,19 @@ window._catToggleCheck = (tag, checked) => {
 window._catTipoRadio = async (tipo) => {
     if (!window._catMultiSel.size) {
         toast('⚠️ Selecciona al menos un tag primero', 'info');
-        // La lógica de desmarcar ya está en el onclick inline
         return;
     }
+    // Capturar el Set ANTES de cualquier re-render para no perderlo
+    const tagsACambiar = [...window._catMultiSel];
     let ok = 0;
-    for (const tag of window._catMultiSel) {
+    for (const tag of tagsACambiar) {
         const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
         const entry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
         const res    = await guardarDescripcionTag(tagKey, entry?.descripcion || '', tipo);
         if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
     }
     toast(`✅ Tipo "${tipo}" aplicado a ${ok} tag${ok!==1?'s':''}`, 'ok');
+    // Mantener selección activa tras re-render
     renderCatalogo();
 };
 
@@ -579,6 +583,157 @@ window._catEliminarSeleccionados = async () => {
     const { grupos: g2 } = await import('./tags-state.js');
     initMarkup({ grupos: g2 });
     renderCatalogo();
+};
+
+// ── Combinar tags ────────────────────────────────────────────
+window._catCombinarTags = () => {
+    const count = window._catMultiSel.size;
+    if (count < 2) { toast('⚠️ Selecciona al menos 2 tags para combinar', 'info'); return; }
+    const tagsOrigen = [...window._catMultiSel];
+
+    const container = document.getElementById('cat-inline-modal');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;"
+            onclick="if(event.target===this)document.getElementById('cat-inline-modal').innerHTML=''">
+            <div style="background:white;border-radius:var(--radius-lg);max-width:520px;width:100%;box-shadow:0 8px 40px rgba(0,0,0,0.22);overflow:hidden;">
+                <div style="background:#6c3483;color:white;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <b style="font-family:'Cinzel',serif;font-size:1.05em;">🔀 Combinar Tags</b>
+                        <div style="font-size:0.78em;opacity:0.85;margin-top:2px;">Los PT se suman al nuevo tag. Los tags originales se eliminan.</div>
+                    </div>
+                    <button onclick="document.getElementById('cat-inline-modal').innerHTML=''"
+                        style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
+                </div>
+                <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                        <div style="font-size:0.75em;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Tags a combinar</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                            ${tagsOrigen.map(t => `<span style="background:#f5eeff;color:#6c3483;border:1px solid #6c3483;border-radius:6px;padding:3px 9px;font-size:0.82em;font-weight:700;">${t}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.82em;font-weight:700;color:var(--gray-700);">Nombre del nuevo tag *</label>
+                        <input id="comb-nombre" class="inp" style="margin-top:4px;"
+                            placeholder="#NuevoTag" autocomplete="off"
+                            onkeydown="if(event.key==='Enter')window._catEjecutarCombinar()">
+                        <div style="font-size:0.72em;color:var(--gray-500);margin-top:3px;">El # se añade automáticamente si no lo escribes.</div>
+                    </div>
+                    <div>
+                        <label style="font-size:0.82em;font-weight:700;color:var(--gray-700);">Tipo del nuevo tag</label>
+                        <select id="comb-tipo" class="inp" style="margin-top:4px;max-width:180px;">
+                            <option value="extra">🏷 Extra</option>
+                            <option value="quirk">⚡ Quirk</option>
+                            <option value="atributo">📊 Atributo</option>
+                        </select>
+                    </div>
+                    <div style="background:var(--orange-pale);border:1px solid var(--orange);border-radius:var(--radius);padding:10px;font-size:0.82em;color:var(--orange);">
+                        ⚠️ Los personajes que tenían cualquiera de los tags originales recibirán el nuevo tag.
+                        Sus PT se sumarán. Los tags originales quedarán eliminados.
+                    </div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-sm" style="background:#6c3483;color:white;border-color:#6c3483;"
+                            onclick="window._catEjecutarCombinar()">🔀 Combinar</button>
+                        <button class="btn btn-outline btn-sm"
+                            onclick="document.getElementById('cat-inline-modal').innerHTML=''">Cancelar</button>
+                    </div>
+                    <div id="comb-msg" style="font-size:0.82em;color:var(--red);min-height:16px;"></div>
+                </div>
+            </div>
+        </div>`;
+
+    setTimeout(() => document.getElementById('comb-nombre')?.focus(), 80);
+    // Guardar tags origen en el modal para acceder desde _catEjecutarCombinar
+    window._catCombinarOrigen = tagsOrigen;
+};
+
+window._catEjecutarCombinar = async () => {
+    const tagsOrigen = window._catCombinarOrigen || [];
+    if (!tagsOrigen.length) return;
+
+    const nombreRaw = document.getElementById('comb-nombre')?.value.trim();
+    if (!nombreRaw) { const m=document.getElementById('comb-msg'); if(m) m.textContent='El nombre es obligatorio.'; return; }
+    const nuevoTag  = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
+    const tipo      = document.getElementById('comb-tipo')?.value || 'extra';
+
+    const btn = document.querySelector('#cat-inline-modal button[onclick*="Ejecutar"], #cat-inline-modal .btn[onclick*="Combinar"]');
+    const msgEl = document.getElementById('comb-msg');
+    if (msgEl) msgEl.textContent = '⏳ Procesando…';
+
+    const { supabase } = await import('../bnh-auth.js');
+    const { cargarTodo } = await import('./tags-data.js');
+    const { initMarkup } = await import('../bnh-markup.js');
+
+    try {
+        // 1. Para cada personaje: si tiene alguno de los tags origen → asignar nuevo tag
+        //    y sumar sus PT en puntos_tag
+        const { data: pjs } = await supabase.from('personajes_refinados').select('id, nombre_refinado, tags');
+
+        for (const pj of (pjs || [])) {
+            const tagsActuales = (pj.tags || []).map(t => (t.startsWith('#') ? t : '#' + t));
+            const tieneAlguno = tagsOrigen.some(to => tagsActuales.some(ta => ta.toLowerCase() === to.toLowerCase()));
+            if (!tieneAlguno) continue;
+
+            // Nuevo array de tags: quitar los origen, añadir nuevo (sin duplicar)
+            const nuevosTags = [
+                ...tagsActuales.filter(ta => !tagsOrigen.some(to => to.toLowerCase() === ta.toLowerCase())),
+                nuevoTag,
+            ].filter((v, i, a) => a.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i);
+
+            await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('id', pj.id);
+
+            // Sumar PT de todos los tags origen para este personaje
+            let ptTotal = 0;
+            for (const tagOrigen of tagsOrigen) {
+                const { data: ptRow } = await supabase.from('puntos_tag')
+                    .select('cantidad').eq('personaje_nombre', pj.nombre_refinado)
+                    .ilike('tag', tagOrigen).maybeSingle();
+                ptTotal += ptRow?.cantidad || 0;
+            }
+
+            if (ptTotal > 0) {
+                // Verificar si ya existe registro para el nuevo tag
+                const { data: ptExist } = await supabase.from('puntos_tag')
+                    .select('cantidad').eq('personaje_nombre', pj.nombre_refinado)
+                    .ilike('tag', nuevoTag).maybeSingle();
+                const ptFinal = (ptExist?.cantidad || 0) + ptTotal;
+                await supabase.from('puntos_tag').upsert(
+                    { personaje_nombre: pj.nombre_refinado, tag: nuevoTag, cantidad: ptFinal, actualizado_en: new Date().toISOString() },
+                    { onConflict: 'personaje_nombre,tag' }
+                );
+            }
+        }
+
+        // 2. Eliminar puntos_tag y log de los tags origen
+        for (const tagOrigen of tagsOrigen) {
+            await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
+            await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
+            // Eliminar de tags_catalogo
+            const key = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
+            await supabase.from('tags_catalogo').delete().ilike('nombre', key);
+        }
+
+        // 3. Crear/actualizar el nuevo tag en catálogo
+        const nuevoKey = nuevoTag.startsWith('#') ? nuevoTag.slice(1) : nuevoTag;
+        await supabase.from('tags_catalogo').upsert(
+            { nombre: nuevoKey, tipo, descripcion: '' },
+            { onConflict: 'nombre' }
+        );
+
+        document.getElementById('cat-inline-modal').innerHTML = '';
+        toast(`✅ Tags combinados en ${nuevoTag}`, 'ok');
+
+        window._catMultiActivo = false;
+        window._catMultiSel    = new Set();
+        await cargarTodo();
+        const { grupos: g2 } = await import('./tags-state.js');
+        initMarkup({ grupos: g2 });
+        renderCatalogo();
+
+    } catch(e) {
+        if (msgEl) msgEl.textContent = '❌ Error: ' + e.message;
+    }
 };
 
 // ── Tab Tags Baneados (solo OP) ───────────────────────────────
