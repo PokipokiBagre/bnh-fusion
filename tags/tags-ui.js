@@ -518,10 +518,13 @@ window._catNuevoTag = () => {
             </div>
         </div>`;
 
-    // Poblar grid de personajes
+    // Poblar grid de personajes y montar markup en textarea
     setTimeout(() => {
         const grid = document.getElementById('nt-pj-grid');
         if (!grid) return;
+        // Montar autocompletado markup en la descripción
+        const ntDesc = document.getElementById('nt-desc');
+        if (ntDesc) initMarkupTextarea(ntDesc);
         grid.innerHTML = grupos.map(g => {
             const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
             return `<div id="nt-pj-${g.id}"
