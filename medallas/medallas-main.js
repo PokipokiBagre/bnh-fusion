@@ -8,6 +8,7 @@ import {
     _htmlReqRow, _htmlCondRow, toast, mountNewTagAC
 } from './medallas-ui.js';
 import { initMarkup } from '../bnh-markup.js';
+import { setSupabaseRef, getEquipacionPJ, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { initTags } from '../bnh-tags.js';
 
 window.onload = async () => {
@@ -18,6 +19,8 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     medallaState.esAdmin = bnhAuth.esAdmin();
+    // Inyectar supabase en bnh-pac para getEquipacionPJ
+    setSupabaseRef(supabase);
 
     try {
         await Promise.all([ initTags(), cargarTodo() ]);
@@ -94,6 +97,9 @@ function _exponerGlobales() {
                     .filter(r => r.propuesta)
                     .map(row => medallas.find(m => m.id === row.medalla_id))
                     .filter(Boolean);
+                // Exponer en cache global para que fichas-ui pueda leer CTL sync
+                window._equipCache = window._equipCache || {};
+                window._equipCache[n] = medallaState.equipacion;
                 renderPersonaje(); 
             }
         }
@@ -186,6 +192,9 @@ function _exponerGlobales() {
             const { error } = await supabase.from('medallas_inventario').insert(inserts);
             if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
         }
+        // Actualizar cache global para fichas-ui
+        window._equipCache = window._equipCache || {};
+        window._equipCache[medallaState.pjSeleccionado] = validas;
         toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
         renderPersonaje();
     };
