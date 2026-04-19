@@ -28,9 +28,17 @@ window.onload = async () => {
     }
 
     document.getElementById('pantalla-carga').classList.add('oculto');
-document.getElementById('interfaz-medallas').classList.remove('oculto');
-    _renderTab('personaje');
+    document.getElementById('interfaz-medallas').classList.remove('oculto');
+    
     _exponerGlobales();
+    _renderTab(medallaState.tabActual);
+
+    // Leer la URL para abrir medallas con !Medalla!
+    const params = new URLSearchParams(window.location.search);
+    const mQuery = params.get('medalla');
+    if (mQuery) {
+        window._medallasAbrirDetalleByName(mQuery);
+    }
 };
 
 function _renderTab(tab) {
@@ -40,25 +48,23 @@ function _renderTab(tab) {
     ['catalogo','grafo','personaje'].forEach(t =>
         document.getElementById(`vista-${t}`)?.classList.toggle('oculto', t !== tab)
     );
-    
     if (tab === 'catalogo')  renderCatalogo();
-    if (tab === 'personaje') renderPersonaje();
     if (tab === 'grafo') {
         renderGrafo();
-        // Hacer scroll automático hasta el fondo (el "piso" de los bloques)
         setTimeout(() => {
             const main = document.querySelector('.app-main');
             if (main) main.scrollTop = main.scrollHeight;
             window.scrollTo(0, document.body.scrollHeight);
         }, 60);
     }
+    if (tab === 'personaje') renderPersonaje();
 }
 
 function _exponerGlobales() {
     window._medTab        = _renderTab;
     window._medBuscar     = v => { medallaState.busqueda  = v; renderCatalogo(); };
     window._medFiltroTag  = v => { medallaState.filtroTag = v; renderCatalogo(); };
-    window._medSelPJ = async n => {
+    window._medSelPJ      = async n => {
         if (medallaState.pjSeleccionado === n) {
             medallaState.pjSeleccionado = null;
             medallaState.equipacion = [];
@@ -93,18 +99,14 @@ function _exponerGlobales() {
         }
     };
 
-    // Filtros personaje
     window._medFiltroRolPJ = v => { medallaState.filtroRolPJ = v; renderPersonaje(); };
     window._medFiltroEstPJ = v => { medallaState.filtroEstadoPJ = v; renderPersonaje(); };
 
-    // Filtros bloques
     window._medBloquesFiltroRol = v => { medallaState.filtroRolBloques = v; renderGrafo(); };
     window._medBloquesFiltroEst = v => { medallaState.filtroEstBloques = v; renderGrafo(); };
 
-    // Seleccionar PJ en bloques → activa sus tags
     window._medBloqueSelPJ = nombre => {
         if (!nombre) {
-            // Quitar PJ: limpiar tags del PJ del selector
             if (medallaState.pjBloquesSel) {
                 const g = grupos.find(x => x.nombre_refinado === medallaState.pjBloquesSel);
                 const tagsDelPJ = (g?.tags||[]).map(t => t.startsWith('#') ? t : '#'+t);
@@ -118,11 +120,9 @@ function _exponerGlobales() {
         if (!g) return;
         const tagsDelPJ = (g.tags||[]).map(t => t.startsWith('#') ? t : '#'+t);
         if (medallaState.pjBloquesSel === nombre) {
-            // Click de nuevo en el mismo PJ → quitar sus tags
             medallaState.grafoTagsSel = medallaState.grafoTagsSel.filter(t => !tagsDelPJ.includes(t));
             medallaState.pjBloquesSel = null;
         } else {
-            // Nuevo PJ: añadir sus tags a los seleccionados (sin duplicar)
             medallaState.pjBloquesSel = nombre;
             tagsDelPJ.forEach(t => {
                 if (!medallaState.grafoTagsSel.includes(t)) medallaState.grafoTagsSel.push(t);
@@ -131,13 +131,11 @@ function _exponerGlobales() {
         renderGrafo();
     };
 
-    // Equipación
     window._medEquiparToggle = (id, mObj) => {
         const eq = medallaState.equipacion || [];
         const idx = eq.findIndex(e => e.id === id);
         if (idx >= 0) {
             eq.splice(idx, 1);
-            // Si se quita la medalla del detalle, limpiar detalle
             if (medallaState.equipacionDetalleId === id) medallaState.equipacionDetalleId = null;
         } else {
             const m = mObj || medallas.find(x => x.id === id);
@@ -147,7 +145,6 @@ function _exponerGlobales() {
         renderPersonaje();
     };
 
-    // Seleccionar medalla del panel para ver su detalle
     window._medEquipSelDetalle = (id) => {
         medallaState.equipacionDetalleId = (medallaState.equipacionDetalleId === id) ? null : id;
         renderPersonaje();
@@ -159,8 +156,7 @@ function _exponerGlobales() {
         renderPersonaje();
     };
 
-    // Guardar solo las medallas que caben dentro del CTL (de arriba a abajo)
-        window._medGuardarEquipacionValida = async () => {
+    window._medGuardarEquipacionValida = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
         const ctl = g?.ctl || 0;
@@ -172,35 +168,30 @@ function _exponerGlobales() {
         });
         const sobran = (medallaState.equipacion||[]).length - validas.length;
         if (sobran > 0) {
-            const ok = confirm(`⚠ ${sobran} medalla${sobran>1?'s':''} excede${sobran>1?'n':''} el límite de CTL y ${sobran>1?'serán':'será'} descartada${sobran>1?'s':''}.\n\n¿Guardar solo las ${validas.length} que caben?`);
+            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL y serán descartadas.\\n\\n¿Guardar solo las ${validas.length} que caben?`);
             if (!ok) return;
         }
         medallaState.equipacion = validas;
         
-        // 1. Borramos la equipación anterior de este personaje
-        await supabase.from('medallas_inventario')
-            .delete()
-            .eq('personaje_nombre', medallaState.pjSeleccionado);
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', medallaState.pjSeleccionado).eq('propuesta', false);
 
-        // 2. Insertamos la nueva equipación en los slots correctos
         if (validas.length > 0) {
             const inserts = validas.map((m, index) => ({
                 personaje_nombre: medallaState.pjSeleccionado,
                 medalla_id: m.id,
                 slot_orden: index + 1,
-                equipada: true
+                equipada: true,
+                propuesta: false
             }));
             const { error } = await supabase.from('medallas_inventario').insert(inserts);
             if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
         }
-        
         toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
         renderPersonaje();
     };
+    window._medGuardarEquipacion = window._medGuardarEquipacionValida; 
 
-    window._medGuardarEquipacion = window._medGuardarEquipacionValida; // alias por compatibilidad
-
-window._medProponerEquipacion = () => {
+    window._medProponerEquipacion = () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
         const ctl = g?.ctl || 0;
@@ -212,26 +203,22 @@ window._medProponerEquipacion = () => {
         });
         const sobran = (medallaState.equipacion||[]).length - validas.length;
         if (sobran > 0) {
-            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL.\n\n¿Proponer solo las ${validas.length} que caben?`);
+            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL.\\n\\n¿Proponer solo las ${validas.length} que caben?`);
             if (!ok) return;
         }
 
-        if (validas.length === 0) { toast('No hay medallas que quepan en el CTL para proponer', 'info'); return; }
+        if (validas.length === 0) { toast('No hay medallas que quepan para proponer', 'info'); return; }
 
-        // Mostrar modal bonito en lugar de prompt/alert
         const el = document.getElementById('medalla-modal');
         el.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
-                 onclick="if(event.target===this)window._medallasCloseModal()">
+            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;" onclick="if(event.target===this)window._medallasCloseModal()">
                 <div style="background:white;border-radius:var(--radius-lg);max-width:450px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border:2px solid #e67e22;">
                     <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
                         <h3 style="margin:0;font-family:'Cinzel',serif;">📝 Enviar Propuesta</h3>
                         <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;">×</button>
                     </div>
                     <div style="padding:20px;">
-                        <p style="font-size:0.9em;color:var(--gray-700);margin-bottom:15px;line-height:1.4;">
-                            Se enviará una propuesta con <b>${validas.length} medallas</b> para el personaje <b>${medallaState.pjSeleccionado}</b>.
-                        </p>
+                        <p style="font-size:0.9em;color:var(--gray-700);margin-bottom:15px;">Se enviará una propuesta con <b>${validas.length} medallas</b> para <b>${medallaState.pjSeleccionado}</b>.</p>
                         <label class="form-label">Tu nombre (opcional)</label>
                         <input class="inp" id="prop-eq-autor" placeholder="¿Cómo te llamamos?" autocomplete="off" onkeydown="if(event.key==='Enter')window._medEjecutarPropuestaEq()">
                         <div style="display:flex;gap:10px;margin-top:20px;">
@@ -242,24 +229,18 @@ window._medProponerEquipacion = () => {
                 </div>
             </div>`;
         el.style.display = 'block';
-        window._tempValidasEq = validas; // Guardamos temporalmente las medallas válidas
+        window._tempValidasEq = validas; 
         setTimeout(() => document.getElementById('prop-eq-autor')?.focus(), 50);
     };
 
-    // Función que realmente envía la info a Supabase
     window._medEjecutarPropuestaEq = async () => {
         const autor = document.getElementById('prop-eq-autor')?.value.trim() || 'Anónimo';
         const validas = window._tempValidasEq || [];
         const btn = event.target;
         btn.disabled = true; btn.textContent = '⏳ Enviando...';
 
-        // Borrar propuesta anterior
-        await supabase.from('medallas_inventario')
-            .delete()
-            .eq('personaje_nombre', medallaState.pjSeleccionado)
-            .eq('propuesta', true);
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', medallaState.pjSeleccionado).eq('propuesta', true);
 
-        // Insertar nueva propuesta
         const inserts = validas.map((m, index) => ({
             personaje_nombre: medallaState.pjSeleccionado,
             medalla_id: m.id,
@@ -270,77 +251,37 @@ window._medProponerEquipacion = () => {
         }));
         
         const { error } = await supabase.from('medallas_inventario').insert(inserts);
-        
-        if (error) { 
-            toast('❌ Error enviando propuesta: ' + error.message, 'error'); 
-            btn.disabled = false; btn.textContent = 'Enviar propuesta'; 
-            return; 
-        }
+        if (error) { toast('❌ Error enviando propuesta', 'error'); btn.disabled = false; btn.textContent = 'Enviar propuesta'; return; }
         
         toast(`✅ Propuesta enviada (${validas.length} medallas)`, 'ok');
         window._medallasCloseModal();
-        window._medSelPJ(medallaState.pjSeleccionado); // Recargar para ver la caja naranja
+        window._medSelPJ(medallaState.pjSeleccionado);
     };
 
-    // OP: Aprobar propuesta (Borra la normal, y convierte la propuesta en normal)
     window._medAprobarPropuestaEq = async () => {
         const pj = medallaState.pjSeleccionado;
         const btn = event.target;
         btn.textContent = '⏳'; btn.disabled = true;
-        
         await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', false);
         await supabase.from('medallas_inventario').update({ propuesta: false, propuesta_por: null }).eq('personaje_nombre', pj).eq('propuesta', true);
-        
         toast('✅ Propuesta de equipación aprobada', 'ok');
         window._medSelPJ(pj); 
     };
 
-    // Rechazar / Retirar propuesta
     window._medRechazarPropuestaEq = async () => {
         const pj = medallaState.pjSeleccionado;
         if (!confirm('¿Seguro que deseas eliminar/retirar esta propuesta de equipación?')) return;
-        
         await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', true);
-        
         toast('🗑️ Propuesta eliminada', 'ok');
         window._medSelPJ(pj); 
     };
 
-    window._medAprobarPropuestaEq = async () => {
-        const pj = medallaState.pjSeleccionado;
-        const btn = event.target;
-        btn.textContent = '⏳'; btn.disabled = true;
-        // Borrar equipación normal
-        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', false);
-        // Convertir propuesta en normal
-        await supabase.from('medallas_inventario').update({ propuesta: false, propuesta_por: null }).eq('personaje_nombre', pj).eq('propuesta', true);
-        toast('✅ Propuesta aprobada', 'ok');
-        window._medSelPJ(pj);
-    };
+    window._medPJBuscar = v => { medallaState.pjBusqueda = v; renderPersonaje(); };
 
-    window._medRechazarPropuestaEq = async () => {
-        const pj = medallaState.pjSeleccionado;
-        if (!confirm('¿Seguro que deseas eliminar/retirar esta propuesta de equipación?')) return;
-        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', true);
-        toast('🗑️ Propuesta eliminada', 'ok');
-        window._medSelPJ(pj);
-    };
-
-    window._medPJBuscar = v => {
-        medallaState.pjBusqueda = v;
-        renderPersonaje();
-    };
-
-    // Propuestas
-    window._medTogglePropuestas = () => {
-        medallaState.filtroPropuestas = !medallaState.filtroPropuestas;
-        renderCatalogo();
-    };
+    window._medTogglePropuestas = () => { medallaState.filtroPropuestas = !medallaState.filtroPropuestas; renderCatalogo(); };
 
     window._medAprobar = async (id) => {
-        const { error } = await supabase.from('medallas_catalogo')
-            .update({ propuesta: false, propuesta_por: '' })
-            .eq('id', id);
+        const { error } = await supabase.from('medallas_catalogo').update({ propuesta: false, propuesta_por: '' }).eq('id', id);
         if (error) { toast('❌ Error al aprobar', 'error'); return; }
         toast('✅ Medalla aprobada', 'ok');
         await cargarTodo(); initMarkup({ grupos, medallas });
@@ -372,29 +313,23 @@ window._medProponerEquipacion = () => {
         });
 
         const datos = {
-            nombre,
-            costo_ctl:       Number(document.getElementById('prop-ctl')?.value || 1),
-            efecto_base:     document.getElementById('prop-efecto')?.value.trim() || '',
-            tipo:            document.getElementById('prop-tipo')?.value || 'activa',
-            requisitos_base: reqs,
-            efectos_condicionales: conds,
-            propuesta:       true,
-            propuesta_por:   document.getElementById('prop-autor')?.value.trim() || '',
+            nombre, costo_ctl: Number(document.getElementById('prop-ctl')?.value || 1),
+            efecto_base: document.getElementById('prop-efecto')?.value.trim() || '',
+            tipo: document.getElementById('prop-tipo')?.value || 'activa',
+            requisitos_base: reqs, efectos_condicionales: conds, propuesta: true,
+            propuesta_por: document.getElementById('prop-autor')?.value.trim() || '',
         };
 
         if (msg) msg.textContent = '⏳ Enviando…';
         const res = await guardarMedalla(datos);
         if (res.ok) {
-            toast('✅ Propuesta enviada. El OP la revisará pronto.', 'ok');
+            toast('✅ Propuesta enviada', 'ok');
             await cargarTodo(); initMarkup({ grupos, medallas });
             window._medallasCloseModal();
             renderCatalogo();
-        } else {
-            if (msg) msg.textContent = '❌ ' + res.msg;
-        }
+        } else { if (msg) msg.textContent = '❌ ' + res.msg; }
     };
 
-    // Grafo — controles de tags seleccionados
     window._medGrafoToggleTag = tag => {
         const idx = medallaState.grafoTagsSel.indexOf(tag);
         if (idx >= 0) medallaState.grafoTagsSel.splice(idx, 1);
@@ -402,76 +337,31 @@ window._medProponerEquipacion = () => {
         renderGrafo();
     };
 
-    window._medGrafoClearTags = () => {
-        medallaState.grafoTagsSel = [];
-        renderGrafo();
+    window._medGrafoClearTags = () => { medallaState.grafoTagsSel = []; renderGrafo(); };
+    window._medGrafoBuscarTag = v => { medallaState.grafoBusqueda  = v; medallaState.grafoTagPagina = 0; renderGrafo(); };
+    window._medGrafoPag = p => { medallaState.grafoTagPagina = p; renderGrafo(); };
+
+    // Función para abrir la medalla desde el markup
+    window._medallasAbrirDetalleByName = (nombre) => {
+        const m = medallas.find(x => x.nombre.toLowerCase() === nombre.toLowerCase());
+        if (m) window._medallasAbrirDetalle(m.id);
     };
 
-    window._medGrafoBuscarTag = v => {
-        medallaState.grafoBusqueda  = v;
-        medallaState.grafoTagPagina = 0;
-        renderGrafo();
-    };
-
-    window._medGrafoPag = p => {
-        medallaState.grafoTagPagina = p;
-        renderGrafo();
-    };
-
-    window._medGrafoReset = () => {
-        const { resetGrafoView } = window._medGrafoExports || {};
-        import('./medallas-grafo.js').then(m => m.resetGrafoView());
-    };
-
-    // Mostrar info del tag al hacer click en un nodo tag del grafo
-    window._medGrafoTagClick = tag => {
-        // Abrir modal de info del tag (mostrar cuántas medallas tiene y cuáles)
-        const medallasDeltag = medallas.filter(m =>
-            (!m.propuesta || medallaState.esAdmin) &&
-            (m.requisitos_base||[]).some(r => {
-                const t = r.tag.startsWith('#') ? r.tag : '#'+r.tag;
-                return t.toLowerCase() === tag.toLowerCase();
-            })
-        );
-        const el = document.getElementById('medalla-modal');
-        if (!el) return;
-        el.innerHTML = `
-            <div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;display:flex;align-items:center;justify-content:center;padding:20px;">
-                <div style="background:white;border-radius:12px;max-width:520px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden;">
-                    <div style="background:#f39c12;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-                        <b style="font-family:'Cinzel',serif;font-size:1.1em;">${tag}</b>
-                        <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
-                    </div>
-                    <div style="padding:16px;">
-                        <p style="font-size:0.85em;color:#888;margin-bottom:12px;">${medallasDeltag.length} medalla${medallasDeltag.length!==1?'s':''} con este tag</p>
-                        <div style="display:flex;flex-direction:column;gap:8px;">
-                            ${medallasDeltag.map(m => `
-                                <div style="background:#f8f9fa;border-radius:8px;padding:8px 12px;cursor:pointer;border:1px solid #dee2e6;"
-                                    onclick="window._medallasCloseModal();setTimeout(()=>window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}),80)">
-                                    <b style="font-size:0.88em;">${m.nombre}</b>
-                                    <span style="color:#888;font-size:0.78em;margin-left:8px;">${m.costo_ctl} CTL</span>
-                                    ${m.propuesta ? '<span style="background:#fef3e2;color:#e67e22;font-size:0.7em;padding:1px 5px;border-radius:4px;margin-left:4px;">Propuesta</span>' : ''}
-                                    <div style="font-size:0.78em;color:#666;margin-top:3px;">${m.efecto_desc||''}</div>
-                                </div>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            </div>`;
-        el.style.display = 'block';
-    };
-
-    // Detalle modal
     window._medallasAbrirDetalle = (m, pj = null) => {
         if (typeof m === 'string') m = medallas.find(x => x.id === m);
         if (!m) return;
         renderDetalleMedalla(m, pj || medallaState.pjSeleccionado);
     };
+    
     window._medallasCloseModal = () => {
         const el = document.getElementById('medalla-modal');
         if (el) el.style.display = 'none';
+        // Limpiamos la URL para no reabrir accidentalmente
+        const url = new URL(window.location);
+        url.searchParams.delete('medalla');
+        window.history.replaceState({}, '', url);
     };
 
-    // CRUD
     window._medallasNueva  = () => renderFormMedalla(null);
     window._medallasEditar = m => { window._medallasCloseModal(); setTimeout(() => renderFormMedalla(m), 80); };
     window._medallasEliminar = async id => {
@@ -485,7 +375,6 @@ window._medProponerEquipacion = () => {
         } else toast('❌ Error al eliminar', 'error');
     };
 
-    // Formulario dinámico
     window._medAddReq = () => {
         const c = window._fm_reqCount = (window._fm_reqCount||0) + 1;
         document.getElementById('fm-reqs').insertAdjacentHTML('beforeend', _htmlReqRow({}, c));
@@ -516,13 +405,11 @@ window._medProponerEquipacion = () => {
             if (tag) conds.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts, efecto: efe });
         });
         const datos = {
-            id:                    document.getElementById('fm-id')?.value || undefined,
-            nombre,
-            costo_ctl:             Number(document.getElementById('fm-ctl')?.value || 1),
-            efecto_base:           document.getElementById('fm-efecto')?.value.trim() || '',
-            tipo:                  document.getElementById('fm-tipo')?.value || 'activa',
-            requisitos_base:       reqs,
-            efectos_condicionales: conds,
+            id: document.getElementById('fm-id')?.value || undefined,
+            nombre, costo_ctl: Number(document.getElementById('fm-ctl')?.value || 1),
+            efecto_base: document.getElementById('fm-efecto')?.value.trim() || '',
+            tipo: document.getElementById('fm-tipo')?.value || 'activa',
+            requisitos_base: reqs, efectos_condicionales: conds,
         };
         if (!datos.id) delete datos.id;
 
@@ -541,7 +428,4 @@ window._medProponerEquipacion = () => {
     };
 
     document.addEventListener('keydown', e => { if (e.key === 'Escape') window._medallasCloseModal(); });
-    document.getElementById('medalla-modal')?.addEventListener('click', e => {
-        if (e.target === document.getElementById('medalla-modal')) window._medallasCloseModal();
-    });
 }
