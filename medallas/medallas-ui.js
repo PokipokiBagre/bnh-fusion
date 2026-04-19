@@ -195,12 +195,18 @@ export function renderGrafo() {
     if (!canvasContainer) {
         wrap.innerHTML = `
             <div style="display:flex;flex-direction:column;gap:0;">
-                <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px 12px 0 0;padding:14px;position:sticky;top:64px;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
-                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:0 0 12px 12px;overflow:hidden;height:720px;">
+                <div id="grafo-controles" style="background:white;border:1.5px solid #dee2e6;border-radius:12px 12px 0 0;padding:14px;position:sticky;top:0;z-index:20;box-shadow:0 4px 12px rgba(0,0,0,0.08);"></div>
+                <div id="bloques-canvas-wrap" style="position:relative;background:#0d1117;border-radius:0 0 12px 12px;overflow:hidden;height:calc(100vh - 320px);min-height:600px;">
                     <canvas id="bloques-canvas" style="display:block; cursor:pointer; width:100%; height:100%;"></canvas>
-                    <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">← Selecciona tags para ver caer las figuras</div>
+                    <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">Selecciona tags para ver caer las figuras</div>
                 </div>
             </div>`;
+        // Calcular offset real del header para el sticky
+        requestAnimationFrame(() => {
+            const header = document.querySelector('.app-header');
+            const ctrl   = document.getElementById('grafo-controles');
+            if (header && ctrl) ctrl.style.top = header.getBoundingClientRect().height + 'px';
+        });
     }
 
     // Actualizamos ÚNICAMENTE el panel de botones, sin tocar el canvas
@@ -228,15 +234,17 @@ export function renderGrafo() {
             </div>`;
         }).join('');
 
+        // Preservar foco y valor del buscador antes de reescribir el HTML
+        const prevSearchFocused = document.activeElement?.id === 'grafo-buscar-tag';
+
         controles.innerHTML = `
             <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
                 <b style="font-size:0.85em;color:var(--gray-700);">Selecciona tags para soltar las figuras</b>
-                <input id="grafo-buscar-tag" placeholder="🔍 Buscar tag…"
+                <input id="grafo-buscar-tag" placeholder="Buscar tag..."
                     value="${_esc(medallaState.grafoBusqueda)}"
-                    oninput="window._medGrafoBuscarTag(this.value)"
                     style="padding:4px 10px;font-size:0.8em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;max-width:180px;">
             </div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
+            <div id="grafo-tags-lista" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px;">
                 ${tagBtns || '<span style="color:#aaa;font-size:0.82em;">Sin tags con medallas</span>'}
             </div>
             ${paginacion}
@@ -246,20 +254,53 @@ export function renderGrafo() {
                     ${bRol('todos','Todos')} ${bRol('#Jugador','Jugador')} ${bRol('#NPC','NPC')}
                     <span style="width:1px;background:#dee2e6;display:inline-block;margin:0 2px;"></span>
                     ${bEst('todos','Todos')} ${bEst('#Activo','Activo')} ${bEst('#Inactivo','Inactivo')}
-                    ${pjSel ? `<button onclick="window._medBloqueSelPJ(null)" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid #c0392b;background:white;color:#c0392b;cursor:pointer;">✕ Quitar PJ</button>` : ''}
+                    ${pjSel ? '<button onclick="window._medBloqueSelPJ(null)" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid #c0392b;background:white;color:#c0392b;cursor:pointer;">Quitar PJ</button>' : ''}
                 </div>
                 <div style="display:flex;flex-wrap:wrap;gap:5px;max-height:80px;overflow-y:auto;">
                     ${pjBtns || '<span style="color:#aaa;font-size:0.78em;">Sin personajes</span>'}
                 </div>
             </div>
         `;
-        // Para no perder el foco si estabas escribiendo en el buscador
-        const wasSearchFocused = document.activeElement.id === 'grafo-buscar-tag';
-        if (wasSearchFocused) {
-            requestAnimationFrame(() => {
-                const inp = document.getElementById('grafo-buscar-tag');
-                if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+
+        // Montar listener del buscador sin oninput inline (evita rebuild al escribir)
+        const searchInp = document.getElementById('grafo-buscar-tag');
+        if (searchInp && !searchInp._grafoBusqInit) {
+            searchInp._grafoBusqInit = true;
+            searchInp.addEventListener('input', e => {
+                medallaState.grafoBusqueda  = e.target.value;
+                medallaState.grafoTagPagina = 0;
+                const lista = document.getElementById('grafo-tags-lista');
+                if (!lista) return;
+                const busqV = e.target.value.toLowerCase();
+                const tagConteoV = {};
+                medallas.filter(m => !m.propuesta || medallaState.esAdmin).forEach(m => {
+                    (m.requisitos_base||[]).map(r => r.tag.startsWith('#')?r.tag:'#'+r.tag)
+                        .forEach(t => { tagConteoV[t] = (tagConteoV[t]||0)+1; });
+                });
+                let todosV = Object.entries(tagConteoV).sort((a,b)=>b[1]-a[1]).map(([tag,cnt])=>({tag,cnt}));
+                if (busqV) {
+                    const match = todosV.filter(t=>t.tag.toLowerCase().includes(busqV));
+                    const resto = todosV.filter(t=>!t.tag.toLowerCase().includes(busqV));
+                    todosV = [...match, ...resto];
+                }
+                const selV = medallaState.grafoTagsSel;
+                lista.innerHTML = todosV.slice(0, TAGS_POR_PAG).map(({tag,cnt}) => {
+                    const sel = selV.includes(tag);
+                    return `<button onclick="window._medGrafoToggleTag('${tag.replace(/'/g,"\\'")}')"
+                        style="padding:4px 10px;font-size:0.78em;border-radius:12px;cursor:pointer;
+                               border:1.5px solid ${sel?'#f39c12':'#dee2e6'};
+                               background:${sel?'rgba(243,156,18,0.15)':'white'};
+                               color:${sel?'#d68910':'#555'};font-weight:${sel?700:400};">
+                        ${tag} <span style="color:#aaa;font-size:0.85em;">(${cnt})</span>
+                    </button>`;
+                }).join('') || '<span style="color:#aaa;font-size:0.82em;">Sin resultados</span>';
             });
+        }
+
+        // Restaurar foco si estaba activo antes del rebuild
+        if (prevSearchFocused && searchInp) {
+            searchInp.focus();
+            searchInp.setSelectionRange(searchInp.value.length, searchInp.value.length);
         }
     }
 
@@ -474,8 +515,8 @@ export function renderPersonaje() {
                 style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">📝 Proponer equipación</button>`;
 
         equipHtml = `
-        <div style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:72px;
-                    display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 90px);overflow:hidden;">
+        <div id="pj-equip-panel" style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
+                    display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 80px);overflow:hidden;">
 
             <!-- CTL y equipadas -->
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;overflow:hidden;">
@@ -519,7 +560,7 @@ export function renderPersonaje() {
     wrap.innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
-                <div class="card" style="position:sticky;top:64px;z-index:15;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+                <div class="card" id="pj-selector-card" style="position:sticky;top:0;z-index:15;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
                     <div class="card-title">Personaje</div>
                     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
                         ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
@@ -527,7 +568,7 @@ export function renderPersonaje() {
                         ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                     </div>
                     <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
-                    ${pj ? `<input id="pj-med-buscar" placeholder="🔍 Filtrar medallas o tags…"
+                    ${pj ? `<input id="pj-med-buscar" placeholder="Filtrar medallas o tags..."
                         oninput="window._medPJBuscar(this.value)"
                         value="${_esc(medallaState.pjBusqueda||'')}"
                         style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">` : ''}
@@ -536,6 +577,17 @@ export function renderPersonaje() {
             </div>
             ${equipHtml}
         </div>`;
+
+    // Calcular offset real del header para los elementos sticky
+    requestAnimationFrame(() => {
+        const header = document.querySelector('.app-header');
+        if (!header) return;
+        const hh = header.getBoundingClientRect().height + 'px';
+        const card = document.getElementById('pj-selector-card');
+        if (card) card.style.top = hh;
+        const equip = document.getElementById('pj-equip-panel');
+        if (equip) equip.style.top = hh;
+    });
 }
 
 // ── Modal detalle ─────────────────────────────────────────────

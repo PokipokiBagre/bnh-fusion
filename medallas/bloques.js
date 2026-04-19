@@ -1,7 +1,8 @@
-// medallas/bloques.js — Motor Tetris 2.0 (Grid 20x36 y Tooltips)
+// medallas/bloques.js — Motor Tetris 2.0 (Grid 20 cols, bloques proporcionales)
 const NUM_COLS = 20; // 20 slots horizontales (ancho)
-const NUM_ROWS = 36; // 36 slots verticales (alto)
 const GAP = 4;
+// Altura mínima de bloque en px — los bloques nunca serán más cortos que esto
+const MIN_BLOCK_H = 42;
 
 let canvas, ctx;
 let bloques = []; 
@@ -123,9 +124,10 @@ function loop() {
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
     
-    // Dimensiones dinámicas basadas en Grid de 16 x 20
+    // Ancho dinámico por columnas; alto fijo mínimo para que sean bloques, no ladrillos
     const BLOCK_W = (W - (NUM_COLS + 1) * GAP) / NUM_COLS;
-    const BLOCK_H = (H - (NUM_ROWS + 1) * GAP) / NUM_ROWS; 
+    // Altura: proporcional al ancho (aprox cuadrado), con mínimo garantizado
+    const BLOCK_H = Math.max(MIN_BLOCK_H, Math.round(BLOCK_W * 0.9));
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0d1117';
