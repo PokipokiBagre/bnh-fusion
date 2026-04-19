@@ -3,7 +3,7 @@ import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './
 import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ } from './medallas-logic.js';
 import { renderMarkup } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
-
+import { initBloques, buildBloques, clearBloques } from './bloques.js';
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -132,8 +132,7 @@ function _renderCard(m) {
     </div>`;
 }
 
-// ── Tab Grafo — selector de tags + canvas ─────────────────────
-// ── Tab Grafo (ahora Sistema de Bloques) ─────────────────────
+// ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
 export function renderGrafo() {
     const wrap = document.getElementById('vista-grafo');
     if (!wrap) return;
@@ -149,7 +148,7 @@ export function renderGrafo() {
         .sort((a,b) => b[1]-a[1])
         .map(([tag, cnt]) => ({ tag, cnt }));
 
-    // 2. Filtro de búsqueda
+    // Buscador
     const busq = medallaState.grafoBusqueda.toLowerCase();
     if (busq) {
         const match = todosLosTags.filter(t => t.tag.toLowerCase().includes(busq));
@@ -157,7 +156,6 @@ export function renderGrafo() {
         todosLosTags = [...match, ...resto];
     }
 
-    // 3. Paginación
     const TAGS_POR_PAG = 50;
     const pagina    = medallaState.grafoTagPagina;
     const inicio    = pagina * TAGS_POR_PAG;
@@ -190,73 +188,12 @@ export function renderGrafo() {
             <button onclick="window._medGrafoClearTags()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.85em;margin-left:4px;">✕ Limpiar</button>
            </div>` : '';
 
-    // 4. PALETA DE COLORES (Variaciones de azul/celeste/verde agua para diferenciar bloques)
-    const paletas = [
-        { bg: '#e0f7fa', border: '#00b4d8', text: '#0077b6' }, // Celeste
-        { bg: '#e8f5e9', border: '#2ecc71', text: '#1d8348' }, // Verde agua
-        { bg: '#e8eaf6', border: '#5c6bc0', text: '#283593' }, // Indigo suave
-        { bg: '#e3f2fd', border: '#42a5f5', text: '#1565c0' }, // Azul claro
-        { bg: '#f3e5f5', border: '#abebc6', text: '#117a65' }  // Menta
-    ];
-
-    // 5. Construir los Bloques de Medallas
-    let bloquesHtml = '';
-    if (selTags.length > 0) {
-        bloquesHtml = `<div style="display:flex;flex-direction:column;gap:20px;margin-top:16px;">`;
-        
-        selTags.forEach((tag, idx) => {
-            const color = paletas[idx % paletas.length];
-
-            const medallasDeltag = medallas.filter(m =>
-                (!m.propuesta || medallaState.esAdmin) &&
-                (m.requisitos_base||[]).some(r => {
-                    const t = r.tag.startsWith('#') ? r.tag : '#'+r.tag;
-                    return t.toLowerCase() === tag.toLowerCase();
-                })
-            );
-
-            if (medallasDeltag.length === 0) return;
-
-            // Bloques de medallas individuales
-            const cards = medallasDeltag.map(m => `
-                <div style="background:${color.bg}; border:1.5px solid ${color.border}; border-radius:8px; padding:12px; cursor:pointer; transition:transform 0.15s; min-width:200px; flex:1; position:relative;"
-                     onmouseover="this.style.transform='translateY(-3px)'"
-                     onmouseout="this.style.transform='translateY(0)'"
-                     onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')})">
-                    ${m.propuesta ? `<span style="position:absolute;top:-8px;right:-8px;background:#f39c12;color:white;font-size:0.65em;padding:2px 6px;border-radius:10px;font-weight:bold;">Propuesta</span>` : ''}
-                    <div style="font-weight:700; color:${color.text}; margin-bottom:4px; font-size:0.95em;">${m.nombre}</div>
-                    <div style="font-size:0.8em; color:var(--purple); font-weight:800;">${m.costo_ctl} CTL</div>
-                </div>
-            `).join('');
-
-            // Cabecera Naranja + Contenedor de medallas
-            bloquesHtml += `
-                <div style="background:white; border:1px solid #e0e0e0; border-radius:12px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-                    <div style="background:rgba(243,156,18,0.15); border-bottom:2px solid #f39c12; padding:10px 16px; display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:800; color:#d68910; font-size:1.15em;">${tag}</span>
-                        <span style="font-size:0.8em; background:white; color:#d68910; font-weight:700; padding:2px 8px; border-radius:12px; border:1px solid #f39c12;">
-                            ${medallasDeltag.length} medalla${medallasDeltag.length !== 1 ? 's' : ''}
-                        </span>
-                    </div>
-                    <div style="padding:16px; display:flex; flex-wrap:wrap; gap:12px; background:#fafafa;">
-                        ${cards}
-                    </div>
-                </div>
-            `;
-        });
-        bloquesHtml += `</div>`;
-    } else {
-        bloquesHtml = `<div class="empty-state" style="margin-top:20px; padding:40px;">
-            <p>Selecciona tags arriba para construir los bloques de medallas correspondientes.</p>
-        </div>`;
-    }
-
-    // 6. Render final
+    // HTML Base con el Canvas
     wrap.innerHTML = `
         <div style="display:flex;flex-direction:column;gap:10px;">
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;">
                 <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
-                    <b style="font-size:0.85em;color:var(--gray-700);">Selecciona tags para ver sus bloques</b>
+                    <b style="font-size:0.85em;color:var(--gray-700);">Selecciona tags para soltar los bloques</b>
                     <input id="grafo-buscar-tag" placeholder="🔍 Buscar tag…"
                         value="${_esc(medallaState.grafoBusqueda)}"
                         oninput="window._medGrafoBuscarTag(this.value)"
@@ -269,8 +206,41 @@ export function renderGrafo() {
                 ${selHtml}
             </div>
 
-            ${bloquesHtml}
+            <div style="position:relative;background:#0d1117;border-radius:12px;overflow:hidden;">
+                <canvas id="bloques-canvas" style="display:block; cursor:pointer;"></canvas>
+                ${!selTags.length ? `<div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">← Selecciona un tag para ver caer los bloques</div>` : ''}
+            </div>
         </div>`;
+
+    // Inicializar el canvas y mandarle la data
+    setTimeout(() => {
+        const c = document.getElementById('bloques-canvas');
+        if (!c) return;
+        
+        // Evitamos reiniciar los listeners si ya estaba cargado
+        if (!c.dataset.init) {
+            initBloques(c);
+            c.dataset.init = "true";
+        }
+
+        if (selTags.length > 0) {
+            // Estructurar la data para bloques.js
+            const datosParaBloques = selTags.map(tag => {
+                const medallasDeltag = medallas.filter(m =>
+                    (!m.propuesta || medallaState.esAdmin) &&
+                    (m.requisitos_base||[]).some(r => {
+                        const t = r.tag.startsWith('#') ? r.tag : '#'+r.tag;
+                        return t.toLowerCase() === tag.toLowerCase();
+                    })
+                );
+                return { tag: tag, medallas: medallasDeltag };
+            }).filter(g => g.medallas.length > 0);
+
+            buildBloques(datosParaBloques);
+        } else {
+            clearBloques();
+        }
+    }, 50);
 }
 
 // ── Tab Personaje — con filtros rol/estado ────────────────────
