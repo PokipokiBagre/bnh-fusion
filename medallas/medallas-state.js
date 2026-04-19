@@ -8,7 +8,7 @@ export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 export const medallaState = {
-    tabActual:         'catalogo',
+    tabActual:         'personaje',
     esAdmin:           false,
     busqueda:          '',
     filtroTag:         '',
