@@ -311,11 +311,14 @@ export async function calcularPTHilo(board, threadId, desdeFecha = null) {
         .eq('thread_id', threadId)
         .in('post_no', postNosEnRango);
 
-    // 4. Reconstruir puntos_tag desde log limpio
-    await reconstruirPuntosTotales();
-
-    // 5. Procesar PT de todos los posts en el rango
+    // 4. Procesar PT de todos los posts en el rango
+    // (el log ya está limpio de esos posts, no habrá duplicados)
     await procesarPTDePostsNuevos(postsEnRango, threadId, board);
+
+    // 5. Reconstruir puntos_tag desde el log completo resultante
+    // Hacerlo DESPUÉS de insertar las nuevas entradas, para que puntos_tag
+    // refleje exactamente lo que está en el log (sin acumulación doble)
+    await reconstruirPuntosTotales();
 
     // 6. Refrescar memoria
     await cargarPTTagDelHilo(threadId);
@@ -342,7 +345,7 @@ async function reconstruirPuntosTotales() {
         sumas[k] = (sumas[k] || 0) + r.delta;
     });
 
-    // Borrar y reinsertar puntos_tag
+    // Borrar y reinsertar puntos_tag — solo si el total es positivo
     await supabase.from('puntos_tag').delete().neq('personaje_nombre', '');
     const rows = Object.entries(sumas)
         .filter(([, v]) => v > 0)
@@ -354,6 +357,32 @@ async function reconstruirPuntosTotales() {
     if (rows.length) {
         await supabase.from('puntos_tag').insert(rows);
     }
+}
+
+// ── Limpiar log de un personaje si ya no existe en personajes_refinados ──
+// Previene duplicados cuando se elimina y recrea un personaje con el mismo nombre.
+// Llamar antes de calcularPTHilo cuando se detecte un personaje "nuevo" sin pt_procesado.
+export async function limpiarLogSiPersonajeNuevo(nombreGrupo) {
+    // Verificar si tiene entradas en log pero puntos_tag ya tiene datos
+    // (señal de que es un recreado con historial previo)
+    const { data: ptExist } = await supabase
+        .from('puntos_tag')
+        .select('tag, cantidad')
+        .eq('personaje_nombre', nombreGrupo)
+        .limit(1);
+
+    const { data: logExist } = await supabase
+        .from('log_puntos_tag')
+        .select('id')
+        .eq('personaje_nombre', nombreGrupo)
+        .limit(1);
+
+    if (ptExist?.length && logExist?.length) {
+        // Tiene ambos — podría ser legítimo o un recreado.
+        // No hacer nada automáticamente; dejar que el usuario limpie si hay duplicados.
+        return false;
+    }
+    return false;
 }
 
 
