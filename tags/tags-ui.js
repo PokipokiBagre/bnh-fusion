@@ -16,10 +16,25 @@ export function renderProgresion() {
     const pj = tagsState.pjSeleccionado;
     const tagsConPts = pj ? getTagsConPuntos(pj) : [];
 
-    const charHtml = grupos.map(g => {
+    // Filter by rol/estado
+    const gruposFiltrados = grupos.filter(g => {
+        const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+        const rolOk = tagsState.filtroRol === 'todos' || tags.includes(tagsState.filtroRol.toLowerCase());
+        const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
+        return rolOk && estOk;
+    });
+    const btnRol = (val, label) => {
+        const a = tagsState.filtroRol === val;
+        return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
+    };
+    const btnEst = (val, label) => {
+        const a = tagsState.filtroEstado === val;
+        return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
+    };
+    const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
-        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
+        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\'")}')">
             <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
             <span>${g.nombre_refinado}</span>
         </div>`;
@@ -77,6 +92,11 @@ export function renderProgresion() {
             <div style="display:flex;flex-direction:column;gap:16px;">
                 <div class="card">
                     <div class="card-title">Personaje</div>
+                    <div style="display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;">
+                        ${btnRol('todos','Todos')}${btnRol('#Jugador','Jugador')}${btnRol('#NPC','NPC')}
+                        <span style="width:1px;background:var(--gray-200);margin:0 3px;display:inline-block;"></span>
+                        ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
+                    </div>
                     <div class="char-grid">${charHtml}</div>
                 </div>
                 ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
