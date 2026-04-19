@@ -1,5 +1,5 @@
 // medallas/bloques.js — Motor Tetris 2.0 (Grid 16x20 y Tooltips)
-const NUM_COLS = 16; // 16 slots horizontales (ancho)
+const NUM_COLS = 20; // 20 slots horizontales (ancho)
 const NUM_ROWS = 20; // 20 slots verticales (alto)
 const GAP = 4;
 
