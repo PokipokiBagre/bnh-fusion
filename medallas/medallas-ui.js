@@ -546,7 +546,7 @@ export function renderPersonaje() {
                 const tagsD = mTags(md).map(t=>`<span style="background:rgba(243,156,18,0.12);border:1px solid #f39c12;color:#d68910;padding:2px 7px;border-radius:8px;font-size:0.72em;">${t}</span>`).join(' ');
 
                 detalleHtml = `
-                <div style="background:white;border:1.5px solid var(--green);border-radius:12px;padding:14px;overflow:hidden;">
+                <div style="background:white;border:1.5px solid var(--green);border-radius:12px;padding:14px;flex-shrink:0;">
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
                         <div>
                             <div style="font-size:0.88em;font-weight:800;color:#1a1a2e;line-height:1.2;margin-bottom:4px;">${md.nombre}</div>
