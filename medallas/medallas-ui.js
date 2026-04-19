@@ -3,7 +3,7 @@ import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './
 import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ } from './medallas-logic.js';
 import { renderMarkup } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
-import { initBloques, buildBloques, clearBloques } from './bloques.js';
+import { initBloques, updateBloques, clearBloques } from './bloques.js';
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -254,7 +254,7 @@ export function renderGrafo() {
                 return { tag: tag, medallas: medallasDeltag };
             }).filter(g => g.medallas.length > 0);
 
-            buildBloques(datosParaBloques);
+            updateBloques(datosParaBloques);
         } else {
             clearBloques();
         }
