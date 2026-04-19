@@ -16,25 +16,10 @@ export function renderProgresion() {
     const pj = tagsState.pjSeleccionado;
     const tagsConPts = pj ? getTagsConPuntos(pj) : [];
 
-    // Apply role/status filters to character grid
-    const gruposFiltrados = grupos.filter(g => {
-        const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
-        const rolOk = tagsState.filtroRol === 'todos' || tags.includes(tagsState.filtroRol.toLowerCase());
-        const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
-        return rolOk && estOk;
-    });
-    const btnRol = (val, label) => {
-        const activo = tagsState.filtroRol === val;
-        return `<button class="btn btn-sm ${activo?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
-    };
-    const btnEst = (val, label) => {
-        const activo = tagsState.filtroEstado === val;
-        return `<button class="btn btn-sm ${activo?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
-    };
-    const charHtml = gruposFiltrados.map(g => {
+    const charHtml = grupos.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
-        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\'")}')">
+        return `<div class="char-thumb ${activo?'active':''}" onclick="window._tagsSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
             <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
             <span>${g.nombre_refinado}</span>
         </div>`;
@@ -92,11 +77,6 @@ export function renderProgresion() {
             <div style="display:flex;flex-direction:column;gap:16px;">
                 <div class="card">
                     <div class="card-title">Personaje</div>
-                    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-                        ${btnRol('todos','Todos')}${btnRol('#Jugador','Jugador')}${btnRol('#NPC','NPC')}
-                        <span style="width:1px;background:var(--gray-200);margin:0 4px;"></span>
-                        ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
-                    </div>
                     <div class="char-grid">${charHtml}</div>
                 </div>
                 ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
@@ -144,6 +124,7 @@ export function renderTagDetalle(tagNombre) {
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     const baneado  = catEntry?.baneado || false;
     const desc     = catEntry?.descripcion || '';
+    const tipo     = catEntry?.tipo || 'extra';
     const medallas = medallasDe(tag);
     const personajes = grupos.filter(g =>
         (g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
@@ -152,10 +133,90 @@ export function renderTagDetalle(tagNombre) {
     const el = document.getElementById('tag-detalle-modal');
     if (!el) return;
 
+    const tipoColor = { quirk:'#6c3483', atributo:'#1a4a80', extra:'#1e8449' };
+    const tipoBg    = { quirk:'#f5eeff',  atributo:'#ebf5fb',  extra:'#d5f5e3' };
+    const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atributo', extra:'🏷 Extra' };
+
+    const adminDescForm = tagsState.esAdmin ? `
+        <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center;">
+            <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);white-space:nowrap;">Tipo:</label>
+            <select id="detalle-tipo-sel" class="inp" style="max-width:140px;padding:5px 8px;font-size:0.82em;">
+                <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
+                <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
+                <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
+            </select>
+        </div>
+        <div style="display:flex;gap:8px;align-items:flex-start;">
+            <textarea id="detalle-desc-inp" class="inp" rows="3"
+                placeholder="Descripción… @Nombre@, #Tag, !Medalla"
+                style="flex:1;font-family:monospace;font-size:0.85em;resize:vertical;">${_esc(desc)}</textarea>
+            <button class="btn btn-green btn-sm" style="margin-top:2px;"
+                onclick="window._tagsGuardarDescDetalle('${tagKey.replace(/'/g,"\\'")}')">💾</button>
+        </div>
+        <div style="font-size:0.7em;color:var(--gray-400);margin-top:3px;">
+            <span style="color:var(--green);font-weight:700;">@Nombre@</span> ·
+            <span style="color:var(--red);font-weight:700;">#Tag</span> ·
+            <span style="color:#1a4a80;font-weight:700;">!Medalla!</span>
+        </div>` :
+        `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="font-size:0.75em;font-weight:700;padding:2px 8px;border-radius:6px;
+                background:${tipoBg[tipo]};color:${tipoColor[tipo]};border:1px solid ${tipoColor[tipo]};">
+                ${tipoLabel[tipo]||tipo}
+            </span>
+        </div>
+        ${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;">${renderMarkup(desc)}</div>`
+               : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`}`;
+
+    const medallaCards = medallas.map(m => {
+        const reqsEsteTag  = (m.requisitos_base||[]).filter(r =>
+            ('#'+(r.tag.startsWith('#')?r.tag.slice(1):r.tag)).toLowerCase() === tag.toLowerCase());
+        const condsEsteTag = (m.efectos_condicionales||[]).filter(ec =>
+            ('#'+(ec.tag.startsWith('#')?ec.tag.slice(1):ec.tag)).toLowerCase() === tag.toLowerCase());
+        return `<div style="background:var(--blue-pale);border:1.5px solid var(--blue);
+                    border-radius:var(--radius);padding:10px 12px;flex:1;min-width:160px;max-width:230px;">
+            <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:4px;">🏅 ${m.nombre}</div>
+            ${m.costo_ctl?`<div style="font-size:0.72em;color:var(--gray-500);margin-bottom:3px;">${m.costo_ctl} CTL</div>`:''}
+            ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);line-height:1.4;margin-bottom:3px;">${m.efecto_desc}</div>`:''}
+            ${reqsEsteTag.length?`<div style="font-size:0.72em;background:#d5f5e3;color:var(--green-dark);padding:2px 6px;border-radius:4px;margin-top:3px;">📋 Req: ${reqsEsteTag.map(r=>r.pts_minimos+' PT').join(', ')}</div>`:''}
+            ${condsEsteTag.length?`<div style="font-size:0.72em;background:var(--orange-pale);color:var(--orange);padding:3px 6px;border-radius:4px;margin-top:3px;">⚡ ${condsEsteTag[0].efecto||'Efecto condicional'}</div>`:''}
+        </div>`;
+    }).join('');
+
+    const sinTag = grupos.filter(g =>
+        !(g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
+    );
+
+    const asignacionSection = tagsState.esAdmin ? `
+        <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);">
+                    Sin este tag (${sinTag.length})
+                </div>
+                ${sinTag.length ? `<div style="display:flex;gap:8px;align-items:center;">
+                    <label style="font-size:0.78em;color:var(--gray-700);display:flex;align-items:center;gap:4px;cursor:pointer;">
+                        <input type="checkbox" id="modo-multi-assign" onchange="window._tagsModoMulti(this.checked)">
+                        Selección múltiple
+                    </label>
+                    <button id="btn-asignar-multi" class="btn btn-green btn-sm" style="display:none;"
+                        onclick="window._tagsAsignarMulti('${tag.replace(/'/g,"\\'")}')">✅ Asignar seleccionados</button>
+                </div>` : ''}
+            </div>
+            ${sinTag.length ? `<div id="sinTag-grid" style="display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;background:var(--gray-100);border-radius:var(--radius);padding:10px;">
+                ${sinTag.map(g => {
+                    const img2 = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
+                    const safeN = g.nombre_refinado.replace(/'/g,"\\'");
+                    const safeT = tag.replace(/'/g,"\\'");
+                    return '<div class="char-thumb" id="assign-'+g.id+'" style="cursor:pointer;opacity:0.65;"'+
+                        ' onclick="window._tagsAsignarClick(\''+g.id+'\',\''+safeN+'\',\''+safeT+'\',this)">'+
+                        '<img src="'+img2+'" onerror="this.onerror=null;this.src=\''+fb()+'\';"><span>'+g.nombre_refinado+'</span></div>';
+                }).join('')}
+            </div>` : `<div style="font-size:0.82em;color:var(--green-dark);">✅ Todos tienen este tag.</div>`}
+        </div>` : '';
+
     el.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;">
-            <div style="background:white;border-radius:var(--radius-lg);max-width:720px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.18);overflow:hidden;">
-                <!-- Header -->
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
+            onclick="if(event.target===this)window._tagsCloseDetalle()">
+            <div style="background:white;border-radius:var(--radius-lg);max-width:760px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.18);overflow:hidden;">
                 <div style="background:var(--green-dark);color:white;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
                     <div>
                         <div style="font-size:1.3em;font-weight:800;font-family:'Cinzel',serif;">${tag}</div>
@@ -163,76 +224,43 @@ export function renderTagDetalle(tagNombre) {
                     </div>
                     <button onclick="window._tagsCloseDetalle()" style="background:rgba(255,255,255,0.2);border:none;color:white;font-size:1.4em;cursor:pointer;border-radius:50%;width:32px;height:32px;line-height:1;">×</button>
                 </div>
-                <!-- Body -->
                 <div style="padding:20px;display:flex;flex-direction:column;gap:16px;">
-                    <!-- Descripción -->
                     <div>
                         <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:6px;">Descripción</div>
-                        ${tagsState.esAdmin ? `
-                            <div style="display:flex;gap:8px;">
-                                <input class="inp" id="detalle-desc-inp" value="${_esc(desc)}" placeholder="Descripción del tag…" style="flex:1;">
-                                <button class="btn btn-green btn-sm" onclick="window._tagsGuardarDescDetalle('${tagKey.replace(/'/g,"\\'")}')">💾</button>
-                            </div>` :
-                            (desc ? `<p style="font-size:0.9em;color:var(--gray-700);">${renderMarkup(desc)}</p>`
-                                  : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`)
-                        }
+                        ${adminDescForm}
                     </div>
-                    <!-- Medallas asociadas -->
-                    ${medallas.length ? `
-                    <div>
-                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Medallas asociadas</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                            ${medallas.map(m=>`
-                                <div style="background:var(--blue-pale);border:1.5px solid var(--blue);border-radius:var(--radius);padding:8px 12px;min-width:140px;">
-                                    <div style="font-weight:700;color:var(--blue);font-size:0.85em;">🏅 ${m.nombre}</div>
-                                    ${m.efecto_desc?`<div style="font-size:0.78em;color:var(--gray-700);margin-top:3px;">${m.efecto_desc}</div>`:''}
-                                    ${m.costo_ctl?`<div style="font-size:0.72em;color:var(--gray-500);margin-top:2px;">${m.costo_ctl} CTL</div>`:''}
-                                </div>`).join('')}
-                        </div>
+                    ${medallas.length ? `<div>
+                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Medallas (${medallas.length})</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:280px;overflow-y:auto;">${medallaCards}</div>
                     </div>` : ''}
-                    <!-- Personajes con este tag -->
                     <div>
-                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">
-                            Personajes (${personajes.length})
-                        </div>
-                        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Tienen este tag (${personajes.length})</div>
+                        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:2px;">
                             ${personajes.map(g => {
-                                const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
-                                return `<div class="char-thumb" onclick="window._tagsIrAFichas('${tag.replace(/'/g,"\\'")}');window._tagsCloseDetalle();" style="cursor:pointer;">
-                                    <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
-                                    <span>${g.nombre_refinado}</span>
-                                </div>`;
+                                const img = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
+                                return '<div class="char-thumb" style="cursor:pointer;" onclick="window._tagsIrAFichas(\''+tag.replace(/'/g,"\\'")+'\');window._tagsCloseDetalle();">'+
+                                    '<img src="'+img+'" onerror="this.onerror=null;this.src=\''+fb()+'\';">'+
+                                    '<span>'+g.nombre_refinado+'</span></div>';
                             }).join('') || '<span style="color:var(--gray-400);font-size:0.85em;">Ninguno aún.</span>'}
                         </div>
-                    <!-- Asignación rápida (solo OP) -->
-                    ${tagsState.esAdmin ? (() => {
-                        const sinTag = grupos.filter(g =>
-                            !(g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
-                        );
-                        if (!sinTag.length) return `<div style="font-size:0.82em;color:var(--green-dark);padding-top:8px;">✅ Todos tienen este tag.</div>`;
-                        return `<div style="margin-top:4px;">
-                            <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">
-                                Sin este tag — click para asignar (${sinTag.length})
-                            </div>
-                            <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:200px;overflow-y:auto;
-                                background:var(--gray-100);border-radius:var(--radius);padding:10px;">
-                                ${sinTag.map(g => {
-                                    const img2 = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
-                                    const safeN = g.nombre_refinado.replace(/'/g,"\'");
-                                    const safeT = tag.replace(/'/g,"\'");
-                                    return `<div class="char-thumb" id="assign-${g.id}" style="cursor:pointer;opacity:0.65;"
-                                        onclick="window._tagsAsignarDesdeDetalle('${g.id}','${safeN}','${safeT}')">
-                                        <img src="${img2}" onerror="this.onerror=null;this.src='${fb()}';">
-                                        <span>${g.nombre_refinado}</span></div>`;
-                                }).join('')}
-                            </div>
-                        </div>`;
-                    })() : ''}
                     </div>
+                    ${asignacionSection}
                 </div>
             </div>
         </div>`;
     el.style.display = 'block';
+
+    // Mount markup textarea for OP
+    if (tagsState.esAdmin) {
+        setTimeout(() => {
+            const ta = document.getElementById('detalle-desc-inp');
+            if (ta && window.initMarkupTextarea) window.initMarkupTextarea(ta);
+        }, 60);
+    }
+
+    // Multi-select state
+    window._tagsModoMultiActivo = false;
+    window._tagsModoMultiSel    = new Set();
 }
 
 // ── Tab Catálogo ──────────────────────────────────────────────
@@ -262,29 +290,20 @@ export function renderCatalogo() {
         entradas = entradas.filter(e => e.tag.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q));
     }
 
-    // Grid of tag cards (8 columns)
-    const cards = entradas.map(({ tag, count, desc, medallas }) => {
-        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
-        const adminBtns = tagsState.esAdmin ? `
-            <div style="display:flex;gap:4px;margin-top:6px;" onclick="event.stopPropagation()">
-                <button class="btn btn-sm btn-outline" style="flex:1;font-size:0.68em;padding:3px 4px;"
-                    onclick="window._tagsRenombrar('${tag.replace(/'/g,"\'")}')" title="Renombrar tag">✏️</button>
-                <button class="btn btn-sm btn-outline" style="flex:1;font-size:0.68em;padding:3px 4px;color:var(--red);border-color:var(--red);"
-                    onclick="window._tagsEliminar('${tag.replace(/'/g,"\'")}',${count})" title="Eliminar tag">🗑️</button>
-            </div>` : '';
-        return `<div onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\'")}');"
+    // Grid of tag cards (4 columns)
+    const cards = entradas.map(({ tag, count, desc, medallas }) => `
+        <div onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}');"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
-                   padding:10px;cursor:pointer;transition:0.15s;"
-            onmouseover="this.style.borderColor='var(--blue)'"
-            onmouseout="this.style.borderColor='var(--gray-200)'">
-            <div style="font-weight:700;color:var(--blue);font-size:0.85em;margin-bottom:2px;">${tag}</div>
-            <div style="font-size:0.7em;color:var(--gray-500);margin-bottom:${desc?'4px':'0'};">
-                ${count} personaje${count!==1?'s':''}${medallas.length ? ` · 🏅${medallas.length}` : ''}
+                   padding:12px;cursor:pointer;transition:0.15s;"
+            onmouseover="this.style.borderColor='var(--blue)';this.style.transform='translateY(-2px)'"
+            onmouseout="this.style.borderColor='var(--gray-200)';this.style.transform=''">
+            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:3px;">${tag}</div>
+            <div style="font-size:0.72em;color:var(--gray-500);margin-bottom:${desc?'5px':'0'};">
+                ${count} personaje${count!==1?'s':''}
+                ${medallas.length ? `· 🏅${medallas.length}` : ''}
             </div>
-            ${desc ? `<div style="font-size:0.72em;color:var(--gray-700);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
-            ${adminBtns}
-        </div>`;
-    }).join('');
+            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${desc}</div>` : ''}
+        </div>`).join('');
 
     wrap.innerHTML = `
         <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;">
@@ -294,7 +313,7 @@ export function renderCatalogo() {
                 style="max-width:360px;">
             <span style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;">
             ${cards || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
         </div>`;
 
@@ -342,13 +361,6 @@ export function renderBaneados() {
         <div class="stats-banner" style="margin-bottom:16px;">
             <div class="stat-box"><div class="num" style="color:var(--red);">${baneadosCount}</div><div class="lbl">Tags baneados</div></div>
             <div class="stat-box"><div class="num">${allTags.length - baneadosCount}</div><div class="lbl">Tags activos</div></div>
-            <div class="stat-box" style="text-align:left;padding:10px 14px;">
-                <div style="font-size:0.72em;font-weight:700;color:var(--gray-500);margin-bottom:8px;text-transform:uppercase;">Exportar</div>
-                <div style="display:flex;flex-direction:column;gap:5px;">
-                    <button class="btn btn-sm btn-outline" onclick="window._tagsDescargar('alfabetico')">📥 Tags (A→Z)</button>
-                    <button class="btn btn-sm btn-outline" onclick="window._tagsDescargar('popularidad')">📥 Tags (N→1)</button>
-                </div>
-            </div>
         </div>
         <div class="card">
             <div class="card-title">Gestión de Tags Baneados</div>

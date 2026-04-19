@@ -67,11 +67,13 @@ function _exponerGlobales() {
 
     // Guardar descripción desde detalle modal
     window._tagsGuardarDescDetalle = async (tagKey) => {
-        const el = document.getElementById('detalle-desc-inp');
+        const el   = document.getElementById('detalle-desc-inp');
+        const sel  = document.getElementById('detalle-tipo-sel');
         if (!el) return;
-        const res = await guardarDescripcionTag(tagKey, el.value.trim());
+        const tipo = sel?.value || undefined;
+        const res  = await guardarDescripcionTag(tagKey, el.value.trim(), tipo);
         if (res.ok) {
-            toast(`✅ Descripción guardada`, 'ok');
+            toast('✅ Descripción guardada', 'ok');
             await cargarTodo(); initMarkup({ grupos });
             renderTagDetalle('#' + tagKey);
             if (tagsState.tabActual === 'catalogo') renderCatalogo();
@@ -148,6 +150,66 @@ function _exponerGlobales() {
     // Ir a fichas filtrado por tag
     window._tagsIrAFichas = (tag) => {
         window.location.href = `../fichas/index.html?tag=${encodeURIComponent(tag)}`;
+    };
+
+    // Multi-select asignación desde detalle
+    window._tagsModoMulti = (activo) => {
+        window._tagsModoMultiActivo = activo;
+        window._tagsModoMultiSel    = new Set();
+        const btn = document.getElementById('btn-asignar-multi');
+        if (btn) btn.style.display = activo ? '' : 'none';
+        // Reset visual selection
+        document.querySelectorAll('#sinTag-grid .char-thumb').forEach(el => {
+            el.style.outline = '';
+            el.style.opacity = '0.65';
+        });
+    };
+
+    window._tagsAsignarClick = async (id, nombre, tag, el) => {
+        if (window._tagsModoMultiActivo) {
+            // Toggle selection
+            if (window._tagsModoMultiSel.has(id)) {
+                window._tagsModoMultiSel.delete(id);
+                el.style.outline = '';
+                el.style.opacity = '0.65';
+            } else {
+                window._tagsModoMultiSel.add(id);
+                el.style.outline = '2px solid var(--green)';
+                el.style.opacity = '1';
+            }
+            const btn = document.getElementById('btn-asignar-multi');
+            if (btn) btn.textContent = `✅ Asignar seleccionados (${window._tagsModoMultiSel.size})`;
+        } else {
+            // Single assign
+            await window._tagsAsignarDesdeDetalle(id, nombre, tag);
+        }
+    };
+
+    window._tagsAsignarMulti = async (tag) => {
+        if (!window._tagsModoMultiSel?.size) return;
+        const { supabase } = await import('../bnh-auth.js');
+        const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+        const btn = document.getElementById('btn-asignar-multi');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Asignando…'; }
+        let ok = 0;
+        for (const id of window._tagsModoMultiSel) {
+            const { data: g } = await supabase.from('personajes_refinados')
+                .select('tags, nombre_refinado').eq('id', id).maybeSingle();
+            if (!g) continue;
+            const nuevosTags = [...new Set([...(g.tags||[]), tagNorm])];
+            const { error } = await supabase.from('personajes_refinados')
+                .update({ tags: nuevosTags }).eq('id', id);
+            if (!error) {
+                const gLocal = grupos.find(x => x.id === id);
+                if (gLocal) gLocal.tags = nuevosTags;
+                const elDiv = document.getElementById('assign-' + id);
+                if (elDiv) { elDiv.style.opacity='0.2'; elDiv.style.pointerEvents='none'; elDiv.querySelector('span').textContent='✅'; }
+                ok++;
+            }
+        }
+        toast(`✅ ${tagNorm} asignado a ${ok} personaje${ok!==1?'s':''}`, 'ok');
+        window._tagsModoMultiSel = new Set();
+        if (btn) { btn.disabled = false; btn.textContent = '✅ Asignar seleccionados'; }
     };
 
     // Filtros rol/estado en progresión
