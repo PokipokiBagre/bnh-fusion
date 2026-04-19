@@ -47,6 +47,8 @@ export async function guardarMedalla(datos) {
         efectos_condicionales: datos.efectos_condicionales || [],
         pos_x:                 datos.pos_x || 0,
         pos_y:                 datos.pos_y || 0,
+        propuesta:             datos.propuesta     ?? false,
+        propuesta_por:         datos.propuesta_por ?? '',
     };
     if (datos.id) payload.id = datos.id;
 
