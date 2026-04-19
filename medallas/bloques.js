@@ -162,7 +162,7 @@ function loop() {
             ROWS_MAX,
             ROWS_BASE + Math.floor(maxStackHeight / EXPAND_STEP) * EXPAND_ADD
         );
-        if (targetRows !== _currentRows) {
+            if (targetRows !== _currentRows) {
             _currentRows = targetRows;
             const wrap = canvas.parentElement;
             if (wrap) {
@@ -170,9 +170,15 @@ function loop() {
                 const newH = _currentRows * (BLOCK_H + GAP) + GAP;
                 wrap.style.height = newH + 'px';
                 _resize();
+                
+                // Mantener la cámara enfocada en el piso cuando el canvas se expande
+                setTimeout(() => {
+                    const main = document.querySelector('.app-main');
+                    if (main) main.scrollTop = main.scrollHeight;
+                    window.scrollTo(0, document.body.scrollHeight);
+                }, 50);
             }
         }
-    }
 
     // --- DIBUJAR CLUSTERS ---
     const clusters = {};
