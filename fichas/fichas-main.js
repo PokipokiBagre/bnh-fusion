@@ -7,7 +7,7 @@ import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones } from '../bnh-fusion.js';
 import { renderSidebar, renderActiveTagsBar, renderCatalogo, renderDetalle, renderUploadPanel, cerrarUploadPanel } from './fichas-ui.js';
 import { subirImagenGrupo } from './fichas-upload.js';
-import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP } from './fichas-op.js';
+import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP, abrirEditarLore } from './fichas-op.js';
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 import { initMarkup } from './fichas-markup.js';
 
@@ -24,10 +24,44 @@ async function init() {
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
     await Promise.all([cargarTodo(), cargarFusiones()]);
-    initMarkup({ grupos: gruposGlobal }); // alimentar bnh-markup con datos actualizados
+
+    // Cargar medallas para autocompletado !Medalla! en markup
+    let medallasCargadas = [];
+    try {
+        const { supabase } = await import('../bnh-auth.js');
+        const { data: med } = await supabase.from('medallas_catalogo')
+            .select('nombre').eq('propuesta', false).order('nombre');
+        medallasCargadas = med || [];
+    } catch(e) { /* silencioso */ }
+
+    initMarkup({ grupos: gruposGlobal, medallas: medallasCargadas });
     exponerGlobalesOP();
     exponerGlobales();
+
+    // Navegación por URL: ?ficha=NombreGrupo
+    const urlParams = new URLSearchParams(window.location.search);
+    const fichaParam = urlParams.get('ficha');
+    if (fichaParam) {
+        const decoded = decodeURIComponent(fichaParam);
+        const g = gruposGlobal.find(x =>
+            x.nombre_refinado.toLowerCase() === decoded.toLowerCase() ||
+            x.nombre_refinado.toLowerCase().replace(/ /g,'_') === decoded.toLowerCase().replace(/ /g,'_')
+        );
+        if (g) {
+            fichasUI.vistaActual  = 'detalle';
+            fichasUI.seleccionado = g.nombre_refinado;
+        }
+    }
+
     sincronizarVista();
+
+    // Enfocar el buscador de nombre por defecto al cargar el catálogo
+    setTimeout(() => {
+        if (fichasUI.vistaActual === 'catalogo') {
+            const inp = document.getElementById('nombre-buscar-inp');
+            if (inp) inp.focus();
+        }
+    }, 150);
 }
 
 function sincronizarVista() {
@@ -64,10 +98,16 @@ function exponerGlobales() {
     window.abrirPanelOP         = abrirPanelOP;
     window.abrirCrearGrupo      = abrirCrearGrupo;
     window.abrirGestorAliases   = abrirGestorAliases;
+    window.abrirEditarLore      = abrirEditarLore;
 
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
-    initMarkup({ grupos: gruposGlobal }); // alimentar bnh-markup con datos actualizados
+    try {
+        const { supabase } = await import('../bnh-auth.js');
+        const { data: med } = await supabase.from('medallas_catalogo')
+            .select('nombre').eq('propuesta', false).order('nombre');
+        initMarkup({ grupos: gruposGlobal, medallas: med || [] });
+    } catch(e) { initMarkup({ grupos: gruposGlobal }); }
         sincronizarVista();
     };
 

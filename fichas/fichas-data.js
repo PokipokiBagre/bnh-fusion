@@ -69,14 +69,17 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
     return { ok: true, grupo: data };
 }
 
-export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, ctl_actual, pv_actual }) {
-    const pvMax = calcPVSimple(pot, agi, ctl);
+export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, ctl_actual, pv_actual, pv_max_delta }) {
+    const pvBase = calcPVSimple(pot, agi, ctl);
+    const delta  = pv_max_delta ?? 0;
+    const pvMax  = pvBase + delta;
     const payload = {
         pot, agi, ctl,
-        pot_actual: pot_actual ?? null,
-        agi_actual: agi_actual ?? null,
-        ctl_actual: ctl_actual ?? null,
-        pv_actual:  Math.min(pv_actual ?? pvMax, pvMax)
+        pot_actual:   pot_actual ?? null,
+        agi_actual:   agi_actual ?? null,
+        ctl_actual:   ctl_actual ?? null,
+        pv_actual:    Math.min(pv_actual ?? pvMax, pvMax),
+        pv_max_delta: delta,
     };
     const { error } = await supabase.from('personajes_refinados').update(payload).eq('id', grupoId);
     if (error) return { ok: false, msg: error.message };

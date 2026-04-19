@@ -148,9 +148,10 @@ export function renderSidebar() {
 
     <div class="sidebar-section">
         <div class="sidebar-section-title">Buscar personaje</div>
-        <input type="text" class="sidebar-search" placeholder="Nombre o alias..."
+        <input type="text" id="nombre-buscar-inp" class="sidebar-search" placeholder="Nombre o alias..."
             value="${fichasUI.nombreBusqueda||''}"
             oninput="window._fichaNombreSearch(this.value)"
+            autofocus
             style="margin-bottom:0;">
     </div>
 
@@ -236,7 +237,8 @@ export function renderCatalogo(postersDelHilo) {
     cont.innerHTML = lista.map(g => {
         const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
         const { tier } = calcTier(pot, agi, ctl);
-        const pvMax    = calcPVMax(pot, agi, ctl);
+        const pvDelta  = g.pv_max_delta || 0;
+        const pvMax    = calcPVMax(pot, agi, ctl) + pvDelta;
         const pac      = pot+agi+ctl;
         const tc       = colorTier(tier);
         const pvA      = g.pv_actual ?? pvMax;
@@ -337,7 +339,8 @@ export function renderDetalle(nombreGrupo) {
             ${fichasUI.esAdmin?`
             <button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>
             <button onclick="window._fichasAbrirUpload('${safeN}')" class="btn btn-sm" style="background:#1a4a80;border-color:#2980b9;color:white;">📷 Imagen</button>
-            `:''}
+            `:'<span style="margin-left:auto;"></span>'}
+            <button onclick="window.abrirEditarLore('${safeN}')" class="btn btn-sm" style="background:#6c757d;border-color:#6c757d;color:white;font-size:0.78em;padding:4px 10px;">📝 Editar lore</button>
         </div>
 
         ${misAliases.length?`
