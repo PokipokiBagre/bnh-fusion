@@ -14,7 +14,7 @@ export async function cargarTodo() {
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
         supabase.from('tags_catalogo').select('nombre, descripcion, baneado, tipo').order('nombre'),
-        supabase.from('medallas_catalogo').select('nombre, tags, costo_ctl, efecto_desc, tipo').order('nombre'),
+        supabase.from('medallas_catalogo').select('nombre, costo_ctl, efecto_desc, tipo, requisitos_base').order('nombre'),
     ]);
     setGrupos(gr || []);
     setPuntosAll(pts || []);

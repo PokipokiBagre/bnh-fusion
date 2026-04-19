@@ -307,6 +307,26 @@ export function renderTagDetalle(tagNombre) {
     window._tagsModoMultiSel    = new Set();
 }
 
+
+// Filtrado in-place: oculta/muestra cards sin re-renderizar el DOM.
+// Evita que el input pierda el foco y los caracteres lleguen invertidos.
+window._catFiltrarInPlace = (v) => {
+    tagsState.busquedaCat = v;
+    const q = v.trim().toLowerCase();
+    const grid = document.getElementById('cat-grid');
+    if (!grid) { renderCatalogo(); return; }
+    let visible = 0;
+    grid.querySelectorAll('[data-cat-card]').forEach(card => {
+        const tag  = (card.dataset.catCard  || '').toLowerCase();
+        const desc = (card.dataset.catDesc  || '').toLowerCase();
+        const show = !q || tag.includes(q) || desc.includes(q);
+        card.style.display = show ? '' : 'none';
+        if (show) visible++;
+    });
+    const countEl = document.querySelector('#vista-catalogo .cat-count');
+    if (countEl) countEl.textContent = visible + ' tags';
+};
+
 // ── Tab Catálogo ──────────────────────────────────────────────
 export function renderCatalogo() {
     const wrap = document.getElementById('vista-catalogo');
@@ -318,6 +338,11 @@ export function renderCatalogo() {
         if (!tagMapa[k]) tagMapa[k] = { count: 0 };
         tagMapa[k].count++;
     }));
+    // Include catalog tags with 0 personajes
+    catalogoTags.forEach(ct => {
+        const k = '#' + (ct.nombre.startsWith('#') ? ct.nombre.slice(1) : ct.nombre);
+        if (!tagMapa[k]) tagMapa[k] = { count: 0 };
+    });
 
     let entradas = Object.entries(tagMapa)
         .map(([tag, info]) => ({
@@ -383,7 +408,7 @@ export function renderCatalogo() {
             </div>` : '';
 
         return `
-        <div data-cat-card="${_esc(tag)}"
+        <div data-cat-card="${_esc(tag)}" data-cat-desc="${_esc(descDe(tag))}"
             onclick="if(window._catMultiActivo){var cb=this.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;window._catToggleCheck(cb.dataset.tag,cb.checked);}}else{window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}')}"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
                    padding:12px;cursor:pointer;transition:border-color 0.15s,transform 0.15s;position:relative;"
@@ -415,9 +440,9 @@ export function renderCatalogo() {
         <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
             <input class="inp" id="cat-search" placeholder="🔍 Buscar tag o descripción…"
                 value="${_esc(tagsState.busquedaCat)}"
-                oninput="window._tagsBuscarCat(this.value)"
+                oninput="window._catFiltrarInPlace(this.value)"
                 style="max-width:360px;">
-            <span style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
+            <span class="cat-count" style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
             ${tagsState.esAdmin ? `
                 <button class="btn btn-green btn-sm" onclick="window._catNuevoTag()">✨ Nuevo tag</button>
                 <button class="btn btn-outline btn-sm" id="btn-cat-multi"
