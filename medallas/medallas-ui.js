@@ -105,6 +105,11 @@ export function renderCatalogo() {
     const wrap = document.getElementById('vista-catalogo');
     if (!wrap) return;
 
+    // 1. Guardar si el buscador tenía el foco y la posición del cursor ANTES de redibujar
+    const activeEl = document.activeElement;
+    const prevFocusSearch = activeEl?.id === 'med-search';
+    const cursorPos = prevFocusSearch ? activeEl.selectionStart : null;
+
     let lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
     if (medallaState.filtroPropuestas) {
         lista = lista.filter(m => m.propuesta);
@@ -138,9 +143,17 @@ export function renderCatalogo() {
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
             ${lista.map(m => _renderCard(m)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
-        </div>
-    `;
+        </div>`;
 
+    // 2. Restaurar el foco y el cursor EXACTAMENTE donde estaba
+    if (prevFocusSearch) {
+        const inp = document.getElementById('med-search');
+        if (inp) {
+            inp.focus();
+            inp.setSelectionRange(cursorPos, cursorPos);
+        }
+    }
+}
     setTimeout(() => { 
         const el = document.getElementById('med-search'); 
         if(el && medallaState.busqueda) el.focus(); 
