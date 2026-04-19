@@ -667,14 +667,33 @@ window._catEditarInline = (tagKey) => {
 };
 
 window._catGuardarInline = async (tagKey) => {
-    const desc    = document.getElementById('ci-desc')?.value.trim() || '';
-    const tipo    = document.getElementById('ci-tipo')?.value || 'extra';
-    const msgEl   = document.getElementById('ci-msg');
+    const desc     = document.getElementById('ci-desc')?.value.trim() || '';
+    const tipo     = document.getElementById('ci-tipo')?.value || 'extra';
+    const nuevoNom = document.getElementById('ci-nombre')?.value.trim() || '';
+    const msgEl    = document.getElementById('ci-msg');
+    
     if (msgEl) msgEl.textContent = '⏳ Guardando…';
-    const res = await guardarDescripcionTag(tagKey, desc, tipo);
+
+    // Importamos la función renameTag que ya tienes en tags-data.js
+    const { guardarDescripcionTag, renameTag } = await import('./tags-data.js');
+
+    let actualKey = tagKey;
+
+    // 1. Si el nombre cambió en el input, renombramos primero en toda la BD
+    if (nuevoNom && nuevoNom !== '#' + tagKey && nuevoNom !== tagKey) {
+        const resRename = await renameTag('#' + tagKey, nuevoNom);
+        if (!resRename.ok) {
+            if (msgEl) msgEl.textContent = '❌ Error al renombrar: ' + resRename.msg;
+            return;
+        }
+        // Actualizamos la key con el nuevo nombre sin el '#'
+        actualKey = nuevoNom.startsWith('#') ? nuevoNom.slice(1) : nuevoNom;
+    }
+
+    // 2. Guardamos la nueva descripción y tipo usando la key final (nueva o vieja)
+    const res = await guardarDescripcionTag(actualKey, desc, tipo);
+    
     if (res.ok) {
-        const entry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
-        if (entry) { entry.descripcion = desc; entry.tipo = tipo; }
         document.getElementById('cat-inline-modal').innerHTML = '';
         toast('✅ Tag actualizado', 'ok');
         await _recargarCatalogo();
