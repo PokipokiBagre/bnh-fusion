@@ -24,27 +24,69 @@ function _attachTagAC(input) {
     dd.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:2px solid var(--green);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,0.18);margin:0;padding:4px 0;list-style:none;max-height:220px;overflow-y:auto;min-width:180px;font-size:0.85em;display:none';
     document.body.appendChild(dd);
     let _items = [], _idx = -1;
-    const _pos  = () => { const r = input.getBoundingClientRect(); dd.style.top = (r.bottom+4)+'px'; dd.style.left = r.left+'px'; dd.style.width = Math.max(r.width,200)+'px'; };
-    const _hide = () => { dd.style.display='none'; _items=[]; _idx=-1; };
-    const _pick = t => { input.value = t; _hide(); input.focus(); };
-    const _render = items => {
-        _items = items; _idx = -1;
-        if (!items.length) { dd.style.display='none'; return; }
-        dd.innerHTML = items.map((t,i) => `<li data-i="${i}" style="padding:7px 14px;cursor:pointer;color:var(--blue);font-weight:600;">${t}</li>`).join('');
-        dd.querySelectorAll('li').forEach(li => li.addEventListener('mousedown', e => { e.preventDefault(); _pick(_items[+li.dataset.i]); }));
-        _pos(); dd.style.display='block';
+    const _pos  = () => { 
+        const r = input.getBoundingClientRect(); 
+        dd.style.top = (r.bottom+4)+'px'; 
+        dd.style.left = r.left+'px'; 
+        dd.style.width = Math.max(r.width,200)+'px'; 
     };
-    input.addEventListener('input',  () => { const v=input.value.trim(); if(!v){_hide();return;} _render(sugerirTags(v,[],20)); });
+    const _hide = () => { 
+        dd.style.display='none'; 
+        _items=[]; 
+        _idx=-1; 
+    };
+    const _pick = t => { 
+        input.value = t; 
+        _hide(); 
+        input.focus(); 
+    };
+    const _render = items => {
+        _items = items; 
+        _idx = -1;
+        if (!items.length) { 
+            dd.style.display='none'; 
+            return; 
+        }
+        dd.innerHTML = items.map((t,i) => `
+            <li data-i="${i}" style="padding:7px 14px;cursor:pointer;color:var(--blue);font-weight:600;">
+                ${t}
+            </li>
+        `).join('');
+        dd.querySelectorAll('li').forEach(li => li.addEventListener('mousedown', e => { 
+            e.preventDefault(); 
+            _pick(_items[+li.dataset.i]); 
+        }));
+        _pos(); 
+        dd.style.display='block';
+    };
+    input.addEventListener('input',  () => { 
+        const v = input.value.trim(); 
+        if(!v){_hide(); return;} 
+        _render(sugerirTags(v,[],20)); 
+    });
     input.addEventListener('keydown', e => {
         if (dd.style.display==='none') return;
-        if (e.key==='ArrowDown') { e.preventDefault(); _idx=Math.min(_idx+1,_items.length-1); dd.querySelectorAll('li').forEach((l,i)=>l.style.background=i===_idx?'var(--blue-pale)':''); }
-        else if (e.key==='ArrowUp') { e.preventDefault(); _idx=Math.max(_idx-1,0); dd.querySelectorAll('li').forEach((l,i)=>l.style.background=i===_idx?'var(--blue-pale)':''); }
-        else if ((e.key==='Tab'||e.key==='Enter') && _idx>=0) { e.preventDefault(); _pick(_items[_idx]); }
+        if (e.key==='ArrowDown') { 
+            e.preventDefault(); 
+            _idx = Math.min(_idx+1,_items.length-1); 
+            dd.querySelectorAll('li').forEach((l,i) => l.style.background = i===_idx ? 'var(--blue-pale)' : ''); 
+        }
+        else if (e.key==='ArrowUp') { 
+            e.preventDefault(); 
+            _idx = Math.max(_idx-1,0); 
+            dd.querySelectorAll('li').forEach((l,i) => l.style.background = i===_idx ? 'var(--blue-pale)' : ''); 
+        }
+        else if ((e.key==='Tab'||e.key==='Enter') && _idx>=0) { 
+            e.preventDefault(); 
+            _pick(_items[_idx]); 
+        }
         else if (e.key==='Escape') _hide();
     });
     input.addEventListener('blur', () => setTimeout(_hide, 150));
     window.addEventListener('scroll', () => { if(dd.style.display!=='none') _pos(); }, true);
-    const obs = new MutationObserver(() => { if(!document.body.contains(input)){dd.remove();obs.disconnect();} });
+    const obs = new MutationObserver(() => { 
+        if(!document.body.contains(input)){ dd.remove(); obs.disconnect(); } 
+    });
     obs.observe(document.body, { childList:true, subtree:true });
 }
 
@@ -63,7 +105,6 @@ export function renderCatalogo() {
     const wrap = document.getElementById('vista-catalogo');
     if (!wrap) return;
 
-    // Filtrar: si filtroPropuestas → solo propuestas; si no → solo aprobadas (o todas para OP)
     let lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
     if (medallaState.filtroPropuestas) {
         lista = lista.filter(m => m.propuesta);
@@ -97,9 +138,13 @@ export function renderCatalogo() {
         </div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
             ${lista.map(m => _renderCard(m)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
-        </div>`;
+        </div>
+    `;
 
-    setTimeout(() => { const el=document.getElementById('med-search'); if(el&&medallaState.busqueda) el.focus(); }, 10);
+    setTimeout(() => { 
+        const el = document.getElementById('med-search'); 
+        if(el && medallaState.busqueda) el.focus(); 
+    }, 10);
 }
 
 function _renderCard(m) {
@@ -117,16 +162,21 @@ function _renderCard(m) {
         ? `<button class="btn btn-green btn-sm" style="margin-top:6px;"
             onclick="event.stopPropagation();window._medAprobar('${m.id}')">✅ Aprobar</button>` : '';
 
-    return `<div class="medalla-card${isProp?' medalla-propuesta':''}"
+    return `
+    <div class="medalla-card${isProp ? ' medalla-propuesta' : ''}"
         style="${isProp ? 'border-color:#e67e22;background:#fffbf5;' : ''}"
         onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+        
         ${propBadge}
+        
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
             <div class="medalla-nombre">${m.nombre}</div>
             <div style="font-size:0.85em;font-weight:800;color:var(--purple);white-space:nowrap;">${m.costo_ctl} CTL</div>
         </div>
+        
         <div style="display:flex;flex-wrap:wrap;gap:4px;">${tagLabel}</div>
         <div class="medalla-efecto">${m.efecto_desc||'Sin descripción.'}</div>
+        
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;">
             ${tieneReqs  ? `<span style="font-size:0.7em;background:var(--blue-pale);color:var(--blue);border:1px solid var(--blue);padding:1px 6px;border-radius:6px;">📋 Req</span>` : ''}
             ${tieneConds ? `<span style="font-size:0.7em;background:var(--orange-pale);color:var(--orange);border:1px solid var(--orange);padding:1px 6px;border-radius:6px;">⚡ Cond</span>` : ''}
@@ -135,7 +185,7 @@ function _renderCard(m) {
     </div>`;
 }
 
-// ── Tab Grafo (Tetris de Bloques) ─────────────────────────────
+// ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
 export function renderGrafo() {
     const wrap = document.getElementById('vista-grafo');
     if (!wrap) return;
@@ -166,7 +216,8 @@ export function renderGrafo() {
 
     const tagBtns = tagsPagina.map(({ tag, cnt }) => {
         const sel = selTags.includes(tag);
-        return `<button onclick="window._medGrafoToggleTag('${tag.replace(/'/g,"\\'")}')"
+        return `
+        <button onclick="window._medGrafoToggleTag('${tag.replace(/'/g,"\\'")}')"
             style="padding:4px 10px;font-size:0.78em;border-radius:12px;cursor:pointer;
                    border:1.5px solid ${sel?'#f39c12':'#dee2e6'};
                    background:${sel?'rgba(243,156,18,0.15)':'white'};
@@ -199,7 +250,8 @@ export function renderGrafo() {
                     <canvas id="bloques-canvas" style="display:block; cursor:pointer; width:100%; height:100%;"></canvas>
                     <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">Selecciona tags para ver caer las figuras</div>
                 </div>
-            </div>`;
+            </div>
+        `;
         requestAnimationFrame(() => {
             const header = document.querySelector('.app-header');
             const ctrl   = document.getElementById('grafo-controles');
@@ -216,13 +268,20 @@ export function renderGrafo() {
             return (fRol==='todos'||ts.includes(fRol.toLowerCase()))
                 && (fEst==='todos'||ts.includes(fEst.toLowerCase()));
         });
-        const bRol = (v,l) => { const a=fRol===v; return `<button onclick="window._medBloquesFiltroRol('${v}')" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${l}</button>`; };
-        const bEst = (v,l) => { const a=fEst===v; return `<button onclick="window._medBloquesFiltroEst('${v}')" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${l}</button>`; };
+        const bRol = (v,l) => { 
+            const a = fRol === v; 
+            return `<button onclick="window._medBloquesFiltroRol('${v}')" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${l}</button>`; 
+        };
+        const bEst = (v,l) => { 
+            const a = fEst === v; 
+            return `<button onclick="window._medBloquesFiltroEst('${v}')" style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${l}</button>`; 
+        };
         const pjSel = medallaState.pjBloquesSel;
         const pjBtns = gpFilt.map(g => {
             const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
             const act = pjSel === g.nombre_refinado;
-            return `<div onclick="window._medBloqueSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')"
+            return `
+            <div onclick="window._medBloqueSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')"
                 style="display:flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;cursor:pointer;
                        background:${act?'rgba(39,174,96,0.1)':'white'};border:1.5px solid ${act?'var(--green)':'#dee2e6'};">
                 <img src="${img}" onerror="this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'" style="width:20px;height:20px;border-radius:50%;object-fit:cover;object-position:top;">
@@ -280,7 +339,8 @@ export function renderGrafo() {
                 const selV = medallaState.grafoTagsSel;
                 lista.innerHTML = todosV.slice(0, TAGS_POR_PAG).map(({tag,cnt}) => {
                     const sel = selV.includes(tag);
-                    return `<button onclick="window._medGrafoToggleTag('${tag.replace(/'/g,"\\'")}')"
+                    return `
+                    <button onclick="window._medGrafoToggleTag('${tag.replace(/'/g,"\\'")}')"
                         style="padding:4px 10px;font-size:0.78em;border-radius:12px;cursor:pointer;
                                border:1.5px solid ${sel?'#f39c12':'#dee2e6'};
                                background:${sel?'rgba(243,156,18,0.15)':'white'};
@@ -334,6 +394,7 @@ export function renderGrafo() {
 export function renderPersonaje() {
     const wrap = document.getElementById('vista-personaje');
     if (!wrap) return;
+    
     const pj        = medallaState.pjSeleccionado;
     const filtroRol = medallaState.filtroRolPJ;
     const filtroEst = medallaState.filtroEstadoPJ;
@@ -347,13 +408,15 @@ export function renderPersonaje() {
 
     const btnRol = (val, lbl) => {
         const a = filtroRol === val;
-        return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}"
+        return `
+        <button class="btn btn-sm ${a?'btn-green':'btn-outline'}"
             style="padding:4px 10px;font-size:0.78em;"
             onclick="window._medFiltroRolPJ('${val}')">${lbl}</button>`;
     };
     const btnEst = (val, lbl) => {
         const a = filtroEst === val;
-        return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}"
+        return `
+        <button class="btn btn-sm ${a?'btn-green':'btn-outline'}"
             style="padding:4px 10px;font-size:0.78em;"
             onclick="window._medFiltroEstPJ('${val}')">${lbl}</button>`;
     };
@@ -361,13 +424,15 @@ export function renderPersonaje() {
     const charHtml = gruposFiltrados.map(g => {
         const img   = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = pj === g.nombre_refinado;
-        return `<div class="char-thumb ${activo?'active':''}" onclick="window._medSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
+        return `
+        <div class="char-thumb ${activo?'active':''}" onclick="window._medSelPJ('${g.nombre_refinado.replace(/'/g,"\\'")}')">
             <img src="${img}" onerror="this.onerror=null;this.src='${fb()}';">
             <span>${g.nombre_refinado}</span>
         </div>`;
     }).join('');
 
     let content = '';
+    
     if (!pj) {
         content = `<div class="empty-state"><h3>Selecciona un personaje</h3><p>Click en uno de arriba.</p></div>`;
     } else {
@@ -376,6 +441,7 @@ export function renderPersonaje() {
         const tagsDelPJ = (g?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
 
         const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
+        
         const secciones = tagsDelPJ.filter(tag => {
             if (!busqPJ) return true;
             if (tag.toLowerCase().includes(busqPJ)) return true;
@@ -392,6 +458,7 @@ export function renderPersonaje() {
                  tag.toLowerCase().includes(busqPJ))
             );
             if (!medallasDeltag.length) return '';
+            
             const pts = ptsMapa[tag] || ptsMapa[tag.slice(1)] || 0;
 
             const cards = medallasDeltag.map(m => {
@@ -401,8 +468,11 @@ export function renderPersonaje() {
                     <div class="cond-badge ${ec.activo?'cond-activa':'cond-inactiva'}">
                         ${ec.activo?'⚡':'🔒'} ${ec.tag} ${ec.pts_minimos}pt
                     </div>`).join('');
+                
                 const equipada = (medallaState.equipacion||[]).some(e => e.id === m.id);
-                return `<div class="medalla-card ${estado}" style="${equipada?'border-color:var(--green);background:rgba(39,174,96,0.04);':''}">
+                
+                return `
+                <div class="medalla-card ${estado}" style="${equipada?'border-color:var(--green);background:rgba(39,174,96,0.04);':''}">
                     <div onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}, '${pj.replace(/'/g,"\\'")}'); event.stopPropagation();" style="cursor:pointer;">
                         <div class="medalla-status">${estado==='activable'?'✅':estado==='parcial'?'⚠️':'🔒'}</div>
                         <div class="medalla-nombre">${m.nombre}</div>
@@ -422,7 +492,8 @@ export function renderPersonaje() {
                 </div>`;
             }).join('');
 
-            return `<div style="margin-bottom:24px;">
+            return `
+            <div style="margin-bottom:24px;">
                 <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
                     <span class="tag-pill" style="font-size:0.85em;">${tag}</span>
                     <span style="font-size:0.82em;color:var(--gray-500);">${pts} PT acumulados</span>
@@ -438,6 +509,7 @@ export function renderPersonaje() {
 
     // ── Panel equipación ────────────────────────────────────
     let equipHtml = '';
+    
     if (pj) {
         const gEq    = grupos.find(x => x.nombre_refinado === pj);
         const ctl    = gEq?.ctl || 0;
@@ -477,9 +549,10 @@ export function renderPersonaje() {
                         style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;line-height:1;flex-shrink:0;" title="Quitar">✕</button>
                 </div>`;
             }).join('')
-            : `<div style="font-size:0.78em;color:#bbb;text-align:center;padding:16px 0;border:1.5px dashed #eee;border-radius:8px;">
+            : `
+            <div style="font-size:0.78em;color:#bbb;text-align:center;padding:16px 0;border:1.5px dashed #eee;border-radius:8px;">
                 Sin medallas equipadas<br><span style="font-size:0.85em;">Usa "+ Equipar" en las tarjetas</span>
-               </div>`;
+            </div>`;
 
         const tagsDelPJ = (gEq?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
         const equipadosIds = new Set(equipados.map(m => m.id));
@@ -493,10 +566,11 @@ export function renderPersonaje() {
             ? sugeridas.map(m => {
                 const ctlLibre = ctl - ctlUsado;
                 const puedeFit = m.costo_ctl <= ctlLibre;
-                return `<div style="display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
-                                border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
-                                background:${puedeFit?'white':'#fff8f8'};"
-                         onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})">
+                return `
+                <div style="display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
+                            border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
+                            background:${puedeFit?'white':'#fff8f8'};"
+                     onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})">
                     <span style="font-size:0.6em;padding:1px 4px;border-radius:3px;font-weight:700;flex-shrink:0;
                         background:${m.tipo==='activa'?'rgba(26,74,128,0.1)':'rgba(108,52,131,0.1)'};
                         color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡':'🛡'}</span>
@@ -508,10 +582,16 @@ export function renderPersonaje() {
             : `<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin sugerencias disponibles</div>`;
 
         const guardarBtn = medallaState.esAdmin
-            ? `<button onclick="window._medGuardarEquipacionValida()"
-                style="width:100%;padding:8px;font-size:0.8em;background:var(--green);border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">💾 Guardar equipación</button>`
-            : `<button onclick="window._medProponerEquipacion()"
-                style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">📝 Proponer equipación</button>`;
+            ? `
+            <button onclick="window._medGuardarEquipacionValida()"
+                style="width:100%;padding:8px;font-size:0.8em;background:var(--green);border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">
+                💾 Guardar equipación
+            </button>`
+            : `
+            <button onclick="window._medProponerEquipacion()"
+                style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">
+                📝 Proponer equipación
+            </button>`;
 
         let detalleHtml = '';
         if (selDetalle) {
@@ -521,7 +601,8 @@ export function renderPersonaje() {
                 const reqsD = (md.requisitos_base||[]).map(r => {
                     const pts = ptsMapa[r.tag] || ptsMapa[r.tag.replace('#','')] || 0;
                     const ok = pts >= (r.pts_minimos||0);
-                    return `<div style="display:flex;align-items:center;justify-content:space-between;font-size:0.75em;padding:4px 0;border-bottom:1px solid #f5f5f5;">
+                    return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.75em;padding:4px 0;border-bottom:1px solid #f5f5f5;">
                         <span style="color:var(--blue);font-weight:600;">${r.tag}</span>
                         <span style="color:${ok?'var(--green-dark)':'#e74c3c'};font-weight:700;">${pts}/${r.pts_minimos} PT ${ok?'✓':'✗'}</span>
                     </div>`;
@@ -530,9 +611,10 @@ export function renderPersonaje() {
                 const condsD = (md.efectos_condicionales||[]).map(ec => {
                     const pts = ptsMapa[ec.tag] || ptsMapa[ec.tag.replace('#','')] || 0;
                     const activo = pts >= (ec.pts_minimos||0);
-                    return `<div style="border-radius:8px;padding:8px;margin-bottom:6px;
-                                        background:${activo?'rgba(39,174,96,0.06)':'rgba(0,0,0,0.03)'};
-                                        border:1.5px solid ${activo?'var(--green)':'#dee2e6'};">
+                    return `
+                    <div style="border-radius:8px;padding:8px;margin-bottom:6px;
+                                background:${activo?'rgba(39,174,96,0.06)':'rgba(0,0,0,0.03)'};
+                                border:1.5px solid ${activo?'var(--green)':'#dee2e6'};">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                             <span style="font-size:0.72em;color:var(--orange);font-weight:700;">${ec.tag}</span>
                             <span style="font-size:0.68em;font-weight:700;color:${activo?'var(--green-dark)':'#aaa'};">
@@ -543,7 +625,7 @@ export function renderPersonaje() {
                     </div>`;
                 }).join('') || '<div style="font-size:0.75em;color:#bbb;">Sin efectos condicionales</div>';
 
-                const tagsD = mTags(md).map(t=>`<span style="background:rgba(243,156,18,0.12);border:1px solid #f39c12;color:#d68910;padding:2px 7px;border-radius:8px;font-size:0.72em;">${t}</span>`).join(' ');
+                const tagsD = mTags(md).map(t => `<span style="background:rgba(243,156,18,0.12);border:1px solid #f39c12;color:#d68910;padding:2px 7px;border-radius:8px;font-size:0.72em;">${t}</span>`).join(' ');
 
                 detalleHtml = `
                 <div style="background:white;border:1.5px solid var(--green);border-radius:12px;padding:14px;flex-shrink:0;">
@@ -594,11 +676,15 @@ export function renderPersonaje() {
             `).join('');
 
             const btnAcc = medallaState.esAdmin
-                ? `<div style="display:flex;gap:5px;margin-top:10px;">
+                ? `
+                <div style="display:flex;gap:5px;margin-top:10px;">
                     <button onclick="window._medAprobarPropuestaEq()" style="flex:1;padding:6px;background:var(--green);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">✅ Aprobar</button>
                     <button onclick="window._medRechazarPropuestaEq()" style="flex:1;padding:6px;background:var(--red);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">❌ Rechazar</button>
-                   </div>`
-                : `<button onclick="window._medRechazarPropuestaEq()" style="margin-top:10px;width:100%;padding:6px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">🗑️ Retirar Propuesta</button>`;
+                </div>`
+                : `
+                <button onclick="window._medRechazarPropuestaEq()" style="margin-top:10px;width:100%;padding:6px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">
+                    🗑️ Retirar Propuesta
+                </button>`;
 
             propHtml = `
                 <div style="background:#fffbf5;border:1.5px solid #e67e22;border-radius:12px;padding:14px;flex-shrink:0;">
@@ -623,8 +709,11 @@ export function renderPersonaje() {
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">⚔ Equipación</span>
-                    ${ctlUsado > 0 ? `<button onclick="window._medLimpiarEquipacion()"
-                        style="font-size:0.7em;background:none;border:1px solid #e74c3c;color:#c0392b;cursor:pointer;padding:2px 6px;border-radius:5px;font-weight:600;">✕ Limpiar</button>` : ''}
+                    ${ctlUsado > 0 ? `
+                    <button onclick="window._medLimpiarEquipacion()"
+                        style="font-size:0.7em;background:none;border:1px solid #e74c3c;color:#c0392b;cursor:pointer;padding:2px 6px;border-radius:5px;font-weight:600;">
+                        ✕ Limpiar
+                    </button>` : ''}
                 </div>
                 <div style="margin-bottom:10px;">
                     <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
@@ -657,8 +746,9 @@ export function renderPersonaje() {
         </div>`;
     }
 
-    // 1. Guardar si el buscador tenía el foco ANTES de redibujar
+    // Guardar el foco antes de redibujar
     const prevFocus = document.activeElement?.id === 'pj-med-buscar';
+    
     wrap.innerHTML = `
         <div style="display:flex;gap:16px;align-items:flex-start;">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
@@ -670,15 +760,26 @@ export function renderPersonaje() {
                         ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                     </div>
                     <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
-                    ${pj ? `<input id="pj-med-buscar" placeholder="Filtrar medallas o tags..."
+                    ${pj ? `
+                    <input id="pj-med-buscar" placeholder="Filtrar medallas o tags..."
                         oninput="window._medPJBuscar(this.value)"
                         value="${_esc(medallaState.pjBusqueda||'')}"
-                        style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">` : ''}
+                        style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">
+                    ` : ''}
                 </div>
                 ${pj ? `<div>${content}</div>` : content}
             </div>
             ${equipHtml}
         </div>`;
+
+    // Restaurar foco
+    if (prevFocus) {
+        const inp = document.getElementById('pj-med-buscar');
+        if (inp) {
+            inp.focus();
+            inp.setSelectionRange(inp.value.length, inp.value.length);
+        }
+    }
 
     // Calcular offset real del header para los elementos sticky
     requestAnimationFrame(() => {
@@ -714,7 +815,8 @@ export function renderDetalleMedalla(m, pjNombre = null) {
                 ? `<span style="color:var(--green);font-weight:700;">⚡ ACTIVO (${pts}/${ec.pts_minimos} PT)</span>`
                 : `<span style="color:var(--gray-500);">🔒 ${pts}/${ec.pts_minimos} PT</span>`;
         }
-        return `<div style="background:var(--orange-pale);border:1px solid var(--orange);border-radius:var(--radius);padding:10px;margin-top:8px;">
+        return `
+        <div style="background:var(--orange-pale);border:1px solid var(--orange);border-radius:var(--radius);padding:10px;margin-top:8px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
                 <span class="tag-pill">${ec.tag}</span>
                 <span style="font-size:0.75em;color:var(--orange);font-weight:700;">≥ ${ec.pts_minimos} PT</span>
@@ -730,7 +832,6 @@ export function renderDetalleMedalla(m, pjNombre = null) {
             🟠 Medalla propuesta${m.propuesta_por ? ` por ${m.propuesta_por}` : ''}
            </div>` : '';
 
-    // OP: todos los botones. Anónimo: solo editar/eliminar sus propuestas
     const adminBtns = medallaState.esAdmin
         ? `<div style="display:flex;gap:8px;margin-top:12px;border-top:1px solid var(--gray-200);padding-top:12px;flex-wrap:wrap;">
             ${isProp ? `<button class="btn btn-green btn-sm" onclick="window._medAprobar('${m.id}');window._medallasCloseModal()">✅ Aprobar</button>` : ''}
@@ -946,7 +1047,8 @@ export function renderFormMedalla(m = null) {
 }
 
 export function _htmlReqRow(r = {}, idx) {
-    return `<div class="cond-row" id="req-row-${idx}">
+    return `
+    <div class="cond-row" id="req-row-${idx}">
         <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
             value="${_esc(r.tag||'')}" id="req-tag-${idx}" autocomplete="off">
         <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
@@ -956,7 +1058,8 @@ export function _htmlReqRow(r = {}, idx) {
 }
 
 export function _htmlCondRow(c = {}, idx) {
-    return `<div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${idx}">
+    return `
+    <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${idx}">
         <div style="display:flex;gap:8px;">
             <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
                 value="${_esc(c.tag||'')}" id="cond-tag-${idx}" autocomplete="off">
