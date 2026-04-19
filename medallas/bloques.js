@@ -1,11 +1,10 @@
-// medallas/bloques.js — Motor de bloques apilables estilo Tetris
-const BLOCK_W = 200;
-const BLOCK_H = 46;
-const GAP     = 4;
+// medallas/bloques.js — Motor de piezas tipo Tetris
+const NUM_COLS = 12; // 12 slots horizontales
+const GAP = 4;
 
 let canvas, ctx;
-let bloques = []; // { id, x, y, targetY, text, color, isTag, data }
-let cols    = []; // Altura actual de cada columna
+let bloques = []; // Todos los bloques individuales en pantalla
+let cols    = []; // Altura disponible actual de cada columna
 let _animId = null;
 
 export function initBloques(canvasEl) {
@@ -14,16 +13,16 @@ export function initBloques(canvasEl) {
     _resize();
     window.addEventListener('resize', _resize);
 
-    // Interacción de click
+    // Interacción de click en los bloques
     canvas.addEventListener('click', e => {
         const r = canvas.getBoundingClientRect();
         const mx = e.clientX - r.left;
         const my = e.clientY - r.top;
         
-        // Buscar si hicimos click en algún bloque
+        // Revisamos desde los últimos (los que están más arriba visualmente)
         for (let i = bloques.length - 1; i >= 0; i--) {
             const b = bloques[i];
-            if (mx >= b.x && mx <= b.x + BLOCK_W && my >= b.y && my <= b.y + BLOCK_H) {
+            if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
                 if (!b.isTag && window._medallasAbrirDetalle) {
                     window._medallasAbrirDetalle(b.data);
                 }
@@ -32,65 +31,115 @@ export function initBloques(canvasEl) {
         }
     });
 
-    loop();
+    if (!_animId) loop();
 }
 
 export function buildBloques(tagsData) {
-    // tagsData: [{ tag: '#Nombre', medallas: [{...}, {...}] }]
-    bloques = [];
     if (!canvas) return;
+    _resize();
     
+    bloques = [];
     const W = canvas.clientWidth;
     const H = canvas.clientHeight;
     
-    // Calcular cuántas columnas caben
-    const numCols = Math.max(1, Math.floor(W / (BLOCK_W + GAP)));
-    const offsetX = (W - (numCols * (BLOCK_W + GAP))) / 2; // Centrar las columnas
+    // Calcular ancho para 12 columnas y un alto más cuadrado
+    const BLOCK_W = (W - (NUM_COLS + 1) * GAP) / NUM_COLS;
+    const BLOCK_H = BLOCK_W * 0.65; 
     
-    // Reiniciar las alturas de las columnas al fondo del canvas
-    cols = Array(numCols).fill(H - GAP);
+    // Reiniciar las alturas de las columnas (H es el piso, crecen hacia 0)
+    cols = Array(NUM_COLS).fill(H - GAP);
 
-    const paletas = ['#00b4d8', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c'];
+    const paletas = ['#00b4d8', '#2ecc71', '#9b59b6', '#e74c3c', '#1abc9c', '#f1c40f', '#e67e22'];
 
     tagsData.forEach((grupo, tIdx) => {
-        // Encontrar la columna más vacía (la de y mayor)
-        let colIdx = 0;
-        let maxY = 0;
-        for (let i = 0; i < numCols; i++) {
-            if (cols[i] > maxY) { maxY = cols[i]; colIdx = i; }
-        }
-
-        const xPos = offsetX + colIdx * (BLOCK_W + GAP);
         const colorMedalla = paletas[tIdx % paletas.length];
 
-        // 1. Apilar el Tag (Naranja)
-        cols[colIdx] -= BLOCK_H;
-        bloques.push({
-            id: 'tag_' + grupo.tag,
-            x: xPos,
-            y: -100 - (Math.random() * 200), // Nace arriba fuera de pantalla
-            targetY: cols[colIdx],
-            text: grupo.tag,
-            color: '#f39c12',
-            isTag: true,
-            data: null
-        });
-        cols[colIdx] -= GAP;
+        // 1. Crear el "Cluster" (El Tag en el centro, y medallas pegadas al azar a los lados)
+        let localBlocks = [];
+        localBlocks.push({ cx: 0, cy: 0, isTag: true, text: grupo.tag, color: '#f39c12', data: null });
 
-        // 2. Apilar sus medallas encima
+        let filled = new Set(['0,0']); // Para no sobreponer bloques de la misma pieza
+        
         grupo.medallas.forEach(m => {
-            cols[colIdx] -= BLOCK_H;
-            bloques.push({
-                id: m.id,
-                x: xPos,
-                y: -100 - (Math.random() * 300), 
-                targetY: cols[colIdx],
-                text: m.nombre,
-                color: colorMedalla,
-                isTag: false,
-                data: m
+            let validSpots = [];
+            // Buscar todos los espacios adyacentes vacíos alrededor de los bloques ya colocados
+            localBlocks.forEach(lb => {
+                [[1,0], [-1,0], [0,1], [0,-1]].forEach(dir => {
+                    let nx = lb.cx + dir[0];
+                    let ny = lb.cy + dir[1];
+                    if (!filled.has(`${nx},${ny}`)) validSpots.push({cx: nx, cy: ny});
+                });
             });
-            cols[colIdx] -= GAP;
+            
+            // Eliminar duplicados
+            let uniqueSpots = [];
+            let seen = new Set();
+            validSpots.forEach(s => {
+                let key = `${s.cx},${s.cy}`;
+                if(!seen.has(key)) { seen.add(key); uniqueSpots.push(s); }
+            });
+            
+            // Escoger uno al azar
+            let spot = uniqueSpots[Math.floor(Math.random() * uniqueSpots.length)];
+            filled.add(`${spot.cx},${spot.cy}`);
+            localBlocks.push({ cx: spot.cx, cy: spot.cy, isTag: false, text: m.nombre, color: colorMedalla, data: m });
+        });
+
+        // 2. Normalizar el cluster para que las coordenadas cx y cy empiecen desde 0
+        let min_cx = Math.min(...localBlocks.map(b => b.cx));
+        let max_cx = Math.max(...localBlocks.map(b => b.cx));
+        let min_cy = Math.min(...localBlocks.map(b => b.cy));
+        let max_cy = Math.max(...localBlocks.map(b => b.cy));
+        
+        localBlocks.forEach(b => {
+            b.cx -= min_cx;
+            b.cy -= min_cy;
+        });
+
+        let cWidth = max_cx - min_cx + 1;
+        let cHeight = max_cy - min_cy + 1;
+
+        // 3. Escoger una columna aleatoria donde quepa toda la figura
+        let max_C = NUM_COLS - cWidth;
+        if (max_C < 0) max_C = 0; // Por seguridad si la pieza es anormalmente ancha
+        let C = Math.floor(Math.random() * (max_C + 1));
+
+        // 4. Calcular hasta qué altura cae la pieza sin chocar con las de abajo
+        let Y_base = H;
+        localBlocks.forEach(b => {
+            let blockCol = C + b.cx;
+            if (blockCol >= NUM_COLS) return;
+            let obstacleY = cols[blockCol];
+            let max_base_for_this = obstacleY - (b.cy + 1) * (BLOCK_H + GAP);
+            if (max_base_for_this < Y_base) Y_base = max_base_for_this;
+        });
+
+        // 5. Instanciar los bloques desde el cielo cayendo a su posición final
+        let spawn_Y_base = - (cHeight * (BLOCK_H + GAP)) - Math.random() * 300 - 100;
+
+        localBlocks.forEach(b => {
+            let blockCol = C + b.cx;
+            if (blockCol >= NUM_COLS) return;
+            
+            let finalY = Y_base + b.cy * (BLOCK_H + GAP);
+            let startY = spawn_Y_base + b.cy * (BLOCK_H + GAP);
+            let finalX = GAP + blockCol * (BLOCK_W + GAP);
+            
+            bloques.push({
+                id: Math.random().toString(),
+                w: BLOCK_W,
+                h: BLOCK_H,
+                x: finalX,
+                y: startY,
+                targetY: finalY,
+                text: b.text,
+                color: b.color,
+                isTag: b.isTag,
+                data: b.data
+            });
+            
+            // Actualizar la cima de esta columna para las siguientes piezas
+            cols[blockCol] = Math.min(cols[blockCol], finalY);
         });
     });
 }
@@ -103,43 +152,51 @@ function loop() {
     const H = canvas.clientHeight;
     ctx.clearRect(0, 0, W, H);
     
-    // Fondo oscuro
     ctx.fillStyle = '#0d1117';
     ctx.fillRect(0, 0, W, H);
 
-    // Actualizar y dibujar bloques
     bloques.forEach(b => {
-        // Gravedad suave (animación de caída)
-        b.y += (b.targetY - b.y) * 0.1;
+        // Físicas de caída
+        b.y += (b.targetY - b.y) * 0.12;
         if (Math.abs(b.targetY - b.y) < 0.5) b.y = b.targetY;
 
-        // Dibujar caja
-        ctx.fillStyle = b.isTag ? 'rgba(243,156,18,0.2)' : `${b.color}33`; // Fondo con opacidad
-        ctx.strokeStyle = b.isTag ? b.color : b.color;
-        ctx.lineWidth = 2;
+        // Dibujar el bloque
+        ctx.fillStyle = b.isTag ? 'rgba(243,156,18,0.25)' : `${b.color}25`;
+        ctx.strokeStyle = b.color;
+        ctx.lineWidth = 1.5;
         
         ctx.beginPath();
-        ctx.roundRect(b.x, b.y, BLOCK_W, BLOCK_H, 6);
+        ctx.roundRect(b.x, b.y, b.w, b.h, 6);
         ctx.fill();
         ctx.stroke();
 
-        // Si es medalla, dibujar pequeño indicador de si es propuesta
+        // Indicador de propuesta
         if (b.data?.propuesta) {
             ctx.fillStyle = '#f39c12';
             ctx.beginPath();
-            ctx.arc(b.x + BLOCK_W - 12, b.y + 12, 4, 0, Math.PI * 2);
+            ctx.arc(b.x + b.w - 10, b.y + 10, 4, 0, Math.PI * 2);
             ctx.fill();
         }
 
         // Texto
         ctx.fillStyle = b.isTag ? '#f39c12' : '#ffffff';
-        ctx.font = b.isTag ? 'bold 14px Inter' : '13px Inter';
+        ctx.font = b.isTag ? 'bold 12px Inter' : '11px Inter';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
         let label = b.text;
-        if (label.length > 22) label = label.substring(0, 20) + '…';
-        ctx.fillText(label, b.x + BLOCK_W / 2, b.y + BLOCK_H / 2);
+        if (label.length > 20) label = label.substring(0, 18) + '…';
+        
+        // Dividir en 2 líneas si el texto no es el tag
+        if (label.length > 12 && !b.isTag) {
+            let words = label.split(' ');
+            let l1 = words.slice(0, Math.ceil(words.length/2)).join(' ');
+            let l2 = words.slice(Math.ceil(words.length/2)).join(' ');
+            ctx.fillText(l1, b.x + b.w / 2, b.y + b.h / 2 - 6);
+            if(l2) ctx.fillText(l2, b.x + b.w / 2, b.y + b.h / 2 + 8);
+        } else {
+            ctx.fillText(label, b.x + b.w / 2, b.y + b.h / 2);
+        }
     });
 }
 
@@ -150,13 +207,15 @@ export function clearBloques() {
 function _resize() {
     if (!canvas) return;
     const dpr = window.devicePixelRatio || 1;
-    const w = canvas.parentElement?.clientWidth || window.innerWidth;
-    const h = Math.max(500, window.innerHeight - 260);
-    canvas.width = w * dpr; 
-    canvas.height = h * dpr;
-    canvas.style.width = w + 'px'; 
-    canvas.style.height = h + 'px';
-    ctx.scale(dpr, dpr);
-    // Forzar recalcular si se redimensiona
-    bloques.forEach(b => b.y = -100); 
+    const parent = canvas.parentElement;
+    if (!parent) return;
+    const w = parent.clientWidth;
+    const h = parent.clientHeight;
+    
+    // Solo redimensionar si el contenedor cambió de tamaño (evita parpadeos)
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+        canvas.width = w * dpr; 
+        canvas.height = h * dpr;
+        ctx.scale(dpr, dpr);
+    }
 }
