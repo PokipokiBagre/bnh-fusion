@@ -40,9 +40,18 @@ function _renderTab(tab) {
     ['catalogo','grafo','personaje'].forEach(t =>
         document.getElementById(`vista-${t}`)?.classList.toggle('oculto', t !== tab)
     );
+    
     if (tab === 'catalogo')  renderCatalogo();
-    if (tab === 'grafo')     renderGrafo();
     if (tab === 'personaje') renderPersonaje();
+    if (tab === 'grafo') {
+        renderGrafo();
+        // Hacer scroll automático hasta el fondo (el "piso" de los bloques)
+        setTimeout(() => {
+            const main = document.querySelector('.app-main');
+            if (main) main.scrollTop = main.scrollHeight;
+            window.scrollTo(0, document.body.scrollHeight);
+        }, 60);
+    }
 }
 
 function _exponerGlobales() {
