@@ -4,10 +4,12 @@ import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ } from 
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 import { initBloques, updateBloques, clearBloques } from './bloques.js';
+
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const _onErr = () => `this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
+
 // Exponer initMarkupTextarea para uso en callbacks
 window._initMarkupTA = initMarkupTextarea;
 
@@ -64,10 +66,8 @@ export function renderCatalogo() {
     // Filtrar: si filtroPropuestas → solo propuestas; si no → solo aprobadas (o todas para OP)
     let lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
     if (medallaState.filtroPropuestas) {
-        // OP activó filtro "solo propuestas"
         lista = lista.filter(m => m.propuesta);
     }
-    // Las propuestas son visibles para todos (anónimos también las ven)
 
     const allTags = [...new Set(
         medallas.filter(m => !m.propuesta || medallaState.esAdmin).flatMap(m => mTags(m))
@@ -135,7 +135,7 @@ function _renderCard(m) {
     </div>`;
 }
 
-// ── Tab Grafo (ahora Tetris de Bloques) ─────────────────────
+// ── Tab Grafo (Tetris de Bloques) ─────────────────────────────
 export function renderGrafo() {
     const wrap = document.getElementById('vista-grafo');
     if (!wrap) return;
@@ -190,8 +190,6 @@ export function renderGrafo() {
             <button onclick="window._medGrafoClearTags()" style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:0.78em;padding:2px 4px;white-space:nowrap;">✕ Limpiar</button>
            </div>` : '';
 
-    // ¡CRÍTICO PARA EVITAR EL PARPADEO!
-    // Solo construimos el Canvas HTML si no existe todavía en la pantalla
     let canvasContainer = document.getElementById('bloques-canvas-wrap');
     if (!canvasContainer) {
         wrap.innerHTML = `
@@ -202,7 +200,6 @@ export function renderGrafo() {
                     <div id="bloques-placeholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:0.9em;pointer-events:none;">Selecciona tags para ver caer las figuras</div>
                 </div>
             </div>`;
-        // Calcular offset real del header para el sticky
         requestAnimationFrame(() => {
             const header = document.querySelector('.app-header');
             const ctrl   = document.getElementById('grafo-controles');
@@ -210,10 +207,8 @@ export function renderGrafo() {
         });
     }
 
-    // Actualizamos ÚNICAMENTE el panel de botones, sin tocar el canvas
     const controles = document.getElementById('grafo-controles');
     if (controles) {
-        // Selector PJ
         const fRol = medallaState.filtroRolBloques || '#Jugador';
         const fEst = medallaState.filtroEstBloques || '#Activo';
         const gpFilt = grupos.filter(g => {
@@ -235,7 +230,6 @@ export function renderGrafo() {
             </div>`;
         }).join('');
 
-        // Preservar foco y valor del buscador antes de reescribir el HTML
         const prevSearchFocused = document.activeElement?.id === 'grafo-buscar-tag';
 
         controles.innerHTML = `
@@ -263,7 +257,6 @@ export function renderGrafo() {
             </div>
         `;
 
-        // Montar listener del buscador sin oninput inline (evita rebuild al escribir)
         const searchInp = document.getElementById('grafo-buscar-tag');
         if (searchInp && !searchInp._grafoBusqInit) {
             searchInp._grafoBusqInit = true;
@@ -298,20 +291,17 @@ export function renderGrafo() {
             });
         }
 
-        // Restaurar foco si estaba activo antes del rebuild
         if (prevSearchFocused && searchInp) {
             searchInp.focus();
             searchInp.setSelectionRange(searchInp.value.length, searchInp.value.length);
         }
     }
 
-    // Ocultar/Mostrar el texto placeholder del canvas
     const placeholder = document.getElementById('bloques-placeholder');
     if (placeholder) {
         placeholder.style.display = selTags.length ? 'none' : 'flex';
     }
 
-    // Finalmente, decirle al motor que dispare los bloques
     setTimeout(() => {
         const c = document.getElementById('bloques-canvas');
         if (!c) return;
@@ -348,7 +338,6 @@ export function renderPersonaje() {
     const filtroRol = medallaState.filtroRolPJ;
     const filtroEst = medallaState.filtroEstadoPJ;
 
-    // Filtrar personajes según rol y estado
     const gruposFiltrados = grupos.filter(g => {
         const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
         const rolOk = filtroRol === 'todos' || tags.includes(filtroRol.toLowerCase());
@@ -389,7 +378,6 @@ export function renderPersonaje() {
         const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
         const secciones = tagsDelPJ.filter(tag => {
             if (!busqPJ) return true;
-            // Incluir sección si el tag o alguna medalla coincide con la búsqueda
             if (tag.toLowerCase().includes(busqPJ)) return true;
             return medallas.some(m => !m.propuesta &&
                 mTags(m).some(t => t.toLowerCase() === tag.toLowerCase()) &&
@@ -459,7 +447,6 @@ export function renderPersonaje() {
         const ctlColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
         const barColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
 
-        // Determinar qué medallas pasan el corte de CTL (de arriba a abajo hasta llenarse)
         let ctlAcum = 0;
         const equipadosConEstado = equipados.map(m => {
             const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
@@ -494,7 +481,6 @@ export function renderPersonaje() {
                 Sin medallas equipadas<br><span style="font-size:0.85em;">Usa "+ Equipar" en las tarjetas</span>
                </div>`;
 
-        // Pool de sugeridas
         const tagsDelPJ = (gEq?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
         const equipadosIds = new Set(equipados.map(m => m.id));
         const sugeridas = medallas.filter(m =>
@@ -527,10 +513,9 @@ export function renderPersonaje() {
             : `<button onclick="window._medProponerEquipacion()"
                 style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">📝 Proponer equipación</button>`;
 
-        // Panel de detalle de medalla seleccionada
         let detalleHtml = '';
         if (selDetalle) {
-            const md = equipados.find(m => m.id === selDetalle);
+            const md = equipados.find(m => m.id === selDetalle) || (medallaState.equipacionPropuesta || []).find(m => m.id === selDetalle);
             if (md) {
                 const ptsMapa = getPuntosPJ(pj);
                 const reqsD = (md.requisitos_base||[]).map(r => {
@@ -593,11 +578,48 @@ export function renderPersonaje() {
             }
         }
 
+        // Propuesta Naranja
+        let propHtml = '';
+        if (medallaState.equipacionPropuesta?.length > 0) {
+            const pUsado = medallaState.equipacionPropuesta.reduce((s, m) => s + (m.costo_ctl||0), 0);
+            const filasProp = medallaState.equipacionPropuesta.map(m => `
+                <div onclick="window._medEquipSelDetalle('${m.id}')"
+                    style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:4px;cursor:pointer;
+                           background:rgba(230,126,34,0.06); border:1.5px solid rgba(230,126,34,0.3);">
+                    <span style="font-size:0.65em;padding:2px 5px;border-radius:4px;font-weight:700;flex-shrink:0;
+                        background:rgba(230,126,34,0.15); color:#d68910; border:1px solid #d68910;">${m.tipo==='activa'?'⚡ A':'🛡 P'}</span>
+                    <span style="flex:1;font-size:0.78em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d68910;">${m.nombre}</span>
+                    <span style="font-size:0.72em;color:#e67e22;font-weight:800;">${m.costo_ctl} CTL</span>
+                </div>
+            `).join('');
+
+            const btnAcc = medallaState.esAdmin
+                ? `<div style="display:flex;gap:5px;margin-top:10px;">
+                    <button onclick="window._medAprobarPropuestaEq()" style="flex:1;padding:6px;background:var(--green);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">✅ Aprobar</button>
+                    <button onclick="window._medRechazarPropuestaEq()" style="flex:1;padding:6px;background:var(--red);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">❌ Rechazar</button>
+                   </div>`
+                : `<button onclick="window._medRechazarPropuestaEq()" style="margin-top:10px;width:100%;padding:6px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">🗑️ Retirar Propuesta</button>`;
+
+            propHtml = `
+                <div style="background:#fffbf5;border:1.5px solid #e67e22;border-radius:12px;padding:14px;flex-shrink:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:0.72em;font-weight:800;color:#d68910;text-transform:uppercase;letter-spacing:.6px;">🟠 Propuesta Pendiente</span>
+                    </div>
+                    <div style="font-size:0.72em;color:#e67e22;margin-bottom:8px;font-weight:700;">
+                        CTL propuesto: ${pUsado} / ${ctl}
+                    </div>
+                    <div>${filasProp}</div>
+                    ${btnAcc}
+                </div>
+            `;
+        }
+
         equipHtml = `
         <div id="pj-equip-panel" style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
                     display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 80px);overflow-y:auto;overflow-x:hidden;">
 
-            <!-- CTL y equipadas -->
+            ${propHtml}
+
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">⚔ Equipación</span>
@@ -620,10 +642,8 @@ export function renderPersonaje() {
                 ${guardarBtn}
             </div>
 
-            <!-- Detalle de medalla seleccionada (solo si hay una seleccionada) -->
             ${detalleHtml}
 
-            <!-- Pool de sugeridas -->
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                     <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">💡 Sugeridas</span>
@@ -843,7 +863,6 @@ export function renderProponerMedalla() {
 
     requestAnimationFrame(() => {
         document.querySelectorAll('#prop-reqs [id^="req-tag-"]').forEach(el => _attachTagAC(el));
-        // Markup en textarea de efecto
         const ef = document.getElementById('prop-efecto');
         if (ef && window._initMarkupTA) window._initMarkupTA(ef);
     });
@@ -915,12 +934,11 @@ export function renderFormMedalla(m = null) {
     window._fm_condCount = conds.length;
     requestAnimationFrame(() => {
         _mountFormAC();
-        // Markup en textareas de efecto
         ['fm-efecto'].concat(
             [...document.querySelectorAll('[id^="cond-efecto-"]')].map(e => e.id)
         ).forEach(id => {
-            const el = document.getElementById(id);
-            if (el && window._initMarkupTA) window._initMarkupTA(el);
+            const elm = document.getElementById(id);
+            if (elm && window._initMarkupTA) window._initMarkupTA(elm);
         });
     });
 }
