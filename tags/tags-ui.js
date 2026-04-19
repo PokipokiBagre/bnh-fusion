@@ -1,16 +1,16 @@
 // ============================================================
 // tags/tags-ui.js
 // ============================================================
-import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
+import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, solicitudes, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
 import { getTagsConPuntos, estadoUmbral, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT } from './tags-logic.js';
-import { guardarDescripcionTag, guardarBaneoTag, canjearPT } from './tags-data.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
 async function _recargarCatalogo() {
-    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop ?? window.scrollY;
+    const scrollY = document.getElementById('vista-catalogo')?.closest('.app-main')?.scrollTop
+        ?? window.scrollY;
     const { cargarTodo } = await import('./tags-data.js');
     const { initMarkup } = await import('../bnh-markup.js');
     const { grupos: g2 } = await import('./tags-state.js');
@@ -37,7 +37,6 @@ export function renderProgresion() {
         const estOk = tagsState.filtroEstado === 'todos' || tags.includes(tagsState.filtroEstado.toLowerCase());
         return rolOk && estOk;
     });
-
     const btnRol = (val, label) => {
         const a = tagsState.filtroRol === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroRol('${val}')">${label}</button>`;
@@ -46,7 +45,6 @@ export function renderProgresion() {
         const a = tagsState.filtroEstado === val;
         return `<button class="btn btn-sm ${a?'btn-green':'btn-outline'}" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsFiltroEstado('${val}')">${label}</button>`;
     };
-
     const charHtml = gruposFiltrados.map(g => {
         const img = `${STORAGE_URL}/imgpersonajes/${norm(g.nombre_refinado)}icon.png`;
         const activo = tagsState.pjSeleccionado === g.nombre_refinado;
@@ -72,7 +70,8 @@ export function renderProgresion() {
             let canjeHtml = '';
             if (baneado) {
                 canjeHtml = '';
-            } else if (tagsState.esAdmin && pts > 0) {
+            } else if (pts > 0) {
+                // OP y Usuario ven botones similares, pero generan Solicitudes
                 canjeHtml = `<div class="thresh-badges">`;
                 if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" style="background:var(--orange);border-color:var(--orange);color:white;" onclick="window._tagsAbrirCanjeTresTags('${_esc(pj)}','${tag}')">−100 → 🎁 3 tags</button>`;
                 if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" style="background:#1a4a80;border-color:#1a4a80;color:white;" onclick="window._tagsAbrirCanjeMedialla('${_esc(pj)}','${tag}')">−75 → 🏅 Medalla</button>`;
@@ -80,13 +79,14 @@ export function renderProgresion() {
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_pot')">−50→+POT</button>
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_agi')">−50→+AGI</button>
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_ctl')">−50→+CTL</button>`;
-                canjeHtml += `</div>`;
-            } else if (!tagsState.esAdmin) {
-                canjeHtml = `<div class="thresh-badges">`;
-                [[50,'🗡 +stat'],[75,'🏅 medalla'],[100,'🎁 3 tags']].forEach(([thr,lbl]) => {
-                    const cl = pts>=thr?'done':pts>=thr*0.6?'close':'far';
-                    canjeHtml += `<span class="thresh ${cl}">${thr}pt → ${lbl}</span>`;
-                });
+                
+                // Si no hay suficientes PT para nada, pintamos las metas en gris
+                if (pts < 50) {
+                    [[50,'🗡 +stat'],[75,'🏅 medalla'],[100,'🎁 3 tags']].forEach(([thr,lbl]) => {
+                        const cl = pts>=thr?'done':pts>=thr*0.6?'close':'far';
+                        canjeHtml += `<span class="thresh ${cl}">${thr}pt → ${lbl}</span>`;
+                    });
+                }
                 canjeHtml += `</div>`;
             }
 
@@ -103,7 +103,6 @@ export function renderProgresion() {
         }).join('');
     }
 
-    // RANKING SEGURO (Generado antes de inyectar)
     const rankingHtml = rankingPorPT().slice(0, 5).map(({ nombre, total }, i) => {
         const medal = ['🥇','🥈','🥉'][i] || `${i+1}.`;
         const img   = `${STORAGE_URL}/imgpersonajes/${norm(nombre)}icon.png`;
@@ -115,7 +114,6 @@ export function renderProgresion() {
         </div>`;
     }).join('');
 
-    // ESTRUCTURA PERFECTA (Ambas columnas seguras)
     wrap.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
             <div style="display:flex;flex-direction:column;gap:16px;">
@@ -126,23 +124,53 @@ export function renderProgresion() {
                         <span style="width:1px;background:var(--gray-200);margin:0 3px;display:inline-block;"></span>
                         ${btnEst('todos','Todos')}${btnEst('#Activo','Activo')}${btnEst('#Inactivo','Inactivo')}
                     </div>
-                    <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
+                    <div class="char-grid">${charHtml}</div>
                 </div>
                 ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>` : barrasHtml}
             </div>
-
             <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;">
                 ${pj ? `<div class="card"><div class="card-title">Resumen</div>${_resumenPJ(pj)}</div>` : ''}
-                <div class="card">
-                    <div class="card-title">🏆 Ranking Top 5</div>
-                    ${rankingHtml}
-                </div>
-                <div class="card">
-                    <div class="card-title">⚡ Cerca de canje</div>
-                    ${_cercaDeCanje()}
-                </div>
+                ${pj ? _renderSolicitudes(pj) : ''}
+                <div class="card"><div class="card-title">🏆 Ranking Top 5</div>${rankingHtml}</div>
+                <div class="card"><div class="card-title">⚡ Cerca de canje</div>${_cercaDeCanje()}</div>
             </div>
         </div>`;
+}
+
+function _renderSolicitudes(pj) {
+    const reqs = solicitudes.filter(s => s.personaje_nombre === pj);
+    if (!reqs.length) return '';
+    
+    const rows = reqs.map(r => {
+        let lbl = '';
+        if (r.tipo === 'stat_pot') lbl = '💪 +1 POT';
+        else if (r.tipo === 'stat_agi') lbl = '⚡ +1 AGI';
+        else if (r.tipo === 'stat_ctl') lbl = '🧠 +1 CTL';
+        else if (r.tipo === 'medalla') lbl = `🏅 Medalla Propuesta: <b>${r.datos?.nombre_medalla||'Desconocida'}</b>`;
+        else if (r.tipo === 'tres_tags') {
+            lbl = `🎁 Tags: ${r.datos.cambios.map(c=>c.tipo==='remover'?'-'+c.tag:'+'+c.tag).join(', ')}`;
+        }
+
+        const adminBtns = tagsState.esAdmin ? `
+            <button onclick="window._tagsAprobarReq(${r.id})" class="btn btn-green btn-sm" style="flex:1;">✅ Aprobar</button>
+            <button onclick="window._tagsCancelarReq(${r.id})" class="btn btn-red btn-sm" style="flex:1;">❌ Rechazar</button>
+        ` : `
+            ${r.tipo === 'tres_tags' ? `<button onclick="window._tagsAbrirEditTresTags(${r.id})" class="btn btn-outline btn-sm" style="border-color:var(--orange);color:var(--orange);flex:1;">✏️ Editar</button>` : ''}
+            ${r.tipo === 'medalla' ? `<div style="font-size:0.7em;color:var(--gray-500);width:100%;margin-bottom:4px;">* Edita la medalla desde la pestaña Catálogo de Medallas.</div>` : ''}
+            <button onclick="window._tagsCancelarReq(${r.id})" class="btn btn-red btn-sm" style="flex:1;">🗑️ Retirar / Devolver PT</button>
+        `;
+
+        return `<div style="background:#fffbf5;border:1px solid var(--orange);border-radius:8px;padding:10px;margin-bottom:8px;">
+            <div style="font-size:0.72em;color:var(--orange);font-weight:800;margin-bottom:4px;text-transform:uppercase;">⏳ Solicitud Pendiente (−${r.costo_pt} PT de ${r.tag_origen})</div>
+            <div style="font-size:0.85em;font-weight:600;color:var(--gray-800);margin-bottom:8px;">${lbl}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;">${adminBtns}</div>
+        </div>`;
+    }).join('');
+
+    return `<div class="card" style="border:2px solid #e67e22;">
+        <div class="card-title" style="color:#d68910;">⏳ Solicitudes Pendientes</div>
+        ${rows}
+    </div>`;
 }
 
 function _resumenPJ(pj) {
@@ -550,13 +578,10 @@ export function renderCatalogo() {
     }
 }
 
-
 window._catNuevoTag = () => {
     const container = document.getElementById('cat-inline-modal');
     if (!container) return;
 
-    const { grupos: gList, STORAGE_URL: SU, norm: normFn } = window._tagsUiImports || {};
-    const gruposDisp = gList || [];
     const fb2 = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
     container.innerHTML = `
@@ -819,8 +844,7 @@ window._catEliminarSeleccionados = async () => {
     const count = window._catMultiSel.size;
     if (!count) { toast('⚠️ Nada seleccionado', 'info'); return; }
     if (!confirm(`¿Eliminar ${count} tag${count!==1?'s':''} seleccionado${count!==1?'s':''}?\nSe quitarán de todos los personajes. Esta acción no se puede deshacer.`)) return;
-    const { deleteTag, cargarTodo } = await import('./tags-data.js');
-    const { initMarkup }            = await import('../bnh-markup.js');
+    const { deleteTag } = await import('./tags-data.js');
     let total = 0;
     for (const tag of window._catMultiSel) {
         const res = await deleteTag(tag);
@@ -902,13 +926,10 @@ window._catEjecutarCombinar = async () => {
     const nuevoTag  = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
     const tipo      = document.getElementById('comb-tipo')?.value || 'extra';
 
-    const btn = document.querySelector('#cat-inline-modal button[onclick*="Ejecutar"], #cat-inline-modal .btn[onclick*="Combinar"]');
     const msgEl = document.getElementById('comb-msg');
     if (msgEl) msgEl.textContent = '⏳ Procesando…';
 
     const { supabase } = await import('../bnh-auth.js');
-    const { cargarTodo } = await import('./tags-data.js');
-    const { initMarkup } = await import('../bnh-markup.js');
 
     try {
         const { data: pjs } = await supabase.from('personajes_refinados').select('id, nombre_refinado, tags');
