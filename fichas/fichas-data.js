@@ -134,10 +134,20 @@ export async function renombrarGrupo(grupoId, nuevoNombre) {
     return { ok: true };
 }
 
-export async function eliminarGrupo(grupoId) {
+export async function eliminarGrupo(grupoId, borrarPT = false) {
+    const g = gruposGlobal.find(x => x.id === grupoId);
+    const nombreGrupo = g?.nombre_refinado;
+
     // Desasignar aliases primero
     await supabase.from('personajes').update({ refinado_id: null }).eq('refinado_id', grupoId);
     await supabase.from('personajes_refinados').delete().eq('id', grupoId);
+
+    // Opcionalmente borrar PT del historial
+    if (borrarPT && nombreGrupo) {
+        await supabase.from('puntos_tag').delete().eq('personaje_nombre', nombreGrupo);
+        await supabase.from('log_puntos_tag').delete().eq('personaje_nombre', nombreGrupo);
+    }
+
     const idx = gruposGlobal.findIndex(g => g.id === grupoId);
     if (idx !== -1) gruposGlobal.splice(idx, 1);
 }

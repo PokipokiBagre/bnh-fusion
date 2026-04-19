@@ -686,7 +686,13 @@ export function exponerGlobalesOP() {
 
     window._opEliminarGrupo = async (grupoId, nombre) => {
         if(!confirm(`¿Eliminar el grupo "${nombre}"?\nLos aliases quedarán sueltos.`)) return;
-        await eliminarGrupo(grupoId);
+        // Segunda pregunta: ofrecer borrar PT del historial
+        const borrarPT = confirm(
+            `¿Borrar también el historial de PT de "${nombre}"?\n\n` +
+            `• SÍ → elimina puntos_tag y log_puntos_tag (el personaje desaparece del historial)\n` +
+            `• NO → conserva los PT (si creas un grupo con el mismo nombre, recuperará sus PT)`
+        );
+        await eliminarGrupo(grupoId, borrarPT);
         cerrarModal(); window.sincronizarVista?.();
     };
 
