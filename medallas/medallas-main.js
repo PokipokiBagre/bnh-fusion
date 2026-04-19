@@ -98,8 +98,9 @@ function _exponerGlobales() {
         const idx = eq.findIndex(e => e.id === id);
         if (idx >= 0) {
             eq.splice(idx, 1);
+            // Si se quita la medalla del detalle, limpiar detalle
+            if (medallaState.equipacionDetalleId === id) medallaState.equipacionDetalleId = null;
         } else {
-            // Buscar el objeto medalla si no se pasó
             const m = mObj || medallas.find(x => x.id === id);
             if (m) eq.push(m);
         }
@@ -107,22 +108,45 @@ function _exponerGlobales() {
         renderPersonaje();
     };
 
-    window._medLimpiarEquipacion = () => {
-        medallaState.equipacion = [];
+    // Seleccionar medalla del panel para ver su detalle
+    window._medEquipSelDetalle = (id) => {
+        medallaState.equipacionDetalleId = (medallaState.equipacionDetalleId === id) ? null : id;
         renderPersonaje();
     };
 
-    window._medGuardarEquipacion = async () => {
+    window._medLimpiarEquipacion = () => {
+        medallaState.equipacion = [];
+        medallaState.equipacionDetalleId = null;
+        renderPersonaje();
+    };
+
+    // Guardar solo las medallas que caben dentro del CTL (de arriba a abajo)
+    window._medGuardarEquipacionValida = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
-        // Guardar en personajes_refinados.equipacion (campo JSON) si existe, o notificar
-        const eq = medallaState.equipacion || [];
-        const ids = eq.map(m => m.id);
+        const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
+        const ctl = g?.ctl || 0;
+        let ctlAcum = 0;
+        const validas = (medallaState.equipacion || []).filter(m => {
+            const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
+            if (cabe) ctlAcum += (m.costo_ctl||0);
+            return cabe;
+        });
+        const sobran = (medallaState.equipacion||[]).length - validas.length;
+        if (sobran > 0) {
+            const ok = confirm(`⚠ ${sobran} medalla${sobran>1?'s':''} excede${sobran>1?'n':''} el límite de CTL y ${sobran>1?'serán':'será'} descartada${sobran>1?'s':''}.\n\n¿Guardar solo las ${validas.length} que caben?`);
+            if (!ok) return;
+        }
+        medallaState.equipacion = validas;
+        const ids = validas.map(m => m.id);
         const { error } = await supabase.from('personajes_refinados')
             .update({ equipacion: ids })
             .eq('nombre_refinado', medallaState.pjSeleccionado);
         if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
-        toast(`✅ Equipación de ${medallaState.pjSeleccionado} guardada`, 'ok');
+        toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
+        renderPersonaje();
     };
+
+    window._medGuardarEquipacion = window._medGuardarEquipacionValida; // alias por compatibilidad
 
     window._medProponerEquipacion = () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
