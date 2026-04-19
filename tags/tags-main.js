@@ -2,7 +2,7 @@
 // tags/tags-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
-import { tagsState, STORAGE_URL, grupos, catalogoTags, solicitudes } from './tags-state.js';
+import { tagsState, STORAGE_URL, grupos, catalogoTags, solicitudes, medallasCat } from './tags-state.js';
 import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, renameTag, deleteTag, enviarSolicitud, aprobarSolicitud, cancelarSolicitud, editarSolicitudTresTags } from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
@@ -34,7 +34,7 @@ window.onload = async () => {
 
     document.getElementById('pantalla-carga').classList.add('oculto');
     document.getElementById('interfaz-tags').classList.remove('oculto');
-    renderTab('catalogo');
+    renderTab('progresion'); // ← Inicia en progresión por defecto
     _exponerGlobales();
 };
 
@@ -133,10 +133,8 @@ function _exponerGlobales() {
         } else toast('❌ ' + res.msg, 'error');
     };
 
-    window._tagsBuscarCat = (v) => {
-        tagsState.busquedaCat = v;
-        renderCatalogo();
-    };
+    window._tagsBuscarCat = (v) => { tagsState.busquedaCat = v; renderCatalogo(); };
+    window._tagsBuscarMedallasAcc = (v) => { tagsState.busquedaMedallasAcc = v; renderProgresion(); };
 
     // SOLICITUDES: Botones de Stats (POT/AGI/CTL)
     window._tagsCanjear = async (pj, tag, tipo) => {
@@ -182,6 +180,11 @@ function _exponerGlobales() {
     };
 
     // ───────────────────────────────────────────────────────────
+    window._tagsAbrirEditTresTags = (reqId) => {
+        const req = solicitudes.find(s => s.id === reqId);
+        if (!req) return;
+        window._tagsAbrirCanjeTresTags(req.personaje_nombre, req.tag_origen, req.id);
+    };
 
     window._tagsAbrirCanjeTresTags = (pj, tag, reqIdToEdit = null) => {
         const g = grupos.find(x => x.nombre_refinado === pj);
@@ -262,7 +265,6 @@ function _exponerGlobales() {
         window._tresPjActual = pj;
         window._tresTagSource= tag;
 
-        // Si es edición, cargar datos previos
         if (isEdit) {
             const req = solicitudes.find(s => s.id === reqIdToEdit);
             if (req && req.datos && req.datos.cambios) {
@@ -382,47 +384,55 @@ function _exponerGlobales() {
             renderProgresion();
         };
 
-        // Render inicial si es edición
         if (isEdit) window._tresRenderCambios();
     };
 
-    window._tagsAbrirEditTresTags = (reqId) => {
+    // EDICIÓN DE PROPUESTA DE MEDALLA
+    window._tagsAbrirEditMedalla = (reqId) => {
         const req = solicitudes.find(s => s.id === reqId);
-        if (!req) return;
-        window._tagsAbrirCanjeTresTags(req.personaje_nombre, req.tag_origen, req.id);
+        if (!req || !req.datos.medalla_id) return;
+        const m = medallasCat.find(x => x.id === req.datos.medalla_id);
+        if (!m) return;
+        window._tagsAbrirCanjeMedialla(req.personaje_nombre, req.tag_origen, req.id, m);
     };
 
-    window._tagsAbrirCanjeMedialla = (pj, tag) => {
+    window._tagsAbrirCanjeMedialla = (pj, tag, reqIdToEdit = null, medToEdit = null) => {
         const modal = document.createElement('div');
         modal.id = 'modal-proponer-medalla-tags';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:20px 16px;overflow-y:auto;';
         modal.onclick = e => { if(e.target===modal) modal.remove(); };
 
+        const isEdit = !!reqIdToEdit;
+        const esc = s => String(s).replace(/'/g,"\\'");
+
+        const reqsInitial = isEdit ? (medToEdit.requisitos_base || []) : [];
+        const condsInitial = isEdit ? (medToEdit.efectos_condicionales || []) : [];
+
         modal.innerHTML = `
         <div style="background:white;border-radius:12px;max-width:700px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);overflow:hidden;border:2px solid #e67e22;">
             <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-                <b style="font-family:'Cinzel',serif;">🏅 Proponer Medalla — ${pj}</b>
+                <b style="font-family:'Cinzel',serif;">🏅 ${isEdit ? 'Editar Propuesta Medalla' : 'Proponer Medalla'} — ${pj}</b>
                 <button onclick="document.getElementById('modal-proponer-medalla-tags').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
             </div>
             <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-                <p style="font-size:0.82em;color:#888;margin:0;">Propuesta para <b>${pj}</b>. El OP la revisará antes de aprobarla.<br>Al confirmar se gastarán <b>75 PT de ${tag}</b>.</p>
+                <p style="font-size:0.82em;color:#888;margin:0;">Propuesta para <b>${pj}</b>. El OP la revisará antes de aprobarla.<br>${isEdit ? 'Estás editando tu solicitud sin gastar PT adicionales.' : `Al confirmar se gastarán <b>75 PT de ${tag}</b>.`}</p>
 
                 <div style="display:grid;grid-template-columns:1fr 120px;gap:12px;">
                     <div>
                         <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">NOMBRE *</label>
-                        <input id="mprop-nombre" class="inp" placeholder="Nombre de la medalla…">
+                        <input id="mprop-nombre" class="inp" placeholder="Nombre de la medalla…" value="${isEdit ? esc(medToEdit.nombre) : ''}">
                     </div>
                     <div>
                         <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">COSTO CTL *</label>
-                        <input id="mprop-ctl" class="inp" type="number" min="1" max="20" value="1">
+                        <input id="mprop-ctl" class="inp" type="number" min="1" max="20" value="${isEdit ? medToEdit.costo_ctl : 1}">
                     </div>
                 </div>
 
                 <div>
                     <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">TIPO</label>
                     <select id="mprop-tipo" class="inp" style="max-width:180px;">
-                        <option value="activa">⚡ Activa</option>
-                        <option value="pasiva">🛡 Pasiva</option>
+                        <option value="activa" ${isEdit && medToEdit.tipo==='activa'?'selected':''}>⚡ Activa</option>
+                        <option value="pasiva" ${isEdit && medToEdit.tipo==='pasiva'?'selected':''}>🛡 Pasiva</option>
                     </select>
                 </div>
 
@@ -433,20 +443,13 @@ function _exponerGlobales() {
                     </label>
                     <textarea id="mprop-efecto" class="inp" rows="3"
                         placeholder="Describe el efecto… @Personaje@ #Tag !Medalla!"
-                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
+                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${isEdit ? esc(medToEdit.efecto_desc) : ''}</textarea>
                 </div>
 
                 <div>
                     <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">REQUISITOS (TAGS)</label>
                     <div style="font-size:0.72em;color:#aaa;margin-bottom:6px;">El PJ debe tener el tag con los PT mínimos. Escribe # para sugerencias.</div>
-                    <div id="mprop-reqs">
-                        <div class="cond-row" id="mprop-req-row-0" style="display:flex;gap:8px;margin-bottom:4px;">
-                            <input class="inp" id="mprop-req-tag-0" value="${tag}" placeholder="#Tag…" style="flex:1;" autocomplete="off"
-                                onmouseenter="if(window._attachTagAC_tags)window._attachTagAC_tags(this)">
-                            <input class="inp" id="mprop-req-pts-0" type="number" value="0" placeholder="PT mín." style="width:80px;">
-                            <button onclick="document.getElementById('mprop-req-row-0').remove()" class="btn btn-red btn-sm">✕</button>
-                        </div>
-                    </div>
+                    <div id="mprop-reqs"></div>
                     <button onclick="window._mpropAddReq()" class="btn btn-outline btn-sm" style="margin-top:4px;">+ Añadir requisito</button>
                 </div>
 
@@ -458,8 +461,8 @@ function _exponerGlobales() {
                 </div>
 
                 <div style="display:flex;gap:8px;margin-top:4px;">
-                    <button onclick="window._tagsConfirmarMedalla('${pj.replace(/'/g,"\\'")}','${tag.replace(/'/g,"\\'")}',document.getElementById('modal-proponer-medalla-tags'))"
-                        style="padding:8px 16px;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">🏅 Proponer Medalla</button>
+                    <button onclick="window._tagsConfirmarMedalla('${pj.replace(/'/g,"\\'")}','${tag.replace(/'/g,"\\'")}',document.getElementById('modal-proponer-medalla-tags'), ${reqIdToEdit})"
+                        style="padding:8px 16px;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">${isEdit ? '💾 Guardar Cambios' : '🏅 Proponer y canjear'}</button>
                     <button onclick="document.getElementById('modal-proponer-medalla-tags').remove()"
                         style="padding:8px 16px;background:#f8f9fa;border:1px solid #dee2e6;border-radius:6px;cursor:pointer;">Cancelar</button>
                 </div>
@@ -471,33 +474,40 @@ function _exponerGlobales() {
         window._mpropReqCount  = 0;
         window._mpropCondCount = 0;
 
-        window._mpropAddReq = () => {
+        window._mpropAddReq = (r = {}) => {
             const idx = ++window._mpropReqCount;
             document.getElementById('mprop-reqs').insertAdjacentHTML('beforeend',
                 `<div class="cond-row" id="mprop-req-row-${idx}" style="display:flex;gap:8px;margin-bottom:4px;">
-                    <input class="inp" id="mprop-req-tag-${idx}" placeholder="#Tag…" style="flex:1;" autocomplete="off"
+                    <input class="inp" id="mprop-req-tag-${idx}" value="${r.tag || (isEdit?'':tag)}" placeholder="#Tag…" style="flex:1;" autocomplete="off"
                         onmouseenter="if(window._attachTagAC_tags)window._attachTagAC_tags(this)">
-                    <input class="inp" id="mprop-req-pts-${idx}" type="number" value="0" placeholder="PT mín." style="width:80px;">
+                    <input class="inp" id="mprop-req-pts-${idx}" type="number" value="${r.pts_minimos || 0}" placeholder="PT mín." style="width:80px;">
                     <button onclick="document.getElementById('mprop-req-row-${idx}').remove()" class="btn btn-red btn-sm">✕</button>
                 </div>`
             );
         };
 
-        window._mpropAddCond = () => {
+        window._mpropAddCond = (c = {}) => {
             const idx = ++window._mpropCondCount;
             document.getElementById('mprop-conds').insertAdjacentHTML('beforeend',
                 `<div id="mprop-cond-row-${idx}" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;background:#fef9f0;border:1px solid #f39c12;border-radius:8px;padding:8px;">
                     <div style="display:flex;gap:8px;">
-                        <input class="inp" id="mprop-cond-tag-${idx}" placeholder="#Tag condicional…" style="flex:1;" autocomplete="off"
+                        <input class="inp" id="mprop-cond-tag-${idx}" value="${c.tag || ''}" placeholder="#Tag condicional…" style="flex:1;" autocomplete="off"
                             onmouseenter="if(window._attachTagAC_tags)window._attachTagAC_tags(this)">
-                        <input class="inp" id="mprop-cond-pts-${idx}" type="number" value="0" placeholder="PT mín." style="width:80px;">
+                        <input class="inp" id="mprop-cond-pts-${idx}" type="number" value="${c.pts_minimos || 0}" placeholder="PT mín." style="width:80px;">
                         <button onclick="document.getElementById('mprop-cond-row-${idx}').remove()" class="btn btn-red btn-sm">✕</button>
                     </div>
                     <textarea class="inp" id="mprop-cond-efecto-${idx}" rows="2" placeholder="Efecto si se cumple la condición…"
-                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
+                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${c.efecto || ''}</textarea>
                 </div>`
             );
         };
+
+        if (isEdit) {
+            reqsInitial.forEach(r => window._mpropAddReq(r));
+            condsInitial.forEach(c => window._mpropAddCond(c));
+        } else {
+            window._mpropAddReq(); // Add one default empty
+        }
 
         setTimeout(() => {
             const ef = document.getElementById('mprop-efecto');
@@ -505,7 +515,7 @@ function _exponerGlobales() {
         }, 100);
     };
 
-    window._tagsConfirmarMedalla = async (pj, tag, modalEl) => {
+    window._tagsConfirmarMedalla = async (pj, tag, modalEl, reqIdEdit) => {
         const nombre  = document.getElementById('mprop-nombre')?.value.trim();
         const ctl     = Number(document.getElementById('mprop-ctl')?.value) || 1;
         const tipo    = document.getElementById('mprop-tipo')?.value || 'activa';
@@ -530,36 +540,45 @@ function _exponerGlobales() {
             if (t) conds.push({ tag: t.startsWith('#')?t:'#'+t, pts_minimos: pts, efecto: efe });
         });
 
-        if (msgEl) msgEl.textContent = '⏳ Registrando propuesta y descontando PT…';
+        if (msgEl) msgEl.textContent = '⏳ Procesando…';
         const btn = event.target;
         btn.disabled = true;
 
         const { supabase } = await import('../bnh-auth.js');
-        // 1. Insertamos en medallas_catalogo como propuesta
-        const { data: medData, error: eMed } = await supabase.from('medallas_catalogo').insert({
-            nombre,
-            efecto_desc:           efecto,
-            costo_ctl:             ctl,
-            tipo,
-            requisitos_base:       reqs,
-            efectos_condicionales: conds,
-            propuesta:             true,
-            propuesta_por:         pj,
-        }).select('id').single();
 
-        if (eMed) { 
-            if(msgEl) msgEl.textContent='❌ Error medalla: '+eMed.message; 
-            btn.disabled = false;
-            return; 
+        if (reqIdEdit) {
+            // Editar propuesta existente
+            const req = solicitudes.find(s => s.id === reqIdEdit);
+            if (!req) return;
+            
+            const { error: eMed } = await supabase.from('medallas_catalogo').update({
+                nombre, efecto_desc: efecto, costo_ctl: ctl, tipo, requisitos_base: reqs, efectos_condicionales: conds
+            }).eq('id', req.datos.medalla_id);
+
+            if (eMed) { if(msgEl) msgEl.textContent='❌ Error: '+eMed.message; btn.disabled=false; return; }
+
+            req.datos.nombre_medalla = nombre;
+            await supabase.from('solicitudes_tag').update({ datos: req.datos }).eq('id', reqIdEdit);
+
+            toast(`🏅 Propuesta actualizada`, 'ok');
+            modalEl.remove();
+            await cargarTodo(); await _refreshMarkup();
+            renderProgresion();
+            return;
         }
 
-        // 2. Enviamos la solicitud para descontar PT
+        // Nueva propuesta
+        const { data: medData, error: eMed } = await supabase.from('medallas_catalogo').insert({
+            nombre, efecto_desc: efecto, costo_ctl: ctl, tipo, requisitos_base: reqs, efectos_condicionales: conds, propuesta: true, propuesta_por: pj,
+        }).select('id').single();
+
+        if (eMed) { if(msgEl) msgEl.textContent='❌ Error medalla: '+eMed.message; btn.disabled = false; return; }
+
         const res = await enviarSolicitud(pj, tag, 'medalla', 75, { medalla_id: medData.id, nombre_medalla: nombre });
         if (!res.ok) { 
             if(msgEl) msgEl.textContent='Medalla propuesta, pero falló descuento PT: '+res.msg; 
-            await supabase.from('medallas_catalogo').delete().eq('id', medData.id); // Rollback
-            btn.disabled = false;
-            return; 
+            await supabase.from('medallas_catalogo').delete().eq('id', medData.id); 
+            btn.disabled = false; return; 
         }
 
         toast(`🏅 Medalla propuesta registrada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
