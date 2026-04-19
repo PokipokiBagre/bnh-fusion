@@ -75,8 +75,8 @@ export function renderProgresion() {
                 canjeHtml = '';
             } else if (tagsState.esAdmin && pts > 0) {
                 canjeHtml = `<div class="thresh-badges">`;
-                if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','tres_tags')">−100 → 🎁 3 tags</button>`;
-                if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','medalla')">−75 → 🏅 Medalla</button>`;
+                if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" style="background:var(--orange);border-color:var(--orange);color:white;" onclick="window._tagsAbrirCanjeTresTags('${_esc(pj)}','${tag}')">−100 → 🎁 3 tags</button>`;
+                if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" style="background:#1a4a80;border-color:#1a4a80;color:white;" onclick="window._tagsAbrirCanjeMedialla('${_esc(pj)}','${tag}')">−75 → 🏅 Medalla</button>`;
                 if (pts >= 50)  canjeHtml += `
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_pot')">−50→+POT</button>
                     <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_agi')">−50→+AGI</button>
@@ -130,13 +130,67 @@ function _resumenPJ(pj) {
     if (!g) return '';
     const ptsMapa = {};
     puntosAll.filter(p=>p.personaje_nombre===pj).forEach(p=>{ ptsMapa[p.tag]=p.cantidad; });
-    const total  = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
-    const listos = Object.values(ptsMapa).filter(v=>v>=50).length;
-    return `<div style="display:flex;flex-direction:column;gap:8px;font-size:0.85em;">
-        <div style="display:flex;justify-content:space-between;"><span>PT totales</span><b>${total}</b></div>
-        <div style="display:flex;justify-content:space-between;"><span>Tags ≥50 PT</span><b style="color:var(--green);">${listos}</b></div>
-        <div style="display:flex;justify-content:space-between;"><span>Tags totales</span><b>${(g.tags||[]).length}</b></div>
-        <div style="display:flex;justify-content:space-between;"><span>POT/AGI/CTL</span><b>${g.pot||0}/${g.agi||0}/${g.ctl||0}</b></div>
+    const total   = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
+    const listos  = Object.values(ptsMapa).filter(v=>v>=50).length;
+    const pot = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
+    const pac = pot+agi+ctl;
+    const tierData = (() => {
+        if (pac>=100) return { tier:4, label:'TIER 4', color:'#f39c12' };
+        if (pac>=80)  return { tier:3, label:'TIER 3', color:'#8e44ad' };
+        if (pac>=60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
+        return              { tier:1, label:'TIER 1', color:'#27ae60' };
+    })();
+    const cambios = Math.floor(agi/4);
+    const pvMax   = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+tierData.tier;
+    const pvActual = g.pv_actual ?? pvMax;
+    // Imagen profile
+    const norm = s => s.toString().trim().toLowerCase()
+        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+        .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+        .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+    const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'profile.png';
+    const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'icon.png';
+    const noImg      = STORAGE_URL + '/imginterfaz/no_encontrado.png';
+    return `
+    <div style="display:flex;flex-direction:column;gap:0;">
+        <!-- Imagen profile extendible -->
+        <div style="border-radius:8px;overflow:hidden;background:#f8f9fa;margin-bottom:12px;max-height:320px;">
+            <img src="${profileUrl}" onerror="this.src='${iconUrl}';this.onerror=()=>this.src='${noImg}'"
+                style="width:100%;display:block;object-fit:cover;object-position:top;">
+        </div>
+        <!-- Tier destacado -->
+        <div style="text-align:center;font-family:'Cinzel',serif;font-size:1em;font-weight:800;
+            color:${tierData.color};letter-spacing:1px;margin-bottom:10px;">${tierData.label}</div>
+        <!-- Stats individuales -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
+            <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px;text-align:center;">
+                <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
+                <div style="font-size:1.1em;font-weight:800;color:#d68910;">${pot}</div>
+            </div>
+            <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:6px;text-align:center;">
+                <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
+                <div style="font-size:1.1em;font-weight:800;color:#2980b9;">${agi}</div>
+            </div>
+            <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px;text-align:center;">
+                <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
+                <div style="font-size:1.1em;font-weight:800;color:#27ae60;">${ctl}</div>
+            </div>
+        </div>
+        <!-- Línea de datos clave -->
+        <div style="display:flex;flex-direction:column;gap:5px;font-size:0.82em;border-top:1px solid var(--gray-200);padding-top:8px;">
+            <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:5px;margin-top:2px;">
+                <span>PT totales</span><b style="color:var(--green);">${total}</b>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <span>Tags ≥50 PT</span><b style="color:var(--orange);">${listos}</b>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <span>Tags totales</span><b>${(g.tags||[]).length}</b>
+            </div>
+        </div>
     </div>`;
 }
 
