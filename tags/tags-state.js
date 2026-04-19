@@ -11,7 +11,7 @@ export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 export const tagsState = {
-    tabActual:      'progresion',   // 'progresion' | 'catalogo' | 'estadisticas'
+    tabActual:      'catalogo',   // 'progresion' | 'catalogo' | 'estadisticas'
     pjSeleccionado: null,           // nombre_refinado activo en tab Progresión
     busquedaCat:    '',             // filtro texto en Catálogo
     esAdmin:        false,
