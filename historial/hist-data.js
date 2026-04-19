@@ -295,12 +295,12 @@ export async function calcularPTHilo(board, threadId, desdeFecha = null) {
 
     const postNosEnRango = postsEnRango.map(p => p.post_no);
 
-    // 2. Borrar PT ya calculados de estos posts (para no duplicar)
+    // 2. Borrar PT ya calculados de estos posts (los 3 motivos)
     await supabase
         .from('log_puntos_tag')
         .delete()
         .eq('origen_thread_id', threadId)
-        .eq('motivo', 'interaccion')
+        .in('motivo', ['interaccion', 'compartido', 'lectura'])
         .in('origen_post_no', postNosEnRango);
 
     // 3. Desmarcar estos posts para que se reprocesen
