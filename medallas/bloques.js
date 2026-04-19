@@ -162,7 +162,8 @@ function loop() {
             ROWS_MAX,
             ROWS_BASE + Math.floor(maxStackHeight / EXPAND_STEP) * EXPAND_ADD
         );
-            if (targetRows !== _currentRows) {
+        
+        if (targetRows !== _currentRows) {
             _currentRows = targetRows;
             const wrap = canvas.parentElement;
             if (wrap) {
@@ -179,6 +180,7 @@ function loop() {
                 }, 50);
             }
         }
+    }
 
     // --- DIBUJAR CLUSTERS ---
     const clusters = {};
@@ -234,6 +236,7 @@ function loop() {
         const PAD_X = 8;
         const maxW = b.w - PAD_X * 2;
         let label = b.text;
+        
         while (label.length > 3 && ctx.measureText(label).width > maxW) {
             label = label.slice(0, -1);
         }
@@ -266,8 +269,10 @@ function loop() {
         const ttH = 14 + padY * 2;
         let tx = mouseX + 15;
         let ty = mouseY + 15;
+        
         if (tx + ttW > W) tx = mouseX - ttW - 10;
         if (ty + ttH > H) ty = mouseY - ttH - 10;
+        
         ctx.fillStyle = 'rgba(13, 17, 23, 0.95)';
         ctx.strokeStyle = hoveredBlock.isTag ? '#f39c12' : hoveredBlock.clusterColor;
         ctx.lineWidth = 1.5;
@@ -298,6 +303,7 @@ function _resize() {
     if (!parent) return;
     const w = parent.clientWidth;
     const h = parent.clientHeight;
+    
     if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
         canvas.width = w * dpr;
         canvas.height = h * dpr;
