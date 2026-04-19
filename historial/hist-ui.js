@@ -377,11 +377,12 @@ function _renderPanelSeleccion() {
             : '';
         // Separador visual entre secciones
         const sep = (i === nNativos && nNativos > 0 && nExtras > 0)
-            ? `<div style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Añadir extra</div>`
+            ? `<div data-sep="extra" style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Añadir extra</div>`
             : (i === nNativos + nExtras && (nNativos > 0 || nExtras > 0))
-            ? `<div style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Otros</div>`
+            ? `<div data-sep="otros" style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Otros</div>`
             : '';
-        return sep + `<div onclick="window._histTogglePJExtra('${g.nombre_refinado.replace(/'/g,"\\'")}')"
+        const safeNombre = g.nombre_refinado.replace(/'/g,"\\'");
+        return sep + `<div data-pj-nombre="${g.nombre_refinado}" onclick="window._histTogglePJExtra('${safeNombre}')"
             style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;
                    background:${bg};border:1.5px solid ${border};transition:background 0.12s,border 0.12s;">
             <img src="${img}" onerror="${_onErr}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
@@ -413,7 +414,7 @@ function _renderPanelSeleccion() {
 
         <!-- Personajes añadidos -->
         ${hayExtra ? `<div style="background:rgba(39,174,96,0.07);border:1px solid var(--green);border-radius:6px;padding:6px 8px;">
-            <span style="font-size:0.72em;font-weight:700;color:var(--green-dark);">Extra añadido:</span>
+            <span style="font-size:0.72em;font-weight:700;color:var(--green-dark);">Seleccionado:</span>
             <div style="font-size:0.78em;margin-top:2px;color:var(--green-dark);">
                 ${personajesExtra.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px;">
                     ${e.nombre_refinado}
@@ -452,7 +453,13 @@ function _renderPanelSeleccion() {
                     ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                 </div>
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;">
+            <input id="hist-pj-buscar" type="text" placeholder="🔍 Buscar personaje…"
+                oninput="window._histBuscarPJ(this.value)"
+                style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:0.78em;
+                       border:1.5px solid #dee2e6;border-radius:6px;margin-bottom:6px;outline:none;"
+                onfocus="this.style.borderColor='var(--green)'"
+                onblur="this.style.borderColor='#dee2e6'">
+            <div id="hist-pj-pool" style="display:flex;flex-direction:column;gap:4px;">
                 ${pjCards || '<span style="font-size:0.78em;color:#aaa;">Sin personajes</span>'}
             </div>
         </div>

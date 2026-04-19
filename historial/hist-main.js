@@ -377,6 +377,27 @@ window._histCalcPTCitas = async function() {
     toast(`✅ ${citadores.length} posts · ${r.transacciones} transacciones`, 'ok');
 };
 
+// Buscador de personajes en el panel (filtra en vivo sin re-render completo)
+window._histBuscarPJ = function(q) {
+    const pool = document.getElementById('hist-pj-pool');
+    if (!pool) return;
+    const termino = q.trim().toLowerCase();
+    pool.querySelectorAll('[data-pj-nombre]').forEach(el => {
+        const nombre = el.dataset.pjNombre || '';
+        el.style.display = (!termino || nombre.toLowerCase().includes(termino)) ? '' : 'none';
+    });
+    // Ocultar/mostrar separadores si todos sus siguientes están ocultos
+    pool.querySelectorAll('[data-sep]').forEach(sep => {
+        let siguiente = sep.nextElementSibling;
+        let algunoVisible = false;
+        while (siguiente && !siguiente.dataset.sep) {
+            if (siguiente.style.display !== 'none') { algunoVisible = true; break; }
+            siguiente = siguiente.nextElementSibling;
+        }
+        sep.style.display = algunoVisible ? '' : 'none';
+    });
+};
+
 // Nav
 window.irAHilos     = () => ir('hilos');
 window.mostrarVista = ir;
