@@ -67,7 +67,7 @@ export function renderProgresion() {
             const baneado = catEntry?.baneado;
             const pct   = Math.min((pts / UMBRAL_MAX) * 100, 100);
             
-            // Colores arreglados: verde -> verdiazul -> azul
+            // Nuevos colores escalonados
             let colorBg = '';
             if (pts >= 100) colorBg = '#3498db'; // Azul brillante
             else if (pts >= 75) colorBg = '#1abc9c'; // Verdiazul (Teal)
@@ -124,7 +124,7 @@ export function renderProgresion() {
                     <div class="medalla-nombre" style="font-size:0.85em;">${m.nombre}</div>
                     <div style="font-size:0.8em;font-weight:800;color:var(--purple);white-space:nowrap;">${m.costo_ctl} CTL</div>
                 </div>
-                ${tagsD ? `<div style="margin:bottom:4px;">${tagsD}</div>` : ''}
+                ${tagsD ? `<div style="margin-bottom:4px;">${tagsD}</div>` : ''}
                 <div class="medalla-efecto" style="font-size:0.75em;">${renderMarkup(m.efecto_desc||'')}</div>
             </div>`;
         }).join('') : '<p class="empty-state" style="grid-column:1/-1;">No se encontraron medallas.</p>';
@@ -1146,7 +1146,7 @@ export function renderEstadisticas() {
                                     ${tag}
                                 </span>
                             </div>
-                            <span style="font-weight:700;color:${pts>=100?'#3498db':pts>=75?'#1abc9c':'#2ecc71'};">${pts} PT</span>
+                            <span style="font-weight:700;color:${pts>=100?'var(--red)':'var(--orange)'};">${pts} PT</span>
                         </div>`).join('') || `<div class="empty-state" style="padding:12px;"><p>Nadie cerca todavía.</p></div>`}
                 </div>
             </div>
