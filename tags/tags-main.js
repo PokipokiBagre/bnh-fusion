@@ -141,7 +141,8 @@ function _exponerGlobales() {
         const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL' };
         if (!confirm(`¿Proponer gastar 50 PT de ${tag} para obtener ${labels[tipo]}?`)) return;
         
-        const res = await enviarSolicitud(pj, tag, tipo, 50);
+        // Se le pasa tagsState.esAdmin para registrar si se cobran los PT ahora o no
+        const res = await enviarSolicitud(pj, tag, tipo, 50, {}, tagsState.esAdmin);
         if (res.ok) {
             toast(`✅ Solicitud enviada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
             await cargarTodo(); await _refreshMarkup();
@@ -165,12 +166,12 @@ function _exponerGlobales() {
     };
 
     window._tagsCancelarReq = async (id) => {
-        if (!confirm('¿Seguro que deseas eliminar esta solicitud? Se devolverán los PT al personaje.')) return;
+        if (!confirm('¿Seguro que deseas retirar esta solicitud?')) return;
         const btn = event.target;
         btn.disabled = true; btn.textContent = '⏳';
         const res = await cancelarSolicitud(id);
         if (res.ok) {
-            toast('🗑️ Solicitud eliminada. PT devueltos.', 'ok');
+            toast('🗑️ Solicitud eliminada/retirada.', 'ok');
             await cargarTodo(); await _refreshMarkup();
             renderProgresion();
         } else {
@@ -265,6 +266,7 @@ function _exponerGlobales() {
         window._tresPjActual = pj;
         window._tresTagSource= tag;
 
+        // Si es edición, cargar datos previos
         if (isEdit) {
             const req = solicitudes.find(s => s.id === reqIdToEdit);
             if (req && req.datos && req.datos.cambios) {
@@ -375,7 +377,7 @@ function _exponerGlobales() {
             const btn = event.target;
             btn.disabled = true; btn.textContent = '⏳';
 
-            const res = await enviarSolicitud(pjLocal, tagSource, 'tres_tags', 100, { cambios: window._tresCambios });
+            const res = await enviarSolicitud(pjLocal, tagSource, 'tres_tags', 100, { cambios: window._tresCambios }, tagsState.esAdmin);
             if (!res.ok) { toast('❌ ' + res.msg, 'error'); btn.disabled = false; btn.textContent = 'Reintentar'; return; }
 
             toast(`✅ Solicitud de tags enviada. PT de ${tagSource}: ${res.nueva}`, 'ok');
@@ -384,6 +386,7 @@ function _exponerGlobales() {
             renderProgresion();
         };
 
+        // Render inicial si es edición
         if (isEdit) window._tresRenderCambios();
     };
 
@@ -574,7 +577,7 @@ function _exponerGlobales() {
 
         if (eMed) { if(msgEl) msgEl.textContent='❌ Error medalla: '+eMed.message; btn.disabled = false; return; }
 
-        const res = await enviarSolicitud(pj, tag, 'medalla', 75, { medalla_id: medData.id, nombre_medalla: nombre });
+        const res = await enviarSolicitud(pj, tag, 'medalla', 75, { medalla_id: medData.id, nombre_medalla: nombre }, tagsState.esAdmin);
         if (!res.ok) { 
             if(msgEl) msgEl.textContent='Medalla propuesta, pero falló descuento PT: '+res.msg; 
             await supabase.from('medallas_catalogo').delete().eq('id', medData.id); 
