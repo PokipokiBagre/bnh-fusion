@@ -310,7 +310,8 @@ export function renderDetalle(nombreGrupo) {
 
     const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
     const { tier } = calcTier(pot, agi, ctl);
-    const pvMax    = calcPVMax(pot, agi, ctl);
+    const pvDeltaD = g.pv_max_delta || 0;
+    const pvMax    = calcPVMax(pot, agi, ctl) + pvDeltaD;
     const pac      = pot+agi+ctl;
     const cambios  = calcCambios(agi);
     const tc       = colorTier(tier);
@@ -321,7 +322,12 @@ export function renderDetalle(nombreGrupo) {
     const misAliases = aliasesGlobal.filter(a=>a.refinado_id===g.id).map(a=>a.nombre);
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
-    const ctlA = g.ctl_actual ?? ctl;
+    // CTL usado = suma costo_ctl de medallas equipadas
+    const ctlEquip = ((g.equipacion||[]).reduce((sum, id) => {
+        const m = (window._medallasCatRef || []).find(x => x.id === id);
+        return sum + (m?.costo_ctl || 0);
+    }, 0));
+    const ctlA = ctlEquip; // CTL usado por equipación
 
     function statDisplay(total, actual) {
         return actual === total ? `${total}` : `<span style="color:#2980b9;">${actual}</span>/${total}`;

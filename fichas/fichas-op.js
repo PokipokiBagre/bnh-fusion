@@ -55,7 +55,11 @@ export function abrirPanelOP(nombreGrupo) {
     const pvMax   = calcPVMax(pot, agi, ctl) + pvDelta;
     const potA    = g.pot_actual ?? pot;
     const agiA    = g.agi_actual ?? agi;
-    const ctlA    = g.ctl_actual ?? ctl;
+    // CTL actual = suma de costo_ctl de las medallas equipadas (nunca de BD)
+    const ctlEquipacion = ((g.equipacion||[]).reduce((sum, id) => {
+        const m = (window._medallasCatRef || []).find(x => x.id === id);
+        return sum + (m?.costo_ctl || 0);
+    }, 0));
 
     const tabs = ['Stats','Tags & PT','Fusión','Grupo'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
@@ -80,10 +84,10 @@ export function abrirPanelOP(nombreGrupo) {
                 <input id="op-agi-a" type="number" class="actual" value="${agiA}"></div>
             <div class="stat-field"><label>AGI Total</label>
                 <input id="op-agi-t" type="number" value="${agi}" oninput="window._opRecalcPV()"></div>
-            <div class="stat-field"><label style="color:#2980b9;">CTL Actual <span style="font-size:0.72em;color:#aaa;font-weight:400;">(auto: equipación)</span></label>
-                <input id="op-ctl-a" type="number" class="actual" value="${ctlA}" readonly
+            <div class="stat-field"><label style="color:#2980b9;">CTL Usado <span style="font-size:0.72em;color:#aaa;font-weight:400;">(equipación)</span></label>
+                <input id="op-ctl-a" type="number" class="actual" value="${ctlEquipacion}" readonly
                     style="background:var(--gray-100);color:var(--gray-500);cursor:not-allowed;"
-                    title="El CTL actual lo determina la equipación de medallas"></div>
+                    title="Suma del costo CTL de las medallas equipadas"></div>
             <div class="stat-field"><label>CTL Total</label>
                 <input id="op-ctl-t" type="number" value="${ctl}" oninput="window._opRecalcPV()"></div>
             <div class="stat-field"><label style="color:#2980b9;">PV Actual</label>
@@ -526,10 +530,12 @@ export function exponerGlobalesOP() {
         const pot=parseInt(document.getElementById('op-pot-t')?.value)||0;
         const agi=parseInt(document.getElementById('op-agi-t')?.value)||0;
         const ctl=parseInt(document.getElementById('op-ctl-t')?.value)||0;
-        const pvm=calcPVMax(pot,agi,ctl);
+        const delta=parseInt(document.getElementById('op-pv-delta')?.value)||0;
+        const pvBase=calcPVMax(pot,agi,ctl);
+        const pvTotal=pvBase+delta;
         const el=document.getElementById('op-pvm'), el2=document.getElementById('op-pv-max');
-        if(el) el.textContent=`(${pvm})`;
-        if(el2) el2.value=pvm;
+        if(el) el.textContent=`(${pvTotal})${delta!==0?' ['+pvBase+(delta>0?'+':'')+delta+']':''}`;
+        if(el2) el2.value=pvTotal;
     };
 
     window._opGuardarStats = async (grupoId) => {
@@ -555,7 +561,8 @@ export function exponerGlobalesOP() {
 
     window._opRestaurarPV = async (grupoId) => {
         const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
-        const pvMax=calcPVMax(g.pot||0,g.agi||0,g.ctl||0);
+        const pvDelta=parseInt(document.getElementById('op-pv-delta')?.value)||g.pv_max_delta||0;
+        const pvMax=calcPVMax(g.pot||0,g.agi||0,g.ctl||0)+pvDelta;
         document.getElementById('op-pv-a').value=pvMax;
         const res=await guardarStatsGrupo(grupoId,{pot:g.pot,agi:g.agi,ctl:g.ctl,pv_actual:pvMax});
         setMsg('msg-stats',res.ok?`✅ PV → ${pvMax}`:'❌ '+res.msg,res.ok);
@@ -563,12 +570,16 @@ export function exponerGlobalesOP() {
     };
 
     window._opIgualarActualTotal = () => {
+        // Iguala POT y AGI actuales a sus totales
+        // CTL actual no se toca (es la equipación, no un valor manual)
         const pot=document.getElementById('op-pot-t')?.value;
         const agi=document.getElementById('op-agi-t')?.value;
-        const ctl=document.getElementById('op-ctl-t')?.value;
         if(document.getElementById('op-pot-a')) document.getElementById('op-pot-a').value=pot;
         if(document.getElementById('op-agi-a')) document.getElementById('op-agi-a').value=agi;
-        if(document.getElementById('op-ctl-a')) document.getElementById('op-ctl-a').value=ctl;
+        // También restaurar PV Actual al PV Máx (con delta)
+        const pvMaxEl=document.getElementById('op-pv-max');
+        const pvA=document.getElementById('op-pv-a');
+        if(pvMaxEl && pvA) pvA.value=pvMaxEl.value;
     };
 
     window._opAddTag = async (grupoId, nombreGrupo, tagDirecto) => {

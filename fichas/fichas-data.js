@@ -69,7 +69,7 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
     return { ok: true, grupo: data };
 }
 
-export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, ctl_actual, pv_actual, pv_max_delta }) {
+export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, pv_actual, pv_max_delta }) {
     const pvBase = calcPVSimple(pot, agi, ctl);
     const delta  = pv_max_delta ?? 0;
     const pvMax  = pvBase + delta;
@@ -77,7 +77,7 @@ export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, ag
         pot, agi, ctl,
         pot_actual:   pot_actual ?? null,
         agi_actual:   agi_actual ?? null,
-        ctl_actual:   ctl_actual ?? null,
+        // ctl_actual eliminado: se calcula desde la equipación de medallas
         pv_actual:    Math.min(pv_actual ?? pvMax, pvMax),
         pv_max_delta: delta,
     };
