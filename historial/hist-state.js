@@ -11,7 +11,7 @@ export let rankingState = [];  // Ranking: { poster_name, total_posts, pt_total,
 // { 'nombre_refinado': { '#Tag': N, ... } }
 export let ptTagState = {};
 
-// PT ganados por post específico
+// PT ganados por post específico — ahora incluye motivo
 // { post_no: [{ personaje_nombre, tag, delta, motivo }] }
 export let ptPorPost = {};
 
@@ -19,9 +19,19 @@ export let ptPorPost = {};
 // { 'Penta': 'Lumina', 'Kumiko##eULHjo': 'Raul', ... }
 export let mapaAliasAGrupo = {};
 
+// ── Estado para selección de posts y personaje extra ──────────
+export let selPostsState = {
+    activo:           false,       // modo selección activo
+    postsSel:         new Set(),   // post_nos seleccionados
+    personajesExtra:  [],          // [{ nombre_refinado, tags[] }] añadidos manualmente
+    filtroRol:        '#Jugador',  // filtro pool personajes
+    filtroEstado:     '#Activo',
+    todosPJs:         [],          // todos los grupos cargados para el selector
+};
+
 export let estadoUI = {
-    vistaActual:         'ranking',  // 'ranking' | 'timeline' | 'hilos'
-    hiloActivo:          null,       // { board, thread_id, thread_url, titulo }
+    vistaActual:         'timeline',  // 'ranking' | 'timeline' | 'hilos'
+    hiloActivo:          null,        // { board, thread_id, thread_url, titulo }
     autoRefresh:         false,
     refreshInterval:     null,
     refreshRate:         10000,

@@ -1,21 +1,25 @@
 // ============================================================
 // hist-main.js — Punto de Entrada y Controladores
 // ============================================================
-import { bnhAuth, currentConfig } from '../bnh-auth.js';
+import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import {
     hilosState, postsState, rankingState,
-    ptTagState, estadoUI
+    ptTagState, estadoUI, selPostsState
 } from './hist-state.js';
 import {
     cargarHilos, cargarPostsDB, cargarRankingDB,
     cargarPTTagDelHilo, scrapearHilo, calcularPTHilo, eliminarPTHilo,
-    agregarHilo, eliminarHilo, toggleHiloActivo
+    agregarHilo, eliminarHilo, toggleHiloActivo,
+    calcularPTExtraParaPosts
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
     renderHeaderInfo, renderOpcionesModal, toast
 } from './hist-ui.js';
-import { initOpciones } from '../bnh-opciones-tags.js';
+import { initOpciones, OPCIONES } from '../bnh-opciones-tags.js';
+
+// Exponemos las opciones globalmente para que hist-ui pueda leerlas en renderPTBadgesConOrigen
+window._histOpciones = null;
 
 // ── Bridge con Tampermonkey ───────────────────────────────────
 (function setupExtensionBridge() {
@@ -44,12 +48,23 @@ async function init() {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
 
-    // Tab config solo para admins
-    const btnCfg = document.getElementById('btn-config');
-    if (btnCfg) btnCfg.style.display = estadoUI.esAdmin ? 'inline-block' : 'none';
+    // Botón actualizar en header: solo OP
+    const btnActualizar = document.getElementById('btn-actualizar-header');
+    if (btnActualizar) btnActualizar.style.display = estadoUI.esAdmin ? '' : 'none';
 
     await initOpciones();
+    window._histOpciones = OPCIONES;
+
     await cargarHilos();
+
+    // Cargar todos los PJs para el selector de personajes extra
+    try {
+        const { data: pjs } = await supabase
+            .from('personajes_refinados')
+            .select('id, nombre_refinado, tags')
+            .order('nombre_refinado');
+        selPostsState.todosPJs = pjs || [];
+    } catch(e) { console.warn('[init] No se pudo cargar PJs:', e); }
 
     // Restaurar hilo activo de sesión anterior
     const guardado = sessionStorage.getItem('hist_hilo_activo');
@@ -62,7 +77,7 @@ async function init() {
         }
     }
 
-    mostrarVista('ranking');
+    mostrarVista('timeline'); // timeline es la vista principal
 }
 
 // ── Cargar datos del hilo activo ──────────────────────────────
@@ -84,11 +99,18 @@ function mostrarVista(vista) {
     });
     renderHeaderInfo();
     switch (vista) {
-        case 'ranking':  renderRanking();  break;
         case 'timeline': renderTimeline(); break;
+        case 'ranking':  renderRanking();  break;
         case 'hilos':    renderHilos();    break;
     }
 }
+
+// ── Selector de hilo inline ───────────────────────────────────
+window._histSelHiloInline = async function(valor) {
+    if (!valor) return;
+    const [board, threadId] = valor.split('|');
+    await window.seleccionarHilo(board, Number(threadId));
+};
 
 // ── Seleccionar hilo ──────────────────────────────────────────
 window.seleccionarHilo = async function(board, threadId) {
@@ -106,7 +128,7 @@ window.seleccionarHilo = async function(board, threadId) {
     await cargarHiloActivo();
     renderHeaderInfo();
     toast(`Hilo "${hilo.titulo}" seleccionado`, 'ok');
-    mostrarVista('ranking');
+    mostrarVista(estadoUI.vistaActual);
 };
 
 // ── Scrape automático ─────────────────────────────────────────
@@ -131,7 +153,7 @@ window.scrapeManual = async function(board, threadId) {
 
     await cargarHilos();
     toast(resultado.nuevos > 0
-        ? `✅ ${resultado.nuevos} post(s) nuevo(s)${resultado.nuevos > 0 ? ' · PT calculados' : ''}`
+        ? `✅ ${resultado.nuevos} post(s) nuevo(s)`
         : '✓ Sin posts nuevos', 'ok');
     renderHeaderInfo();
 };
@@ -215,7 +237,6 @@ window.calcularPT = async function(rango) {
     if (rango === '1d')  { desdeFecha = new Date(Date.now() - 1  * 86400000); label = 'último día'; }
     if (rango === '3d')  { desdeFecha = new Date(Date.now() - 3  * 86400000); label = 'últimos 3 días'; }
     if (rango === '7d')  { desdeFecha = new Date(Date.now() - 7  * 86400000); label = 'última semana'; }
-    // rango === 'todo' → desdeFecha queda null → procesa todos
 
     toast(`⏳ Calculando PT ${label}…`, 'info');
     renderHeaderInfo();
@@ -290,39 +311,12 @@ window.toggleActivo = async function(board, threadId, nuevoEstado) {
     mostrarVista('hilos');
 };
 
-window.toggleAutoRefresh = function() {
-    if (estadoUI.autoRefresh) {
-        clearInterval(estadoUI.refreshInterval);
-        estadoUI.refreshInterval = null;
-        estadoUI.autoRefresh     = false;
-        toast('⏹ Auto-refresh detenido', 'info');
-    } else {
-        if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
-        estadoUI.autoRefresh     = true;
-        estadoUI.refreshInterval = setInterval(async () => {
-            if (!estadoUI.hiloActivo) return;
-            const { board, thread_id, thread_url } = estadoUI.hiloActivo;
-            const r = await scrapearHilo(board, thread_id, thread_url);
-            if (r.ok && r.nuevos > 0) {
-                await cargarHiloActivo();
-                mostrarVista(estadoUI.vistaActual);
-                toast(`🆕 ${r.nuevos} post(s) · PT calculados`, 'ok');
-            }
-            renderHeaderInfo();
-        }, estadoUI.refreshRate);
-        toast(`▶ Auto-refresh cada ${estadoUI.refreshRate / 1000}s`, 'ok');
-    }
-    renderHeaderInfo();
-};
-
 window.irAHilos     = function() { mostrarVista('hilos'); };
 window.mostrarVista = mostrarVista;
 
 document.querySelectorAll('.nav-tab').forEach(btn => {
     btn.addEventListener('click', () => mostrarVista(btn.dataset.vista));
 });
-
-init().catch(console.error);
 
 // ── Panel Opciones Tags ───────────────────────────────────────
 window.abrirOpcionesTags = function() {
@@ -348,3 +342,104 @@ window.abrirOpcionesTags = function() {
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
 };
+
+// ── Controles de selección de posts ──────────────────────────
+
+window._histToggleSelPosts = function() {
+    selPostsState.activo = !selPostsState.activo;
+    if (!selPostsState.activo) {
+        selPostsState.postsSel.clear();
+        selPostsState.personajesExtra = [];
+    }
+    mostrarVista('timeline');
+};
+
+window._histCancelarSel = function() {
+    selPostsState.activo = false;
+    selPostsState.postsSel.clear();
+    selPostsState.personajesExtra = [];
+    mostrarVista('timeline');
+};
+
+window._histLimpiarPosts = function() {
+    selPostsState.postsSel.clear();
+    mostrarVista('timeline');
+};
+
+window._histTogglePostSel = function(postNo) {
+    if (selPostsState.postsSel.has(postNo)) selPostsState.postsSel.delete(postNo);
+    else selPostsState.postsSel.add(postNo);
+    mostrarVista('timeline');
+};
+
+window._histFiltroRol = function(v) {
+    selPostsState.filtroRol = v;
+    mostrarVista('timeline');
+};
+
+window._histFiltroEst = function(v) {
+    selPostsState.filtroEstado = v;
+    mostrarVista('timeline');
+};
+
+window._histTogglePJExtra = function(nombre) {
+    const idx = selPostsState.personajesExtra.findIndex(e => e.nombre_refinado === nombre);
+    if (idx >= 0) {
+        selPostsState.personajesExtra.splice(idx, 1);
+    } else {
+        const pj = selPostsState.todosPJs.find(g => g.nombre_refinado === nombre);
+        if (pj) selPostsState.personajesExtra.push({ nombre_refinado: pj.nombre_refinado, tags: pj.tags || [] });
+    }
+    mostrarVista('timeline');
+};
+
+// ── Calcular PT extra para posts seleccionados ────────────────
+window._histCalcPTExtra = async function() {
+    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
+    if (!selPostsState.postsSel.size) { toast('Selecciona al menos un post', 'error'); return; }
+    if (!selPostsState.personajesExtra.length) { toast('Añade al menos un personaje extra', 'error'); return; }
+
+    const { board, thread_id } = estadoUI.hiloActivo;
+    const postNos = [...selPostsState.postsSel];
+    const pjsExtra = selPostsState.personajesExtra;
+
+    toast('⏳ Calculando PT para posts seleccionados…', 'info');
+
+    const res = await calcularPTExtraParaPosts(board, thread_id, postNos, pjsExtra, false);
+    if (!res.ok) { toast('❌ ' + res.msg, 'error'); return; }
+
+    await cargarPTTagDelHilo(thread_id);
+    mostrarVista('timeline');
+    toast(`✅ PT calculados: ${res.transacciones} transacciones para ${pjsExtra.map(p=>p.nombre_refinado).join(', ')}`, 'ok');
+};
+
+// ── Calcular PT para posts que citan los seleccionados ────────
+window._histCalcPTCitas = async function() {
+    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
+    if (!selPostsState.postsSel.size) { toast('Selecciona al menos un post', 'error'); return; }
+    if (!selPostsState.personajesExtra.length) { toast('Añade al menos un personaje extra', 'error'); return; }
+
+    const { board, thread_id } = estadoUI.hiloActivo;
+    const postNosReferenciados = [...selPostsState.postsSel];
+
+    // Encontrar posts que citan a los seleccionados
+    const postsCitadores = postsState.filter(p => {
+        const refs = []; let m; const re = />>(\d+)/g; const txt = p.contenido || '';
+        while ((m = re.exec(txt)) !== null) refs.push(Number(m[1]));
+        return refs.some(r => postNosReferenciados.includes(r));
+    }).map(p => p.post_no);
+
+    if (!postsCitadores.length) { toast('Ningún post cita a los seleccionados', 'info'); return; }
+
+    const pjsExtra = selPostsState.personajesExtra;
+    toast(`⏳ Calculando PT para ${postsCitadores.length} posts citadores…`, 'info');
+
+    const res = await calcularPTExtraParaPosts(board, thread_id, postsCitadores, pjsExtra, true);
+    if (!res.ok) { toast('❌ ' + res.msg, 'error'); return; }
+
+    await cargarPTTagDelHilo(thread_id);
+    mostrarVista('timeline');
+    toast(`✅ PT calculados para ${postsCitadores.length} posts citadores · ${res.transacciones} transacciones`, 'ok');
+};
+
+init().catch(console.error);

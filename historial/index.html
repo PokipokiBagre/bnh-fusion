@@ -27,9 +27,9 @@
                 ⚙ Opciones PT
             </button>
 
-            <!-- Actualizar posts -->
-            <button class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()"
-                title="Scrapea posts nuevos y calcula PT">
+            <!-- Actualizar posts: solo OP -->
+            <button id="btn-actualizar-header" class="btn btn-green btn-sm" onclick="window.actualizarHiloActivo()"
+                title="Scrapea posts nuevos y calcula PT" style="display:none;">
                 🔄 Actualizar
             </button>
 
@@ -86,8 +86,8 @@
     </div>
 
     <nav class="app-nav">
-        <button class="nav-tab active" data-vista="ranking">Ranking</button>
-        <button class="nav-tab"        data-vista="timeline">Timeline</button>
+        <button class="nav-tab" data-vista="ranking">Ranking</button>
+        <button class="nav-tab active"        data-vista="timeline">Timeline</button>
         <button class="nav-tab"        data-vista="hilos">Hilos</button>
     </nav>
 </header>

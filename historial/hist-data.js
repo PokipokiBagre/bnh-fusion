@@ -461,3 +461,185 @@ export async function toggleHiloActivo(board, threadId, activo) {
         .eq('board', board).eq('thread_id', threadId);
     await cargarHilos();
 }
+
+// ── Calcular PT extra para un subconjunto de posts ────────────
+// pjsExtra: [{ nombre_refinado, tags[] }] — personajes añadidos manualmente
+// soloEnCupoRestante: si true, respeta los límites ya usados en ese post
+// Solo aplica para los pjsExtra, NO recalcula a los participantes originales
+export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtra, soloEnCupoRestante = false) {
+    try {
+        await initOpciones();
+
+        // Cargar los posts pedidos con su contenido
+        const { data: postsDB } = await supabase
+            .from('historial_posts')
+            .select('post_no, poster_name, contenido, post_time')
+            .eq('board', board)
+            .eq('thread_id', threadId)
+            .in('post_no', postNos);
+
+        if (!postsDB?.length) return { ok: true, transacciones: 0 };
+
+        // Índice de autores de todo el hilo
+        const { data: indice } = await supabase
+            .from('historial_posts')
+            .select('post_no, poster_name')
+            .eq('board', board)
+            .eq('thread_id', threadId);
+        const postAutor = {};
+        (indice || []).forEach(p => { postAutor[p.post_no] = p.poster_name; });
+
+        // Mapa nombre → { nombre, tags, tieneGrupo }
+        const mapaNombres = await db.historial.getMapaNombres();
+
+        // Personajes en fusión
+        const fusionados = new Set();
+        try {
+            const { data: fusiones } = await supabase
+                .from('fusiones_activas').select('pj_a, pj_b').eq('activa', true);
+            (fusiones || []).forEach(f => { fusionados.add(f.pj_a); fusionados.add(f.pj_b); });
+        } catch(_) {}
+
+        // Si soloEnCupoRestante=true, cargamos los PT ya existentes por post/motivo
+        // para calcular cuánto cupo queda
+        let ptYaUsadosPorPost = {}; // { post_no: { motivo: count } }
+        if (soloEnCupoRestante) {
+            const { data: logExist } = await supabase
+                .from('log_puntos_tag')
+                .select('origen_post_no, motivo, personaje_nombre')
+                .eq('origen_thread_id', threadId)
+                .in('origen_post_no', postNos);
+            (logExist || []).forEach(r => {
+                if (!ptYaUsadosPorPost[r.origen_post_no]) ptYaUsadosPorPost[r.origen_post_no] = {};
+                const m = r.motivo;
+                ptYaUsadosPorPost[r.origen_post_no][m] = (ptYaUsadosPorPost[r.origen_post_no][m] || 0) + 1;
+            });
+        }
+
+        const { OPCIONES } = await import('../bnh-opciones-tags.js');
+        const limites = {
+            interaccion: OPCIONES.max_no_compartidos ?? 5,
+            compartido:  OPCIONES.max_compartidos    ?? 5,
+            lectura:     OPCIONES.max_lectura        ?? 5,
+        };
+
+        // Construir mapa extra para calcularTransaccionesPT
+        // Añadimos los pjsExtra al mapa de nombres temporalmente
+        const mapaConExtra = { ...mapaNombres };
+        pjsExtra.forEach(pj => {
+            // Registramos el personaje extra como su propio alias
+            mapaConExtra[pj.nombre_refinado] = {
+                nombre:     pj.nombre_refinado,
+                tags:       pj.tags || [],
+                tieneGrupo: true
+            };
+        });
+
+        // Calcular transacciones SOLO para los pjsExtra
+        // Para cada post, calculamos como si los pjsExtra fueran los emisores
+        const todasTransacciones = [];
+
+        for (const post of postsDB) {
+            const cupoUsado = soloEnCupoRestante ? (ptYaUsadosPorPost[post.post_no] || {}) : {};
+
+            // Por cada personaje extra, calcular sus PT en este post
+            for (const pjExtra of pjsExtra) {
+                const tagsExtraLow = new Set((pjExtra.tags || []).map(t => t.toLowerCase()));
+                const tagOrig = {};
+                (pjExtra.tags || []).forEach(t => {
+                    const norm = t.toLowerCase();
+                    tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
+                });
+
+                const enFusion = fusionados.has(pjExtra.nombre_refinado);
+                const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
+
+                const texto = post.contenido || '';
+
+                // Replies en este post
+                const replyNums = []; let m; const reR = />>(\d+)/g;
+                while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
+                const misReplies = [...new Set(replyNums)];
+
+                // Tags de los citados (solo PJs que no son el extra)
+                const tagsReplyados = new Set();
+                let hayPJ = false;
+                misReplies.forEach(rno => {
+                    const autor = postAutor[rno];
+                    if (!autor) return;
+                    const partes = autor.split(',').map(s => s.trim()).filter(Boolean);
+                    partes.forEach(p => {
+                        const pjCit = mapaConExtra[p] || mapaConExtra[p.replace(/##?\S+/, '').trim()];
+                        if (!pjCit || pjCit.nombre === pjExtra.nombre_refinado) return;
+                        hayPJ = true;
+                        (pjCit.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
+                    });
+                });
+
+                function shuffle(arr) {
+                    const a = [...arr];
+                    for (let i = a.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [a[i], a[j]] = [a[j], a[i]];
+                    }
+                    return a;
+                }
+
+                const empujar = (tagLow, delta, motivo) => {
+                    todasTransacciones.push({
+                        personaje_nombre: pjExtra.nombre_refinado,
+                        tag:              tagOrig[tagLow] || ('#' + tagLow),
+                        delta:            Math.max(1, Math.round(delta / divFusion)),
+                        motivo,
+                        origen_post_no:   post.post_no,
+                        origen_thread_id: threadId
+                    });
+                };
+
+                // LECTURA — con cupo restante si aplica
+                const cupoLectUsado  = cupoUsado['lectura'] || 0;
+                const cupoLectQueda  = Math.max(0, limites.lectura - cupoLectUsado);
+                if (cupoLectQueda > 0) {
+                    const re2 = /#([A-Za-zÀ-ɏ][A-Za-zÀ-ɏ0-9_.]*)/g;
+                    const leidos = [];
+                    while ((m = re2.exec(texto)) !== null) {
+                        const t = ('#' + m[1]).toLowerCase();
+                        if (tagsExtraLow.has(t)) leidos.push(t);
+                    }
+                    shuffle([...new Set(leidos)]).slice(0, cupoLectQueda)
+                        .forEach(t => empujar(t, OPCIONES.delta_lectura, 'lectura'));
+                }
+
+                if (!hayPJ) continue;
+
+                // NO COMPARTIDOS
+                const cupoNoCompUsado = cupoUsado['interaccion'] || 0;
+                const cupoNoCompQueda  = Math.max(0, limites.interaccion - cupoNoCompUsado);
+                if (cupoNoCompQueda > 0) {
+                    const noComp = [...tagsExtraLow].filter(t => !tagsReplyados.has(t));
+                    shuffle(noComp).slice(0, cupoNoCompQueda)
+                        .forEach(t => empujar(t, OPCIONES.delta_no_compartido, 'interaccion'));
+                }
+
+                // COMPARTIDOS
+                const cupoCompUsado = cupoUsado['compartido'] || 0;
+                const cupoCompQueda  = Math.max(0, limites.compartido - cupoCompUsado);
+                if (cupoCompQueda > 0) {
+                    const comp = [...tagsExtraLow].filter(t => tagsReplyados.has(t));
+                    shuffle(comp).slice(0, cupoCompQueda)
+                        .forEach(t => empujar(t, OPCIONES.delta_compartido, 'compartido'));
+                }
+            }
+        }
+
+        if (!todasTransacciones.length) return { ok: true, transacciones: 0 };
+
+        // Aplicar transacciones
+        await db.progresion.aplicarTransacciones(todasTransacciones);
+
+        return { ok: true, transacciones: todasTransacciones.length };
+    } catch(e) {
+        console.error('[calcularPTExtraParaPosts]', e);
+        return { ok: false, msg: e.message };
+    }
+}

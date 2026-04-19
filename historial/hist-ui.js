@@ -3,13 +3,13 @@
 // ============================================================
 import {
     hilosState, postsState, rankingState,
-    ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI
+    ptTagState, ptPorPost, mapaAliasAGrupo, estadoUI,
+    selPostsState
 } from './hist-state.js';
 import { formatearMinutos, fmtFecha, limpiarHTML } from './hist-logic.js';
 import { renderOpcionesPanel, guardarOpcion } from '../bnh-opciones-tags.js';
 import { currentConfig } from '../bnh-auth.js';
 
-// Imagen de personaje (siempre por nombre_refinado, los aliases no tienen imagen)
 const _norm = s => String(s||'').trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
@@ -43,23 +43,388 @@ function tiempoRelativo(isoString) {
     return `hace ${Math.round(diff / 1440)}d`;
 }
 
-// Renderiza los tags con sus PT como pequeñas píldoras
-function renderTagsPT(pjNombre) {
-    const tags = ptTagState[pjNombre];
-    if (!tags || Object.keys(tags).length === 0) return '<span style="color:#666; font-size:0.8em;">Sin PT en este hilo</span>';
+// ── Selector de hilo integrado (compacto) ─────────────────────
+export function renderSelectorHiloInline() {
+    if (!hilosState.length) return '';
+    const activo = estadoUI.hiloActivo;
+    const opts = hilosState.map(h => {
+        const sel = activo?.thread_id == h.thread_id && activo?.board == h.board;
+        return `<option value="${h.board}|${h.thread_id}" ${sel?'selected':''}>${h.titulo} (${h.total_posts||0} posts)</option>`;
+    }).join('');
+    return `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:0.78em;color:#888;white-space:nowrap;">📋 Hilo:</span>
+        <select id="sel-hilo-inline" onchange="window._histSelHiloInline(this.value)"
+            style="font-size:0.82em;padding:5px 10px;border:1.5px solid #dee2e6;border-radius:8px;
+                   background:white;cursor:pointer;max-width:340px;min-width:200px;">
+            <option value="">— Seleccionar hilo —</option>
+            ${opts}
+        </select>
+        ${activo ? `<a href="${activo.thread_url}" target="_blank"
+            style="font-size:0.78em;color:var(--green);text-decoration:none;white-space:nowrap;">↗ Ver en 8chan</a>` : ''}
+    </div>`;
+}
 
-    return Object.entries(tags)
-        .sort((a, b) => b[1] - a[1])
-        .map(([tag, pts]) => {
-            const color = pts >= 5 ? '#00b4d8' : pts >= 3 ? '#7ecfb3' : '#888';
-            return `<span style="
-                display:inline-block; background:rgba(0,180,216,0.1);
-                border:1px solid ${color}; color:${color};
-                padding:2px 7px; border-radius:12px; font-size:0.72em;
-                font-weight:600; margin:2px 2px 0 0; white-space:nowrap;">
-                ${tag} <b>${pts}</b>
+// ── Imágenes superpuestas de múltiples PJs ────────────────────
+function renderAvatarStack(nombres, size = 36) {
+    if (!nombres.length) return '';
+    const max    = 8;   // máximo visible
+    const shown  = nombres.slice(0, max);
+    const overlap = Math.min(size * 0.45, 16);  // cuánto se superponen
+    const totalW = size + (shown.length - 1) * (size - overlap);
+    const imgs = shown.map((n, i) => {
+        const left = i * (size - overlap);
+        const zIndex = shown.length - i;
+        return `<img src="${imgPJ(n)}" onerror="${_onErr}"
+            title="${n}"
+            style="position:absolute;left:${left}px;top:0;
+                   width:${size}px;height:${size}px;border-radius:50%;
+                   object-fit:cover;object-position:top;
+                   border:2px solid white;z-index:${zIndex};
+                   box-shadow:0 1px 3px rgba(0,0,0,0.2);">`;
+    }).join('');
+    const extra = nombres.length > max
+        ? `<span style="position:absolute;left:${shown.length*(size-overlap)}px;top:0;
+                width:${size}px;height:${size}px;border-radius:50%;
+                background:#555;color:white;font-size:${size*0.35}px;
+                display:flex;align-items:center;justify-content:center;
+                font-weight:700;z-index:0;border:2px solid white;">+${nombres.length-max}</span>` : '';
+    return `<div style="position:relative;height:${size}px;width:${Math.min(totalW+size*0.1, totalW+20)}px;flex-shrink:0;">${imgs}${extra}</div>`;
+}
+
+// ── PT por origen con colores y contadores n/max ──────────────
+// motivo: 'interaccion'=gris, 'compartido'=verde, 'lectura'=celeste
+const MOTI_COLOR = {
+    interaccion: { bg:'rgba(150,150,150,0.12)', border:'#aaa',    text:'#666',    label:'excl' },
+    compartido:  { bg:'rgba(39,174,96,0.12)',   border:'#27ae60', text:'#1e8449', label:'comp' },
+    lectura:     { bg:'rgba(0,180,216,0.12)',    border:'#00b4d8', text:'#0097b2', label:'lect' },
+};
+
+function renderPTBadgesConOrigen(ptEstePost, opciones) {
+    // Agrupar: { personaje_nombre → { tag → { interaccion: N, compartido: N, lectura: N } } }
+    const porPJ = {};
+    ptEstePost.forEach(e => {
+        if (!porPJ[e.personaje_nombre]) porPJ[e.personaje_nombre] = {};
+        const t = porPJ[e.personaje_nombre];
+        if (!t[e.tag]) t[e.tag] = {};
+        t[e.tag][e.motivo] = (t[e.tag][e.motivo] || 0) + e.delta;
+    });
+
+    if (!Object.keys(porPJ).length) return '';
+
+    // Límites por categoría (de opciones o defaults)
+    const limites = {
+        interaccion: opciones?.max_no_compartidos ?? 5,
+        compartido:  opciones?.max_compartidos    ?? 5,
+        lectura:     opciones?.max_lectura        ?? 5,
+    };
+
+    // Totales acumulados por personaje y motivo (para calcular n/max)
+    const acumPJMotivo = {};
+    ptEstePost.forEach(e => {
+        const key = `${e.personaje_nombre}||${e.motivo}`;
+        acumPJMotivo[key] = (acumPJMotivo[key] || 0) + e.delta;
+    });
+
+    const lineas = Object.entries(porPJ).map(([pj, tags]) => {
+        // Agrupar badges por motivo para mostrar el n/max
+        const porMotivo = { interaccion: [], compartido: [], lectura: [] };
+        Object.entries(tags).forEach(([tag, motivos]) => {
+            Object.entries(motivos).forEach(([motivo, delta]) => {
+                if (porMotivo[motivo]) porMotivo[motivo].push({ tag, delta });
+            });
+        });
+
+        const grupos = ['interaccion','compartido','lectura'].map(motivo => {
+            const items = porMotivo[motivo];
+            if (!items.length) return '';
+            const c = MOTI_COLOR[motivo];
+            const totalMotivoEnPost = items.reduce((s, x) => s + x.delta, 0);
+            const limite = limites[motivo];
+            const badges = items.map(({ tag, delta }) => {
+                const tagCorto = tag.length > 16 ? tag.substring(0, 14) + '…' : tag;
+                return `<span style="background:${c.bg};border:1px solid ${c.border};color:${c.text};
+                    padding:2px 6px;border-radius:8px;font-size:0.7em;font-weight:700;
+                    white-space:nowrap;display:inline-flex;align-items:center;gap:2px;"
+                    title="${tag} (${c.label})">+${delta} ${tagCorto}</span>`;
+            }).join('');
+            return `<span style="display:inline-flex;align-items:center;gap:3px;flex-wrap:wrap;">
+                ${badges}
+                <span style="font-size:0.65em;color:${c.text};opacity:0.8;white-space:nowrap;font-weight:600;">${totalMotivoEnPost}/${limite}</span>
             </span>`;
+        }).filter(Boolean).join('<span style="color:#ccc;margin:0 2px;">|</span>');
+
+        return `<div style="display:flex;align-items:flex-start;gap:5px;flex-wrap:wrap;margin-bottom:2px;">
+            <span style="font-size:0.7em;color:#555;font-weight:700;white-space:nowrap;padding-top:3px;">${pj}:</span>
+            <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;">${grupos}</div>
+        </div>`;
+    }).join('');
+
+    return lineas;
+}
+
+// ============================================================
+// VISTA: TIMELINE (ahora es la principal)
+// ============================================================
+export function renderTimeline() {
+    const cont = $('contenido-principal');
+    if (!cont) return;
+
+    const selectorHilo = renderSelectorHiloInline();
+
+    if (!estadoUI.hiloActivo) {
+        cont.innerHTML = selectorHilo + `<div class="empty-state"><div class="empty-icon">📜</div>
+            <h3>Selecciona un hilo para ver el timeline</h3></div>`;
+        return;
+    }
+    if (!postsState.length) {
+        cont.innerHTML = selectorHilo + `<div class="empty-state"><div class="empty-icon">📜</div>
+            <h3>Sin posts registrados</h3>
+            ${estadoUI.esAdmin?`<button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button>`:''}
+        </div>`;
+        return;
+    }
+
+    const postAutor = {};
+    postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
+
+    const backlinks = {};
+    postsState.forEach(post => {
+        let m; const re = />>(\d+)/g; const txt = post.contenido || '';
+        while ((m = re.exec(txt)) !== null) {
+            const n = Number(m[1]);
+            if (!backlinks[n]) backlinks[n] = [];
+            backlinks[n].push(post.post_no);
+        }
+    });
+
+    // ── Panel de selección de posts ───────────────────────────
+    const panelSeleccion = _renderPanelSeleccion();
+
+    let html = selectorHilo + `
+    <div style="display:flex;gap:16px;align-items:flex-start;">
+
+        <!-- Panel izquierdo: selección de posts -->
+        <div id="panel-sel-posts" style="position:sticky;top:80px;width:${selPostsState.activo?'300px':'0'};
+            min-width:${selPostsState.activo?'300px':'0'};overflow:hidden;
+            transition:width 0.25s,min-width 0.25s;flex-shrink:0;">
+            ${panelSeleccion}
+        </div>
+
+        <!-- Contenido principal -->
+        <div style="flex:1;min-width:0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;
+                padding:4px 0 10px;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
+                <span style="font-size:0.85em;color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
+                <button class="btn btn-sm ${selPostsState.activo?'btn-green':'btn-outline'}"
+                    onclick="window._histToggleSelPosts()"
+                    style="font-size:0.78em;">
+                    ${selPostsState.activo
+                        ? `✓ Seleccionando (${selPostsState.postsSel.size})`
+                        : '☑ Seleccionar posts'}
+                </button>
+            </div>
+
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">`;
+
+    [...postsState].reverse().forEach(post => {
+        const nums = []; let m; const re = />>(\d+)/g; const txt = post.contenido || '';
+        while ((m = re.exec(txt)) !== null) nums.push(Number(m[1]));
+        const misReplies = [...new Set(nums)];
+
+        const repliesHtml = misReplies.map(rno => {
+            const autor = postAutor[rno] || '';
+            return `<a href="#post-${rno}" onclick="tlScrollTo(${rno},${post.post_no});return false;"
+                style="color:#00b4d8;font-size:0.75em;margin-right:6px;text-decoration:none;cursor:pointer;"
+                >&gt;&gt;${rno}${autor?` <span style="color:#7ecfb3">(${autor})</span>`:''} ↑</a>`;
         }).join('');
+
+        const backHtml = (backlinks[post.post_no]||[]).map(bno => {
+            const autor = postAutor[bno]||'';
+            return `<a href="#post-${bno}" onclick="tlScrollTo(${bno},${post.post_no});return false;"
+                style="color:#7ecfb3;font-size:0.75em;margin-right:6px;text-decoration:none;cursor:pointer;"
+                >&gt;&gt;${bno}${autor?` (${autor})`:''} ↓</a>`;
+        }).join('');
+
+        // PT ganados EN ESTE POST con distinción de origen
+        const ptEstePost = ptPorPost[post.post_no] || [];
+        const ptBadges = renderPTBadgesConOrigen(ptEstePost, window._histOpciones);
+
+        // Nombres de grupos del post (puede ser multipersonaje)
+        const gruposPost = post.poster_name.split(',').map(s => s.trim()).filter(Boolean)
+            .map(p => mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/, '').trim()] || null)
+            .filter(Boolean);
+        const nombreDisplay = gruposPost.length
+            ? `${gruposPost.join(', ')} <span style="font-size:0.72em;color:#aaa;font-weight:400;">(${post.poster_name})</span>`
+            : post.poster_name;
+
+        // Avatar stack con TODOS los personajes del post
+        const avatarStack = renderAvatarStack(gruposPost, 32);
+
+        // Estado seleccionado
+        const esSel = selPostsState.postsSel.has(post.post_no);
+        const borderColor = esSel ? '#00b4d8' : '#e9ecef';
+        const bgColor = esSel ? 'rgba(0,180,216,0.05)' : 'white';
+
+        html += `
+        <div id="post-${post.post_no}"
+            onclick="${selPostsState.activo ? `window._histTogglePostSel(${post.post_no})` : ''}"
+            style="background:${bgColor};border:${esSel?'2px':'1px'} solid ${borderColor};
+                border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;
+                font-size:0.87em;box-shadow:0 1px 4px rgba(0,0,0,0.05);
+                ${selPostsState.activo?'cursor:pointer;':''};position:relative;transition:border-color 0.15s,background 0.15s;">
+
+            ${esSel?`<div style="position:absolute;top:6px;right:8px;background:#00b4d8;color:white;
+                border-radius:50%;width:18px;height:18px;display:flex;align-items:center;
+                justify-content:center;font-size:0.7em;font-weight:800;">✓</div>`:''}
+
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">
+                <div style="display:flex;align-items:center;gap:7px;min-width:0;">
+                    ${avatarStack}
+                    <div style="min-width:0;">
+                        <span style="font-weight:700;color:#1e8449;">${nombreDisplay}</span>
+                        ${post.poster_id?`<span style="background:#f1f3f4;color:#888;font-size:0.72em;
+                            padding:1px 5px;border-radius:4px;margin-left:4px;">${post.poster_id}</span>`:''}
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                    <span style="color:#aaa;font-size:0.72em;cursor:pointer;"
+                        onclick="tlCopyLink(${post.post_no});event.stopPropagation();" title="Copiar">No.${post.post_no}</span>
+                    <span style="color:#999;font-size:0.72em;">${fmtFecha(post.post_time)}</span>
+                </div>
+            </div>
+
+            ${repliesHtml?`<div style="padding-bottom:5px;border-bottom:1px solid rgba(0,180,216,0.15);">
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citas:</span>${repliesHtml}</div>`:''}
+
+            <div style="color:#333;line-height:1.5;word-break:break-word;">
+                ${renderContenido(post.contenido||'', postAutor, post.post_no)}
+                ${post.tiene_imagen?`<div style="margin-top:4px;"><span style="background:#f8f9fa;
+                    border:1px solid #e9ecef;border-radius:4px;padding:2px 7px;font-size:0.75em;
+                    color:#666;">🖼 ${post.num_imagenes} imagen${post.num_imagenes>1?'es':''}</span></div>`:''}
+            </div>
+
+            ${ptBadges?`<div style="padding-top:5px;border-top:1px solid rgba(0,180,216,0.15);">
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;display:block;margin-bottom:3px;">PT/post:</span>
+                <div style="display:flex;flex-direction:column;gap:2px;">${ptBadges}</div>
+            </div>`:''}
+
+            ${backHtml?`<div style="padding-top:4px;border-top:1px solid rgba(126,207,179,0.2);">
+                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citado por:</span>${backHtml}</div>`:''}
+        </div>`;
+    });
+
+    html += `</div></div></div>`; // cierre grid, col principal, flex container
+    cont.innerHTML = html;
+}
+
+// ── Panel lateral de selección de posts ───────────────────────
+function _renderPanelSeleccion() {
+    if (!selPostsState.activo) return '';
+
+    const { filtroRol, filtroEstado, todosPJs, personajesExtra, postsSel } = selPostsState;
+
+    // Filtrar pool de personajes
+    const pool = todosPJs.filter(g => {
+        const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+        const rolOk  = filtroRol  === 'todos' || tags.includes(filtroRol.toLowerCase());
+        const estOk  = filtroEstado === 'todos' || tags.includes(filtroEstado.toLowerCase());
+        return rolOk && estOk;
+    });
+
+    const btnRol = (val, lbl) => {
+        const a = filtroRol === val;
+        return `<button onclick="window._histFiltroRol('${val}')"
+            style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};
+                   background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${lbl}</button>`;
+    };
+    const btnEst = (val, lbl) => {
+        const a = filtroEstado === val;
+        return `<button onclick="window._histFiltroEst('${val}')"
+            style="padding:2px 8px;font-size:0.72em;border-radius:6px;border:1.5px solid ${a?'var(--green)':'#dee2e6'};
+                   background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${lbl}</button>`;
+    };
+
+    const pjCards = pool.map(g => {
+        const yaEsta = personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado);
+        const img = imgPJ(g.nombre_refinado);
+        return `<div onclick="window._histTogglePJExtra('${g.nombre_refinado.replace(/'/g,"\\'")}')"
+            style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;
+                   background:${yaEsta?'rgba(39,174,96,0.1)':'white'};
+                   border:1.5px solid ${yaEsta?'var(--green)':'#dee2e6'};
+                   transition:background 0.12s,border 0.12s;">
+            <img src="${img}" onerror="${_onErr}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
+            <span style="font-size:0.78em;font-weight:${yaEsta?700:500};color:${yaEsta?'var(--green-dark)':'#333'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.nombre_refinado}</span>
+            ${yaEsta?`<span style="margin-left:auto;font-size:0.7em;color:var(--green);font-weight:800;">✓</span>`:''}
+        </div>`;
+    }).join('');
+
+    const extraNombres = personajesExtra.map(e => e.nombre_refinado).join(', ');
+    const hayExtra = personajesExtra.length > 0;
+    const hayPosts = postsSel.size > 0;
+
+    return `
+    <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:12px;
+        display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 120px);overflow-y:auto;">
+
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <b style="font-size:0.85em;color:var(--green-dark);">☑ Selección de posts</b>
+            <button onclick="window._histCancelarSel()"
+                style="background:none;border:none;font-size:1.1em;cursor:pointer;color:#999;">×</button>
+        </div>
+
+        <!-- Posts seleccionados -->
+        <div style="font-size:0.78em;color:#555;background:#f8f9fa;border-radius:6px;padding:6px 8px;">
+            <b>${postsSel.size}</b> post${postsSel.size!==1?'s':''} seleccionado${postsSel.size!==1?'s':''}
+            ${hayPosts?`<button onclick="window._histLimpiarPosts()"
+                style="margin-left:8px;font-size:0.8em;color:#c0392b;background:none;border:none;cursor:pointer;">✕ Limpiar</button>`:''}
+        </div>
+
+        <!-- Personajes añadidos -->
+        ${hayExtra ? `<div style="background:rgba(39,174,96,0.07);border:1px solid var(--green);border-radius:6px;padding:6px 8px;">
+            <span style="font-size:0.72em;font-weight:700;color:var(--green-dark);">Extra añadido:</span>
+            <div style="font-size:0.78em;margin-top:2px;color:var(--green-dark);">
+                ${personajesExtra.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px;">
+                    ${e.nombre_refinado}
+                    <span onclick="window._histTogglePJExtra('${e.nombre_refinado.replace(/'/g,"\\'")}',true)"
+                        style="cursor:pointer;color:#c0392b;font-weight:800;font-size:0.9em;">×</span>
+                </span>`).join('')}
+            </div>
+        </div>` : ''}
+
+        <!-- Botones de acción -->
+        ${hayExtra && hayPosts ? `
+        <div style="display:flex;flex-direction:column;gap:6px;">
+            <button onclick="window._histCalcPTExtra()"
+                style="background:var(--blue);color:white;border:none;border-radius:8px;
+                       padding:7px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;">
+                ⚡ Calcular PT para posts seleccionados
+            </button>
+            <button onclick="window._histCalcPTCitas()"
+                style="background:#6c3483;color:white;border:none;border-radius:8px;
+                       padding:7px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;">
+                🔗 Calcular PT para posts que citan seleccionados
+            </button>
+        </div>` : `<div style="font-size:0.72em;color:#aaa;text-align:center;">
+            Selecciona posts y al menos un personaje extra para calcular PT
+        </div>`}
+
+        <!-- Pool de personajes -->
+        <div>
+            <div style="font-size:0.72em;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Añadir personaje extra</div>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;">
+                ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
+                ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;">
+                ${pjCards || '<span style="font-size:0.78em;color:#aaa;">Sin personajes</span>'}
+            </div>
+        </div>
+
+        <div style="font-size:0.68em;color:#aaa;line-height:1.4;border-top:1px solid #f1f3f4;padding-top:6px;">
+            <b>Gris</b> = exclusivo · <b style="color:var(--green)">Verde</b> = compartido · <b style="color:#00b4d8">Celeste</b> = lectura
+        </div>
+    </div>`;
 }
 
 // ============================================================
@@ -69,16 +434,17 @@ export function renderRanking() {
     const cont = $('contenido-principal');
     if (!cont) return;
 
+    const selectorHilo = renderSelectorHiloInline();
+
     if (!estadoUI.hiloActivo) {
-        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div>
-            <h3>No hay hilo seleccionado</h3>
-            <button class="btn btn-green" onclick="window.irAHilos()">Ver Hilos</button></div>`;
+        cont.innerHTML = selectorHilo + `<div class="empty-state"><div class="empty-icon">📋</div>
+            <h3>Selecciona un hilo para ver el ranking</h3></div>`;
         return;
     }
     if (!rankingState.length) {
-        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">🏅</div>
+        cont.innerHTML = selectorHilo + `<div class="empty-state"><div class="empty-icon">🏅</div>
             <h3>Ranking vacío</h3>
-            <button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar ahora</button></div>`;
+            ${estadoUI.esAdmin?`<button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar ahora</button>`:''}</div>`;
         return;
     }
 
@@ -86,13 +452,6 @@ export function renderRanking() {
     let totalPT = 0;
     Object.values(ptTagState).forEach(tags => Object.values(tags).forEach(n => { totalPT += n; }));
 
-    // Construir ranking de GRUPOS (agrupando aliases)
-    // poster_name puede ser "LinOP, Test, Test el Personaje" → dividir por coma
-    // Solo las partes que existen en mapaAliasAGrupo (alias registrados con grupo real) cuentan.
-    const grupoData = {}; // nombre_refinado → { total_posts, aliasesRegistrados: Set, ultimo_post }
-
-    // Índice inverso: grupo → Set de aliases registrados que pertenecen a él
-    // (para la columna Aliases en la tabla, mostramos solo aliases registrados)
     const aliasesPorGrupo = {};
     Object.entries(mapaAliasAGrupo).forEach(([alias, grupo]) => {
         if (!aliasesPorGrupo[grupo]) aliasesPorGrupo[grupo] = new Set();
@@ -111,6 +470,7 @@ export function renderRanking() {
         return [...grupos];
     }
 
+    const grupoData = {};
     rankingState.forEach(r => {
         const grupos = resolverGrupos(r.poster_name);
         grupos.forEach(grupo => {
@@ -127,7 +487,7 @@ export function renderRanking() {
 
     const modoActual = window._rankingModo || 'grupos';
 
-    let html = `
+    let html = selectorHilo + `
     <div class="stats-banner">
         <div class="stat-item"><span class="stat-num">${rankingState.length}</span><span class="stat-lbl">Aliases activos</span></div>
         <div class="stat-item"><span class="stat-num">${totalPosts}</span><span class="stat-lbl">Posts Totales</span></div>
@@ -145,7 +505,6 @@ export function renderRanking() {
     </div>`;
 
     if (modoActual === 'grupos') {
-        // ── VISTA GRUPOS — cards con imagen ──
         html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:16px;">`;
         rankingGrupos.forEach((r, i) => {
             const img = imgPJ(r.nombre);
@@ -174,7 +533,6 @@ export function renderRanking() {
             </div>`;
         });
         html += `</div>`;
-        // Aliases sin grupo registrado: tabla compacta debajo
         const sinGrupo = rankingState.filter(r => resolverGrupos(r.poster_name).length === 0);
         if (sinGrupo.length && estadoUI.esAdmin) {
             html += `<details style="margin-top:4px;"><summary style="font-size:0.78em;color:#aaa;cursor:pointer;">
@@ -185,9 +543,7 @@ export function renderRanking() {
             });
             html += `</tbody></table></details>`;
         }
-
     } else {
-        // ── VISTA ALIASES (solo OP) ──
         html += `<table class="tabla-ranking"><thead><tr>
             <th>#</th><th>Alias / Poster</th><th>Grupo</th><th>Posts</th><th>PT en este hilo</th>
         </tr></thead><tbody>`;
@@ -212,157 +568,6 @@ export function renderRanking() {
 
     cont.innerHTML = html;
 }
-
-
-export function renderTimeline() {
-    const cont = $('contenido-principal');
-    if (!cont) return;
-    if (!estadoUI.hiloActivo) {
-        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📜</div><h3>Selecciona un hilo primero</h3></div>`;
-        return;
-    }
-    if (!postsState.length) {
-        cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📜</div><h3>Sin posts registrados</h3>
-            <button class="btn btn-green" onclick="window.actualizarHiloActivo()">🔄 Actualizar</button></div>`;
-        return;
-    }
-
-    const postAutor = {};
-    postsState.forEach(p => { postAutor[p.post_no] = p.poster_name; });
-
-    // Backlinks
-    const backlinks = {};
-    postsState.forEach(post => {
-        let m; const re = />>(\d+)/g; const txt = post.contenido || '';
-        while ((m = re.exec(txt)) !== null) {
-            const n = Number(m[1]);
-            if (!backlinks[n]) backlinks[n] = [];
-            backlinks[n].push(post.post_no);
-        }
-    });
-
-    const motiColor = { interaccion:'#00b4d8', compartido:'#7ecfb3', lectura:'#f39c12' };
-    const motiLabel = { interaccion:'exclusivo', compartido:'compartido', lectura:'lectura' };
-
-    let html = `
-    <div style="display:flex;justify-content:space-between;align-items:center;
-        padding:6px 0 10px;flex-wrap:wrap;gap:8px;">
-        <span style="font-size:0.85em;color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
-        <a href="${estadoUI.hiloActivo.thread_url}" target="_blank" class="btn btn-outline"
-            style="font-size:0.8em;padding:4px 12px;">↗ Ver en 8chan</a>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;">`;
-
-    [...postsState].reverse().forEach(post => {
-        // Replies salientes del contenido
-        const nums = []; let m; const re = />>(\d+)/g; const txt = post.contenido || '';
-        while ((m = re.exec(txt)) !== null) nums.push(Number(m[1]));
-        const misReplies = [...new Set(nums)];
-
-        const repliesHtml = misReplies.map(rno => {
-            const autor = postAutor[rno] || '';
-            return `<a href="#post-${rno}" onclick="tlScrollTo(${rno},${post.post_no});return false;"
-                style="color:#00b4d8;font-size:0.75em;margin-right:6px;text-decoration:none;cursor:pointer;"
-                >&gt;&gt;${rno}${autor?` <span style="color:#7ecfb3">(${autor})</span>`:''} ↑</a>`;
-        }).join('');
-
-        const backHtml = (backlinks[post.post_no]||[]).map(bno => {
-            const autor = postAutor[bno]||'';
-            return `<a href="#post-${bno}" onclick="tlScrollTo(${bno},${post.post_no});return false;"
-                style="color:#7ecfb3;font-size:0.75em;margin-right:6px;text-decoration:none;cursor:pointer;"
-                >&gt;&gt;${bno}${autor?` (${autor})`:''} ↓</a>`;
-        }).join('');
-
-        // PT ganados EN ESTE POST — agrupados por personaje receptor
-        const ptEstePost = ptPorPost[post.post_no] || [];
-
-        // Agrupar por personaje → tag → delta
-        const ptPorPJ = {}; // { nombre_refinado: { tag: delta } }
-        ptEstePost.forEach(e => {
-            if (!ptPorPJ[e.personaje_nombre]) ptPorPJ[e.personaje_nombre] = {};
-            if (!ptPorPJ[e.personaje_nombre][e.tag]) ptPorPJ[e.personaje_nombre][e.tag] = 0;
-            ptPorPJ[e.personaje_nombre][e.tag] += e.delta;
-        });
-
-        // Si solo hay un personaje, mostrar lista plana; si hay varios, mostrar por nombre
-        const esMultiPJ = Object.keys(ptPorPJ).length > 1;
-        let ptBadges = '';
-        if (esMultiPJ) {
-            // Multipersonaje: "Nombre: +1 #Tag +1 #Tag2 / Nombre2: ..."
-            ptBadges = Object.entries(ptPorPJ).map(([pj, tags]) => {
-                const tagBadges = Object.entries(tags).map(([tag, delta]) => {
-                    const tagCorto = tag.length > 18 ? tag.substring(0, 16) + '…' : tag;
-                    return `<span style="border:1px solid #00b4d8;color:#00b4d8;background:rgba(0,180,216,0.06);
-                        padding:2px 6px;border-radius:8px;font-size:0.72em;font-weight:700;
-                        white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;"
-                        title="${tag}">+${delta} ${tagCorto}</span>`;
-                }).join(' ');
-                return `<span style="font-size:0.72em;color:#555;font-weight:600;">${pj}:</span> ${tagBadges}`;
-            }).join('<br>');
-        } else if (Object.keys(ptPorPJ).length === 1) {
-            const tags = Object.values(ptPorPJ)[0];
-            ptBadges = Object.entries(tags).map(([tag, delta]) => {
-                const tagCorto = tag.length > 18 ? tag.substring(0, 16) + '…' : tag;
-                return `<span style="border:1px solid #00b4d8;color:#00b4d8;background:rgba(0,180,216,0.06);
-                    padding:2px 6px;border-radius:8px;font-size:0.72em;font-weight:700;
-                    white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;display:inline-block;"
-                    title="${tag}">+${delta} ${tagCorto}</span>`;
-            }).join(' ');
-        }
-
-        // Nombre del personaje (grupos si existe, soporta multipersonaje)
-        const gruposPost = post.poster_name.split(',').map(s => s.trim()).filter(Boolean)
-            .map(p => mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/, '').trim()] || null)
-            .filter(Boolean);
-        const nombreDisplay = gruposPost.length
-            ? `${gruposPost.join(', ')} <span style="font-size:0.72em;color:#aaa;font-weight:400;">(${post.poster_name})</span>`
-            : post.poster_name;
-
-        html += `
-        <div id="post-${post.post_no}" style="background:white;border:1px solid #e9ecef;
-            border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;
-            font-size:0.87em;box-shadow:0 1px 4px rgba(0,0,0,0.05);">
-
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:4px;">
-                <div style="display:flex;align-items:center;gap:6px;min-width:0;">
-                    ${gruposPost.length ? `<img src="${imgPJ(gruposPost[0])}" onerror="${_onErr}"
-                        style="width:28px;height:28px;border-radius:50%;object-fit:cover;object-position:top;
-                        flex-shrink:0;border:1.5px solid #27ae60;">` : ''}
-                    <div style="min-width:0;">
-                        <span style="font-weight:700;color:#1e8449;">${nombreDisplay}</span>
-                        ${post.poster_id?`<span style="background:#f1f3f4;color:#888;font-size:0.72em;
-                            padding:1px 5px;border-radius:4px;margin-left:4px;">${post.poster_id}</span>`:''}
-                    </div>
-                </div>
-                <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                    <span style="color:#aaa;font-size:0.72em;cursor:pointer;"
-                        onclick="tlCopyLink(${post.post_no})" title="Copiar">No.${post.post_no}</span>
-                    <span style="color:#999;font-size:0.72em;">${fmtFecha(post.post_time)}</span>
-                </div>
-            </div>
-
-            ${repliesHtml?`<div style="padding-bottom:5px;border-bottom:1px solid rgba(0,180,216,0.15);">
-                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citas:</span>${repliesHtml}</div>`:''}
-
-            <div style="color:#333;line-height:1.5;word-break:break-word;">
-                ${renderContenido(post.contenido||'', postAutor, post.post_no)}
-                ${post.tiene_imagen?`<div style="margin-top:4px;"><span style="background:#f8f9fa;
-                    border:1px solid #e9ecef;border-radius:4px;padding:2px 7px;font-size:0.75em;
-                    color:#666;">🖼 ${post.num_imagenes} imagen${post.num_imagenes>1?'es':''}</span></div>`:''}
-            </div>
-
-            ${ptBadges?`<div style="padding-top:5px;border-top:1px solid rgba(0,180,216,0.15);display:flex;flex-wrap:wrap;gap:4px;align-items:flex-start;">
-                <span style="font-size:0.68em;color:#aaa;margin-right:3px;flex-shrink:0;">PT/post:</span><div style="display:flex;flex-wrap:wrap;gap:3px;">${ptBadges}</div></div>`:''}
-
-            ${backHtml?`<div style="padding-top:4px;border-top:1px solid rgba(126,207,179,0.2);">
-                <span style="font-size:0.68em;color:#aaa;margin-right:3px;">citado por:</span>${backHtml}</div>`:''}
-        </div>`;
-    });
-
-    html += `</div>`;
-    cont.innerHTML = html;
-}
-
 
 // ============================================================
 // VISTA: HILOS
@@ -417,13 +622,9 @@ export function renderHilos() {
                 <button class="btn btn-green btn-sm" onclick="window.seleccionarHilo('${h.board}', ${h.thread_id})">
                     ${isActivo ? '✓ Seleccionado' : 'Seleccionar'}
                 </button>
-                <button class="btn btn-outline btn-sm" onclick="window.scrapeManual('${h.board}', ${h.thread_id})">🔄 Actualizar</button>
+                ${esAdmin ? `<button class="btn btn-outline btn-sm" onclick="window.scrapeManual('${h.board}', ${h.thread_id})">🔄 Actualizar</button>` : ''}
                 ${esAdmin ? `<button class="btn btn-outline btn-sm" style="border-color:var(--orange); color:var(--orange);" onclick="window.actualizarManual('${h.board}', ${h.thread_id})">📥 Pega JSON</button>` : ''}
-                ${esAdmin ? `
-                <button class="btn btn-outline btn-sm" onclick="window.toggleActivo('${h.board}', ${h.thread_id}, ${!h.activo})">
-                    ${h.activo ? '⏸ Pausar' : '▶ Activar'}
-                </button>
-                <button class="btn btn-red btn-sm" onclick="window.pedirEliminarHilo('${h.board}', ${h.thread_id}, '${h.titulo}')">🗑</button>` : ''}
+                ${esAdmin ? `<button class="btn btn-red btn-sm" onclick="window.pedirEliminarHilo('${h.board}', ${h.thread_id}, '${h.titulo}')">🗑</button>` : ''}
             </div>
         </div>`;
     });
@@ -453,7 +654,6 @@ export function renderHeaderInfo() {
         — ${h.titulo}
         ${ultima ? `<span style="color:#888; font-size:0.8em; margin-left:8px;">${ultima}</span>` : ''}
         ${estadoUI.cargando ? `<span class="spinner"></span>` : ''}
-        ${estadoUI.autoRefresh ? `<span class="badge badge-rapido" style="margin-left:6px;">🔴 Live</span>` : ''}
     </span>`;
 }
 
@@ -472,7 +672,7 @@ export function toast(msg, tipo = 'ok') {
     el._t = setTimeout(() => { el.style.display = 'none'; }, 3500);
 }
 
-window.tlScrollTo = function(postNo, from) {
+window.tlScrollTo = function(postNo) {
     const el = document.getElementById('post-' + postNo);
     if (!el) return;
     el.scrollIntoView({behavior:'smooth',block:'center'});
@@ -481,21 +681,17 @@ window.tlScrollTo = function(postNo, from) {
     setTimeout(()=>{el.style.background='';},1500);
 };
 window.tlCopyLink = function(n){ navigator.clipboard?.writeText('No.'+n); };
+
 function renderContenido(texto, postAutor, thisPostNo) {
     let s = String(texto).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     s = s.replace(/&gt;&gt;(\d+)/g, (_,rno) => {
         const n=Number(rno); const a=postAutor[n]||'';
-        return `<a href="#post-${n}" onclick="tlScrollTo(${n},${thisPostNo});return false;"
+        return `<a href="#post-${n}" onclick="tlScrollTo(${n});return false;"
             style="color:#00b4d8;font-weight:600;text-decoration:none;cursor:pointer;"
             >&gt;&gt;${rno}${a?` <span style="color:#7ecfb3;font-size:0.85em;">(${a})</span>`:''}</a>`;
     });
     s = s.replace(/(^|\n)(&gt;(?!&gt;)[^\n]*)/g,'$1<span style="color:#789922;">$2</span>');
     return s;
-}
-function escHTML(str) {
-    return String(str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 // ── Panel de Opciones Tags ────────────────────────────────────
