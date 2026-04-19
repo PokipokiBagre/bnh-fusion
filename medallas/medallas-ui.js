@@ -187,7 +187,7 @@ function _renderCard(m) {
         </div>
         
         <div style="display:flex;flex-wrap:wrap;gap:4px;">${tagLabel}</div>
-        <div class="medalla-efecto">${m.efecto_desc||'Sin descripción.'}</div>
+        <div class="medalla-efecto">${renderMarkup(m.efecto_desc||'Sin descripción.')}</div>
         
         <div style="display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;">
             ${tieneReqs  ? `<span style="font-size:0.7em;background:var(--blue-pale);color:var(--blue);border:1px solid var(--blue);padding:1px 6px;border-radius:6px;">📋 Req</span>` : ''}
@@ -473,7 +473,7 @@ export function renderPersonaje() {
             
             const pts = ptsMapa[tag] || ptsMapa[tag.slice(1)] || 0;
 
-            const cards = medallasDeltag.map(m => {
+           const cards = medallasDeltag.map(m => {
                 const estado      = estadoMedallaPJ(m, pj);
                 const condActivos = efectosActivosPJ(m, pj);
                 const condHtml    = condActivos.map(ec => `
@@ -491,7 +491,7 @@ export function renderPersonaje() {
                         <div style="font-size:0.78em;color:var(--purple);font-weight:700;">${m.costo_ctl} CTL
                             <span style="font-size:0.85em;color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};margin-left:5px;">${m.tipo==='activa'?'⚡A':'🛡P'}</span>
                         </div>
-                        <div class="medalla-efecto">${m.efecto_desc||''}</div>
+                        <div class="medalla-efecto">${renderMarkup(m.efecto_desc||'')}</div>
                         ${condHtml ? `<div style="margin-top:4px;">${condHtml}</div>` : ''}
                     </div>
                     <button onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})"
