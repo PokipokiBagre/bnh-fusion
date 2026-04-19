@@ -158,7 +158,6 @@ export function renderCatalogo() {
         const el = document.getElementById('med-search'); 
         if(el && medallaState.busqueda) el.focus(); 
     }, 10);
-}
 
 function _renderCard(m) {
     const tagLabel  = mTags(m).map(t => `<span class="medalla-tag">${t}</span>`).join(' ');
