@@ -625,13 +625,19 @@ window._catEditarInline = (tagKey) => {
                         style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
                 </div>
                 <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
-                    <div style="display:flex;gap:8px;align-items:center;">
-                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);white-space:nowrap;">Tipo:</label>
-                        <select id="ci-tipo" class="inp" style="max-width:160px;padding:5px 8px;font-size:0.85em;">
-                            <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
-                            <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
-                            <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
-                        </select>
+                   <div style="display:flex;gap:12px;margin-bottom:4px;">
+                        <div style="flex:1;">
+                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Nombre:</label>
+                            <input id="ci-nombre" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;">
+                        </div>
+                        <div>
+                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Tipo:</label>
+                            <select id="ci-tipo" class="inp" style="min-width:140px;padding:5px 8px;font-size:0.85em;">
+                                <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
+                                <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
+                                <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
+                            </select>
+                        </div>
                     </div>
                     <div>
                         <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);">Descripción:</label>
