@@ -51,32 +51,35 @@ function _exponerGlobales() {
     window._medFiltroTag  = v => { medallaState.filtroTag = v; renderCatalogo(); };
     window._medSelPJ = async n => {
         if (medallaState.pjSeleccionado === n) {
-            // Deseleccionar
             medallaState.pjSeleccionado = null;
             medallaState.equipacion = [];
+            medallaState.equipacionPropuesta = [];
             medallaState.equipacionDetalleId = null;
             renderPersonaje();
         } else {
-            // Seleccionar nuevo
             medallaState.pjSeleccionado = n;
             medallaState.equipacion = []; 
+            medallaState.equipacionPropuesta = [];
             medallaState.equipacionDetalleId = null;
-            renderPersonaje(); // Renderiza rápido en blanco
+            renderPersonaje(); 
             
-            // Consultar la base de datos (tabla medallas_inventario)
             const { data, error } = await supabase
                 .from('medallas_inventario')
-                .select('medalla_id')
+                .select('medalla_id, propuesta')
                 .eq('personaje_nombre', n)
                 .eq('equipada', true)
                 .order('slot_orden');
                 
             if (!error && data) {
-                // Relacionar los IDs con los datos completos de las medallas
                 medallaState.equipacion = data
+                    .filter(r => !r.propuesta)
                     .map(row => medallas.find(m => m.id === row.medalla_id))
-                    .filter(Boolean); // Eliminar nulos por si alguna medalla fue borrada
-                renderPersonaje(); // Re-renderizar con los datos reales
+                    .filter(Boolean);
+                medallaState.equipacionPropuesta = data
+                    .filter(r => r.propuesta)
+                    .map(row => medallas.find(m => m.id === row.medalla_id))
+                    .filter(Boolean);
+                renderPersonaje(); 
             }
         }
     };
@@ -188,12 +191,65 @@ function _exponerGlobales() {
 
     window._medGuardarEquipacion = window._medGuardarEquipacionValida; // alias por compatibilidad
 
-    window._medProponerEquipacion = () => {
+window._medProponerEquipacion = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
-        const eq = medallaState.equipacion || [];
-        if (!eq.length) { toast('No hay medallas equipadas que proponer', 'info'); return; }
-        const lista = eq.map(m => `• ${m.nombre} (${m.costo_ctl} CTL)`).join('\n');
-        alert(`Propuesta de equipación para ${medallaState.pjSeleccionado}:\n\n${lista}\n\nCopia este mensaje y envíalo al OP.`);
+        const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
+        const ctl = g?.ctl || 0;
+        let ctlAcum = 0;
+        const validas = (medallaState.equipacion || []).filter(m => {
+            const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
+            if (cabe) ctlAcum += (m.costo_ctl||0);
+            return cabe;
+        });
+        const sobran = (medallaState.equipacion||[]).length - validas.length;
+        if (sobran > 0) {
+            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL.\n\n¿Proponer solo las ${validas.length} que caben?`);
+            if (!ok) return;
+        }
+
+        // Borrar propuesta anterior
+        await supabase.from('medallas_inventario')
+            .delete()
+            .eq('personaje_nombre', medallaState.pjSeleccionado)
+            .eq('propuesta', true);
+
+        // Insertar nueva propuesta
+        if (validas.length > 0) {
+            const autor = prompt('Tu nombre (opcional) para identificar la propuesta:') || 'Anónimo';
+            const inserts = validas.map((m, index) => ({
+                personaje_nombre: medallaState.pjSeleccionado,
+                medalla_id: m.id,
+                slot_orden: index + 1,
+                equipada: true,
+                propuesta: true,
+                propuesta_por: autor
+            }));
+            const { error } = await supabase.from('medallas_inventario').insert(inserts);
+            if (error) { toast('❌ Error enviando propuesta: ' + error.message, 'error'); return; }
+        }
+        
+        toast(`✅ Propuesta enviada (${validas.length} medallas)`, 'ok');
+        window._medSelPJ(medallaState.pjSeleccionado); // Recargar para ver la caja naranja
+    };
+
+    window._medAprobarPropuestaEq = async () => {
+        const pj = medallaState.pjSeleccionado;
+        const btn = event.target;
+        btn.textContent = '⏳'; btn.disabled = true;
+        // Borrar equipación normal
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', false);
+        // Convertir propuesta en normal
+        await supabase.from('medallas_inventario').update({ propuesta: false, propuesta_por: null }).eq('personaje_nombre', pj).eq('propuesta', true);
+        toast('✅ Propuesta aprobada', 'ok');
+        window._medSelPJ(pj);
+    };
+
+    window._medRechazarPropuestaEq = async () => {
+        const pj = medallaState.pjSeleccionado;
+        if (!confirm('¿Seguro que deseas eliminar/retirar esta propuesta de equipación?')) return;
+        await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', true);
+        toast('🗑️ Propuesta eliminada', 'ok');
+        window._medSelPJ(pj);
     };
 
     window._medPJBuscar = v => {
