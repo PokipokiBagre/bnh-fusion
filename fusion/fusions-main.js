@@ -179,7 +179,16 @@ function _exponerGlobales() {
         fusionsState.tagFusionNombre = '';
         renderResultado(fusionsState.resultadoCalculado);
     };
+    
+window._fusionTagModeChange = (val) => {
+        fusionsState.modoTagLocal = val;
+        const uin = document.getElementById('ui-tag-nuevo');
+        const uic = document.getElementById('ui-tag-compartido');
+        if (uin) uin.style.display = val === 'nuevo' ? 'flex' : 'none';
+        if (uic) uic.style.display = val === 'compartido' ? 'block' : 'none';
+    };
 
+    
     window._fusionEditStat = (stat, val) => {
         const n = parseInt(val);
         fusionsState.statsEditadas[stat] = isNaN(n) || n < 0 ? null : n;
