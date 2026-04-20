@@ -1,4 +1,6 @@
-// bnh-fusion.js — Core actualizado
+// ============================================================
+// bnh-fusion.js — Estado global de Fusiones Activas
+// ============================================================
 import { supabase } from './bnh-auth.js';
 
 export const fusionState = new Map();
@@ -9,11 +11,10 @@ export async function cargarFusiones() {
     (data || []).forEach(f => fusionState.set(f.id, f));
 }
 
-// Ahora recibe el rendimiento (1-100)
 export async function activarFusion(pjA, pjB, rendimiento) {
     for (const [, f] of fusionState) {
         if (f.pj_a === pjA || f.pj_b === pjA || f.pj_a === pjB || f.pj_b === pjB) {
-            return { ok: false, msg: 'Uno de los personajes ya está fusionado.' };
+            return { ok: false, msg: `${f.pj_a === pjA || f.pj_b === pjA ? pjA : pjB} ya está en una fusión activa.` };
         }
     }
 
@@ -32,6 +33,15 @@ export async function terminarFusion(fusionId) {
     fusionState.delete(fusionId);
 }
 
+// ── Helpers Originales Conservados ────────────────────────────
+
+export function estaEnFusion(nombrePJ) {
+    for (const [, f] of fusionState) {
+        if (f.pj_a === nombrePJ || f.pj_b === nombrePJ) return true;
+    }
+    return false;
+}
+
 export function getFusionDe(nombrePJ) {
     for (const [, f] of fusionState) {
         if (f.pj_a === nombrePJ || f.pj_b === nombrePJ) return f;
@@ -39,7 +49,8 @@ export function getFusionDe(nombrePJ) {
     return null;
 }
 
-// LA MAGIA: Calcula los PT proyectados en base al rendimiento
+// ── Nueva Lógica Proyectiva (El Lente Matemático) ─────────────
+
 export function calcularPTsFusionados(ptsA, ptsB, rendimiento) {
     const fusionados = {};
     const todosLosTags = [...new Set([...Object.keys(ptsA), ...Object.keys(ptsB)])];
@@ -49,25 +60,22 @@ export function calcularPTsFusionados(ptsA, ptsB, rendimiento) {
         const valB = ptsB[tag] || 0;
 
         if (rendimiento <= 33) {
-            // Tier 1: Stats se fusionan (manejado en UI), pero PTs no hacen sinergia. 
-            // Cada uno aporta lo suyo, pero no se cruzan. Usamos el mayor para simplificar la vista, 
-            // pero podrías restringirlo a 0 si quieres ser estricto.
+            // Stats se fusionan, pero los PT mantienen el mayor valor original
             fusionados[tag] = Math.max(valA, valB); 
         } else if (rendimiento <= 66) {
-            // Tier 2: Escoge el mayor
+            // Se adopta el PT más alto compartido (sinergia)
             fusionados[tag] = Math.max(valA, valB);
         } else {
-            // Tier 3: Suma los PT
+            // Fusión perfecta: se suman los PT
             fusionados[tag] = valA + valB;
         }
     });
 
     return fusionados;
 }
-// ── Render del doble icono de fusión (HTML string) ───────────
-// Úsalo en cualquier página donde quieras mostrar el badge de fusión
-// storageUrl = currentConfig.storageUrl
-// norm = función normalizadora de nombres
+
+// ── Render del Badge Conservado ───────────────────────────────
+
 export function renderFusionBadge(nombrePJ, storageUrl, norm) {
     const fusion = getFusionDe(nombrePJ);
     if (!fusion) return '';
