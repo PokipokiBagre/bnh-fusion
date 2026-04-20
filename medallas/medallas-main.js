@@ -94,15 +94,22 @@ function _exponerGlobales() {
                     .map(row => medallas.find(m => m.id === row.medalla_id))
                     .filter(Boolean);
                     
-                // --- NUEVA LÓGICA DE LIMPIEZA INMEDIATA CON FALLBACK ---
+
                 try {
                     const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
-                    medallaState.equipacion = await limpiarInventarioInvalido(n, rawEquip, grupos, puntosAll);
+                    const { proyectarPJ } = await import('./medallas-logic.js');
+                    
+                    const proy = proyectarPJ(n); // Aplicar lente de fusión
+                    
+                    // Ahora validamos usando los tags, pt y CTL Proyectados
+                    medallaState.equipacion = await limpiarInventarioInvalido(
+                        n, rawEquip, proy.tags, proy.ptsMapa, proy.ctl
+                    );
                 } catch (err) {
-                    console.error("Error en validación de medallas, cargando datos brutos:", err);
-                    medallaState.equipacion = rawEquip; // Evita que la interfaz se quede en 0 si hay error
+                    console.error("Error en validación, cargando datos brutos:", err);
+                    medallaState.equipacion = rawEquip; 
                 }
-                // ------------------------------------------
+
 
                 medallaState.equipacionPropuesta = data
                     .filter(r => r.propuesta)
