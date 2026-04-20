@@ -236,24 +236,46 @@ export function renderResultado(resultado) {
             </span>`;
         }).join('');
 
-    const tagFusionSection = opcionesState.crear_tag_fusion ? `
+    fusionsState.modoTagLocal = fusionsState.modoTagLocal || 'ninguno';
+    const isN = fusionsState.modoTagLocal === 'ninguno';
+    const isNew = fusionsState.modoTagLocal === 'nuevo';
+    const isC = fusionsState.modoTagLocal === 'compartido';
+    const hasShared = maxTagCompartido ? true : false;
+
+    const tagFusionSection = `
     <div style="padding:14px 20px;border-top:1px solid var(--border);">
-        <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:8px;">✨ Tag de Fusión Temporal</div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:8px;">✨ Tag de Fusión (Opcional)</div>
+        
+        <div style="display:flex;flex-wrap:wrap;gap:16px;margin-bottom:12px;font-size:0.85em;color:var(--gray-700);">
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="tag_mode" value="ninguno" ${isN ? 'checked' : ''} onchange="window._fusionTagModeChange(this.value)"> 
+                <span>1. No hacer nada</span>
+            </label>
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+                <input type="radio" name="tag_mode" value="nuevo" ${isNew ? 'checked' : ''} onchange="window._fusionTagModeChange(this.value)"> 
+                <span>2. Crear Tag Nuevo (Quirk)</span>
+            </label>
+            <label style="cursor:pointer;display:flex;align-items:center;gap:6px;opacity:${hasShared ? 1 : 0.5}">
+                <input type="radio" name="tag_mode" value="compartido" ${isC ? 'checked' : ''} ${hasShared ? '' : 'disabled'} onchange="window._fusionTagModeChange(this.value)"> 
+                <span>3. Potenciar Compartido</span>
+            </label>
+        </div>
+
+        <div id="ui-tag-nuevo" style="display:${isNew ? 'flex' : 'none'};gap:8px;align-items:center;flex-wrap:wrap;">
             <div style="flex:1;min-width:200px;">
                 <input class="inp" type="text" id="inp-tag-fusion"
-                    placeholder="#VaporFusion, #CieloLlama…"
+                    placeholder="Escribe el nuevo tag (ej: VaporFusion)"
                     value="${_esc(fusionsState.tagFusionNombre || '')}"
                     oninput="window._fusionTagNombreChange(this.value)"
                     style="font-weight:700;color:var(--fp);">
             </div>
-            <div style="font-size:0.8em;color:var(--gray-500);">${opcionesState.pts_tag_fusion} PT iniciales</div>
+            <div style="font-size:0.8em;color:var(--gray-500);">Se asignarán <b>20 PT</b></div>
         </div>
-        <div style="font-size:0.75em;color:var(--gray-500);margin-top:4px;">
-            Este tag se asignará a ambos PJs. El # se añade automáticamente.
-            ${maxTagCompartido ? `<b>Inspiración:</b> tag más compartido fue <b>${_esc(maxTagCompartido)}</b> (${maxPtsCompartidos}pt).` : ''}
+
+        <div id="ui-tag-compartido" style="display:${isC ? 'block' : 'none'};font-size:0.85em;color:var(--gray-600);">
+            Se asignarán <b>20 PT</b> al tag más compartido: <b style="color:var(--fp);">${_esc(maxTagCompartido || '')}</b>
         </div>
-    </div>` : '';
+    </div>`;
 
     // Botón de acción según rol
     const esAdmin = fusionsState.esAdmin;
