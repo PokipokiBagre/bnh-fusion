@@ -152,8 +152,7 @@ function renderVsPanel() {
             Selecciona ambos PJs para ver compatibilidad
         </div>`}
 
-        <!-- Barra de compatibilidad -->
-        <div style="width:100%;display:flex;flex-direction:column;gap:3px;">
+            <div style="width:100%;display:flex;flex-direction:column;gap:3px;">
             <div style="width:100%;height:10px;background:var(--gray-200);border-radius:5px;overflow:hidden;position:relative;">
                 <div id="compat-fill" style="
                     position:absolute;left:0;top:0;bottom:0;
@@ -171,12 +170,12 @@ function renderVsPanel() {
             </div>
         </div>
 
-        <!-- Rendimiento total y regla -->
-        ${regla ? `
-        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
-            <div id="regla-badge-display" class="regla-badge ${regla.clase}" style="width:100%;text-align:center;">${regla.label}</div>
-            ${sobreRecarga ? `<div style="font-size:0.7em;font-weight:700;color:var(--fa);">Rendimiento total: <b>${total}%</b> (×1.5 activo)</div>` : ''}
-        </div>` : ''}
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;min-height:36px;">
+            <div id="regla-badge-display" class="regla-badge ${regla ? regla.clase : ''}" style="width:100%;text-align:center;display:${regla ? 'block' : 'none'};">${regla ? regla.label : ''}</div>
+            <div id="sobrecarga-display" style="font-size:0.7em;font-weight:700;color:var(--fa); display:${sobreRecarga ? 'block' : 'none'};">
+                Rendimiento total: <b id="rend-total-display">${total}</b>% (×1.5 activo)
+            </div>
+        </div>
     </div>
 
     <button class="btn btn-fusion btn-lg" style="width:100%;margin-top:4px;" onclick="window._fusionSimular()">⚡ Simular</button>`;
