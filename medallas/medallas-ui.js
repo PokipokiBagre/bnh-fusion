@@ -608,10 +608,6 @@ export function renderPersonaje() {
                 </div>
             </div>
         </div>`;
-        const ctlRatio  = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
-        const ctlColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
-        const barColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
-
         let ctlAcum = 0;
         const equipadosConEstado = equipados.map(m => {
             const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
