@@ -471,4 +471,3 @@ function _exponerGlobales() {
     };
 
     document.addEventListener('keydown', e => { if (e.key === 'Escape') window._medallasCloseModal(); });
-}
