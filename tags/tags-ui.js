@@ -1,7 +1,11 @@
 // ============================================================
 // tags/tags-ui.js
 // ============================================================
-import { tagsState, grupos, puntosAll, catalogoTags, medallasCat, solicitudes, STORAGE_URL, norm, tagDetalle, setTagDetalle } from './tags-state.js';
+import {
+    tagsState, grupos, puntosAll, catalogoTags, medallasCat, solicitudes,
+    STORAGE_URL, norm, tagDetalle, setTagDetalle,
+    inventarioMedallas,
+} from './tags-state.js';
 import { getTagsConPuntos, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles } from './tags-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 
@@ -67,11 +71,10 @@ export function renderProgresion() {
             const baneado = catEntry?.baneado;
             const pct   = Math.min((pts / UMBRAL_MAX) * 100, 100);
             
-            // Colores escalonados y amigables (Verde -> Verdiazul -> Azul Brillante)
             let colorBg = '';
-            if (pts >= 100) colorBg = '#3498db'; // Azul brillante
-            else if (pts >= 75) colorBg = '#1abc9c'; // Verdiazul (Teal)
-            else colorBg = '#2ecc71'; // Verde
+            if (pts >= 100) colorBg = '#3498db';
+            else if (pts >= 75) colorBg = '#1abc9c';
+            else colorBg = '#2ecc71';
 
             let canjeHtml = '';
             if (baneado) {
@@ -107,37 +110,137 @@ export function renderProgresion() {
         }).join('');
     }
 
-    // ── Medallas Accesibles ──
+    // ── Medallas Accesibles ───────────────────────────────────────────────────
+    // Las tarjetas se renderizan UNA SOLA VEZ aquí. El buscador opera in-place
+    // sobre el DOM (ver window._tagsBuscarMedallasAcc en tags-main.js), sin
+    // destruir ni recrear este bloque, evitando pérdida de foco y scroll jumps.
     let secMedallas = '';
     if (pj) {
-        const accMedallas = getMedallasAccesibles(pj);
-        const busqMed = (tagsState.busquedaMedallasAcc || '').toLowerCase();
-        const filtradas = accMedallas.filter(m => m.nombre.toLowerCase().includes(busqMed) || (m.efecto_desc||'').toLowerCase().includes(busqMed));
-        
-        const mHtml = filtradas.length ? filtradas.map(m => {
-            const tagsD = (m.requisitos_base||[]).map(r => `<span style="font-size:0.68em;background:var(--gray-100);color:var(--blue);border:1px solid var(--gray-300);padding:1px 5px;border-radius:4px;">${r.tag.startsWith('#')?r.tag:'#'+r.tag}</span>`).join(' ');
-            return `
-            <div class="medalla-card activable" style="cursor:pointer; border-color:var(--green); background:rgba(39,174,96,0.04);"
-                onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')">
-                <div class="medalla-status">✅</div>
-                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
-                    <div class="medalla-nombre" style="font-size:0.85em;">${m.nombre}</div>
-                    <div style="font-size:0.8em;font-weight:800;color:var(--purple);white-space:nowrap;">${m.costo_ctl} CTL</div>
-                </div>
-                ${tagsD ? `<div style="margin-bottom:4px;">${tagsD}</div>` : ''}
-                <div class="medalla-efecto" style="font-size:0.75em;">${renderMarkup(m.efecto_desc||'')}</div>
-            </div>`;
-        }).join('') : '<p class="empty-state" style="grid-column:1/-1;">No se encontraron medallas.</p>';
+        // Deduplicar por id antes de renderizar
+        const seen = new Set();
+        const accMedallas = getMedallasAccesibles(pj).filter(m => {
+            if (seen.has(m.id)) return false;
+            seen.add(m.id);
+            return true;
+        });
+
+        const mHtml = accMedallas.length
+            ? accMedallas.map(m => {
+                // Cruzar con inventarioMedallas para saber si ya está equipada
+                const equipada = inventarioMedallas.includes(m.id);
+
+                const tagsReqs = (m.requisitos_base || []).map(r => {
+                    const t = r.tag.startsWith('#') ? r.tag : '#' + r.tag;
+                    return `<span style="
+                        display:inline-block;
+                        font-size:0.7em;font-weight:600;
+                        background:rgba(52,152,219,0.1);
+                        color:var(--blue,#2980b9);
+                        border:1px solid rgba(52,152,219,0.3);
+                        padding:2px 8px;border-radius:12px;white-space:nowrap;">
+                        ${_esc(t)}${r.pts_minimos ? ` ≥${r.pts_minimos}pt` : ''}
+                    </span>`;
+                }).join(' ');
+
+                return `
+                <div class="medalla-acc-card"
+                     data-nombre="${_esc(m.nombre)}"
+                     data-efecto="${_esc(m.efecto_desc || '')}"
+                     onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')"
+                     onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)';this.style.transform='translateY(-1px)'"
+                     onmouseout="this.style.boxShadow='';this.style.transform=''"
+                     style="
+                        background:${equipada ? 'rgba(39,174,96,0.06)' : '#fff'};
+                        border:1.5px solid ${equipada ? 'var(--green,#27ae60)' : 'var(--gray-200,#e5e7eb)'};
+                        border-radius:10px;
+                        padding:13px 14px;
+                        display:flex;flex-direction:column;gap:8px;
+                        cursor:pointer;
+                        transition:box-shadow .15s, transform .15s, border-color .15s;">
+
+                    <!-- Fila superior: nombre + costo + badge equipada -->
+                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                        <span style="
+                            font-weight:700;font-size:0.88em;
+                            color:var(--gray-900,#111);
+                            line-height:1.3;flex:1;">
+                            🏅 ${_esc(m.nombre)}
+                        </span>
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+                            <span style="
+                                font-size:0.75em;font-weight:800;
+                                color:var(--purple,#8e44ad);
+                                background:rgba(142,68,173,0.08);
+                                border:1px solid rgba(142,68,173,0.22);
+                                padding:2px 9px;border-radius:8px;white-space:nowrap;">
+                                ${m.costo_ctl} CTL
+                            </span>
+                            ${equipada ? `
+                            <span style="
+                                font-size:0.68em;font-weight:700;
+                                color:#27ae60;
+                                background:rgba(39,174,96,0.12);
+                                border:1px solid rgba(39,174,96,0.3);
+                                padding:2px 8px;border-radius:8px;white-space:nowrap;">
+                                ✅ Equipada
+                            </span>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Tags requisito como pills -->
+                    ${tagsReqs
+                        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsReqs}</div>`
+                        : ''}
+
+                    <!-- Descripción del efecto -->
+                    ${m.efecto_desc ? `
+                    <div style="
+                        font-size:0.78em;
+                        color:var(--gray-600,#555);
+                        line-height:1.5;
+                        border-top:1px solid var(--gray-100,#f0f0f0);
+                        padding-top:7px;">
+                        ${renderMarkup(m.efecto_desc)}
+                    </div>` : ''}
+                </div>`;
+            }).join('')
+            : `<p style="
+                grid-column:1/-1;
+                color:var(--gray-400,#9ca3af);
+                font-size:0.85em;
+                text-align:center;
+                padding:24px 0;">
+                Sin medallas accesibles con los requisitos actuales.
+               </p>`;
 
         secMedallas = `
         <div class="card" style="margin-top:16px;">
-            <div class="card-title">Medallas Posibles Accesibles (${filtradas.length})</div>
-            <input class="inp" placeholder="🔍 Buscar medalla accesible..." value="${_esc(tagsState.busquedaMedallasAcc)}" oninput="window._tagsBuscarMedallasAcc(this.value)" style="margin-bottom:12px;width:100%;max-width:300px;">
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+            <div style="
+                display:flex;align-items:center;justify-content:space-between;
+                flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                <div id="medallas-acc-titulo" class="card-title" style="margin:0;">
+                    Medallas Accesibles (${accMedallas.length})
+                </div>
+                <input
+                    id="buscador-medallas-acc"
+                    class="inp"
+                    placeholder="🔍 Buscar medalla…"
+                    value="${_esc(tagsState.busquedaMedallasAcc)}"
+                    oninput="window._tagsBuscarMedallasAcc(this.value)"
+                    style="width:100%;max-width:260px;padding:6px 10px;font-size:0.85em;">
+            </div>
+            <div id="medallas-acc-grid"
+                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">
                 ${mHtml}
             </div>
         </div>`;
+
+        // Re-aplicar filtro guardado en estado tras re-render (sin mover el foco)
+        if (tagsState.busquedaMedallasAcc) {
+            requestAnimationFrame(() => window._tagsBuscarMedallasAcc(tagsState.busquedaMedallasAcc));
+        }
     }
+    // ─────────────────────────────────────────────────────────────────────────
 
     const rankingHtml = rankingPorPT().slice(0, 5).map(({ nombre, total }, i) => {
         const medal = ['🥇','🥈','🥉'][i] || `${i+1}.`;
@@ -727,7 +830,6 @@ window._catCrearTagEjecutar = async () => {
     let asignados = 0;
     for (const div of selDivs) {
         const id     = div.dataset.id;
-        const nombre = div.dataset.nombre;
         const { data: g } = await supabase.from('personajes_refinados')
             .select('tags').eq('id', id).maybeSingle();
         if (!g) continue;
@@ -746,12 +848,11 @@ window._catEditarInline = (tagKey) => {
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     const desc     = catEntry?.descripcion || '';
     const tipo     = catEntry?.tipo || 'extra';
-
     const container = document.getElementById('cat-inline-modal');
     if (!container) return;
 
     container.innerHTML = `
-        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:2000;display:flex;align-items:center;justify-content:center;padding:20px;"
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto;"
             onclick="if(event.target===this)document.getElementById('cat-inline-modal').innerHTML=''">
             <div style="background:white;border-radius:var(--radius-lg);max-width:500px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.2);overflow:hidden;">
                 <div style="background:var(--green-dark);color:white;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
@@ -879,6 +980,7 @@ window._catTipoRadio = async (tipo) => {
     for (const tag of tagsACambiar) {
         const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
         const entry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+        const { guardarDescripcionTag } = await import('./tags-data.js');
         const res    = await guardarDescripcionTag(tagKey, entry?.descripcion || '', tipo);
         if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
     }

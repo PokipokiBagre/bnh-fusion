@@ -3,7 +3,11 @@
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
 import { tagsState, STORAGE_URL, grupos, catalogoTags, solicitudes, medallasCat } from './tags-state.js';
-import { cargarTodo, guardarDescripcionTag, guardarBaneoTag, renameTag, deleteTag, enviarSolicitud, aprobarSolicitud, cancelarSolicitud, editarSolicitudTresTags } from './tags-data.js';
+import {
+    cargarTodo, guardarDescripcionTag, guardarBaneoTag, renameTag, deleteTag,
+    enviarSolicitud, aprobarSolicitud, cancelarSolicitud, editarSolicitudTresTags,
+    cargarInventarioPJ,
+} from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
 
@@ -82,14 +86,11 @@ function _exponerGlobales() {
         input.addEventListener('blur', () => setTimeout(hide,150));
     };
 
-    window._tagsSelPJ = (nombre) => {
+    // ── Selección de personaje: carga el inventario antes de renderizar ──────
+    window._tagsSelPJ = async (nombre) => {
         tagsState.pjSeleccionado = nombre;
-        requestAnimationFrame(() => {
-            if (tagsState.pjSeleccionado !== nombre) {
-                tagsState.pjSeleccionado = nombre;
-            }
-            renderProgresion();
-        });
+        await cargarInventarioPJ(nombre);
+        renderProgresion();
     };
 
     window._tagsVerDetalle = (tag) => { renderTagDetalle(tag); };
@@ -134,7 +135,29 @@ function _exponerGlobales() {
     };
 
     window._tagsBuscarCat = (v) => { tagsState.busquedaCat = v; renderCatalogo(); };
-    window._tagsBuscarMedallasAcc = (v) => { tagsState.busquedaMedallasAcc = v; renderProgresion(); };
+
+    // ── Buscador de medallas accesibles: filtrado in-place sin re-render ─────
+    // Opera directamente sobre el DOM existente → el input nunca pierde el foco,
+    // no hay salto de scroll y no se destruye ningún nodo del árbol.
+    window._tagsBuscarMedallasAcc = (v) => {
+        tagsState.busquedaMedallasAcc = v;
+        const q = v.trim().toLowerCase();
+        const grid = document.getElementById('medallas-acc-grid');
+        if (!grid) return; // Si el grid no existe aún, ignorar
+
+        let visibles = 0;
+        grid.querySelectorAll('.medalla-acc-card').forEach(card => {
+            const nombre = (card.dataset.nombre || '').toLowerCase();
+            const efecto = (card.dataset.efecto  || '').toLowerCase();
+            const mostrar = !q || nombre.includes(q) || efecto.includes(q);
+            card.style.display = mostrar ? '' : 'none';
+            if (mostrar) visibles++;
+        });
+
+        // Actualiza el contador del encabezado sin tocar nada más del DOM
+        const titulo = document.getElementById('medallas-acc-titulo');
+        if (titulo) titulo.textContent = `Medallas Accesibles (${visibles})`;
+    };
 
     // SOLICITUDES: Botones de Stats (POT/AGI/CTL)
     window._tagsCanjear = async (pj, tag, tipo) => {

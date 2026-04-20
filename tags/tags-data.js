@@ -2,7 +2,10 @@
 // tags/tags-data.js
 // ============================================================
 import { supabase } from '../bnh-auth.js';
-import { setGrupos, setPuntosAll, setCatalogoTags, setMedallasCat, setSolicitudes, catalogoTags } from './tags-state.js';
+import {
+    setGrupos, setPuntosAll, setCatalogoTags, setMedallasCat, setSolicitudes,
+    setInventarioMedallas,
+} from './tags-state.js';
 
 export async function cargarTodo() {
     const [
@@ -23,6 +26,27 @@ export async function cargarTodo() {
     setCatalogoTags(cat || []);
     setMedallasCat(med || []);
     setSolicitudes(sol || []);
+}
+
+// ── Inventario de medallas equipadas por un PJ ───────────────
+// Se llama on-demand al seleccionar un personaje en la pestaña Progresión.
+// Guarda en estado los IDs de las medallas que ese PJ tiene equipadas,
+// para que tags-ui.js pueda marcar las tarjetas correspondientes.
+export async function cargarInventarioPJ(nombrePJ) {
+    if (!nombrePJ) {
+        setInventarioMedallas([]);
+        return;
+    }
+    try {
+        const { data } = await supabase
+            .from('medallas_inventario')
+            .select('medalla_id')
+            .eq('personaje_nombre', nombrePJ);
+        setInventarioMedallas((data || []).map(r => r.medalla_id));
+    } catch (_) {
+        // Si la tabla no existe aún, simplemente no marcamos nada
+        setInventarioMedallas([]);
+    }
 }
 
 export async function guardarDescripcionTag(nombre, descripcion, tipo) {

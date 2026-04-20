@@ -34,3 +34,9 @@ export function setSolicitudes(d)  { solicitudes  = d; }
 
 export let tagDetalle = null;
 export function setTagDetalle(v) { tagDetalle = v; }
+
+// ── Inventario de medallas del PJ seleccionado ────────────────
+// Se carga on-demand al seleccionar un personaje (ver tags-data.js).
+// Contiene los IDs de medallas que el PJ tiene actualmente equipadas.
+export let inventarioMedallas = [];
+export function setInventarioMedallas(d) { inventarioMedallas = d; }
