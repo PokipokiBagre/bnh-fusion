@@ -1,17 +1,32 @@
-// medallas/medallas-data.js
+// medallas/medallas-data.js (fragmento de cargarTodo actualizado)
 import { supabase } from '../bnh-auth.js';
-import { setMedallas, setGrupos, setPuntosAll } from './medallas-state.js';
+import { setMedallas, setGrupos, setPuntosAll, setOpcionesFusion, setBannedTags } from './medallas-state.js';
+import { cargarFusiones } from '../bnh-fusion.js'; // <-- IMPORTANTE
 import { registrarTagEnDB, TAGS_CANONICOS } from '../bnh-tags.js';
 
 export async function cargarTodo() {
-    const [{ data: med }, { data: gr }, { data: pts }] = await Promise.all([
+    const [
+        { data: med }, 
+        { data: gr }, 
+        { data: pts },
+        { data: opts },
+        { data: baneados }
+    ] = await Promise.all([
         supabase.from('medallas_catalogo').select('*').order('nombre'),
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
+        supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
     ]);
+    
+    await cargarFusiones(); // <-- Carga las fusiones activas
+    
     setMedallas(med || []);
     setGrupos(gr   || []);
     setPuntosAll(pts || []);
+    
+    setOpcionesFusion(opts || {});
+    setBannedTags((baneados || []).map(t => (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase()));
 }
 
 // Comprueba si un tag existe en el catálogo canónico y lo crea si no.
