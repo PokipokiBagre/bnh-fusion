@@ -498,7 +498,7 @@ export async function renderRegistro() {
         }).join('');
 
         const borrarBtn = fusionsState.esAdmin
-            ? `<button class="btn btn-outline btn-sm" style="border-color:var(--red);color:var(--red);" onclick="window._fusionBorrarRegistro(${f.id})">🗑️</button>`
+            ? `<button class="btn btn-outline btn-sm" style="border-color:var(--red);color:var(--red);" onclick="window._fusionBorrarRegistro('${f.id}')">🗑️</button>`
             : '';
 
         return `
