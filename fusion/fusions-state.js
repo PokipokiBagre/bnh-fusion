@@ -8,9 +8,13 @@ export const fusionsState = {
     pjA:                 null,
     pjB:                 null,
     d100:                null,
+    rendTotal:           null,   // d100 + bonus de tags compartidos
     resultadoCalculado:  null,
     statsEditadas:       { pot: null, agi: null, ctl: null },
-    tagFusionNombre:     '',    // nombre del tag temporal a crear al oficializar
+    tagFusionNombre:     '',     // nombre del tag temporal a crear al oficializar
+    compatTags:          0,      // número de tags compartidos entre pjA y pjB
+    compatPct:           0,      // bonus porcentual por tags compartidos
+    esAdmin:             false,  // se setea en onload desde bnhAuth
 };
 
 export let personajes       = [];

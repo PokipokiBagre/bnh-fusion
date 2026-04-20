@@ -51,12 +51,19 @@ function _tipoTag(valA, valB, comportamiento) {
 
 // ─── Cálculo completo ─────────────────────────────────────────
 export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = opcionesState) {
-    const regla = getRegla(d100, opciones);
+    // d100 puede superar 100 si hay bonus de tags compartidos
+    // Si supera 100 → multiplicador ×1.5 en stats Y en PTs resultantes
+    const sobreRecarga = d100 > 100;
+    const MULT = sobreRecarga ? 1.5 : 1;
+
+    // Para buscar la regla, limitar a 100 (las reglas solo van hasta 100)
+    const d100Clamp = Math.min(d100, 100);
+    const regla = getRegla(d100Clamp, opciones);
 
     const statsBase = {
-        pot: _calcStat(pjA.pot || 0, pjB.pot || 0, opciones.modo_stats),
-        agi: _calcStat(pjA.agi || 0, pjB.agi || 0, opciones.modo_stats),
-        ctl: _calcStat(pjA.ctl || 0, pjB.ctl || 0, opciones.modo_stats),
+        pot: Math.round(_calcStat(pjA.pot || 0, pjB.pot || 0, opciones.modo_stats) * MULT),
+        agi: Math.round(_calcStat(pjA.agi || 0, pjB.agi || 0, opciones.modo_stats) * MULT),
+        ctl: Math.round(_calcStat(pjA.ctl || 0, pjB.ctl || 0, opciones.modo_stats) * MULT),
     };
 
     const ptsA = {}, ptsB = {};
@@ -70,8 +77,9 @@ export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = 
     todosLosTags.forEach(tag => {
         const valA = ptsA[tag] || 0;
         const valB = ptsB[tag] || 0;
+        const ptsCalc = _calcPT(valA, valB, regla.comportamiento);
         tagsResultantes[tag] = {
-            pts:     _calcPT(valA, valB, regla.comportamiento),
+            pts:     Math.round(ptsCalc * MULT),
             tipo:    _tipoTag(valA, valB, regla.comportamiento),
             aportaA: valA,
             aportaB: valB,
@@ -103,6 +111,8 @@ export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = 
         snapshotA:         { pot: pjA.pot, agi: pjA.agi, ctl: pjA.ctl, tags: tagsA },
         snapshotB:         { pot: pjB.pot, agi: pjB.agi, ctl: pjB.ctl, tags: tagsB },
         d100,
+        sobreRecarga,
+        multiplicador:     MULT,
     };
 }
 
@@ -128,4 +138,12 @@ export function buildRegistroFusion(resultado, statsFinales, tagFusion, ptsFusio
         tags_resultado:      tagsArr,
         fusion_activa_id:    fusionActivaId || null,
     };
+}
+
+// ─── Compatibilidad por tags compartidos ─────────────────────
+// Escala: 0=0%, 1=1%, 2=10%, 3=18%, 4=26%, +8% por cada tag adicional
+export function calcCompatibilidadTags(nTagsCompartidos) {
+    if (nTagsCompartidos <= 0) return 0;
+    if (nTagsCompartidos === 1) return 1;
+    return 10 + (nTagsCompartidos - 2) * 8;
 }

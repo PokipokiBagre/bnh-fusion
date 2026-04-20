@@ -1,10 +1,10 @@
 // fusions/fusions-ui.js
 import { fusionsState, personajes, fusionesActivas, registroFusiones, STORAGE_URL, norm } from './fusions-state.js';
-import { getRegla, getReglas } from './fusions-logic.js';
+import { getRegla, getReglas, calcCompatibilidadTags } from './fusions-logic.js';
 import { opcionesState, renderOpciones } from './fusions-options.js';
 import { estaEnFusion } from '../bnh-fusion.js';
 
-export { renderOpciones };  // re-exportar para fusions-main.js
+export { renderOpciones };
 
 const _esc  = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -30,7 +30,7 @@ export function renderSimulador() {
 
     <div class="fusion-layout" style="margin-bottom:16px;">
         <div id="slot-a" class="slot-card">${renderSlot('a')}</div>
-        <div class="vs-panel">${renderVsPanel()}</div>
+        <div class="vs-panel" id="vs-panel-wrap">${renderVsPanel()}</div>
         <div id="slot-b" class="slot-card">${renderSlot('b')}</div>
     </div>
 
@@ -40,7 +40,10 @@ export function renderSimulador() {
     _actualizarClasesPool();
     _actualizarSlot('a');
     _actualizarSlot('b');
-    _actualizarVsPanel();
+    // Inicializar listener del D100 sin oninput en el HTML (evita pérdida de foco)
+    requestAnimationFrame(() => {
+        window._fusionD100Init?.();
+    });
 
     if (fusionsState.resultadoCalculado) renderResultado(fusionsState.resultadoCalculado);
 }
@@ -102,24 +105,91 @@ function renderSlot(letra) {
 }
 
 function renderVsPanel() {
-    const d100  = fusionsState.d100 || '';
-    const regla = d100 ? getRegla(parseInt(d100)) : null;
-    const pct   = d100 ? Math.min(100, parseInt(d100)) : 0;
+    const d100   = fusionsState.d100 || '';
+    const bonus  = fusionsState.compatPct || 0;
+    const nTags  = fusionsState.compatTags || 0;
+    const total  = (parseInt(d100) || 0) + bonus;
+    const regla  = total ? getRegla(total) : null;
+    const pct    = d100 ? Math.min(parseInt(d100), 100) : 0;
+    // El bonus de tags llena la barra como un segundo color encima
+    const bonusPx = bonus > 0 ? Math.min(bonus, 100 - pct) : 0;
+    // Si el total supera 100, la barra entera + un indicador de sobrerecarga
+    const sobreRecarga = total > 100;
 
     return `
-    <div class="vs-orb">VS</div>
+    <div class="vs-orb">${sobreRecarga ? '🔥' : 'VS'}</div>
+
+    <!-- Input D100 — sin oninput en el HTML para evitar pérdida de foco -->
     <div class="d100-wrap">
         <div class="d100-label">Rendimiento D100</div>
-        <input type="number" class="d100-input" id="inp-d100"
-            min="1" max="100" placeholder="—" value="${d100}"
-            oninput="window._fusionD100Change(this.value)">
-        <div class="compat-bar-wrap">
-            <div class="compat-bar"><div class="compat-fill" id="compat-fill" style="width:${pct}%;"></div></div>
-            <div class="compat-label" id="compat-label">${pct ? pct + '% compatibilidad' : 'Ingresa el dado'}</div>
+        <input type="number" id="inp-d100"
+            min="1" max="100" placeholder="—"
+            value="${d100}"
+            style="
+                width:90px;text-align:center;font-size:1.8em;font-weight:800;
+                color:var(--fp);border:2px solid var(--fp);border-radius:var(--radius);
+                padding:6px;outline:none;font-family:inherit;
+                transition:box-shadow 0.2s;background:white;
+            "
+            onfocus="this.style.boxShadow='0 0 0 3px var(--fp-glow)'"
+            onblur="this.style.boxShadow=''">
+
+        <!-- Compatibilidad por tags -->
+        ${(fusionsState.pjA && fusionsState.pjB) ? `
+        <div style="
+            display:flex;align-items:center;gap:6px;
+            background:${sobreRecarga ? 'rgba(224,64,251,0.12)' : 'var(--fp-pale)'};
+            border:1px solid ${sobreRecarga ? 'var(--fa)' : 'var(--fp)'};
+            border-radius:8px;padding:5px 10px;width:100%;
+            font-size:0.78em;font-weight:700;color:var(--fp-dark);">
+            <span style="font-size:1em;">${sobreRecarga ? '🔥' : '🔗'}</span>
+            <div>
+                <div>${nTags} tag${nTags!==1?'s':''} compartido${nTags!==1?'s':''} = <span style="color:var(--fp);font-weight:800;">+${bonus}%</span></div>
+                ${sobreRecarga ? `<div style="color:var(--fa);font-size:0.9em;">¡Sobrecarga! Stats y PT ×1.5</div>` : ''}
+            </div>
+        </div>` : `
+        <div style="font-size:0.72em;color:var(--gray-500);text-align:center;">
+            Selecciona ambos PJs para ver compatibilidad
+        </div>`}
+
+        <!-- Barra de compatibilidad -->
+        <div style="width:100%;display:flex;flex-direction:column;gap:3px;">
+            <div style="width:100%;height:10px;background:var(--gray-200);border-radius:5px;overflow:hidden;position:relative;">
+                <div id="compat-fill" style="
+                    position:absolute;left:0;top:0;bottom:0;
+                    width:${pct}%;background:var(--fp);
+                    transition:width 0.3s ease;border-radius:5px;"></div>
+                <div id="compat-fill-bonus" style="
+                    position:absolute;top:0;bottom:0;
+                    left:${pct}%;width:${bonusPx}%;
+                    background:var(--fa);opacity:0.8;
+                    transition:all 0.3s ease;"></div>
+                ${sobreRecarga ? `<div style="position:absolute;right:2px;top:50%;transform:translateY(-50%);font-size:8px;">🔥</div>` : ''}
+            </div>
+            <div id="compat-label" style="font-size:0.7em;color:var(--gray-500);text-align:center;">
+                ${d100 ? `D100: ${d100} + ${bonus}% tags = <b>${total}%</b>` : 'Ingresa el dado'}
+            </div>
         </div>
-        ${regla ? `<div class="regla-badge ${regla.clase}">${regla.label}</div>` : ''}
+
+        <!-- Rendimiento total y regla -->
+        ${regla ? `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:100%;">
+            <div id="regla-badge-display" class="regla-badge ${regla.clase}" style="width:100%;text-align:center;">${regla.label}</div>
+            ${sobreRecarga ? `<div style="font-size:0.7em;font-weight:700;color:var(--fa);">Rendimiento total: <b>${total}%</b> (×1.5 activo)</div>` : ''}
+        </div>` : ''}
     </div>
+
     <button class="btn btn-fusion btn-lg" style="width:100%;margin-top:4px;" onclick="window._fusionSimular()">⚡ Simular</button>`;
+}
+
+// ── Actualizar el panel VS en-place (sin re-render total) ──────
+export function actualizarCompatibilidadDisplay() {
+    // Solo actualizamos el panel VS completo para mostrar el bonus de tags
+    const panel = document.getElementById('vs-panel-wrap');
+    if (!panel) return;
+    panel.innerHTML = renderVsPanel();
+    // Re-inicializar el listener del input D100 (se perdió al re-renderizar)
+    requestAnimationFrame(() => window._fusionD100Init?.());
 }
 
 function _actualizarClasesPool() {
@@ -133,12 +203,8 @@ function _actualizarSlot(letra) {
     el.className = `slot-card ${nombre ? 'filled-' + letra : ''}`;
     el.innerHTML = renderSlot(letra);
 }
-function _actualizarVsPanel() {
-    const el = document.querySelector('.vs-panel');
-    if (el) el.innerHTML = renderVsPanel();
-}
-export function actualizarVsPanelPublic()    { _actualizarVsPanel(); }
-export function actualizarSlotPublic(letra)  { _actualizarSlot(letra); _actualizarClasesPool(); }
+export function actualizarVsPanelPublic() { /* ya no se usa el panel viejo */ }
+export function actualizarSlotPublic(letra) { _actualizarSlot(letra); _actualizarClasesPool(); }
 
 // ─── Resultado ────────────────────────────────────────────────
 export function renderResultado(resultado) {
@@ -146,14 +212,17 @@ export function renderResultado(resultado) {
     if (!wrap) return;
     wrap.classList.remove('oculto');
 
-    const { regla, statsBase, statsFinales, tags, pjA, pjB, d100, maxTagCompartido, maxPtsCompartidos } = resultado;
+    const { regla, statsBase, statsFinales, tags, pjA, pjB, d100,
+            maxTagCompartido, maxPtsCompartidos, d100Base, d100Bonus } = resultado;
+    const sobreRecarga = (d100 || 0) > 100;
+
     const sf  = fusionsState.statsEditadas;
     const pot = sf.pot !== null ? sf.pot : statsFinales.pot;
     const agi = sf.agi !== null ? sf.agi : statsFinales.agi;
     const ctl = sf.ctl !== null ? sf.ctl : statsFinales.ctl;
 
-    const dL  = d => d === 0 ? '' : (d > 0 ? `+${d}` : `${d}`);
-    const dC  = d => d === 0 ? 'sdelta-neu' : (d > 0 ? 'sdelta-pos' : 'sdelta-neg');
+    const dL = d => d === 0 ? '' : (d > 0 ? `+${d}` : `${d}`);
+    const dC = d => d === 0 ? 'sdelta-neu' : (d > 0 ? 'sdelta-pos' : 'sdelta-neg');
 
     const tagsHtml = Object.entries(tags)
         .filter(([, d]) => d.pts > 0)
@@ -167,36 +236,53 @@ export function renderResultado(resultado) {
             </span>`;
         }).join('');
 
-    // Input para el tag de fusión (si está activado en opciones)
     const tagFusionSection = opcionesState.crear_tag_fusion ? `
     <div style="padding:14px 20px;border-top:1px solid var(--border);">
-        <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:8px;">
-            ✨ Tag de Fusión Temporal
-        </div>
+        <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:8px;">✨ Tag de Fusión Temporal</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <div style="flex:1;min-width:200px;">
                 <input class="inp" type="text" id="inp-tag-fusion"
-                    placeholder="#VaporFusion, #CieloLlama, etc."
+                    placeholder="#VaporFusion, #CieloLlama…"
                     value="${_esc(fusionsState.tagFusionNombre || '')}"
                     oninput="window._fusionTagNombreChange(this.value)"
                     style="font-weight:700;color:var(--fp);">
             </div>
-            <div style="font-size:0.8em;color:var(--gray-500);">
-                ${opcionesState.pts_tag_fusion} PT iniciales
-            </div>
+            <div style="font-size:0.8em;color:var(--gray-500);">${opcionesState.pts_tag_fusion} PT iniciales</div>
         </div>
         <div style="font-size:0.75em;color:var(--gray-500);margin-top:4px;">
-            Este tag se asignará a ambos personajes al oficializar. El # se añade automáticamente.
-            ${maxTagCompartido ? `<b>Inspiración:</b> el tag más compartido fue ${_esc(maxTagCompartido)} con ${maxPtsCompartidos} PT.` : ''}
+            Este tag se asignará a ambos PJs. El # se añade automáticamente.
+            ${maxTagCompartido ? `<b>Inspiración:</b> tag más compartido fue <b>${_esc(maxTagCompartido)}</b> (${maxPtsCompartidos}pt).` : ''}
         </div>
     </div>` : '';
+
+    // Botón de acción según rol
+    const esAdmin = fusionsState.esAdmin;
+    const accionBtn = esAdmin
+        ? `<button class="btn btn-fusion btn-lg" style="flex:1;min-width:180px;" onclick="window._fusionOficializar()">⚡ Oficializar en Base de Datos</button>`
+        : `<button class="btn btn-outline-fusion btn-lg" style="flex:1;min-width:180px;" onclick="window._fusionEnviarSugerencia()">📨 Enviar como Sugerencia al OP</button>`;
 
     wrap.innerHTML = `
     <div class="resultado-section">
         <div class="resultado-header">
             <h3>⚡ ${_esc(pjA)} + ${_esc(pjB)}</h3>
-            <div class="regla-badge ${regla.clase}">${regla.label} · D${d100}</div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
+                <div class="regla-badge ${regla.clase}">${regla.label}</div>
+                <div style="font-size:0.72em;color:rgba(255,255,255,0.8);">
+                    D${d100Base||d100}${d100Bonus ? ` + ${d100Bonus}% tags` : ''}
+                    ${sobreRecarga ? ' · <b style="color:#f0abfc;">🔥 ×1.5 activo</b>' : ''}
+                </div>
+            </div>
         </div>
+
+        ${sobreRecarga ? `
+        <div style="padding:10px 20px;background:rgba(224,64,251,0.1);border-bottom:1px solid rgba(224,64,251,0.3);">
+            <div style="font-size:0.82em;font-weight:700;color:var(--fa);">
+                🔥 Sobrecarga de Compatibilidad — Stats y PTs base multiplicados por ×1.5
+            </div>
+            <div style="font-size:0.75em;color:var(--gray-500);margin-top:2px;">
+                Rendimiento total: ${d100} (supera el 100%). Los valores base ya incluyen el multiplicador.
+            </div>
+        </div>` : ''}
 
         <!-- Stats editables -->
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
@@ -221,7 +307,7 @@ export function renderResultado(resultado) {
                 </div>
             </div>
             <div style="margin-top:8px;font-size:0.75em;color:var(--gray-500);">
-                Base calculada (modo <b>${resultado.opciones.modo_stats}</b>): POT ${statsBase.pot} · AGI ${statsBase.agi} · CTL ${statsBase.ctl}
+                Base (modo <b>${resultado.opciones.modo_stats}</b>): POT ${statsBase.pot} · AGI ${statsBase.agi} · CTL ${statsBase.ctl}
                 &nbsp;·&nbsp; PAC: <b id="pac-display">${pot + agi + ctl}</b>
             </div>
         </div>
@@ -244,12 +330,8 @@ export function renderResultado(resultado) {
             </div>
 
             <div style="display:flex;gap:10px;padding-top:4px;border-top:1px solid var(--border);flex-wrap:wrap;">
-                <button class="btn btn-fusion btn-lg" style="flex:1;min-width:180px;" onclick="window._fusionOficializar()">
-                    ⚡ Oficializar en Base de Datos
-                </button>
-                <button class="btn btn-outline btn-lg" onclick="window._fusionResetResultado()">
-                    Reiniciar
-                </button>
+                ${accionBtn}
+                <button class="btn btn-outline btn-lg" onclick="window._fusionResetResultado()">Reiniciar</button>
             </div>
         </div>
     </div>`;
@@ -272,10 +354,14 @@ export function renderFusionesActivas() {
     }
 
     const cards = fusionesActivas.map(f => {
-        const rend = f.rendimiento || 0;
+        const rend    = f.rendimiento || 0;
         const rendCls = rend <= 33 ? 'rend-bajo' : rend <= 66 ? 'rend-medio' : 'rend-alto';
-        const regla = getRegla(rend);
-        const fecha = f.creado_en ? new Date(f.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+        const regla   = getRegla(rend);
+        const fecha   = f.creado_en ? new Date(f.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+
+        const terminBtn = fusionsState.esAdmin
+            ? `<button class="btn btn-red btn-sm" onclick="window._fusionTerminar(${f.id},'${f.pj_a.replace(/'/g,"\\'")}','${f.pj_b.replace(/'/g,"\\'")}')">Terminar</button>`
+            : '';
 
         return `
         <div class="fusion-activa-card">
@@ -287,14 +373,12 @@ export function renderFusionesActivas() {
                 <div class="fusion-activa-names">${_esc(f.pj_a)} ⚡ ${_esc(f.pj_b)}</div>
                 <div class="fusion-activa-meta">
                     <span class="regla-badge ${regla.clase}" style="font-size:0.68em;">${regla.label}</span>
-                    ${f.tag_fusion ? `&nbsp;·&nbsp; <span style="color:var(--fp);font-weight:700;font-size:0.8em;">${_esc(f.tag_fusion)}</span>` : ''}
+                    ${f.tag_fusion ? `&nbsp;·&nbsp;<span style="color:var(--fp);font-weight:700;font-size:0.8em;">${_esc(f.tag_fusion)}</span>` : ''}
                     &nbsp;·&nbsp; Desde ${fecha}
                 </div>
             </div>
             <div class="rendimiento-pill ${rendCls}">${rend}</div>
-            <button class="btn btn-red btn-sm" onclick="window._fusionTerminar(${f.id},'${f.pj_a.replace(/'/g,"\\'")}','${f.pj_b.replace(/'/g,"\\'")}')">
-                Terminar
-            </button>
+            ${terminBtn}
         </div>`;
     }).join('');
 
@@ -303,33 +387,97 @@ export function renderFusionesActivas() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// TAB: REGISTRO
+// TAB: REGISTRO (incluye sugerencias pendientes para el OP)
 // ═══════════════════════════════════════════════════════════════
-export function renderRegistro() {
+export async function renderRegistro() {
     const wrap = document.getElementById('vista-registro');
     if (!wrap) return;
 
+    // Si es OP, cargar también sugerencias pendientes
+    let sugerencias = [];
+    if (fusionsState.esAdmin) {
+        const { supabase: sb } = await import('../bnh-auth.js');
+        const { data } = await sb.from('sugerencias_fusion')
+            .select('*').eq('estado', 'pendiente').order('creado_en', { ascending: false });
+        sugerencias = data || [];
+    }
+
+    // Sección de sugerencias (solo visible para OP)
+    let sugSection = '';
+    if (fusionsState.esAdmin && sugerencias.length) {
+        const sugCards = sugerencias.map(s => {
+            const fecha = new Date(s.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' });
+            const rendTotal = s.rend_total || s.rendimiento;
+            const regla = getRegla(rendTotal);
+
+            // Tags top 5
+            const tagsArr = (Array.isArray(s.tags_resultado) ? s.tags_resultado : []).sort((a,b) => b.pts - a.pts).slice(0, 5);
+            const tagsHtml = tagsArr.map(t => `<span class="tag-res tag-res-${t.tipo}" style="font-size:0.72em;">${_esc(t.tag)} <span class="tag-pts">${t.pts}pt</span></span>`).join('');
+
+            return `
+            <div style="background:rgba(214,137,16,0.04);border:1.5px solid var(--orange);border-radius:var(--radius-lg);padding:14px 16px;display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                    <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">
+                        <div style="position:relative;width:52px;height:36px;flex-shrink:0;">
+                            <img src="${imgPJ(s.pj_a)}" onerror="this.onerror=null;this.src='${fb()}'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid white;position:absolute;left:0;z-index:2;">
+                            <img src="${imgPJ(s.pj_b)}" onerror="this.onerror=null;this.src='${fb()}'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid white;position:absolute;left:16px;z-index:1;opacity:0.9;">
+                        </div>
+                        <div>
+                            <div style="font-weight:700;font-size:0.9em;">${_esc(s.pj_a)} ⚡ ${_esc(s.pj_b)}</div>
+                            <div style="font-size:0.75em;color:var(--gray-500);">Sugerido el ${fecha}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                        <span class="regla-badge ${regla?.clase||'regla-basica'}" style="font-size:0.68em;">${regla?.label||'—'}</span>
+                        <span style="font-size:0.78em;color:var(--gray-500);">D${s.rendimiento}${s.compat_bonus?` +${s.compat_bonus}%`:''}=${rendTotal}%</span>
+                        ${s.tag_fusion ? `<span style="font-size:0.78em;font-weight:700;color:var(--fp);background:var(--fp-pale);border:1px solid var(--fp);padding:2px 8px;border-radius:8px;">${_esc(s.tag_fusion)}</span>` : ''}
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(3,auto) 1fr;gap:8px;align-items:center;">
+                    ${[['POT',s.stats_pot,'var(--orange)'],['AGI',s.stats_agi,'#2980b9'],['CTL',s.stats_ctl,'var(--green-light)']].map(([l,v,c]) =>
+                        `<div style="font-size:0.78em;text-align:center;background:white;border:1px solid var(--border);border-radius:6px;padding:4px 8px;">
+                            <div style="font-size:0.7em;color:var(--gray-500);">${l}</div><div style="font-weight:800;color:${c};">${v}</div>
+                        </div>`).join('')}
+                    <div></div>
+                </div>
+                ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsHtml}</div>` : ''}
+                <div style="display:flex;gap:8px;padding-top:6px;border-top:1px solid var(--border);">
+                    <button class="btn btn-green btn-sm" style="flex:1;" onclick="window._fusionAprobarSugerencia(${s.id})">✅ Aprobar</button>
+                    <button class="btn btn-red btn-sm" style="flex:1;" onclick="window._fusionRechazarSugerencia(${s.id})">❌ Rechazar</button>
+                </div>
+            </div>`;
+        }).join('');
+
+        sugSection = `
+        <div class="card" style="margin-bottom:16px;border-color:var(--orange);">
+            <div class="card-title" style="color:var(--orange);">⏳ Sugerencias de Fusión Pendientes (${sugerencias.length})</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">${sugCards}</div>
+        </div>`;
+    }
+
+    // Historial
     if (!registroFusiones.length) {
-        wrap.innerHTML = `<div class="card"><div class="card-title">Registro de Fusiones</div>
+        wrap.innerHTML = sugSection + `<div class="card"><div class="card-title">Registro de Fusiones</div>
         <div class="empty-state"><div style="font-size:2.5em;margin-bottom:12px;">📋</div>
         <h3>Sin fusiones registradas</h3><p>El historial aparecerá aquí una vez se oficialice la primera fusión.</p></div></div>`;
         return;
     }
 
     const rows = registroFusiones.map(f => {
-        const fecha = f.creado_en ? new Date(f.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
-        const regla = { basica:'regla-basica', sinergia:'regla-sinergia', perfecta:'regla-perfecta', z1:'regla-basica', z2:'regla-sinergia', z3:'regla-perfecta' }[f.regla_aplicada] || 'regla-basica';
-        const rend = f.rendimiento || 0;
+        const fecha   = f.creado_en ? new Date(f.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+        const reglaKey = { basica:'regla-basica', sinergia:'regla-sinergia', perfecta:'regla-perfecta', z1:'regla-basica', z2:'regla-sinergia', z3:'regla-perfecta', sugerencia_aprobada:'regla-sinergia' }[f.regla_aplicada] || 'regla-basica';
+        const rend    = f.rendimiento || 0;
         const rendCls = rend <= 33 ? 'rend-bajo' : rend <= 66 ? 'rend-medio' : 'rend-alto';
 
-        // Top 5 tags del resultado
-        const tagsArr = (Array.isArray(f.tags_resultado) ? f.tags_resultado : [])
-            .sort((a, b) => b.pts - a.pts)
-            .slice(0, 5);
+        const tagsArr = (Array.isArray(f.tags_resultado) ? f.tags_resultado : []).sort((a, b) => b.pts - a.pts).slice(0, 5);
         const tagsHtml = tagsArr.map(t => {
             const cls = `tag-res-${t.tipo}`;
             return `<span class="tag-res ${cls}" style="font-size:0.72em;">${_esc(t.tag)} <span class="tag-pts">${t.pts}pt</span></span>`;
         }).join('');
+
+        const borrarBtn = fusionsState.esAdmin
+            ? `<button class="btn btn-outline btn-sm" style="border-color:var(--red);color:var(--red);" onclick="window._fusionBorrarRegistro(${f.id})">🗑️</button>`
+            : '';
 
         return `
         <div style="background:white;border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;display:flex;flex-direction:column;gap:8px;">
@@ -346,39 +494,32 @@ export function renderRegistro() {
                 </div>
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <div class="rendimiento-pill ${rendCls}" style="width:36px;height:36px;font-size:0.72em;">${rend}</div>
-                    <span class="regla-badge ${regla}" style="font-size:0.7em;">${f.regla_aplicada}</span>
+                    <span class="regla-badge ${reglaKey}" style="font-size:0.7em;">${f.regla_aplicada}</span>
                     ${f.tag_fusion ? `<span style="font-size:0.78em;font-weight:700;color:var(--fp);background:var(--fp-pale);border:1px solid var(--fp);padding:2px 8px;border-radius:8px;">${_esc(f.tag_fusion)} · ${f.tag_fusion_pts}pt</span>` : ''}
+                    ${borrarBtn}
                 </div>
             </div>
 
             <div style="display:grid;grid-template-columns:repeat(4,auto) 1fr;gap:8px;align-items:center;flex-wrap:wrap;">
-                <div style="font-size:0.78em;text-align:center;background:rgba(214,137,16,0.08);border:1px solid rgba(214,137,16,0.3);border-radius:6px;padding:4px 8px;">
-                    <div style="font-size:0.7em;color:var(--gray-500);">POT</div>
-                    <div style="font-weight:800;color:var(--orange);">${f.stats_pot}</div>
-                </div>
-                <div style="font-size:0.78em;text-align:center;background:rgba(41,128,185,0.08);border:1px solid rgba(41,128,185,0.3);border-radius:6px;padding:4px 8px;">
-                    <div style="font-size:0.7em;color:var(--gray-500);">AGI</div>
-                    <div style="font-weight:800;color:#2980b9;">${f.stats_agi}</div>
-                </div>
-                <div style="font-size:0.78em;text-align:center;background:rgba(39,174,96,0.08);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:4px 8px;">
-                    <div style="font-size:0.7em;color:var(--gray-500);">CTL</div>
-                    <div style="font-weight:800;color:var(--green-light);">${f.stats_ctl}</div>
-                </div>
+                ${[['POT',f.stats_pot,'rgba(214,137,16,0.08)','rgba(214,137,16,0.3)','var(--orange)'],
+                   ['AGI',f.stats_agi,'rgba(41,128,185,0.08)','rgba(41,128,185,0.3)','#2980b9'],
+                   ['CTL',f.stats_ctl,'rgba(39,174,96,0.08)','rgba(39,174,96,0.3)','var(--green-light)']].map(([l,v,bg,brd,c]) =>
+                    `<div style="font-size:0.78em;text-align:center;background:${bg};border:1px solid ${brd};border-radius:6px;padding:4px 8px;">
+                        <div style="font-size:0.7em;color:var(--gray-500);">${l}</div>
+                        <div style="font-weight:800;color:${c};">${v}</div>
+                    </div>`).join('')}
                 <div style="font-size:0.78em;text-align:center;background:var(--fp-pale);border:1px solid var(--fp);border-radius:6px;padding:4px 8px;">
                     <div style="font-size:0.7em;color:var(--gray-500);">PAC</div>
                     <div style="font-weight:800;color:var(--fp-dark);">${f.stats_pac || (f.stats_pot + f.stats_agi + f.stats_ctl)}</div>
                 </div>
-                ${f.max_tag_compartido ? `
-                <div style="font-size:0.75em;color:var(--gray-500);">
-                    Mayor compartido: <b style="color:var(--fp-dark);">${_esc(f.max_tag_compartido)}</b> · ${f.max_pts_compartidos}pt
-                </div>` : '<div></div>'}
+                ${f.max_tag_compartido ? `<div style="font-size:0.75em;color:var(--gray-500);">Mayor compartido: <b style="color:var(--fp-dark);">${_esc(f.max_tag_compartido)}</b> · ${f.max_pts_compartidos}pt</div>` : '<div></div>'}
             </div>
 
             ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsHtml}</div>` : ''}
         </div>`;
     }).join('');
 
-    wrap.innerHTML = `
+    wrap.innerHTML = sugSection + `
     <div class="card">
         <div class="card-title">Registro de Fusiones (${registroFusiones.length})</div>
         <div style="display:flex;flex-direction:column;gap:10px;">${rows}</div>
