@@ -195,21 +195,24 @@ export function renderTimeline() {
     let html = selectorHilo + `
     <div style="display:flex;gap:16px;align-items:flex-start;">
 
-        <!-- Panel izquierdo: selección de posts (solo OP) -->
         ${estadoUI.esAdmin ? `<div id="panel-sel-posts" style="width:${selPostsState.activo?'280px':'0'};
-            min-width:${selPostsState.activo?'280px':'0'};overflow:hidden;
-            transition:width 0.25s,min-width 0.25s;flex-shrink:0;align-self:flex-start;">
+            min-width:${selPostsState.activo?'280px':'0'};
+            transition:width 0.25s,min-width 0.25s;flex-shrink:0;align-self:flex-start;
+            position:sticky; top:70px; max-height:calc(100vh - 90px); overflow-y:auto; overflow-x:hidden;">
             ${panelSeleccion}
         </div>` : ''}
 
-        <!-- Contenido principal -->
         <div style="flex:1;min-width:0;">
             <div style="display:flex;justify-content:space-between;align-items:center;
-                padding:4px 0 10px;flex-wrap:wrap;gap:8px;margin-bottom:4px;">
-                <span style="font-size:0.85em;color:#666;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
+                padding:12px 10px;flex-wrap:wrap;gap:8px;margin-bottom:12px;
+                position:sticky; top:55px; z-index:20; 
+                background:rgba(255,255,255,0.95); backdrop-filter:blur(6px);
+                border-bottom:1px solid #e9ecef; border-radius:0 0 10px 10px; margin-top:-8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                <span style="font-size:0.85em;color:#666;font-weight:600;">${postsState.length} posts · ${estadoUI.hiloActivo.titulo}</span>
                 ${estadoUI.esAdmin ? `<button class="btn btn-sm ${selPostsState.activo?'btn-green':'btn-outline'}"
                     onclick="window._histToggleSelPosts()"
-                    style="font-size:0.78em;">
+                    style="font-size:0.78em;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                     ${selPostsState.activo
                         ? '✓ Seleccionando (' + selPostsState.postsSel.size + ')'
                         : '☑ Seleccionar posts'}
