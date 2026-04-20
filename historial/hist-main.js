@@ -275,103 +275,120 @@ window._histTogglePostSel = function(postNo) {
 };
 
 window._histTogglePJExtra = async function(nombre) {
-    const idx = selPostsState.personajesExtra.findIndex(e => e.nombre_refinado === nombre);
-    if (idx >= 0) {
-        selPostsState.personajesExtra.splice(idx, 1);
-        if (estadoUI.hiloActivo && selPostsState.postsSel.size > 0) {
-            const { board, thread_id } = estadoUI.hiloActivo;
-            const postNos = [...selPostsState.postsSel];
+    if (!estadoUI.hiloActivo || selPostsState.postsSel.size === 0) return;
+    const { board, thread_id } = estadoUI.hiloActivo;
+    const postNos = [...selPostsState.postsSel];
 
-            // 1. Quitar del poster_name en DB y memoria
-            for (const postNo of postNos) {
-                const postLocal = postsState.find(p => p.post_no === postNo);
-                if (!postLocal) continue;
-                const partes = postLocal.poster_name.split(',').map(s => s.trim()).filter(Boolean);
-                // Quitar el nombre exacto y sus aliases que resuelvan a este grupo
-                const nuevasPartes = partes.filter(p => {
-                    if (p === nombre) return false;
-                    const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
-                    return g !== nombre;
-                });
-                if (nuevasPartes.length === partes.length) continue; // no estaba
-                const nuevoPosterName = nuevasPartes.join(', ');
-                try {
-                    await supabase.from('historial_posts')
-                        .update({ poster_name: nuevoPosterName })
-                        .eq('board', board).eq('thread_id', thread_id).eq('post_no', postNo);
-                    postLocal.poster_name = nuevoPosterName;
-                } catch(e) { console.warn('[togglePJExtra quitar] poster_name:', e); }
-            }
+    let presentes = 0;
+    postNos.forEach(postNo => {
+        const post = postsState.find(p => p.post_no === postNo);
+        if (post) {
+            const partes = post.poster_name.split(',').map(s => s.trim());
+            if (partes.some(p => {
+                const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
+                return g === nombre;
+            })) presentes++;
+        }
+    });
 
-            // 2. Revertir PT
-            toast('⏳ Revirtiendo PT de ' + nombre + '…', 'info');
-            const hijos = postsState.filter(p => {
-                const refs = []; let m; const re = />>(\d+)/g; const txt = p.contenido || '';
-                while ((m = re.exec(txt)) !== null) refs.push(Number(m[1]));
-                return refs.some(r => postNos.includes(r));
-            }).map(p => p.post_no);
-            const afect = [...new Set([...postNos, ...hijos])];
-            await revertirPTExtraParaPosts(thread_id, nombre, afect);
-            await cargarPTTagDelHilo(thread_id);
-            toast('✅ PT revertidos (' + afect.length + ' posts)', 'ok');
+    const accionAgregar = presentes < postNos.length;
+    toast(`⏳ ${accionAgregar ? 'Agregando' : 'Quitando'} personaje…`, 'info');
+
+    for (const postNo of postNos) {
+        const postLocal = postsState.find(p => p.post_no === postNo);
+        if (!postLocal) continue;
+        const partes = postLocal.poster_name.split(',').map(s => s.trim()).filter(Boolean);
+        
+        let nuevasPartes;
+        if (accionAgregar) {
+            const yaEsta = partes.some(p => {
+                const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
+                return g === nombre;
+            });
+            if (yaEsta) continue; 
+            nuevasPartes = [...partes, nombre];
+        } else {
+            nuevasPartes = partes.filter(p => {
+                if (p === nombre) return false;
+                const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
+                return g !== nombre;
+            });
         }
-    } else {
-        const pj = selPostsState.todosPJs.find(g => g.nombre_refinado === nombre);
-        if (pj) {
-            selPostsState.personajesExtra.push({ nombre_refinado: pj.nombre_refinado, tags: pj.tags || [] });
-            if (estadoUI.hiloActivo && selPostsState.postsSel.size > 0) {
-                const { board, thread_id } = estadoUI.hiloActivo;
-                for (const postNo of selPostsState.postsSel) {
-                    const postLocal = postsState.find(p => p.post_no === postNo);
-                    if (!postLocal) continue;
-                    const yaEsta = postLocal.poster_name.split(',').map(s => s.trim()).some(p => {
-                        const g = mapaAliasAGrupo[p] || mapaAliasAGrupo[p.replace(/##?\S+/,'').trim()];
-                        return g === nombre;
-                    });
-                    if (yaEsta) continue;
-                    const nuevo = postLocal.poster_name + ', ' + nombre;
-                    try {
-                        await supabase.from('historial_posts')
-                            .update({ poster_name: nuevo })
-                            .eq('board', board).eq('thread_id', thread_id).eq('post_no', postNo);
-                        postLocal.poster_name = nuevo;
-                        mapaAliasAGrupo[nombre] = nombre;
-                    } catch(e) { console.warn('[togglePJExtra]', e); }
-                }
-            }
-        }
+
+        if (nuevasPartes.length === partes.length) continue;
+        const nuevoPosterName = nuevasPartes.join(', ');
+
+        try {
+            await supabase.from('historial_posts')
+                .update({ poster_name: nuevoPosterName })
+                .eq('board', board).eq('thread_id', thread_id).eq('post_no', postNo);
+            postLocal.poster_name = nuevoPosterName;
+        } catch(e) { console.warn('[togglePJExtra]', e); }
     }
+
     _sync(); ir('timeline');
+    toast(`✅ Personaje ${accionAgregar ? 'agregado' : 'quitado'} de la DB.`, 'ok');
 };
 
-window._histCalcPTExtra = async function() {
-    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
-    if (!selPostsState.postsSel.size) { toast('Selecciona al menos un post', 'error'); return; }
-    if (!selPostsState.personajesExtra.length) { toast('Añade al menos un personaje extra', 'error'); return; }
+window._histEliminarPT = async function() {
+    if (!estadoUI.hiloActivo || !selPostsState.postsSel.size) return;
+    if (!confirm('¿Eliminar todos los PT de los posts seleccionados?')) return;
+    const { thread_id } = estadoUI.hiloActivo;
+    
+    // Importación dinámica para llamar la nueva función limpia de hist-data.js
+    const { eliminarPTPorPosts } = await import('./hist-data.js');
+    
+    toast('⏳ Eliminando PT…', 'info');
+    const r = await eliminarPTPorPosts(thread_id, [...selPostsState.postsSel]);
+    if (!r.ok) { toast('❌ Error', 'error'); return; }
+    await cargarPTTagDelHilo(thread_id);
+    _sync(); ir('timeline');
+    toast('🗑 PT eliminados', 'ok');
+};
+
+window._histCalcPT = async function(modo) {
+    if (!estadoUI.hiloActivo || !selPostsState.postsSel.size) return;
     const { board, thread_id } = estadoUI.hiloActivo;
+    const postNos = [...selPostsState.postsSel];
     toast('⏳ Calculando PT…', 'info');
-    const r = await calcularPTExtraParaPosts(board, thread_id, [...selPostsState.postsSel], selPostsState.personajesExtra, false);
+
+    const { eliminarPTPorPosts, procesarPTSeleccion } = await import('./hist-data.js');
+
+    if (modo === 'completo') {
+        await eliminarPTPorPosts(thread_id, postNos);
+    }
+    
+    const r = await procesarPTSeleccion(board, thread_id, postNos, modo === 'faltantes');
     if (!r.ok) { toast('❌ ' + r.msg, 'error'); return; }
+
     await cargarPTTagDelHilo(thread_id);
     _sync(); ir('timeline');
     toast(`✅ PT calculados: ${r.transacciones} transacciones`, 'ok');
 };
 
-window._histCalcPTCitas = async function() {
-    if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
-    if (!selPostsState.postsSel.size) { toast('Selecciona al menos un post', 'error'); return; }
-    if (!selPostsState.personajesExtra.length) { toast('Añade al menos un personaje extra', 'error'); return; }
+window._histCalcPTHijos = async function(modo) {
+    if (!estadoUI.hiloActivo || !selPostsState.postsSel.size) return;
     const { board, thread_id } = estadoUI.hiloActivo;
     const selNos = [...selPostsState.postsSel];
+    
     const citadores = postsState.filter(p => {
         const refs = []; let m; const re = />>(\d+)/g; const txt = p.contenido || '';
         while ((m = re.exec(txt)) !== null) refs.push(Number(m[1]));
         return refs.some(r => selNos.includes(r));
     }).map(p => p.post_no);
+
     if (!citadores.length) { toast('Ningún post cita a los seleccionados', 'info'); return; }
     toast(`⏳ Calculando PT para ${citadores.length} posts citadores…`, 'info');
-    const r = await calcularPTExtraParaPosts(board, thread_id, citadores, selPostsState.personajesExtra, true);
+
+    const { eliminarPTPorPosts, procesarPTSeleccion } = await import('./hist-data.js');
+
+    if (modo === 'completo') {
+        await eliminarPTPorPosts(thread_id, citadores);
+    }
+
+    const r = await procesarPTSeleccion(board, thread_id, citadores, modo === 'faltantes');
     if (!r.ok) { toast('❌ ' + r.msg, 'error'); return; }
+
     await cargarPTTagDelHilo(thread_id);
     _sync(); ir('timeline');
     toast(`✅ ${citadores.length} posts · ${r.transacciones} transacciones`, 'ok');
