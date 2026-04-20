@@ -503,23 +503,32 @@ async function _refrescarTodo() {
 function _actualizarBarraD100() {
     const val   = fusionsState.d100 || 0;
     const bonus = fusionsState.compatPct || 0;
-    const total = Math.min(val + bonus, 150);
+    const total = val + bonus;
 
     const fill    = document.getElementById('compat-fill');
     const fillB   = document.getElementById('compat-fill-bonus');
     const label   = document.getElementById('compat-label');
     const totalEl = document.getElementById('rend-total-display');
     const reglaEl = document.getElementById('regla-badge-display');
+    const sobreEl = document.getElementById('sobrecarga-display');
 
     if (fill)    fill.style.width    = Math.min(val, 100) + '%';
     if (fillB)   fillB.style.width   = (total > 100 ? (total - 100) * 0.5 : bonus > 0 ? Math.min(bonus, 100 - val) : 0) + '%';
-    if (label)   label.textContent   = val ? `D100: ${val} + ${bonus}% tags = ${val + bonus}%` : 'Ingresa el dado';
-    if (totalEl) totalEl.textContent = val + bonus;
+    if (label)   label.textContent   = val ? `D100: ${val} + ${bonus}% tags = ${total}%` : 'Ingresa el dado';
+    if (totalEl) totalEl.textContent = total;
 
-    // AHORA SÍ LLAMAMOS A LA FUNCIÓN CORRECTAMENTE
     if (reglaEl) {
-        const regla = getRegla(val + bonus);
-        reglaEl.className = `regla-badge ${regla?.clase || ''}`;
-        reglaEl.textContent = regla?.label || '';
+        if (val > 0) {
+            const regla = getRegla(total);
+            reglaEl.style.display = 'block';
+            reglaEl.className = `regla-badge ${regla?.clase || ''}`;
+            reglaEl.textContent = regla?.label || '';
+        } else {
+            reglaEl.style.display = 'none';
+        }
+    }
+    
+    if (sobreEl) {
+        sobreEl.style.display = total > 100 ? 'block' : 'none';
     }
 }
