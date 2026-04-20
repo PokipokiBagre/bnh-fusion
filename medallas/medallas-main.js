@@ -200,19 +200,24 @@ window._medEquiparToggle = async (id, mObj) => {
         renderPersonaje();
     };
 
-    window._medGuardarEquipacionValida = async () => {
+window._medGuardarEquipacionValida = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
-        const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
-        const ctl = g?.ctl || 0;
+        
+        // ⚡ LENTE DE FUSIÓN: Leemos el CTL Proyectado en lugar de la base de datos estática
+        const { proyectarPJ } = await import('./medallas-logic.js');
+        const proy = proyectarPJ(medallaState.pjSeleccionado);
+        const ctl = proy ? proy.ctl : 0;
+
         let ctlAcum = 0;
         const validas = (medallaState.equipacion || []).filter(m => {
             const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
             if (cabe) ctlAcum += (m.costo_ctl||0);
             return cabe;
         });
+
         const sobran = (medallaState.equipacion||[]).length - validas.length;
         if (sobran > 0) {
-            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL y serán descartadas.\\n\\n¿Guardar solo las ${validas.length} que caben?`);
+            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL (${ctl} CTL) y serán descartadas.\n\n¿Guardar solo las ${validas.length} que caben?`);
             if (!ok) return;
         }
         medallaState.equipacion = validas;
@@ -236,21 +241,26 @@ window._medEquiparToggle = async (id, mObj) => {
         toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
         renderPersonaje();
     };
-    window._medGuardarEquipacion = window._medGuardarEquipacionValida; 
+    window._medGuardarEquipacion = window._medGuardarEquipacionValida;
 
-    window._medProponerEquipacion = () => {
+  window._medProponerEquipacion = async () => { 
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
-        const g   = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
-        const ctl = g?.ctl || 0;
+        
+        // ⚡ LENTE DE FUSIÓN: Leemos el CTL Proyectado
+        const { proyectarPJ } = await import('./medallas-logic.js');
+        const proy = proyectarPJ(medallaState.pjSeleccionado);
+        const ctl = proy ? proy.ctl : 0;
+
         let ctlAcum = 0;
         const validas = (medallaState.equipacion || []).filter(m => {
             const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
             if (cabe) ctlAcum += (m.costo_ctl||0);
             return cabe;
         });
+
         const sobran = (medallaState.equipacion||[]).length - validas.length;
         if (sobran > 0) {
-            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL.\\n\\n¿Proponer solo las ${validas.length} que caben?`);
+            const ok = confirm(`⚠ ${sobran} medalla(s) exceden el límite de CTL (${ctl} CTL).\n\n¿Proponer solo las ${validas.length} que caben?`);
             if (!ok) return;
         }
 
