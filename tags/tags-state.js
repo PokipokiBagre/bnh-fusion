@@ -26,17 +26,21 @@ export let catalogoTags  = [];
 export let medallasCat   = [];   
 export let solicitudes   = [];   
 
+// NUEVO: Variables para el Lente de Fusión
+export let opcionesFusion = {};
+export let bannedTags     = [];
+
 export function setGrupos(d)       { grupos       = d; }
 export function setPuntosAll(d)    { puntosAll    = d; }
 export function setCatalogoTags(d) { catalogoTags = d; }
 export function setMedallasCat(d)  { medallasCat  = d; }
 export function setSolicitudes(d)  { solicitudes  = d; }
 
+export function setOpcionesFusion(d) { opcionesFusion = d; }
+export function setBannedTags(d)     { bannedTags = d; }
+
 export let tagDetalle = null;
 export function setTagDetalle(v) { tagDetalle = v; }
 
-// ── Inventario de medallas del PJ seleccionado ────────────────
-// Se carga on-demand al seleccionar un personaje (ver tags-data.js).
-// Contiene los IDs de medallas que el PJ tiene actualmente equipadas.
 export let inventarioMedallas = [];
 export function setInventarioMedallas(d) { inventarioMedallas = d; }
