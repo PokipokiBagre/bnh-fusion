@@ -1,46 +1,60 @@
+// bnh-medal.js
 import { supabase } from './bnh-auth.js';
 
-export function verificarRequisitosMedalla(medalla, pjData, ptsMapa) {
-    if (!pjData) return false;
+export function verificarRequisitosMedalla(medalla, tagsPJ, ptsMapa) {
+    if (!tagsPJ) return false;
     
-    // Normalizar tags del personaje para comparación segura
-    const tagsPJ = (pjData.tags || []).map(t => t.startsWith('#') ? t.toLowerCase() : '#' + t.toLowerCase());
+    // Normalizar tags del personaje
+    const tagsNorm = tagsPJ.map(t => t.startsWith('#') ? t.toLowerCase() : '#' + t.toLowerCase());
     
+    // Normalizar mapa de PT
+    const ptsSeguros = {};
+    Object.keys(ptsMapa || {}).forEach(k => {
+        const cleanKey = k.startsWith('#') ? k.toLowerCase() : '#' + k.toLowerCase();
+        ptsSeguros[cleanKey] = ptsMapa[k];
+    });
+
     const reqs = medalla.requisitos_base || [];
     for (const req of reqs) {
         const tagNorm = (req.tag.startsWith('#') ? req.tag : '#' + req.tag).toLowerCase();
         
-        // 1. Verificar si el personaje tiene el TAG
-        if (!tagsPJ.includes(tagNorm)) return false;
+        if (!tagsNorm.includes(tagNorm)) return false;
         
-        // 2. Verificar si tiene los PT mínimos (usando la llave normalizada)
-        const pts = ptsMapa[tagNorm] || 0;
+        const pts = ptsSeguros[tagNorm] || 0;
         if (pts < (req.pts_minimos || 0)) return false;
     }
     
     return true;
 }
 
-export async function limpiarInventarioInvalido(pjNombre, inventarioActual, grupos, puntosAll) {
-    const pjData = grupos.find(g => g.nombre_refinado === pjNombre);
-    if (!pjData) return inventarioActual;
-
-    // Normalizamos las llaves del mapa a minúsculas y con '#' asegurado
-    const ptsMapa = {};
-    puntosAll.filter(p => p.personaje_nombre === pjNombre).forEach(p => { 
-        const k = p.tag.startsWith('#') ? p.tag.toLowerCase() : '#' + p.tag.toLowerCase();
-        ptsMapa[k] = p.cantidad; 
-    });
+// NUEVO: Ahora recibe los datos proyectados y el límite de CTL.
+export async function limpiarInventarioInvalido(pjNombre, inventarioActual, tagsPJ, ptsMapa, ctlMaximo) {
+    if (!tagsPJ || !ptsMapa) return inventarioActual;
 
     const idsInvalidos = [];
-    const inventarioLimpio = inventarioActual.filter(m => {
-        const esValida = verificarRequisitosMedalla(m, pjData, ptsMapa);
-        if (!esValida) idsInvalidos.push(m.id);
-        return esValida;
-    });
+    let inventarioValido = [];
 
+    // 1. Validar requisitos individuales (Tags y PTs)
+    for (const m of inventarioActual) {
+        if (!verificarRequisitosMedalla(m, tagsPJ, ptsMapa)) {
+            idsInvalidos.push(m.id);
+        } else {
+            inventarioValido.push(m);
+        }
+    }
+
+    // 2. Validar límite de CTL (Si se pasa, quita desde la última hasta cumplir)
+    let ctlUsado = inventarioValido.reduce((acc, m) => acc + (Number(m.costo_ctl) || 0), 0);
+    
+    while (ctlUsado > ctlMaximo && inventarioValido.length > 0) {
+        const removida = inventarioValido.pop(); // Sacrificamos la última validada
+        idsInvalidos.push(removida.id);
+        ctlUsado -= (Number(removida.costo_ctl) || 0);
+    }
+
+    // 3. Ejecutar borrado en BD si se violó alguna regla
     if (idsInvalidos.length > 0) {
-        console.warn(`[Seguridad-Medallas] Retirando ${idsInvalidos.length} medallas inválidas de ${pjNombre}`);
+        console.warn(`[Seguridad-Medallas] Retirando ${idsInvalidos.length} medallas de ${pjNombre} por pérdida de requisitos o CTL.`);
         
         await supabase
             .from('medallas_inventario')
@@ -49,9 +63,9 @@ export async function limpiarInventarioInvalido(pjNombre, inventarioActual, grup
             .in('medalla_id', idsInvalidos);
             
         if (window.toast) {
-            window.toast(`⚠️ Se retiraron ${idsInvalidos.length} medallas por falta de requisitos (Tags/PT).`, 'error');
+            window.toast(`⚠️ Se desequiparon ${idsInvalidos.length} medallas (Requisitos insuficientes o CTL excedido al perder fusión).`, 'error');
         }
     }
 
-    return inventarioLimpio;
+    return inventarioValido;
 }
