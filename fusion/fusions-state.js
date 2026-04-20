@@ -8,24 +8,30 @@ export const fusionsState = {
     pjA:                 null,
     pjB:                 null,
     d100:                null,
-    rendTotal:           null,   // d100 + bonus de tags compartidos
+    rendTotal:           null,   
     resultadoCalculado:  null,
     statsEditadas:       { pot: null, agi: null, ctl: null },
-    tagFusionNombre:     '',     // nombre del tag temporal a crear al oficializar
-    compatTags:          0,      // número de tags compartidos entre pjA y pjB
-    compatPct:           0,      // bonus porcentual por tags compartidos
-    esAdmin:             false,  // se setea en onload desde bnhAuth
+    tagFusionNombre:     '',     
+    compatTags:          0,      
+    compatPct:           0,      
+    esAdmin:             false,  
 };
 
 export let personajes       = [];
 export let ptGlobales       = [];
 export let fusionesActivas  = [];
 export let registroFusiones = [];
+export let bannedTags       = []; // NUEVO: Tags excluidos
 
 export function setPersonajes(data)       { personajes       = data; }
 export function setPtGlobales(data)       { ptGlobales       = data; }
 export function setFusionesActivas(data)  { fusionesActivas  = data; }
 export function setRegistroFusiones(data) { registroFusiones = data; }
+
+// NUEVO: Almacenamos los tags baneados siempre en minúsculas y con #
+export function setBannedTags(data) { 
+    bannedTags = data.map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase()); 
+}
 
 export const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
