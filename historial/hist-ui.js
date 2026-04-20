@@ -198,14 +198,14 @@ export function renderTimeline() {
         ${estadoUI.esAdmin ? `<div id="panel-sel-posts" style="width:${selPostsState.activo?'280px':'0'};
             min-width:${selPostsState.activo?'280px':'0'};
             transition:width 0.25s,min-width 0.25s;flex-shrink:0;align-self:flex-start;
-            position:sticky; top:70px; max-height:calc(100vh - 90px); overflow-y:auto; overflow-x:hidden;">
+            position:sticky; top:125px; max-height:calc(100vh - 145px); overflow-y:auto; overflow-x:hidden;">
             ${panelSeleccion}
         </div>` : ''}
 
         <div style="flex:1;min-width:0;">
             <div style="display:flex;justify-content:space-between;align-items:center;
                 padding:12px 10px;flex-wrap:wrap;gap:8px;margin-bottom:12px;
-                position:sticky; top:55px; z-index:20; 
+                position:sticky; top:115px; z-index:20; 
                 background:rgba(255,255,255,0.95); backdrop-filter:blur(6px);
                 border-bottom:1px solid #e9ecef; border-radius:0 0 10px 10px; margin-top:-8px;
                 box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
