@@ -485,9 +485,6 @@ export async function toggleHiloActivo(board, threadId, activo) {
 }
 
 // ── Calcular PT extra para un subconjunto de posts ────────────
-// pjsExtra: [{ nombre_refinado, tags[] }] — personajes añadidos manualmente
-// soloEnCupoRestante: si true, respeta los límites ya usados en ese post
-// Solo aplica para los pjsExtra, NO recalcula a los participantes originales
 export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtra, soloEnCupoRestante = false) {
     try {
         await initOpciones();
@@ -514,9 +511,8 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
         // Mapa nombre → { nombre, tags, tieneGrupo }
         const mapaNombres = await db.historial.getMapaNombres();
 
-        // Si soloEnCupoRestante=true, cargamos los PT ya existentes por post/motivo
-        // para calcular cuánto cupo queda
-        let ptYaUsadosPorPost = {}; // { post_no: { motivo: count } }
+        // Si soloEnCupoRestante=true, cargamos los PT ya existentes
+        let ptYaUsadosPorPost = {}; 
         if (soloEnCupoRestante) {
             const { data: logExist } = await supabase
                 .from('log_puntos_tag')
@@ -537,11 +533,8 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
             lectura:     OPCIONES.max_lectura        ?? 5,
         };
 
-        // Construir mapa extra para calcularTransaccionesPT
-        // Añadimos los pjsExtra al mapa de nombres temporalmente
         const mapaConExtra = { ...mapaNombres };
         pjsExtra.forEach(pj => {
-            // Registramos el personaje extra como su propio alias
             mapaConExtra[pj.nombre_refinado] = {
                 nombre:     pj.nombre_refinado,
                 tags:       pj.tags || [],
@@ -549,14 +542,11 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
             };
         });
 
-        // Calcular transacciones SOLO para los pjsExtra
-        // Para cada post, calculamos como si los pjsExtra fueran los emisores
         const todasTransacciones = [];
 
         for (const post of postsDB) {
             const cupoUsado = soloEnCupoRestante ? (ptYaUsadosPorPost[post.post_no] || {}) : {};
 
-            // Por cada personaje extra, calcular sus PT en este post
             for (const pjExtra of pjsExtra) {
                 const tagsExtraLow = new Set((pjExtra.tags || []).map(t => t.toLowerCase()));
                 const tagOrig = {};
@@ -565,17 +555,12 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                     tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
                 });
 
-                const enFusion = fusionados.has(pjExtra.nombre_refinado);
-                const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
-
                 const texto = post.contenido || '';
 
-                // Replies en este post
                 const replyNums = []; let m; const reR = />>(\d+)/g;
                 while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
                 const misReplies = [...new Set(replyNums)];
 
-                // Tags de los citados (solo PJs que no son el extra)
                 const tagsReplyados = new Set();
                 let hayPJ = false;
                 misReplies.forEach(rno => {
@@ -599,18 +584,19 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                     return a;
                 }
 
+                // Generamos los PT puros sin divisores de fusión
                 const empujar = (tagLow, delta, motivo) => {
                     todasTransacciones.push({
                         personaje_nombre: pjExtra.nombre_refinado,
                         tag:              tagOrig[tagLow] || ('#' + tagLow),
-                        delta:            delta, // <-- Solo el delta normal
+                        delta:            delta, 
                         motivo,
                         origen_post_no:   post.post_no,
                         origen_thread_id: threadId
                     });
                 };
 
-                // LECTURA — con cupo restante si aplica
+                // LECTURA
                 const cupoLectUsado  = cupoUsado['lectura'] || 0;
                 const cupoLectQueda  = Math.max(0, limites.lectura - cupoLectUsado);
                 if (cupoLectQueda > 0) {
@@ -648,9 +634,7 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
 
         if (!todasTransacciones.length) return { ok: true, transacciones: 0 };
 
-        // Aplicar transacciones
         await db.progresion.aplicarTransacciones(todasTransacciones);
-
         return { ok: true, transacciones: todasTransacciones.length };
     } catch(e) {
         console.error('[calcularPTExtraParaPosts]', e);
