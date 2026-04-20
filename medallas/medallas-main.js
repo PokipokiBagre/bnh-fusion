@@ -87,24 +87,30 @@ function _exponerGlobales() {
                 .eq('personaje_nombre', n)
                 .eq('equipada', true)
                 .order('slot_orden');
-    if (!error && data) {
-        // Filtrar medallas normales (no propuestas)
-        const rawEquip = data
-            .filter(r => !r.propuesta)
-            .map(row => medallas.find(m => m.id === row.medalla_id))
-            .filter(Boolean);
-            
-        // --- NUEVA LÓGICA DE LIMPIEZA INMEDIATA ---
-        const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
-        medallaState.equipacion = await limpiarInventarioInvalido(n, rawEquip, grupos, puntosAll);
-        // ------------------------------------------
+   if (!error && data) {
+                // Filtrar medallas normales (no propuestas)
+                const rawEquip = data
+                    .filter(r => !r.propuesta)
+                    .map(row => medallas.find(m => m.id === row.medalla_id))
+                    .filter(Boolean);
+                    
+                // --- NUEVA LÓGICA DE LIMPIEZA INMEDIATA CON FALLBACK ---
+                try {
+                    const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
+                    medallaState.equipacion = await limpiarInventarioInvalido(n, rawEquip, grupos, puntosAll);
+                } catch (err) {
+                    console.error("Error en validación de medallas, cargando datos brutos:", err);
+                    medallaState.equipacion = rawEquip; // Evita que la interfaz se quede en 0 si hay error
+                }
+                // ------------------------------------------
 
-        medallaState.equipacionPropuesta = data
-            .filter(r => r.propuesta)
-            .map(row => medallas.find(m => m.id === row.medalla_id))
-            .filter(Boolean);
-            
-        renderPersonaje(); 
+                medallaState.equipacionPropuesta = data
+                    .filter(r => r.propuesta)
+                    .map(row => medallas.find(m => m.id === row.medalla_id))
+                    .filter(Boolean);
+                    
+                renderPersonaje(); 
+            }
     }
         }
     };
