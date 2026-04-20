@@ -1,34 +1,18 @@
 // ============================================================
 // bnh-opciones-tags.js — Configuración modular del sistema de PT
 // Colocar en la RAÍZ del proyecto.
-//
-// Tabla Supabase (ejecutar una vez):
-//   CREATE TABLE opciones_tags (
-//     clave      text primary key,
-//     valor      numeric not null,
-//     descripcion text
-//   );
-//   INSERT INTO opciones_tags (clave, valor, descripcion) VALUES
-//     ('max_no_compartidos',  5,  'Máximo de tags propios únicos que se puntúan por post'),
-//     ('max_compartidos',     5,  'Máximo de tags compartidos que se puntúan por post'),
-//     ('max_lectura',         5,  'Máximo de #tags leídos del contenido que se puntúan por post'),
-//     ('delta_no_compartido', 1,  'Puntos por tag no compartido'),
-//     ('delta_compartido',    2,  'Puntos por tag compartido'),
-//     ('delta_lectura',       1,  'Puntos por tag de lectura (#tag en contenido)'),
-//     ('multiplicador_fusion',3,  'Multiplicador de PT cuando el personaje está en fusión (en lugar de x5 base)');
 // ============================================================
 
 import { supabase } from './bnh-auth.js';
 
-// Valores por defecto (usados si la tabla falla o no existe)
+// Valores por defecto
 export let OPCIONES = {
     max_no_compartidos:  5,
     max_compartidos:     5,
     max_lectura:         5,
     delta_no_compartido: 1,
     delta_compartido:    2,
-    delta_lectura:       1,
-    multiplicador_fusion: 3
+    delta_lectura:       1
 };
 
 let _cargado = false;
@@ -59,7 +43,7 @@ export async function guardarOpcion(clave, valor) {
     return { ok: true };
 }
 
-// Renderiza el panel de opciones (lectura para todos, edición solo OP)
+// Renderiza el panel de opciones
 export function renderOpcionesPanel(esAdmin) {
     const campos = [
         { clave: 'max_no_compartidos',  label: 'Max tags no compartidos / post', grupo: 'Interacción' },
@@ -67,8 +51,7 @@ export function renderOpcionesPanel(esAdmin) {
         { clave: 'max_compartidos',     label: 'Max tags compartidos / post',    grupo: 'Interacción' },
         { clave: 'delta_compartido',    label: 'Puntos por tag compartido',      grupo: 'Interacción' },
         { clave: 'max_lectura',         label: 'Max tags de lectura / post',     grupo: 'Lectura' },
-        { clave: 'delta_lectura',       label: 'Puntos por tag de lectura',      grupo: 'Lectura' },
-        { clave: 'multiplicador_fusion',label: 'Multiplicador en fusión (÷)',    grupo: 'Fusión' },
+        { clave: 'delta_lectura',       label: 'Puntos por tag de lectura',      grupo: 'Lectura' }
     ];
 
     const grupos = [...new Set(campos.map(c => c.grupo))];
