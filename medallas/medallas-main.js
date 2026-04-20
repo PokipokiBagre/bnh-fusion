@@ -141,19 +141,29 @@ function _exponerGlobales() {
         renderGrafo();
     };
 
-    window._medEquiparToggle = (id, mObj) => {
-        const eq = medallaState.equipacion || [];
-        const idx = eq.findIndex(e => e.id === id);
-        if (idx >= 0) {
-            eq.splice(idx, 1);
-            if (medallaState.equipacionDetalleId === id) medallaState.equipacionDetalleId = null;
-        } else {
-            const m = mObj || medallas.find(x => x.id === id);
-            if (m) eq.push(m);
+   window._medEquiparToggle = (id, mObj) => {
+    const eq = medallaState.equipacion || [];
+    const idx = eq.findIndex(e => e.id === id);
+    if (idx >= 0) {
+        eq.splice(idx, 1);
+        if (medallaState.equipacionDetalleId === id) medallaState.equipacionDetalleId = null;
+    } else {
+        const m = mObj || medallas.find(x => x.id === id);
+        if (m) {
+            // --- VALIDACIÓN ESTRICTA ANTES DE EQUIPAR ---
+            const { estadoMedallaPJ } = await import('./medallas-logic.js');
+            const estado = estadoMedallaPJ(m, medallaState.pjSeleccionado);
+            if (estado !== 'activable') {
+                toast('❌ No cumples los requisitos de Tag o PT para esta medalla.', 'error');
+                return;
+            }
+            // --------------------------------------------
+            eq.push(m);
         }
-        medallaState.equipacion = eq;
-        renderPersonaje();
-    };
+    }
+    medallaState.equipacion = eq;
+    renderPersonaje();
+};
 
     window._medEquipSelDetalle = (id) => {
         medallaState.equipacionDetalleId = (medallaState.equipacionDetalleId === id) ? null : id;
