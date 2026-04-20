@@ -240,17 +240,10 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
         .in('motivo', ['interaccion', 'compartido', 'lectura']);
     const yaProcessados = new Set((yaEnLog || []).map(r => r.origen_post_no));
 
-    // Personajes en fusión
-    const fusionados = new Set();
-    try {
-        const { data: fusiones } = await supabase
-            .from('fusiones_activas').select('pj_a, pj_b').eq('activa', true);
-        (fusiones || []).forEach(f => { fusionados.add(f.pj_a); fusionados.add(f.pj_b); });
-    } catch(_) {}
-
+    // Calculamos las transacciones (sin variables de fusión)
     const transacciones = calcularTransaccionesPT(
         postsEnriquecidos, mapaNombres, threadId,
-        postsParaIndice, yaProcessados // <-- Le quitamos el "fusionados" del medio
+        postsParaIndice, yaProcessados
     );
 
     console.log('[PT] hilo:', threadId, '| posts:', postsEnriquecidos.length,
