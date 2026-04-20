@@ -69,13 +69,9 @@ function resolverPersonajes(posterName, mapaNombres) {
 }
 
 // ── Calcula transacciones de PT ───────────────────────────────
-// 3 fuentes: NO_COMPARTIDOS, COMPARTIDOS, LECTURA
-// Post multipersonaje (nombre con comas): cada personaje actúa de forma
-// independiente, tanto al DAR como al RECIBIR PT (hasta 15 PT × N personajes).
-// yaProcessados = Set<post_no> ya en log para este thread (idempotencia)
 export function calcularTransaccionesPT(
     posts, mapaNombres, threadId,
-    indiceCompleto = [], fusionados = new Set(), yaProcessados = new Set()
+    indiceCompleto = [], yaProcessados = new Set()
 ) {
     const transacciones = [];
     const postAutor = {};
@@ -93,21 +89,18 @@ export function calcularTransaccionesPT(
         while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
         const misReplies = [...new Set(replyNums)];
 
-        // Personajes del EMISOR (1 en posts normales, N en multipersonaje)
+        // Personajes del EMISOR 
         const pjsEmisor = resolverPersonajes(post.poster_name, mapaNombres);
         if (!pjsEmisor.length) return;
 
-        // Tags de todos los personajes citados (para fuentes 1 y 2)
-        // Se calcula una sola vez y se comparte entre todos los emisores
+        // Tags de todos los personajes citados
         const tagsReplyados = new Set();
         let hayPJ = false;
         misReplies.forEach(rno => {
             const autor = postAutor[rno];
             if (!autor) return;
-            // El citado puede ser multipersonaje también → resolver sus PJs
             const pjsCitados = resolverPersonajes(autor, mapaNombres);
             pjsCitados.forEach(pjC => {
-                // No contarse a uno mismo
                 if (pjsEmisor.some(e => e.nombre === pjC.nombre)) return;
                 hayPJ = true;
                 (pjC.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
@@ -123,14 +116,11 @@ export function calcularTransaccionesPT(
                 tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
             });
 
-            const enFusion = fusionados.has(pjReplier.nombre);
-            const divFusion = enFusion ? Math.max(1, OPCIONES.multiplicador_fusion) : 1;
-
             const empujar = (tagLow, delta, motivo) => {
                 transacciones.push({
                     personaje_nombre: pjReplier.nombre,
                     tag:              tagOrig[tagLow] || ('#' + tagLow),
-                    delta:            Math.max(1, Math.round(delta / divFusion)),
+                    delta:            delta, // Ya no se divide entre nada
                     motivo,
                     origen_post_no:   post.post_no,
                     origen_thread_id: threadId
@@ -145,7 +135,6 @@ export function calcularTransaccionesPT(
                 empujar(t, OPCIONES.delta_lectura, 'lectura')
             );
 
-            // Fuentes 1 y 2 solo si hay replies a personajes
             if (!hayPJ) return;
 
             // ── FUENTE 1: NO COMPARTIDOS ──────────────────────
