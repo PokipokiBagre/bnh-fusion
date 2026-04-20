@@ -10,7 +10,7 @@ import {
     renderOpciones, actualizarVsPanelPublic, actualizarSlotPublic, toast,
     actualizarCompatibilidadDisplay,
 } from './fusions-ui.js';
-import { ccalcularResultadoFusion, buildRegistroFusion, calcCompatibilidadTags, getRegla } from './fusions-logic.js';
+import { calcularResultadoFusion, buildRegistroFusion, calcCompatibilidadTags, getRegla } from './fusions-logic.js';
 import { cargarOpciones, guardarOpciones, opcionesState } from './fusions-options.js';
 import { cargarFusiones, activarFusion, terminarFusion } from '../bnh-fusion.js';
 
