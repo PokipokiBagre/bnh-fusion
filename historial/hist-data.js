@@ -202,8 +202,6 @@ export async function scrapearHilo(board, threadId, threadUrl, manualJson = null
     return { ok: true, nuevos: soloNuevos.length, total: todosLosPosts.length };
 }
 
-// ── Procesar PT para un array de posts nuevos ─────────────────
-// Solo procesa posts que aún no tienen pt_procesado = true
 async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
     const mapaNombres = await db.historial.getMapaNombres();
     if (!Object.keys(mapaNombres).length) { console.warn('[PT] mapa vacío'); return; }
@@ -240,11 +238,14 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
         .in('motivo', ['interaccion', 'compartido', 'lectura']);
     const yaProcessados = new Set((yaEnLog || []).map(r => r.origen_post_no));
 
-    // Calculamos las transacciones (sin variables de fusión)
-    const transacciones = calcularTransaccionesPT(
+    // Calculamos las transacciones (usamos let para poder filtrar después)
+    let transacciones = calcularTransaccionesPT(
         postsEnriquecidos, mapaNombres, threadId,
         postsParaIndice, yaProcessados
     );
+
+    // NUEVO: Filtro de seguridad contra tags baneados
+    transacciones = await _limpiarTransaccionesBaneadas(transacciones);
 
     console.log('[PT] hilo:', threadId, '| posts:', postsEnriquecidos.length,
         '| ya procesados:', yaProcessados.size,
@@ -322,20 +323,31 @@ export async function calcularPTHilo(board, threadId, desdeFecha = null) {
 }
 
 // ── Reconstruir puntos_tag desde el log completo ──────────────
-// Borra la tabla y la recalcula sumando todos los deltas del log
+// Borra la tabla y la recalcula sumando todos los deltas del log, excluyendo tags baneados
 async function reconstruirPuntosTotales() {
-    // Leer el log completo
-    const { data: log } = await supabase
-        .from('log_puntos_tag')
-        .select('personaje_nombre, tag, delta');
+    // Leer el log completo y los tags baneados en paralelo
+    const [{ data: log }, { data: tagsBaneados }] = await Promise.all([
+        supabase.from('log_puntos_tag').select('personaje_nombre, tag, delta'),
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
+    ]);
 
     if (!log) return;
+
+    // Set de tags baneados (en minúsculas y con #) para búsqueda rápida
+    const listaNegra = new Set((tagsBaneados || []).map(t => 
+        (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase()
+    ));
 
     // Agrupar sumas
     const sumas = {};
     log.forEach(r => {
-        const k = `${r.personaje_nombre}||${r.tag}`;
-        sumas[k] = (sumas[k] || 0) + r.delta;
+        const tagNorm = (r.tag.startsWith('#') ? r.tag : '#' + r.tag).toLowerCase();
+        
+        // Solo sumamos el PT si el tag NO está en la lista negra actualmente
+        if (!listaNegra.has(tagNorm)) {
+            const k = `${r.personaje_nombre}||${r.tag}`;
+            sumas[k] = (sumas[k] || 0) + r.delta;
+        }
     });
 
     // Borrar y reinsertar puntos_tag — solo si el total es positivo
@@ -542,7 +554,7 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
             };
         });
 
-        const todasTransacciones = [];
+        let todasTransacciones = [];
 
         for (const post of postsDB) {
             const cupoUsado = soloEnCupoRestante ? (ptYaUsadosPorPost[post.post_no] || {}) : {};
@@ -631,6 +643,9 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                 }
             }
         }
+
+        // NUEVO: Filtro de seguridad antes de aplicar
+        todasTransacciones = await _limpiarTransaccionesBaneadas(todasTransacciones);
 
         if (!todasTransacciones.length) return { ok: true, transacciones: 0 };
 
