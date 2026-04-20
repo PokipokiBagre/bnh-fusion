@@ -403,8 +403,6 @@ export function renderGrafo() {
     }, 10);
 }
 
-// ── Tab Personaje — con filtros rol/estado ────────────────────
-// ── Tab Personaje — con filtros rol/estado ────────────────────
 export function renderPersonaje() {
     const wrap = document.getElementById('vista-personaje');
     if (!wrap) return;
@@ -412,6 +410,9 @@ export function renderPersonaje() {
     const pj        = medallaState.pjSeleccionado;
     const filtroRol = medallaState.filtroRolPJ;
     const filtroEst = medallaState.filtroEstadoPJ;
+
+    // ⚡ 1. INVOCAMOS EL LENTE DE FUSIÓN PARA TODO EL PERSONAJE
+    const proy = pj ? proyectarPJ(pj) : null;
 
     const gruposFiltrados = grupos.filter(g => {
         const tags = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
@@ -449,30 +450,24 @@ export function renderPersonaje() {
     medallaState.filtroTagsPJ = medallaState.filtroTagsPJ || [];
     const busqPJ = (medallaState.pjBusqueda || '').toLowerCase();
 
-    // Tags del PJ seleccionado (si hay alguno)
-    const pjGrupo = pj ? grupos.find(x => x.nombre_refinado === pj) : null;
-    const pjTags  = pjGrupo
-        ? (pjGrupo.tags || []).map(t => t.startsWith('#') ? t : '#' + t)
-        : null;
+    // ⚡ 2. USAMOS LOS TAGS PROYECTADOS PARA FILTRAR EL CATÁLOGO
+    const pjTags = proy ? proy.tags.map(t => t.startsWith('#') ? t : '#' + t) : null;
 
-    // 1. Base: todas las medallas aprobadas
     let medallasBase = medallas.filter(m => !m.propuesta || medallaState.esAdmin);
 
-    // 2. Si hay PJ seleccionado, filtrar solo las medallas con algún tag del PJ
     if (pj && pjTags && pjTags.length > 0) {
         medallasBase = medallasBase.filter(m =>
             mTags(m).some(t => pjTags.some(pt => pt.toLowerCase() === t.toLowerCase()))
         );
     }
 
-    // 3. Chips de tag: los tags del PJ (con PJ) o todos los tags únicos (sin PJ)
     const mTagsList = (pj && pjTags)
         ? pjTags.filter(pt => medallasBase.some(m => mTags(m).some(t => t.toLowerCase() === pt.toLowerCase())))
         : [...new Set(medallasBase.flatMap(m => mTags(m)))].sort();
 
-    const ptsMapa = pj ? getPuntosPJ(pj) : {};
+    // ⚡ 3. USAMOS LOS PUNTOS PROYECTADOS
+    const ptsMapa = proy ? proy.ptsMapa : {};
 
-    // 4. Aplicar búsqueda de texto
     let medallasUnicas = medallasBase;
     if (busqPJ) {
         medallasUnicas = medallasUnicas.filter(m =>
@@ -482,7 +477,6 @@ export function renderPersonaje() {
         );
     }
 
-    // 5. Aplicar filtro de tag seleccionado (chips)
     if (medallaState.filtroTagsPJ.length > 0) {
         medallasUnicas = medallasUnicas.filter(m => {
             const tagsMed = mTags(m).map(t => t.toLowerCase());
@@ -490,16 +484,20 @@ export function renderPersonaje() {
         });
     }
 
-    // 6. Construir chips de tag
     const tagsFiltrosHtml = mTagsList.map(tag => {
         const activo = medallaState.filtroTagsPJ.includes(tag);
+        // Marcamos de morado si es un tag prestado por la fusión (opcional, pero visualmente útil)
+        const gEq = grupos.find(x => x.nombre_refinado === pj);
+        const tagsOriginales = gEq ? (gEq.tags||[]).map(t => t.toLowerCase()) : [];
+        const esPrestado = proy && proy.esFusion && !tagsOriginales.includes(tag.replace('#','').toLowerCase());
+        
         return `<button class="btn btn-sm"
                 style="padding:3px 8px; font-size:0.75em; border-radius:12px; margin:2px; cursor:pointer;
-                       border:1.5px solid ${activo ? 'var(--green)' : '#dee2e6'};
-                       background:${activo ? 'rgba(39,174,96,0.1)' : 'white'};
-                       color:${activo ? 'var(--green-dark)' : '#555'}; font-weight:${activo ? '700' : '600'};"
+                       border:1.5px solid ${activo ? (esPrestado ? 'var(--purple)' : 'var(--green)') : '#dee2e6'};
+                       background:${activo ? (esPrestado ? 'rgba(142,68,173,0.1)' : 'rgba(39,174,96,0.1)') : 'white'};
+                       color:${activo ? (esPrestado ? 'var(--purple)' : 'var(--green-dark)') : '#555'}; font-weight:${activo ? '700' : '600'};"
                 onclick="window._medToggleFiltroTagPJ('${tag}')">
-            ${tag}
+            ${esPrestado ? '⚡ ' : ''}${tag}
         </button>`;
     }).join('');
 
@@ -515,7 +513,6 @@ export function renderPersonaje() {
         </div>
     `;
 
-    // 7. Renderizar tarjetas (completas con estado si hay PJ, simples si no)
     const tarjetasHtml = medallasUnicas.length > 0
         ? medallasUnicas.map(m => pj ? _renderCardCompletaParaPJ(m, pj, ptsMapa) : _renderCard(m)).join('')
         : `<div class="empty-state" style="grid-column:1/-1;"><h3>${pj ? 'Sin medallas para los tags de este personaje' : 'No se encontraron medallas'}</h3></div>`;
@@ -530,16 +527,15 @@ export function renderPersonaje() {
     // ── Panel equipación ────────────────────────────────────
     let equipHtml = '';
     
-if (pj) {
-        const proy = proyectarPJ(pj); // <-- ⚡ APLICAMOS EL LENTE AQUÍ
+    if (pj) {
         const gEq    = grupos.find(x => x.nombre_refinado === pj);
-        const ctl    = proy.ctl; // <-- Usamos CTL proyectado
+        const ctl    = proy.ctl; // ⚡ USAMOS CTL PROYECTADO
         const equipados = medallaState.equipacion || [];
         const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
 
-        // ── Datos para el Resumen reactivo (Proyectados) ───────────
-        const pot = proy.pot;
-        const agi = proy.agi;
+        // ── Datos para el Resumen reactivo ─────────────────────────
+        const pot = proy.pot; // ⚡ USAMOS POT PROYECTADO
+        const agi = proy.agi; // ⚡ USAMOS AGI PROYECTADO
         const pac = pot + agi + ctl;
         const tierData = (() => {
             if (pac >= 100) return { label: 'TIER 4', color: '#f39c12' };
@@ -572,7 +568,7 @@ if (pj) {
         const ctlRatio   = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
         const barColor   = ctlExcedido ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
 
-        const ptsMapa2  = proy.ptsMapa; // <-- Usamos los PTs proyectados
+        const ptsMapa2  = proy.ptsMapa;
         const totalPT   = Object.values(ptsMapa2).reduce((a,b)=>a+b,0);
         const listos    = Object.values(ptsMapa2).filter(v=>v>=50).length;
 
@@ -657,7 +653,8 @@ if (pj) {
                 Sin medallas equipadas<br><span style="font-size:0.85em;">Usa "+ Equipar" en las tarjetas</span>
             </div>`;
 
-        const tagsDelPJ = (gEq?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
+        // ⚡ 4. USAMOS LOS TAGS PROYECTADOS PARA LAS SUGERENCIAS
+        const tagsDelPJ = proy.tags.map(t => '#'+(t.startsWith('#')?t.slice(1):t));
         const equipadosIds = new Set(equipados.map(m => m.id));
         const sugeridas = medallas.filter(m =>
             !m.propuesta &&
@@ -671,8 +668,8 @@ if (pj) {
                 const puedeFit = m.costo_ctl <= ctlLibre;
                 return `
                 <div style="display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
-                            border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
-                            background:${puedeFit?'white':'#fff8f8'};"
+                             border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
+                             background:${puedeFit?'white':'#fff8f8'};"
                      onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})">
                     <span style="font-size:0.6em;padding:1px 4px;border-radius:3px;font-weight:700;flex-shrink:0;
                         background:${m.tipo==='activa'?'rgba(26,74,128,0.1)':'rgba(108,52,131,0.1)'};
@@ -700,9 +697,11 @@ if (pj) {
         if (selDetalle) {
             const md = equipados.find(m => m.id === selDetalle) || (medallaState.equipacionPropuesta || []).find(m => m.id === selDetalle);
             if (md) {
-                const ptsMapa = getPuntosPJ(pj);
+                // ⚡ 5. USAMOS LOS PUNTOS PROYECTADOS PARA EL DETALLE DE LA MEDALLA
+                const ptsMapaD = proy.ptsMapa;
                 const reqsD = (md.requisitos_base||[]).map(r => {
-                    const pts = ptsMapa[r.tag] || ptsMapa[r.tag.replace('#','')] || 0;
+                    const normTagReq = r.tag.startsWith('#') ? r.tag.toLowerCase() : '#' + r.tag.toLowerCase();
+                    const pts = ptsMapaD[normTagReq] || ptsMapaD[r.tag] || ptsMapaD[r.tag.replace('#','')] || 0;
                     const ok = pts >= (r.pts_minimos||0);
                     return `
                     <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.75em;padding:4px 0;border-bottom:1px solid #f5f5f5;">
@@ -712,7 +711,8 @@ if (pj) {
                 }).join('') || '<div style="font-size:0.75em;color:#bbb;">Sin requisitos</div>';
 
                 const condsD = (md.efectos_condicionales||[]).map(ec => {
-                    const pts = ptsMapa[ec.tag] || ptsMapa[ec.tag.replace('#','')] || 0;
+                    const normTagCond = ec.tag.startsWith('#') ? ec.tag.toLowerCase() : '#' + ec.tag.toLowerCase();
+                    const pts = ptsMapaD[normTagCond] || ptsMapaD[ec.tag] || ptsMapaD[ec.tag.replace('#','')] || 0;
                     const activo = pts >= (ec.pts_minimos||0);
                     return `
                     <div style="border-radius:8px;padding:8px;margin-bottom:6px;
@@ -763,7 +763,6 @@ if (pj) {
             }
         }
 
-        // Propuesta Naranja
         let propHtml = '';
         if (medallaState.equipacionPropuesta?.length > 0) {
             const pUsado = medallaState.equipacionPropuesta.reduce((s, m) => s + (m.costo_ctl||0), 0);
@@ -851,7 +850,6 @@ if (pj) {
         </div>`;
     }
 
-    // Guardar el foco antes de redibujar
     const prevFocus = document.activeElement?.id === 'pj-med-buscar';
     
     wrap.innerHTML = `
@@ -875,7 +873,6 @@ if (pj) {
             ${equipHtml}
         </div>`;
 
-    // Restaurar foco
     if (prevFocus) {
         const inp = document.getElementById('pj-med-buscar');
         if (inp) {
@@ -884,7 +881,6 @@ if (pj) {
         }
     }
 
-    // Calcular offset real del header para los elementos sticky
     requestAnimationFrame(() => {
         const header = document.querySelector('.app-header');
         if (!header) return;
