@@ -443,15 +443,18 @@ if (sug.tag_fusion) {
         } catch(e) { toast('❌ Error: ' + e.message, 'error'); }
     };
 
-    window._fusionBorrarRegistro = async (id) => {
+        window._fusionBorrarRegistro = async (id) => {
         if (!fusionsState.esAdmin) return;
         if (!confirm('¿Eliminar este registro del historial? No deshace la fusión en sí.')) return;
-        const { error } = await supabase.from('registro_fusiones').delete().eq('id', id);
-        if (error) { toast('❌ ' + error.message, 'error'); return; }
-        const { data } = await supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50);
-        setRegistroFusiones(data || []);
-        renderRegistro();
-        toast('Registro eliminado.', 'ok');
+        
+        const realId = parseInt(id, 10); // <-- Forzamos número entero para la BD
+        const { error } = await supabase.from('registro_fusiones').delete().eq('id', realId);
+        
+        if (error) { toast('❌ Error BD: ' + error.message, 'error'); return; }
+        
+        await _refrescarTodo(); // Refresco agresivo
+        _renderTab('registro');
+        toast('✅ Registro eliminado.', 'ok');
     };
 
     window._fusionResetResultado = () => {
