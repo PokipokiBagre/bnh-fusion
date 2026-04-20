@@ -529,21 +529,22 @@ export function renderPersonaje() {
     // ── Panel equipación ────────────────────────────────────
     let equipHtml = '';
     
-    if (pj) {
+if (pj) {
+        const proy = proyectarPJ(pj); // <-- ⚡ APLICAMOS EL LENTE AQUÍ
         const gEq    = grupos.find(x => x.nombre_refinado === pj);
-        const ctl    = gEq?.ctl || 0;
+        const ctl    = proy.ctl; // <-- Usamos CTL proyectado
         const equipados = medallaState.equipacion || [];
         const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
 
-        // ── Datos para el Resumen reactivo ─────────────────────────
-        const pot = gEq?.pot || 0;
-        const agi = gEq?.agi || 0;
+        // ── Datos para el Resumen reactivo (Proyectados) ───────────
+        const pot = proy.pot;
+        const agi = proy.agi;
         const pac = pot + agi + ctl;
         const tierData = (() => {
             if (pac >= 100) return { label: 'TIER 4', color: '#f39c12' };
             if (pac >= 80)  return { label: 'TIER 3', color: '#8e44ad' };
             if (pac >= 60)  return { label: 'TIER 2', color: '#2980b9' };
-            return              { label: 'TIER 1', color: '#27ae60' };
+            return          { label: 'TIER 1', color: '#27ae60' };
         })();
         const cambios   = Math.floor(agi / 4);
         const tierNum   = pac>=100?4:pac>=80?3:pac>=60?2:1;
@@ -557,11 +558,20 @@ export function renderPersonaje() {
         const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm_pj + 'profile.png';
         const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm_pj + 'icon.png';
         const noImgUrl   = STORAGE_URL + '/imginterfaz/no_encontrado.png';
-        const ctlColor   = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
+        
+        // ⚡ Colores adaptativos para la fusión
+        const baseCtl    = gEq?.ctl || 0;
+        const ctlExcedido = ctlUsado > ctl;
+        const ctlEsFusionado = proy.esFusion && ctl !== baseCtl;
+        const colorCtlTxt = ctlExcedido ? '#c0392b' : ctlEsFusionado ? '#8e44ad' : (ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)');
+        const iconCtl     = ctlEsFusionado ? '⚡ ' : '';
+        const badgeFusion = proy.esFusion ? renderFusionBadge(pj, STORAGE_URL, norm) : '';
+        
+        const ctlColor   = ctlExcedido ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
         const ctlRatio   = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
-        const barColor   = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
+        const barColor   = ctlExcedido ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
 
-        const ptsMapa2  = getPuntosPJ(pj);
+        const ptsMapa2  = proy.ptsMapa; // <-- Usamos los PTs proyectados
         const totalPT   = Object.values(ptsMapa2).reduce((a,b)=>a+b,0);
         const listos    = Object.values(ptsMapa2).filter(v=>v>=50).length;
 
@@ -573,37 +583,40 @@ export function renderPersonaje() {
                     style="width:100%;display:block;object-fit:cover;object-position:top;">
             </div>
             <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
-                <div style="text-align:center;font-family:'Cinzel',serif;font-size:0.9em;font-weight:800;
-                    color:${tierData.color};letter-spacing:1px;">${tierData.label}</div>
+                <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
+                    <div style="text-align:center;font-family:'Cinzel',serif;font-size:0.9em;font-weight:800;
+                        color:${tierData.color};letter-spacing:1px;">${tierData.label}</div>
+                    ${badgeFusion}
+                </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
                     <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
-                        <div style="font-size:1em;font-weight:800;color:#d68910;">${pot}</div>
+                        <div style="font-size:1em;font-weight:800;color:#d68910;">${proy.esFusion && pot !== gEq.pot ? '⚡' : ''}${pot}</div>
                     </div>
                     <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
-                        <div style="font-size:1em;font-weight:800;color:#2980b9;">${agi}</div>
+                        <div style="font-size:1em;font-weight:800;color:#2980b9;">${proy.esFusion && agi !== gEq.agi ? '⚡' : ''}${agi}</div>
                     </div>
                     <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                        <div style="font-size:1em;font-weight:800;color:${ctlColor};">${ctlUsado}/${ctl}</div>
+                        <div style="font-size:1em;font-weight:800;color:${colorCtlTxt};" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">${iconCtl}${ctlUsado}/${ctl}</div>
                     </div>
                 </div>
                 <div style="height:5px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
                     <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
                 </div>
                 <div style="display:flex;flex-direction:column;gap:4px;font-size:0.78em;border-top:1px solid var(--gray-200);padding-top:6px;">
-                    <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
+                    <div style="display:flex;justify-content:space-between;"><span>PAC</span><b style="${proy.esFusion ? 'color:#8e44ad;' : ''}">${proy.esFusion ? '⚡' : ''}${pac}</b></div>
                     <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
                     <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
                     <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:4px;margin-top:2px;">
-                        <span>PT totales</span><b style="color:var(--green);">${totalPT}</b>
+                        <span>PT totales</span><b style="${proy.esFusion ? 'color:#8e44ad;' : 'color:var(--green);'}">${proy.esFusion ? '⚡' : ''}${totalPT}</b>
                     </div>
                     <div style="display:flex;justify-content:space-between;">
                         <span>Tags ≥50 PT</span><b style="color:var(--orange);">${listos}</b>
                     </div>
                     <div style="display:flex;justify-content:space-between;">
-                        <span>Tags totales</span><b>${(gEq?.tags||[]).length}</b>
+                        <span>Tags totales</span><b>${proy.tags.length}</b>
                     </div>
                 </div>
             </div>
