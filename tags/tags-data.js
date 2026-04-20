@@ -2,9 +2,10 @@
 // tags/tags-data.js
 // ============================================================
 import { supabase } from '../bnh-auth.js';
+import { cargarFusiones } from '../bnh-fusion.js'; // <-- NUEVO
 import {
     setGrupos, setPuntosAll, setCatalogoTags, setMedallasCat, setSolicitudes,
-    setInventarioMedallas,
+    setInventarioMedallas, setOpcionesFusion, setBannedTags
 } from './tags-state.js';
 
 export async function cargarTodo() {
@@ -14,39 +15,36 @@ export async function cargarTodo() {
         { data: cat },
         { data: med },
         { data: sol },
+        { data: opts },     // <-- NUEVO
+        { data: baneados }  // <-- NUEVO
     ] = await Promise.all([
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
         supabase.from('tags_catalogo').select('nombre, descripcion, baneado, tipo').order('nombre'),
         supabase.from('medallas_catalogo').select('id, nombre, costo_ctl, efecto_desc, tipo, requisitos_base, efectos_condicionales, propuesta').order('nombre'),
         supabase.from('solicitudes_tag').select('*').order('creado_en'),
+        supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
     ]);
+    
+    await cargarFusiones(); // <-- Cargar las fusiones activas en la caché global
+
     setGrupos(gr || []);
     setPuntosAll(pts || []);
     setCatalogoTags(cat || []);
     setMedallasCat(med || []);
     setSolicitudes(sol || []);
+    
+    // Guardar opciones de fusión y tags baneados normalizados
+    setOpcionesFusion(opts || {});
+    setBannedTags((baneados || []).map(t => (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase()));
 }
 
 // ── Inventario de medallas equipadas por un PJ ───────────────
-// Se llama on-demand al seleccionar un personaje en la pestaña Progresión.
-// Guarda en estado los IDs de las medallas que ese PJ tiene equipadas,
-// para que tags-ui.js pueda marcar las tarjetas correspondientes.
 export async function cargarInventarioPJ(nombrePJ) {
-    if (!nombrePJ) {
-        setInventarioMedallas([]);
-        return;
-    }
-    try {
-        const { data } = await supabase
-            .from('medallas_inventario')
-            .select('medalla_id')
-            .eq('personaje_nombre', nombrePJ);
-        setInventarioMedallas((data || []).map(r => r.medalla_id));
-    } catch (_) {
-        // Si la tabla no existe aún, simplemente no marcamos nada
-        setInventarioMedallas([]);
-    }
+    if (!nombrePJ) return;
+    const { data } = await supabase.from('medallas_inventario').select('medalla_id').eq('personaje_nombre', nombrePJ);
+    setInventarioMedallas((data || []).map(r => r.medalla_id));
 }
 
 export async function guardarDescripcionTag(nombre, descripcion, tipo) {
