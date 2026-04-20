@@ -301,7 +301,6 @@ export function renderCatalogo(postersDelHilo) {
     }).join('');
 }
 
-// ── DETALLE ───────────────────────────────────────────────────
 export function renderDetalle(nombreGrupo) {
     const cont = $('fichas-contenido');
     if (!cont) return;
@@ -309,31 +308,46 @@ export function renderDetalle(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) { window.volverCatalogo(); return; }
 
-    const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
+    // --- 1. APLICAR EL LENTE DE FUSIÓN ---
+    const proy = proyectarFicha(g, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
+    
+    // Stats proyectadas
+    const pot = proy.pot;
+    const agi = proy.agi;
+    const ctl = proy.ctl;
+    
+    // PT y Tags proyectados
+    const ptG = proy.ptsMapa;
+    const tagsProy = proy.tags;
+    const baseTagsNorm = (g.tags || []).map(x => (x.startsWith('#') ? x : '#' + x).toLowerCase());
+
     const { tier } = calcTier(pot, agi, ctl);
     const pvDeltaD = g.pv_max_delta || 0;
     const pvMax    = calcPVMax(pot, agi, ctl) + pvDeltaD;
-    const pac      = pot+agi+ctl;
+    const pac      = pot + agi + ctl;
     const cambios  = calcCambios(agi);
     const tc       = colorTier(tier);
     const fusion   = getFusionDe(nombreGrupo);
-    const ptG      = ptGlobal[nombreGrupo] || {};
     const safeN    = nombreGrupo.replace(/'/g,"\\'");
 
     const misAliases = aliasesGlobal.filter(a=>a.refinado_id===g.id).map(a=>a.nombre);
+    
+    // Stats actuales (usando la base o el proyectado)
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
-    // CTL usado = desde medallas_inventario (vía cache de bnh-pac)
-    // Nota: renderDetalle es sync, usamos el cache si está disponible, sino 0
     const _cachedEquip = window._equipCache?.[nombreGrupo] || [];
     const ctlEquip = calcCTLUsado(_cachedEquip);
     const ctlA = ctlEquip;
 
-    function statDisplay(total, actual) {
-        return actual === total ? `${total}` : `<span style="color:#2980b9;">${actual}</span>/${total}`;
+    function statDisplay(total, actual, baseVal) {
+        const esBuffeado = proy.esFusion && total !== baseVal;
+        const icon = esBuffeado ? '<span style="color:#8e44ad;font-size:0.85em;margin-right:2px;" title="Modificado por Fusión">⚡</span>' : '';
+        const clr = esBuffeado ? '#8e44ad' : '';
+        const strTotal = `<span style="color:${clr};font-weight:${esBuffeado?'800':'normal'};">${total}</span>`;
+        return actual === total ? `${icon}${strTotal}` : `${icon}<span style="color:#2980b9;">${actual}</span>/${strTotal}`;
     }
 
-    const tagsOrdenados = [...(g.tags||[])].sort((a,b)=>(ptG[b]||0)-(ptG[a]||0));
+    const tagsOrdenados = [...tagsProy].sort((a,b) => (ptG[b]||0) - (ptG[a]||0));
 
     cont.innerHTML = `
     <div class="detalle-layout">
@@ -358,9 +372,16 @@ export function renderDetalle(nombreGrupo) {
             <div class="wiki-section-header">Tags del Quirk</div>
             <div class="tags-detalle">
                 ${tagsOrdenados.map(t=>{
-                    const pts=ptG[t]||0, tf=t.startsWith('#')?t:'#'+t;
-                    return `<span class="tag-detalle" onclick="window._fichaToggleTagYVolver('${tf.replace(/'/g,"\\'")}')" title="${pts} PT">
-                        ${tf}<span class="tag-detalle-pts">${pts}pt</span></span>`;
+                    const pts = ptG[t] || 0;
+                    const tf = t.startsWith('#') ? t : '#' + t;
+                    const normT = tf.toLowerCase();
+                    const esFusionTag = proy.esFusion && !baseTagsNorm.includes(normT);
+                    const extraStyle = esFusionTag ? 'border:1px solid #8e44ad; color:#8e44ad; background:#f5eeff;' : '';
+                    const icon = esFusionTag ? '⚡ ' : '';
+                    const extraPtsStyle = esFusionTag ? 'background:#8e44ad;color:white;' : '';
+                    
+                    return `<span class="tag-detalle" style="${extraStyle}" onclick="window._fichaToggleTagYVolver('${tf.replace(/'/g,"\\'")}')" title="${pts} PT">
+                        ${icon}${tf}<span class="tag-detalle-pts" style="${extraPtsStyle}">${pts}pt</span></span>`;
                 }).join('')||'<span style="color:var(--gray-500);">Sin tags</span>'}
             </div>
         </div>
@@ -387,14 +408,20 @@ export function renderDetalle(nombreGrupo) {
             <div class="wiki-section-header">Progresión — Puntos de Tag</div>
             <table class="pt-table">
                 <thead><tr><th>Tag</th><th>PT</th><th>Stat (50)</th><th>Medalla (75)</th><th>Mutación (100)</th></tr></thead>
-                <tbody>${Object.entries(ptG).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=>`
+                <tbody>${Object.entries(ptG).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=> {
+                    const basePt = (ptGlobal[nombreGrupo] || {})[tag] || 0;
+                    const esAlterado = proy.esFusion && pts !== basePt;
+                    const icon = esAlterado ? '<span style="color:#8e44ad; margin-right:4px;" title="Alterado por Fusión">⚡</span>' : '';
+                    const colorTxt = esAlterado ? '#8e44ad' : (pts>=50?'#d68910':pts>=20?'#8e44ad':'var(--gray-900)');
+                    
+                    return `
                 <tr>
                     <td style="color:var(--booru-link);font-weight:600;">${tag.startsWith('#')?tag:'#'+tag}</td>
-                    <td style="font-weight:700;color:${pts>=50?'#d68910':pts>=20?'#8e44ad':'var(--gray-900)'};">${pts}</td>
+                    <td style="font-weight:700;color:${colorTxt};">${icon}${pts}</td>
                     <td style="color:${pts>=50?'var(--green)':'var(--gray-400)'};">${pts>=50?'✓':`${50-pts}↑`}</td>
                     <td style="color:${pts>=75?'var(--green)':'var(--gray-400)'};">${pts>=75?'✓':`${75-pts}↑`}</td>
                     <td style="color:${pts>=100?'var(--green)':'var(--gray-400)'};">${pts>=100?'✓':`${100-pts}↑`}</td>
-                </tr>`).join('')}</tbody>
+                </tr>`}).join('')}</tbody>
             </table>
         </div>`:''} 
       </div>
@@ -408,16 +435,22 @@ export function renderDetalle(nombreGrupo) {
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
-                <tr><td>POT</td><td>${statDisplay(pot,potA)}</td></tr>
-                <tr><td>AGI</td><td>${statDisplay(agi,agiA)}</td></tr>
-                <tr><td>CTL</td><td>${statDisplay(ctl,ctlA)}</td></tr>
+                <tr><td>POT</td><td>${statDisplay(pot, potA, g.pot||0)}</td></tr>
+                <tr><td>AGI</td><td>${statDisplay(agi, agiA, g.agi||0)}</td></tr>
+                <tr><td>CTL</td><td>${statDisplay(ctl, ctlA, g.ctl||0)}</td></tr>
                 <tr><td>PV</td><td>${g.pv_actual??pvMax} / ${pvMax}</td></tr>
                 <tr><td>Cambios/t</td><td>${cambios}</td></tr>
                 <tr><td>PT Total</td><td style="color:#2980b9;font-weight:700;">${Object.values(ptG).reduce((a,b)=>a+b,0)}</td></tr>
             </table>
             <div style="padding:6px 10px 4px;font-size:0.72em;font-weight:700;color:var(--gray-700);text-transform:uppercase;">Tags</div>
             <div class="infobox-tags">
-                ${(g.tags||[]).map(t=>`<span style="background:var(--gray-100);border:1px solid var(--booru-border);color:var(--booru-link);padding:2px 6px;border-radius:3px;font-size:0.72em;">${t.startsWith('#')?t:'#'+t}</span>`).join('')||'<span style="color:var(--gray-400);font-size:0.78em;">—</span>'}
+                ${tagsProy.map(t=>{
+                    const normT = (t.startsWith('#')?t:'#'+t).toLowerCase();
+                    const esFusionTag = proy.esFusion && !baseTagsNorm.includes(normT);
+                    const style = esFusionTag ? 'background:#f5eeff;border:1px solid #8e44ad;color:#8e44ad;' : 'background:var(--gray-100);border:1px solid var(--booru-border);color:var(--booru-link);';
+                    const icon = esFusionTag ? '⚡' : '';
+                    return `<span style="${style}padding:2px 6px;border-radius:3px;font-size:0.72em;">${icon}${t.startsWith('#')?t:'#'+t}</span>`;
+                }).join('')||'<span style="color:var(--gray-400);font-size:0.78em;">—</span>'}
             </div>
             ${Object.values(g.info_extra||{}).some(v=>v)?`
             <div style="border-top:1px solid var(--gray-200);">
