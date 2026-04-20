@@ -351,16 +351,6 @@ window._fusionOficializar = async () => {
         document.getElementById('resultado-fusion')?.classList.add('oculto');
     };
 
-        const { error } = await supabase.from('sugerencias_fusion').insert(payload);
-        if (error) { toast('❌ Error al enviar sugerencia: ' + error.message, 'error'); return; }
-
-        toast('✅ Sugerencia enviada. El OP la revisará pronto.', 'ok');
-        fusionsState.resultadoCalculado = null;
-        fusionsState.statsEditadas = { pot: null, agi: null, ctl: null };
-        fusionsState.tagFusionNombre = '';
-        document.getElementById('resultado-fusion')?.classList.add('oculto');
-    };
-
     window._fusionAprobarSugerencia = async (id) => {
         if (!fusionsState.esAdmin) return;
         const { data: sug } = await supabase.from('sugerencias_fusion').select('*').eq('id', id).maybeSingle();
