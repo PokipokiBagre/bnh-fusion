@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusiones — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="stylefusion.css">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Fusiones</a>
+        <div id="bnh-session-badge"></div>
+    </div>
+</header>
+
+<main class="app-main">
+    <div id="pantalla-carga" style="text-align:center;padding:60px 20px;">
+        <p>Sincronizando entidades...</p>
+    </div>
+
+    <div id="interfaz-fusiones" class="oculto">
+        <div class="card" style="margin-bottom: 20px;">
+            <p style="font-size: 0.9em; color: var(--gray-700);">Selecciona dos personajes y lanza el dado de rendimiento (D100). Las reglas de asimilación cambiarán según el porcentaje de compatibilidad obtenido.</p>
+        </div>
+        
+        <div class="fusion-grid" id="simulador-contenedor">
+            </div>
+
+        <div id="resultado-fusion" class="card resultado-card oculto">
+            </div>
+    </div>
+</main>
+
+<script type="module" src="fusions-main.js"></script>
+</body>
+</html>
