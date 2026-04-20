@@ -6,8 +6,9 @@ import {
     STORAGE_URL, norm, tagDetalle, setTagDetalle,
     inventarioMedallas,
 } from './tags-state.js';
-import { getTagsConPuntos, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles } from './tags-logic.js';
+import { getTagsConPuntos, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles, proyectarPJ } from './tags-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
+import { renderFusionBadge } from '../bnh-fusion.js';
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -27,11 +28,13 @@ async function _recargarCatalogo() {
     });
 }
 
-// ── Tab Progresión ────────────────────────────────────────────
 export function renderProgresion() {
     const wrap = document.getElementById('vista-progresion');
     if (!wrap) return;
     const pj = tagsState.pjSeleccionado;
+    
+    // --- LENTE ---
+    const proy = pj ? proyectarPJ(pj) : null;
     const tagsConPts = pj ? getTagsConPuntos(pj) : [];
 
     const gruposFiltrados = grupos.filter(g => {
@@ -65,7 +68,7 @@ export function renderProgresion() {
     } else if (!tagsConPts.length) {
         barrasHtml = `<div class="empty-state"><h3>Sin tags</h3><p>${pj} no tiene tags asignados.</p></div>`;
     } else {
-        barrasHtml = tagsConPts.map(({ tag, pts }) => {
+        barrasHtml = tagsConPts.map(({ tag, pts, ptsReales, alterado }) => {
             const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
             const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
             const baneado = catEntry?.baneado;
@@ -81,12 +84,17 @@ export function renderProgresion() {
                 canjeHtml = '';
             } else if (pts > 0) {
                 canjeHtml = `<div class="thresh-badges">`;
-                if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" style="background:var(--orange);border-color:var(--orange);color:white;" onclick="window._tagsAbrirCanjeTresTags('${_esc(pj)}','${tag}')">−100 → 🎁 3 tags</button>`;
-                if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" style="background:#1a4a80;border-color:#1a4a80;color:white;" onclick="window._tagsAbrirCanjeMedialla('${_esc(pj)}','${tag}')">−75 → 🏅 Medalla</button>`;
+                
+                // BLOQUEOS POR FUSIÓN
+                const bloq = alterado ? 'disabled style="opacity:0.5;cursor:not-allowed;" title="Bloqueado: PT virtuales de fusión"' : '';
+                const clk = (accion) => alterado ? `onclick="window.toast('No puedes gastar PT virtuales de fusión', 'error')"` : `onclick="${accion}"`;
+
+                if (pts >= 100) canjeHtml += `<button class="thresh done btn btn-sm" style="background:var(--orange);border-color:var(--orange);color:white;" ${clk(`window._tagsAbrirCanjeTresTags('${_esc(pj)}','${tag}')`)} ${bloq}>−100 → 🎁 3 tags</button>`;
+                if (pts >= 75)  canjeHtml += `<button class="thresh done btn btn-sm" style="background:#1a4a80;border-color:#1a4a80;color:white;" ${clk(`window._tagsAbrirCanjeMedialla('${_esc(pj)}','${tag}')`)} ${bloq}>−75 → 🏅 Medalla</button>`;
                 if (pts >= 50)  canjeHtml += `
-                    <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_pot')">−50→+POT</button>
-                    <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_agi')">−50→+AGI</button>
-                    <button class="thresh done btn btn-sm" onclick="window._tagsCanjear('${_esc(pj)}','${tag}','stat_ctl')">−50→+CTL</button>`;
+                    <button class="thresh done btn btn-sm" ${clk(`window._tagsCanjear('${_esc(pj)}','${tag}','stat_pot')`)} ${bloq}>−50→+POT</button>
+                    <button class="thresh done btn btn-sm" ${clk(`window._tagsCanjear('${_esc(pj)}','${tag}','stat_agi')`)} ${bloq}>−50→+AGI</button>
+                    <button class="thresh done btn btn-sm" ${clk(`window._tagsCanjear('${_esc(pj)}','${tag}','stat_ctl')`)} ${bloq}>−50→+CTL</button>`;
                 
                 if (pts < 50) {
                     [[50,'🗡 +stat'],[75,'🏅 medalla'],[100,'🎁 3 tags']].forEach(([thr,lbl]) => {
@@ -102,19 +110,17 @@ export function renderProgresion() {
                     <span class="tag-name" style="cursor:pointer;" onclick="window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}')">
                         ${tag}${baneado?' <span style="color:#888;font-size:0.75em;">🚫</span>':''}
                     </span>
-                    <span class="tag-pts">${pts} / ${UMBRAL_MAX} PT</span>
+                    <span class="tag-pts" ${alterado ? `style="color:#8e44ad; font-weight:800;" title="Reales: ${ptsReales}"` : ''}>
+                        ${alterado ? '⚡ ' : ''}${pts} / ${UMBRAL_MAX} PT
+                    </span>
                 </div>
-                <div class="prog-bar"><div class="prog-fill" style="width:${pct}%; background:${colorBg};"></div></div>
+                <div class="prog-bar"><div class="prog-fill" style="width:${pct}%; background:${alterado ? '#8e44ad' : colorBg};"></div></div>
                 ${canjeHtml}
             </div>`;
         }).join('');
     }
 
-    // ── Medallas Accesibles ───────────────────────────────────────────────────
-    // Las tarjetas se renderizan UNA SOLA VEZ aquí. El buscador opera in-place
-    // sobre el DOM (ver window._tagsBuscarMedallasAcc en tags-main.js), sin
-    // destruir ni recrear este bloque, evitando pérdida de foco y scroll jumps.
-    // ── Medallas Accesibles ──
+    // ── Medallas Accesibles (In-place) ──
     let secMedallas = '';
     if (pj) {
         const accMedallas = getMedallasAccesibles(pj);
@@ -122,15 +128,12 @@ export function renderProgresion() {
         let visiblesInit = 0;
         
         const mHtml = accMedallas.map(m => {
-            // Verificar si la medalla está en el inventario
             const equipada = inventarioMedallas.includes(m.id);
-            
             const tagsD = (m.requisitos_base||[]).map(r => `
                 <span style="font-size:0.7em; font-weight:600; background:rgba(52,152,219,0.1); color:var(--blue,#2980b9); border:1px solid rgba(52,152,219,0.3); padding:2px 8px; border-radius:12px; white-space:nowrap;">
                     ${_esc(r.tag.startsWith('#')?r.tag:'#'+r.tag)} ≥${r.pts_minimos}pt
                 </span>`).join(' ');
 
-            // Filtrado inicial
             const mostrar = !busqMed || m.nombre.toLowerCase().includes(busqMed) || (m.efecto_desc||'').toLowerCase().includes(busqMed);
             if (mostrar) visiblesInit++;
 
@@ -168,7 +171,6 @@ export function renderProgresion() {
             </div>
         </div>`;
     }
-    // ─────────────────────────────────────────────────────────────────────────
 
     const rankingHtml = rankingPorPT().slice(0, 5).map(({ nombre, total }, i) => {
         const medal = ['🥇','🥈','🥉'][i] || `${i+1}.`;
@@ -180,6 +182,19 @@ export function renderProgresion() {
             <span style="font-weight:800;color:var(--green-dark);font-size:0.85em;">${total} PT</span>
         </div>`;
     }).join('');
+
+    // --- Stats de Fusión para el Título ---
+    let statsTitle = '';
+    let badgeFusionHtml = '';
+    if (proy) {
+        badgeFusionHtml = proy.esFusion ? renderFusionBadge(pj, STORAGE_URL, norm) : '';
+        if (proy.esFusion) {
+            statsTitle = `
+            <div style="background:var(--purple-pale); border:1px solid var(--purple); border-radius:6px; padding:6px 12px; font-size:0.8em; color:var(--purple); font-weight:700; margin-bottom: 15px; display:inline-block;">
+                ⚡ PAC Proyectado: ${proy.pot + proy.agi + proy.ctl} (POT: ${proy.pot} | AGI: ${proy.agi} | CTL: ${proy.ctl})
+            </div>`;
+        }
+    }
 
     wrap.innerHTML = `
         <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
@@ -193,7 +208,17 @@ export function renderProgresion() {
                     </div>
                     <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
                 </div>
-                ${pj ? `<div class="card"><div class="card-title">Progresión — ${pj}</div>${barrasHtml}</div>${secMedallas}` : barrasHtml}
+                ${pj ? `
+                <div class="card">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        <div class="card-title" style="margin-bottom:0;">Progresión — ${pj}</div>
+                        ${badgeFusionHtml}
+                    </div>
+                    <hr style="border:0; border-top:1px solid var(--gray-200); margin:10px 0;">
+                    ${statsTitle}
+                    ${barrasHtml}
+                </div>
+                ${secMedallas}` : barrasHtml}
             </div>
 
             <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;">
