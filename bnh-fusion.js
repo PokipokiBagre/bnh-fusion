@@ -1,74 +1,37 @@
-// ============================================================
-// bnh-fusion.js — Estado global de Fusiones Activas
-// Colocar en la RAÍZ del proyecto (bnh-fusion/)
-// ============================================================
-// Uso desde cualquier página:
-//   import { fusionState, activarFusion, terminarFusion } from '../bnh-fusion.js';
-// ============================================================
+// bnh-fusion.js — Core actualizado
 import { supabase } from './bnh-auth.js';
 
-// ── Estado en memoria ─────────────────────────────────────────
-// fusionState es un Map: id_fusion → { id, pj_a, pj_b, tags_fusionados, activa, inicio }
 export const fusionState = new Map();
 
-// ── Cargar fusiones activas desde Supabase ───────────────────
 export async function cargarFusiones() {
-    const { data } = await supabase
-        .from('fusiones_activas')
-        .select('*')
-        .eq('activa', true);
+    const { data } = await supabase.from('fusiones_activas').select('*').eq('activa', true);
     fusionState.clear();
     (data || []).forEach(f => fusionState.set(f.id, f));
 }
 
-// ── Activar una fusión entre dos personajes ──────────────────
-// Tags fusionados = unión de ambos arrays (sin duplicados)
-export async function activarFusion(pjA, pjB, tagsA, tagsB) {
-    // Verificar que ninguno ya esté en fusión
+// Ahora recibe el rendimiento (1-100)
+export async function activarFusion(pjA, pjB, rendimiento) {
     for (const [, f] of fusionState) {
         if (f.pj_a === pjA || f.pj_b === pjA || f.pj_a === pjB || f.pj_b === pjB) {
-            return { ok: false, msg: `${f.pj_a === pjA || f.pj_b === pjA ? pjA : pjB} ya está en una fusión activa.` };
+            return { ok: false, msg: 'Uno de los personajes ya está fusionado.' };
         }
     }
 
-    const tagsFusionados = [...new Set([...tagsA, ...tagsB])];
-
     const { data, error } = await supabase
         .from('fusiones_activas')
-        .insert({
-            pj_a:            pjA,
-            pj_b:            pjB,
-            tags_fusionados: tagsFusionados,
-            activa:          true
-        })
-        .select('*')
-        .single();
+        .insert({ pj_a: pjA, pj_b: pjB, rendimiento, activa: true })
+        .select('*').single();
 
     if (error) return { ok: false, msg: error.message };
     fusionState.set(data.id, data);
     return { ok: true, fusion: data };
 }
 
-// ── Terminar una fusión ───────────────────────────────────────
 export async function terminarFusion(fusionId) {
-    await supabase
-        .from('fusiones_activas')
-        .update({ activa: false })
-        .eq('id', fusionId);
+    await supabase.from('fusiones_activas').update({ activa: false }).eq('id', fusionId);
     fusionState.delete(fusionId);
 }
 
-// ── Helpers de consulta ───────────────────────────────────────
-
-// ¿Está un personaje en fusión ahora mismo?
-export function estaEnFusion(nombrePJ) {
-    for (const [, f] of fusionState) {
-        if (f.pj_a === nombrePJ || f.pj_b === nombrePJ) return true;
-    }
-    return false;
-}
-
-// Devuelve la fusión activa de un personaje (o null)
 export function getFusionDe(nombrePJ) {
     for (const [, f] of fusionState) {
         if (f.pj_a === nombrePJ || f.pj_b === nombrePJ) return f;
@@ -76,6 +39,31 @@ export function getFusionDe(nombrePJ) {
     return null;
 }
 
+// LA MAGIA: Calcula los PT proyectados en base al rendimiento
+export function calcularPTsFusionados(ptsA, ptsB, rendimiento) {
+    const fusionados = {};
+    const todosLosTags = [...new Set([...Object.keys(ptsA), ...Object.keys(ptsB)])];
+
+    todosLosTags.forEach(tag => {
+        const valA = ptsA[tag] || 0;
+        const valB = ptsB[tag] || 0;
+
+        if (rendimiento <= 33) {
+            // Tier 1: Stats se fusionan (manejado en UI), pero PTs no hacen sinergia. 
+            // Cada uno aporta lo suyo, pero no se cruzan. Usamos el mayor para simplificar la vista, 
+            // pero podrías restringirlo a 0 si quieres ser estricto.
+            fusionados[tag] = Math.max(valA, valB); 
+        } else if (rendimiento <= 66) {
+            // Tier 2: Escoge el mayor
+            fusionados[tag] = Math.max(valA, valB);
+        } else {
+            // Tier 3: Suma los PT
+            fusionados[tag] = valA + valB;
+        }
+    });
+
+    return fusionados;
+}
 // ── Render del doble icono de fusión (HTML string) ───────────
 // Úsalo en cualquier página donde quieras mostrar el badge de fusión
 // storageUrl = currentConfig.storageUrl
