@@ -7,6 +7,7 @@
     <title>Fusiones — BNH</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
     <link rel="stylesheet" href="stylefusion.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -15,26 +16,27 @@
         <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Fusiones</a>
         <div id="bnh-session-badge"></div>
     </div>
+    <nav class="app-nav">
+        <button class="nav-tab active" id="tab-simulador" onclick="window._fusionTab('simulador')">⚡ Simulador</button>
+        <button class="nav-tab"        id="tab-activas"   onclick="window._fusionTab('activas')">🔗 Fusiones Activas</button>
+    </nav>
 </header>
 
 <main class="app-main">
+    <!-- Carga -->
     <div id="pantalla-carga" style="text-align:center;padding:60px 20px;">
-        <p>Sincronizando entidades...</p>
+        <div class="spinner" style="width:32px;height:32px;margin:0 auto 14px;"></div>
+        <p style="color:var(--gray-500);">Sincronizando entidades…</p>
     </div>
 
+    <!-- Interfaz principal -->
     <div id="interfaz-fusiones" class="oculto">
-        <div class="card" style="margin-bottom: 20px;">
-            <p style="font-size: 0.9em; color: var(--gray-700);">Selecciona dos personajes y lanza el dado de rendimiento (D100). Las reglas de asimilación cambiarán según el porcentaje de compatibilidad obtenido.</p>
-        </div>
-        
-        <div class="fusion-grid" id="simulador-contenedor">
-            </div>
-
-        <div id="resultado-fusion" class="card resultado-card oculto">
-            </div>
+        <div id="vista-simulador"></div>
+        <div id="vista-activas" class="oculto"></div>
     </div>
 </main>
 
+<div id="toast-msg"></div>
 <script type="module" src="fusions-main.js"></script>
 </body>
 </html>
