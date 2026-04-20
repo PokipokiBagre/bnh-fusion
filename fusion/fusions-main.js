@@ -2,7 +2,8 @@
 import { bnhAuth, supabase } from '../bnh-auth.js';
 import {
     fusionsState, setPersonajes, setPtGlobales, setFusionesActivas, setRegistroFusiones,
-    personajes, ptGlobales, fusionesActivas, STORAGE_URL,
+    personajes, ptGlobales, fusionesActivas, STORAGE_URL, 
+    bannedTags, setBannedTags // NUEVAS IMPORTACIONES
 } from './fusions-state.js';
 import {
     renderSimulador, renderFusionesActivas, renderRegistro, renderResultado,
@@ -13,7 +14,6 @@ import { calcularResultadoFusion, buildRegistroFusion, calcCompatibilidadTags } 
 import { cargarOpciones, guardarOpciones, opcionesState } from './fusions-options.js';
 import { cargarFusiones, activarFusion, terminarFusion } from '../bnh-fusion.js';
 
-// ─── Rol global (se setea en onload) ──────────────────────────
 export let esAdmin = false;
 
 // ─── Init ──────────────────────────────────────────────────────
@@ -27,30 +27,33 @@ window.onload = async () => {
     esAdmin = bnhAuth.esAdmin();
     fusionsState.esAdmin = esAdmin;
 
-    // Mostrar/ocultar tab Opciones según rol
     const tabOpc = document.getElementById('tab-opciones');
     if (tabOpc) tabOpc.style.display = esAdmin ? '' : 'none';
 
     try {
         await Promise.all([cargarFusiones(), cargarOpciones()]);
 
+        // NUEVO: Agregamos la consulta e5 para los tags baneados
         const [
             { data: pjData,  error: e1 },
             { data: ptData,  error: e2 },
             { data: faData,  error: e3 },
             { data: regData, error: e4 },
+            { data: tagsData, error: e5 } 
         ] = await Promise.all([
-            // ✅ CORRECCIÓN PRINCIPAL: usar personajes_refinados, no personajes
             supabase.from('personajes_refinados').select('nombre_refinado, pot, agi, ctl, tags').order('nombre_refinado'),
             supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
             supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
             supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
+            supabase.from('tags_catalogo').select('nombre').eq('baneado', true) // <-- CONSULTA BANEADOS
         ]);
 
         if (e1) throw new Error(e1.message);
         if (e2) throw new Error(e2.message);
 
-        // Normalizar: personajes_refinados usa nombre_refinado, nosotros usamos nombre
+        // Guardamos los tags baneados en el estado local
+        setBannedTags((tagsData || []).map(t => t.nombre));
+
         const pjNorm = (pjData || []).map(p => ({
             nombre: p.nombre_refinado,
             pot:    p.pot   || 0,
@@ -59,7 +62,6 @@ window.onload = async () => {
             tags:   p.tags  || [],
         }));
 
-        // Normalizar puntos_tag para que coincidan con nombre_refinado
         const ptNorm = (ptData || []).map(p => ({
             personaje_nombre: p.personaje_nombre,
             tag:              p.tag,
@@ -85,7 +87,6 @@ window.onload = async () => {
 
 // ─── Tabs ──────────────────────────────────────────────────────
 function _renderTab(tab) {
-    // Bloquear tab opciones a no-admins
     if (tab === 'opciones' && !fusionsState.esAdmin) return;
 
     fusionsState.tabActual = tab;
@@ -110,9 +111,12 @@ function _recalcCompatibilidad() {
     } else {
         const tagsA = (pjA.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase());
         const tagsB = (pjB.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase());
-        const compartidos = tagsA.filter(t => tagsB.includes(t)).length;
+        
+        // NUEVO: Limpiamos los arrays de cualquier tag que esté baneado ANTES de cruzar
+        const tagsALimpios = tagsA.filter(t => !bannedTags.includes(t));
+        const compartidos = tagsALimpios.filter(t => tagsB.includes(t)).length;
+        
         fusionsState.compatTags = compartidos;
-        // Escala: 0 tags=0%, 1=1%, 2=10%, 3=18%, 4=26%, y de ahí +8% por cada tag adicional
         fusionsState.compatPct = calcCompatibilidadTags(compartidos);
     }
     actualizarCompatibilidadDisplay();
@@ -122,7 +126,6 @@ function _recalcCompatibilidad() {
 function _exponerGlobales() {
     window._fusionTab = _renderTab;
 
-    // ── Pool ─────────────────────────────────────────────────
     window._fusionClickPJ = (nombre) => {
         if (fusionsState.pjA === nombre) { fusionsState.pjA = null; actualizarSlotPublic('a'); _recalcCompatibilidad(); return; }
         if (fusionsState.pjB === nombre) { fusionsState.pjB = null; actualizarSlotPublic('b'); _recalcCompatibilidad(); return; }
@@ -142,8 +145,6 @@ function _exponerGlobales() {
         document.getElementById('resultado-fusion')?.classList.add('oculto');
     };
 
-    // ── D100 ─────────────────────────────────────────────────
-    // Usamos un listener directo en lugar de oninput para evitar pérdida de foco
     window._fusionD100Init = () => {
         const inp = document.getElementById('inp-d100');
         if (!inp || inp._d100init) return;
@@ -155,14 +156,12 @@ function _exponerGlobales() {
         });
     };
 
-    // ── Simular ──────────────────────────────────────────────
     window._fusionSimular = () => {
         const d100raw = parseInt(document.getElementById('inp-d100')?.value);
         if (!fusionsState.pjA || !fusionsState.pjB)        { toast('Selecciona dos personajes.', 'error'); return; }
         if (fusionsState.pjA === fusionsState.pjB)          { toast('A y B no pueden ser el mismo personaje.', 'error'); return; }
         if (isNaN(d100raw) || d100raw < 1 || d100raw > 100) { toast('Ingresa un rendimiento válido (1–100).', 'error'); return; }
 
-        // Calcular rendimiento total: D100 + bonus de compatibilidad
         const bonus = fusionsState.compatPct || 0;
         const rendTotal = d100raw + bonus;
         fusionsState.d100      = d100raw;
@@ -171,9 +170,9 @@ function _exponerGlobales() {
         const pjA = personajes.find(p => p.nombre === fusionsState.pjA);
         const pjB = personajes.find(p => p.nombre === fusionsState.pjB);
 
-        // Pasar el rendimiento total al cálculo (puede superar 100)
-        fusionsState.resultadoCalculado = calcularResultadoFusion(pjA, pjB, rendTotal, ptGlobales);
-        // Guardar también el d100 base en el resultado para mostrarlo
+        // NUEVO: Mandamos el array bannedTags a la lógica
+        fusionsState.resultadoCalculado = calcularResultadoFusion(pjA, pjB, rendTotal, ptGlobales, opcionesState, bannedTags);
+        
         fusionsState.resultadoCalculado.d100Base  = d100raw;
         fusionsState.resultadoCalculado.d100Bonus = bonus;
         fusionsState.statsEditadas = { pot: null, agi: null, ctl: null };
@@ -181,7 +180,6 @@ function _exponerGlobales() {
         renderResultado(fusionsState.resultadoCalculado);
     };
 
-    // ── Edición de stats ─────────────────────────────────────
     window._fusionEditStat = (stat, val) => {
         const n = parseInt(val);
         fusionsState.statsEditadas[stat] = isNaN(n) || n < 0 ? null : n;
@@ -200,7 +198,6 @@ function _exponerGlobales() {
         fusionsState.tagFusionNombre = val.trim();
     };
 
-    // ── Oficializar (solo OP) ─────────────────────────────────
     window._fusionOficializar = async () => {
         if (!fusionsState.resultadoCalculado) return;
         if (!fusionsState.esAdmin) { toast('Solo el OP puede oficializar fusiones.', 'error'); return; }
@@ -288,7 +285,6 @@ function _exponerGlobales() {
         }
     };
 
-    // ── Enviar sugerencia (no-OP) ─────────────────────────────
     window._fusionEnviarSugerencia = async () => {
         if (!fusionsState.resultadoCalculado) return;
         const { pjA, pjB } = fusionsState.resultadoCalculado;
@@ -335,13 +331,11 @@ function _exponerGlobales() {
         document.getElementById('resultado-fusion')?.classList.add('oculto');
     };
 
-    // ── Aprobar / rechazar sugerencia (OP) ────────────────────
     window._fusionAprobarSugerencia = async (id) => {
         if (!fusionsState.esAdmin) return;
         const { data: sug } = await supabase.from('sugerencias_fusion').select('*').eq('id', id).maybeSingle();
         if (!sug) return;
 
-        // Activar en DB como si el OP la hubiera oficializado
         const res = await activarFusion(sug.pj_a, sug.pj_b, sug.rendimiento);
         if (!res.ok) { toast('❌ ' + res.msg, 'error'); return; }
 
@@ -373,7 +367,6 @@ function _exponerGlobales() {
             }
         }
 
-        // Guardar en registro
         await supabase.from('registro_fusiones').insert({
             pj_a: sug.pj_a, pj_b: sug.pj_b,
             rendimiento: sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
@@ -398,7 +391,6 @@ function _exponerGlobales() {
         renderRegistro();
     };
 
-    // ── Terminar fusión (solo OP) ─────────────────────────────
     window._fusionTerminar = async (id, pjA, pjB) => {
         if (!fusionsState.esAdmin) { toast('Solo el OP puede terminar fusiones.', 'error'); return; }
         if (!confirm(`¿Terminar la fusión de ${pjA} y ${pjB}?`)) return;
@@ -431,7 +423,6 @@ function _exponerGlobales() {
         } catch(e) { toast('❌ Error: ' + e.message, 'error'); }
     };
 
-    // ── Borrar registro (solo OP) ─────────────────────────────
     window._fusionBorrarRegistro = async (id) => {
         if (!fusionsState.esAdmin) return;
         if (!confirm('¿Eliminar este registro del historial? No deshace la fusión en sí.')) return;
@@ -443,7 +434,6 @@ function _exponerGlobales() {
         toast('Registro eliminado.', 'ok');
     };
 
-    // ── Reset resultado ──────────────────────────────────────
     window._fusionResetResultado = () => {
         fusionsState.resultadoCalculado = null;
         fusionsState.statsEditadas = { pot: null, agi: null, ctl: null };
@@ -451,7 +441,6 @@ function _exponerGlobales() {
         document.getElementById('resultado-fusion')?.classList.add('oculto');
     };
 
-    // ── Opciones (solo OP) ────────────────────────────────────
     window._fusionOpcionChange = (key, val) => {
         if (!fusionsState.esAdmin) return;
         let parsed = val;
@@ -472,14 +461,17 @@ function _exponerGlobales() {
     };
 }
 
-// ─── Refrescar datos globales ─────────────────────────────────
 async function _refrescarTodo() {
-    const [{ data: faData }, { data: regData }, { data: pjData }, { data: ptData }] = await Promise.all([
+    const [{ data: faData }, { data: regData }, { data: pjData }, { data: ptData }, { data: tagsData }] = await Promise.all([
         supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
         supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
         supabase.from('personajes_refinados').select('nombre_refinado, pot, agi, ctl, tags').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true) // <-- CONSULTA BANEADOS
     ]);
+    
+    setBannedTags((tagsData || []).map(t => t.nombre));
+    
     setFusionesActivas(faData || []);
     setRegistroFusiones(regData || []);
     const pjNorm = (pjData || []).map(p => ({ nombre: p.nombre_refinado, pot: p.pot||0, agi: p.agi||0, ctl: p.ctl||0, tags: p.tags||[] }));
@@ -488,7 +480,6 @@ async function _refrescarTodo() {
     await cargarFusiones();
 }
 
-// ─── Actualizar barra D100 in-place ──────────────────────────
 function _actualizarBarraD100() {
     const val   = fusionsState.d100 || 0;
     const bonus = fusionsState.compatPct || 0;
@@ -505,7 +496,6 @@ function _actualizarBarraD100() {
     if (label)   label.textContent   = val ? `D100: ${val} + ${bonus}% tags = ${val + bonus}%` : 'Ingresa el dado';
     if (totalEl) totalEl.textContent = val + bonus;
 
-    // Actualizar badge de regla
     const { getRegla } = window._fusionLogicRef || {};
     if (reglaEl && getRegla) {
         const regla = getRegla(val + bonus);
