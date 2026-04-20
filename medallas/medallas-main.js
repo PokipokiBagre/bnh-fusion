@@ -154,7 +154,7 @@ function _exponerGlobales() {
         renderGrafo();
     };
 
-    window._medEquiparToggle = async (id, mObj) => {
+window._medEquiparToggle = async (id, mObj) => {
         const eq = medallaState.equipacion || [];
         const idx = eq.findIndex(e => e.id === id);
         if (idx >= 0) {
@@ -163,15 +163,25 @@ function _exponerGlobales() {
         } else {
             const m = mObj || medallas.find(x => x.id === id);
             if (m) {
-                // --- VALIDACIÓN ANTES DE PERMITIR EQUIPAR ---
-                const { estadoMedallaPJ } = await import('./medallas-logic.js');
+                // --- 1. VALIDACIÓN DE TAGS Y PT ---
+                const { estadoMedallaPJ, proyectarPJ } = await import('./medallas-logic.js');
                 const estado = estadoMedallaPJ(m, medallaState.pjSeleccionado);
                 
                 if (estado !== 'activable') {
                     toast('❌ No cumples los requisitos de Tags o PT para esta medalla.', 'error');
                     return;
                 }
+
+                // --- 2. VALIDACIÓN DE LÍMITE DE CTL (Usando Lente de Fusión) ---
+                const proy = proyectarPJ(medallaState.pjSeleccionado);
+                const ctlUsado = eq.reduce((a, b) => a + (Number(b.costo_ctl) || 0), 0);
+                
+                if (ctlUsado + (Number(m.costo_ctl) || 0) > proy.ctl) {
+                    toast('❌ No tienes suficiente CTL (Incluso con la fusión activa)', 'error');
+                    return;
+                }
                 // --------------------------------------------
+
                 eq.push(m);
             }
         }
