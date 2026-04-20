@@ -31,7 +31,7 @@ window.onload = async () => {
             { data: faData,  error: e3 },
             { data: regData, error: e4 },
         ] = await Promise.all([
-            supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
+            supabase.from('personajes').select('*').order('nombre'),
             supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
             supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
             supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
@@ -195,16 +195,16 @@ function _exponerGlobales() {
                     .upsert({ nombre: tagKey, descripcion: `Tag temporal de fusión: ${pjA} ⚡ ${pjB}` }, { onConflict: 'nombre', ignoreDuplicates: true });
 
                 // Asignar a PJ A
-                const { data: gA } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', pjA).maybeSingle();
+                const { data: gA } = await supabase.from('personajes').select('tags').eq('nombre', pjA).maybeSingle();
                 if (gA) {
                     const tagsA = [...new Set([...(gA.tags || []), tagFusion])];
-                    await supabase.from('personajes_refinados').update({ tags: tagsA }).eq('nombre_refinado', pjA);
+                    await supabase.from('personajes').update({ tags: tagsA }).eq('nombre', pjA);
                 }
                 // Asignar a PJ B
-                const { data: gB } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', pjB).maybeSingle();
+                const { data: gB } = await supabase.from('personajes').select('tags').eq('nombre', pjB).maybeSingle();
                 if (gB) {
                     const tagsB = [...new Set([...(gB.tags || []), tagFusion])];
-                    await supabase.from('personajes_refinados').update({ tags: tagsB }).eq('nombre_refinado', pjB);
+                    await supabase.from('personajes').update({ tags: tagsB }).eq('nombre', pjB);
                 }
 
                 // Insertar PT del tag de fusión a ambos
@@ -234,7 +234,7 @@ function _exponerGlobales() {
             const [{ data: faData }, { data: regData }, { data: pjData }, { data: ptData }] = await Promise.all([
                 supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
                 supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
-                supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
+                supabase.from('personajes').select('*').order('nombre'),
                 supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
             ]);
             setFusionesActivas(faData  || []);
@@ -269,12 +269,12 @@ function _exponerGlobales() {
                 const quitarTag = confirm(`¿Quitar también el tag ${tagFusion} de ${pjA} y ${pjB}?`);
                 if (quitarTag) {
                     for (const nombre of [pjA, pjB]) {
-                        const { data: g } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', nombre).maybeSingle();
+                        const { data: g } = await supabase.from('personajes').select('tags').eq('nombre', nombre).maybeSingle();
                         if (g) {
                             const nuevosTags = (g.tags || []).filter(t =>
                                 (t.startsWith('#') ? t : '#' + t).toLowerCase() !== tagFusion.toLowerCase()
                             );
-                            await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('nombre_refinado', nombre);
+                            await supabase.from('personajes').update({ tags: nuevosTags }).eq('nombre', nombre);
                         }
                     }
                 }
@@ -282,7 +282,7 @@ function _exponerGlobales() {
 
             const [{ data: faData }, { data: pjData }] = await Promise.all([
                 supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
-                supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
+                supabase.from('personajes').select('*').order('nombre'),
             ]);
             setFusionesActivas(faData || []);
             setPersonajes(pjData || []);
