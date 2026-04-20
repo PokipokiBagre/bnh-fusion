@@ -382,7 +382,7 @@ export function renderFusionesActivas() {
         const fecha   = f.creado_en ? new Date(f.creado_en).toLocaleDateString('es', { day:'2-digit', month:'short', year:'numeric' }) : '—';
 
         const terminBtn = fusionsState.esAdmin
-            ? `<button class="btn btn-red btn-sm" onclick="window._fusionTerminar(${f.id},'${f.pj_a.replace(/'/g,"\\'")}','${f.pj_b.replace(/'/g,"\\'")}')">Terminar</button>`
+            ? `<button class="btn btn-red btn-sm" onclick="window._fusionTerminar('${f.id}','${f.pj_a.replace(/'/g,"\\'")}','${f.pj_b.replace(/'/g,"\\'")}')">Terminar</button>`
             : '';
 
         return `
