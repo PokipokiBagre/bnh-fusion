@@ -12,6 +12,7 @@ export const fusionsState = {
     resultadoCalculado:  null,
     statsEditadas:       { pot: null, agi: null, ctl: null },
     tagFusionNombre:     '',     
+    modoTagLocal:        'ninguno', // <-- AÑADIR ESTA LÍNEA
     compatTags:          0,      
     compatPct:           0,      
     esAdmin:             false,  
