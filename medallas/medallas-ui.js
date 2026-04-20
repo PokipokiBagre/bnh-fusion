@@ -444,77 +444,87 @@ export function renderPersonaje() {
         </div>`;
     }).join('');
 
-    let content = '';
-    
-    if (!pj) {
-        content = `<div class="empty-state"><h3>Selecciona un personaje</h3><p>Click en uno de arriba.</p></div>`;
-    } else {
-        const g       = grupos.find(x => x.nombre_refinado === pj);
-        const ptsMapa = getPuntosPJ(pj);
+    // ── Determinar medallas base según el PJ seleccionado ─────────────
+    medallaState.filtroTagsPJ = medallaState.filtroTagsPJ || [];
+    const busqPJ = (medallaState.pjBusqueda || '').toLowerCase();
 
-        const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
-        
-        // 1. Obtener todas las medallas (sin agrupar)
-        let medallasUnicas = medallas.filter(m => !m.propuesta);
-        medallaState.filtroTagsPJ = medallaState.filtroTagsPJ || [];
+    // Tags del PJ seleccionado (si hay alguno)
+    const pjGrupo = pj ? grupos.find(x => x.nombre_refinado === pj) : null;
+    const pjTags  = pjGrupo
+        ? (pjGrupo.tags || []).map(t => t.startsWith('#') ? t : '#' + t)
+        : null;
 
-        // 2. Extraer tags para los filtros (solo de las medallas existentes)
-        const mTagsList = [...new Set(medallasUnicas.flatMap(m => mTags(m)))].sort();
+    // 1. Base: todas las medallas aprobadas
+    let medallasBase = medallas.filter(m => !m.propuesta || medallaState.esAdmin);
 
-        // 3. Filtrar por búsqueda de texto
-        if (busqPJ) {
-            medallasUnicas = medallasUnicas.filter(m =>
-                m.nombre.toLowerCase().includes(busqPJ) ||
-                (m.efecto_desc||'').toLowerCase().includes(busqPJ) ||
-                mTags(m).some(t => t.toLowerCase().includes(busqPJ))
-            );
-        }
-
-        // 4. Filtrar por tags seleccionados (Lógica AND)
-        if (medallaState.filtroTagsPJ.length > 0) {
-            medallasUnicas = medallasUnicas.filter(m => {
-                const tagsMed = mTags(m).map(t => t.toLowerCase());
-                return medallaState.filtroTagsPJ.every(f => tagsMed.includes(f.toLowerCase()));
-            });
-        }
-
-        // 5. Construir HTML de los filtros
-        const tagsFiltrosHtml = mTagsList.map(tag => {
-            const activo = medallaState.filtroTagsPJ.includes(tag);
-            return `<button class="btn btn-sm"
-                    style="padding:3px 8px; font-size:0.75em; border-radius:12px; margin:2px; cursor:pointer;
-                           border:1.5px solid ${activo ? 'var(--green)' : '#dee2e6'};
-                           background:${activo ? 'rgba(39,174,96,0.1)' : 'white'};
-                           color:${activo ? 'var(--green-dark)' : '#555'}; font-weight:${activo ? '700' : '600'};"
-                    onclick="window._medToggleFiltroTagPJ('${tag}')">
-                ${tag}
-            </button>`;
-        }).join('');
-
-        const controlesFiltroHtml = `
-            <div style="margin-bottom: 14px; background: white; padding: 12px; border-radius: 8px; border: 1px solid var(--gray-200);">
-                <div style="font-size: 0.75em; font-weight: 800; color: var(--gray-500); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-                    Filtros por Tags
-                    ${medallaState.filtroTagsPJ.length > 0 ? `<span style="float:right; cursor:pointer; color:var(--red);" onclick="window._medLimpiarFiltrosTagPJ()">✕ Limpiar (${medallaState.filtroTagsPJ.length})</span>` : ''}
-                </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
-                    ${tagsFiltrosHtml}
-                </div>
-            </div>
-        `;
-
-        // 6. Generar las nuevas tarjetas completas
-        const tarjetasHtml = medallasUnicas.length > 0
-            ? medallasUnicas.map(m => _renderCardCompletaParaPJ(m, pj, ptsMapa)).join('')
-            : '<div class="empty-state" style="grid-column:1/-1;"><h3>No se encontraron medallas.</h3></div>';
-
-        content = `
-            ${controlesFiltroHtml}
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; align-items:start;">
-                ${tarjetasHtml}
-            </div>
-        `;
+    // 2. Si hay PJ seleccionado, filtrar solo las medallas con algún tag del PJ
+    if (pj && pjTags && pjTags.length > 0) {
+        medallasBase = medallasBase.filter(m =>
+            mTags(m).some(t => pjTags.some(pt => pt.toLowerCase() === t.toLowerCase()))
+        );
     }
+
+    // 3. Chips de tag: los tags del PJ (con PJ) o todos los tags únicos (sin PJ)
+    const mTagsList = (pj && pjTags)
+        ? pjTags.filter(pt => medallasBase.some(m => mTags(m).some(t => t.toLowerCase() === pt.toLowerCase())))
+        : [...new Set(medallasBase.flatMap(m => mTags(m)))].sort();
+
+    const ptsMapa = pj ? getPuntosPJ(pj) : {};
+
+    // 4. Aplicar búsqueda de texto
+    let medallasUnicas = medallasBase;
+    if (busqPJ) {
+        medallasUnicas = medallasUnicas.filter(m =>
+            m.nombre.toLowerCase().includes(busqPJ) ||
+            (m.efecto_desc || '').toLowerCase().includes(busqPJ) ||
+            mTags(m).some(t => t.toLowerCase().includes(busqPJ))
+        );
+    }
+
+    // 5. Aplicar filtro de tag seleccionado (chips)
+    if (medallaState.filtroTagsPJ.length > 0) {
+        medallasUnicas = medallasUnicas.filter(m => {
+            const tagsMed = mTags(m).map(t => t.toLowerCase());
+            return medallaState.filtroTagsPJ.every(f => tagsMed.includes(f.toLowerCase()));
+        });
+    }
+
+    // 6. Construir chips de tag
+    const tagsFiltrosHtml = mTagsList.map(tag => {
+        const activo = medallaState.filtroTagsPJ.includes(tag);
+        return `<button class="btn btn-sm"
+                style="padding:3px 8px; font-size:0.75em; border-radius:12px; margin:2px; cursor:pointer;
+                       border:1.5px solid ${activo ? 'var(--green)' : '#dee2e6'};
+                       background:${activo ? 'rgba(39,174,96,0.1)' : 'white'};
+                       color:${activo ? 'var(--green-dark)' : '#555'}; font-weight:${activo ? '700' : '600'};"
+                onclick="window._medToggleFiltroTagPJ('${tag}')">
+            ${tag}
+        </button>`;
+    }).join('');
+
+    const controlesFiltroHtml = `
+        <div style="margin-bottom:14px; background:white; padding:12px; border-radius:8px; border:1px solid var(--gray-200);">
+            <div style="font-size:0.75em; font-weight:800; color:var(--gray-500); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                ${pj ? `Tags de ${pj}` : 'Filtros por Tags'}
+                ${medallaState.filtroTagsPJ.length > 0 ? `<span style="float:right; cursor:pointer; color:var(--red);" onclick="window._medLimpiarFiltrosTagPJ()">✕ Limpiar (${medallaState.filtroTagsPJ.length})</span>` : ''}
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:4px;">
+                ${tagsFiltrosHtml || '<span style="font-size:0.82em;color:#aaa;">Sin tags disponibles</span>'}
+            </div>
+        </div>
+    `;
+
+    // 7. Renderizar tarjetas (completas con estado si hay PJ, simples si no)
+    const tarjetasHtml = medallasUnicas.length > 0
+        ? medallasUnicas.map(m => pj ? _renderCardCompletaParaPJ(m, pj, ptsMapa) : _renderCard(m)).join('')
+        : `<div class="empty-state" style="grid-column:1/-1;"><h3>${pj ? 'Sin medallas para los tags de este personaje' : 'No se encontraron medallas'}</h3></div>`;
+
+    let content = `
+        ${controlesFiltroHtml}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; align-items:start;">
+            ${tarjetasHtml}
+        </div>
+    `;
 
     // ── Panel equipación ────────────────────────────────────
     let equipHtml = '';
@@ -524,6 +534,80 @@ export function renderPersonaje() {
         const ctl    = gEq?.ctl || 0;
         const equipados = medallaState.equipacion || [];
         const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
+
+        // ── Datos para el Resumen reactivo ─────────────────────────
+        const pot = gEq?.pot || 0;
+        const agi = gEq?.agi || 0;
+        const pac = pot + agi + ctl;
+        const tierData = (() => {
+            if (pac >= 100) return { label: 'TIER 4', color: '#f39c12' };
+            if (pac >= 80)  return { label: 'TIER 3', color: '#8e44ad' };
+            if (pac >= 60)  return { label: 'TIER 2', color: '#2980b9' };
+            return              { label: 'TIER 1', color: '#27ae60' };
+        })();
+        const cambios   = Math.floor(agi / 4);
+        const tierNum   = pac>=100?4:pac>=80?3:pac>=60?2:1;
+        const bonoPV    = [5,10,15,20][tierNum-1] || 5;
+        const pvMax     = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV+(gEq?.pv_max_delta||0);
+        const pvActual  = gEq?.pv_actual ?? pvMax;
+        const norm_pj   = pj.toString().trim().toLowerCase()
+            .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+            .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+            .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+        const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm_pj + 'profile.png';
+        const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm_pj + 'icon.png';
+        const noImgUrl   = STORAGE_URL + '/imginterfaz/no_encontrado.png';
+        const ctlColor   = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
+        const ctlRatio   = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
+        const barColor   = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
+
+        const ptsMapa2  = getPuntosPJ(pj);
+        const totalPT   = Object.values(ptsMapa2).reduce((a,b)=>a+b,0);
+        const listos    = Object.values(ptsMapa2).filter(v=>v>=50).length;
+
+        const resumenCard = `
+        <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;overflow:hidden;flex-shrink:0;">
+            <div style="background:#f8f9fa;max-height:220px;overflow:hidden;">
+                <img src="${profileUrl}"
+                    onerror="this.src='${iconUrl}';this.onerror=function(){this.src='${noImgUrl}';};"
+                    style="width:100%;display:block;object-fit:cover;object-position:top;">
+            </div>
+            <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+                <div style="text-align:center;font-family:'Cinzel',serif;font-size:0.9em;font-weight:800;
+                    color:${tierData.color};letter-spacing:1px;">${tierData.label}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+                    <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:5px;text-align:center;">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
+                        <div style="font-size:1em;font-weight:800;color:#d68910;">${pot}</div>
+                    </div>
+                    <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:5px;text-align:center;">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
+                        <div style="font-size:1em;font-weight:800;color:#2980b9;">${agi}</div>
+                    </div>
+                    <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:5px;text-align:center;">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
+                        <div style="font-size:1em;font-weight:800;color:${ctlColor};">${ctlUsado}/${ctl}</div>
+                    </div>
+                </div>
+                <div style="height:5px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                    <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;font-size:0.78em;border-top:1px solid var(--gray-200);padding-top:6px;">
+                    <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
+                    <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
+                    <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
+                    <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:4px;margin-top:2px;">
+                        <span>PT totales</span><b style="color:var(--green);">${totalPT}</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span>Tags ≥50 PT</span><b style="color:var(--orange);">${listos}</b>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;">
+                        <span>Tags totales</span><b>${(gEq?.tags||[]).length}</b>
+                    </div>
+                </div>
+            </div>
+        </div>`;
         const ctlRatio  = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
         const ctlColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
         const barColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
@@ -713,6 +797,8 @@ export function renderPersonaje() {
         <div id="pj-equip-panel" style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
                     display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 80px);overflow-y:auto;overflow-x:hidden;">
 
+            ${resumenCard}
+
             ${propHtml}
 
             <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
@@ -769,12 +855,10 @@ export function renderPersonaje() {
                         ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
                     </div>
                     <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
-                    ${pj ? `
-                    <input id="pj-med-buscar" placeholder="Filtrar medallas o tags..."
+                    <input id="pj-med-buscar" placeholder="🔍 Filtrar medallas o tags..."
                         oninput="window._medPJBuscar(this.value)"
                         value="${_esc(medallaState.pjBusqueda||'')}"
                         style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">
-                    ` : ''}
                 </div>
                 ${content}
             </div>
