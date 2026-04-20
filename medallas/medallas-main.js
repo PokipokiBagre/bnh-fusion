@@ -302,6 +302,19 @@ function _exponerGlobales() {
 
     window._medPJBuscar = v => { medallaState.pjBusqueda = v; renderPersonaje(); };
 
+    window._medToggleFiltroTagPJ = (tag) => {
+        medallaState.filtroTagsPJ = medallaState.filtroTagsPJ || [];
+        const idx = medallaState.filtroTagsPJ.indexOf(tag);
+        if (idx > -1) medallaState.filtroTagsPJ.splice(idx, 1);
+        else medallaState.filtroTagsPJ.push(tag);
+        renderPersonaje();
+    };
+
+    window._medLimpiarFiltrosTagPJ = () => {
+        medallaState.filtroTagsPJ = [];
+        renderPersonaje();
+    };
+    
     window._medTogglePropuestas = () => { medallaState.filtroPropuestas = !medallaState.filtroPropuestas; renderCatalogo(); };
 
     window._medAprobar = async (id) => {
