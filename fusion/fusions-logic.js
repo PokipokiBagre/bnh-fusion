@@ -50,13 +50,11 @@ function _tipoTag(valA, valB, comportamiento) {
 }
 
 // ─── Cálculo completo ─────────────────────────────────────────
-export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = opcionesState) {
-    // d100 puede superar 100 si hay bonus de tags compartidos
-    // Si supera 100 → multiplicador ×1.5 en stats Y en PTs resultantes
+// NUEVO: Agregamos bannedTags como parámetro
+export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = opcionesState, bannedTags = []) {
     const sobreRecarga = d100 > 100;
     const MULT = sobreRecarga ? 1.5 : 1;
 
-    // Para buscar la regla, limitar a 100 (las reglas solo van hasta 100)
     const d100Clamp = Math.min(d100, 100);
     const regla = getRegla(d100Clamp, opciones);
 
@@ -68,6 +66,9 @@ export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = 
 
     const ptsA = {}, ptsB = {};
     todosLosPTs.forEach(p => {
+        const tagNorm = (p.tag.startsWith('#') ? p.tag : '#' + p.tag).toLowerCase();
+        if (bannedTags.includes(tagNorm)) return; // <-- IGNORAR TAGS BANEADOS (PT)
+        
         if (p.personaje_nombre === pjA.nombre) ptsA[p.tag] = p.cantidad;
         if (p.personaje_nombre === pjB.nombre) ptsB[p.tag] = p.cantidad;
     });
@@ -94,8 +95,9 @@ export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = 
         }
     });
 
-    const tagsA = (pjA.tags || []).map(t => t.startsWith('#') ? t : '#' + t);
-    const tagsB = (pjB.tags || []).map(t => t.startsWith('#') ? t : '#' + t);
+    // <-- IGNORAR TAGS BANEADOS EN LA UNIÓN (Para que no se hereden formalmente)
+    const tagsA = (pjA.tags || []).map(t => t.startsWith('#') ? t : '#' + t).filter(t => !bannedTags.includes(t.toLowerCase()));
+    const tagsB = (pjB.tags || []).map(t => t.startsWith('#') ? t : '#' + t).filter(t => !bannedTags.includes(t.toLowerCase()));
 
     return {
         regla,
@@ -141,7 +143,6 @@ export function buildRegistroFusion(resultado, statsFinales, tagFusion, ptsFusio
 }
 
 // ─── Compatibilidad por tags compartidos ─────────────────────
-// Escala: 0=0%, 1=1%, 2=10%, 3=18%, 4=26%, +8% por cada tag adicional
 export function calcCompatibilidadTags(nTagsCompartidos) {
     if (nTagsCompartidos <= 0) return 0;
     if (nTagsCompartidos === 1) return 1;
