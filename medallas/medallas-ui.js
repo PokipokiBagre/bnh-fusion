@@ -1086,7 +1086,6 @@ export function renderPersonaje() {
         const equip = document.getElementById('pj-equip-panel');
         if (equip) equip.style.top = hh;
     });
-}
 
 // ── Modal detalle ─────────────────────────────────────────────
 export function renderDetalleMedalla(m, pjNombre = null) {
