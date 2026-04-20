@@ -87,21 +87,25 @@ function _exponerGlobales() {
                 .eq('personaje_nombre', n)
                 .eq('equipada', true)
                 .order('slot_orden');
-                
-            if (!error && data) {
-                medallaState.equipacion = data
-                    .filter(r => !r.propuesta)
-                    .map(row => medallas.find(m => m.id === row.medalla_id))
-                    .filter(Boolean);
-                medallaState.equipacionPropuesta = data
-                    .filter(r => r.propuesta)
-                    .map(row => medallas.find(m => m.id === row.medalla_id))
-                    .filter(Boolean);
-                // Exponer en cache global para que fichas-ui pueda leer CTL sync
-                window._equipCache = window._equipCache || {};
-                window._equipCache[n] = medallaState.equipacion;
-                renderPersonaje(); 
-            }
+    if (!error && data) {
+        // Filtrar medallas normales (no propuestas)
+        const rawEquip = data
+            .filter(r => !r.propuesta)
+            .map(row => medallas.find(m => m.id === row.medalla_id))
+            .filter(Boolean);
+            
+        // --- NUEVA LÓGICA DE LIMPIEZA INMEDIATA ---
+        const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
+        medallaState.equipacion = await limpiarInventarioInvalido(n, rawEquip, grupos, puntosAll);
+        // ------------------------------------------
+
+        medallaState.equipacionPropuesta = data
+            .filter(r => r.propuesta)
+            .map(row => medallas.find(m => m.id === row.medalla_id))
+            .filter(Boolean);
+            
+        renderPersonaje(); 
+    }
         }
     };
 
