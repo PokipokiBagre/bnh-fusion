@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fusiones — BNH</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
-    <link rel="stylesheet" href="../stylefusion.css">
+    <link rel="stylesheet" href="stylefusion.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -18,21 +18,23 @@
     </div>
     <nav class="app-nav">
         <button class="nav-tab active" id="tab-simulador" onclick="window._fusionTab('simulador')">⚡ Simulador</button>
-        <button class="nav-tab"        id="tab-activas"   onclick="window._fusionTab('activas')">🔗 Fusiones Activas</button>
+        <button class="nav-tab"        id="tab-activas"   onclick="window._fusionTab('activas')">🔗 Activas</button>
+        <button class="nav-tab"        id="tab-registro"  onclick="window._fusionTab('registro')">📋 Registro</button>
+        <button class="nav-tab"        id="tab-opciones"  onclick="window._fusionTab('opciones')">⚙️ Opciones</button>
     </nav>
 </header>
 
 <main class="app-main">
-    <!-- Carga -->
     <div id="pantalla-carga" style="text-align:center;padding:60px 20px;">
         <div class="spinner" style="width:32px;height:32px;margin:0 auto 14px;"></div>
         <p style="color:var(--gray-500);">Sincronizando entidades…</p>
     </div>
 
-    <!-- Interfaz principal -->
     <div id="interfaz-fusiones" class="oculto">
         <div id="vista-simulador"></div>
-        <div id="vista-activas" class="oculto"></div>
+        <div id="vista-activas"   class="oculto"></div>
+        <div id="vista-registro"  class="oculto"></div>
+        <div id="vista-opciones"  class="oculto"></div>
     </div>
 </main>
 
