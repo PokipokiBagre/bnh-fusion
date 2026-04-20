@@ -403,6 +403,7 @@ export function renderGrafo() {
 }
 
 // ── Tab Personaje — con filtros rol/estado ────────────────────
+// ── Tab Personaje — con filtros rol/estado ────────────────────
 export function renderPersonaje() {
     const wrap = document.getElementById('vista-personaje');
     if (!wrap) return;
@@ -450,9 +451,8 @@ export function renderPersonaje() {
     } else {
         const g       = grupos.find(x => x.nombre_refinado === pj);
         const ptsMapa = getPuntosPJ(pj);
-        const tagsDelPJ = (g?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
 
-      const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
+        const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
         
         // 1. Obtener todas las medallas (sin agrupar)
         let medallasUnicas = medallas.filter(m => !m.propuesta);
@@ -514,9 +514,293 @@ export function renderPersonaje() {
                 ${tarjetasHtml}
             </div>
         `;
-
-        content = secciones || `<div class="empty-state"><h3>Sin medallas disponibles para los tags de este personaje</h3></div>`;
     }
+
+    // ── Panel equipación ────────────────────────────────────
+    let equipHtml = '';
+    
+    if (pj) {
+        const gEq    = grupos.find(x => x.nombre_refinado === pj);
+        const ctl    = gEq?.ctl || 0;
+        const equipados = medallaState.equipacion || [];
+        const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
+        const ctlRatio  = ctl > 0 ? Math.min(ctlUsado / ctl, 1) : 0;
+        const ctlColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : 'var(--green-dark)';
+        const barColor  = ctlUsado > ctl ? '#c0392b' : ctlUsado >= ctl * 0.8 ? '#e67e22' : '#27ae60';
+
+        let ctlAcum = 0;
+        const equipadosConEstado = equipados.map(m => {
+            const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
+            if (cabe) ctlAcum += (m.costo_ctl||0);
+            return { ...m, _cabe: cabe };
+        });
+
+        const selDetalle = medallaState.equipacionDetalleId;
+
+        const filaEq = equipados.length
+            ? equipadosConEstado.map(m => {
+                const esSel = selDetalle === m.id;
+                const excede = !m._cabe;
+                return `
+                <div onclick="window._medEquipSelDetalle('${m.id}')"
+                    style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:4px;cursor:pointer;
+                           background:${esSel ? 'rgba(39,174,96,0.08)' : excede ? 'rgba(231,76,60,0.05)' : m.tipo==='activa'?'rgba(26,74,128,0.05)':'rgba(108,52,131,0.05)'};
+                           border:1.5px solid ${esSel ? 'var(--green)' : excede ? '#e74c3c' : m.tipo==='activa'?'rgba(26,74,128,0.2)':'rgba(108,52,131,0.2)'};">
+                    <span style="font-size:0.65em;padding:2px 5px;border-radius:4px;font-weight:700;flex-shrink:0;
+                        background:${m.tipo==='activa'?'rgba(26,74,128,0.12)':'rgba(108,52,131,0.12)'};
+                        color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};
+                        border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡ A':'🛡 P'}</span>
+                    <span style="flex:1;font-size:0.78em;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2;
+                                 color:${excede?'#e74c3c':'inherit'};" title="${excede?'Excede el límite CTL':''}">${m.nombre}${excede?' ⚠':''}
+                    </span>
+                    <span style="font-size:0.72em;color:${excede?'#e74c3c':'var(--purple)'};font-weight:800;white-space:nowrap;">${m.costo_ctl} CTL</span>
+                    <button onclick="event.stopPropagation();window._medEquiparToggle('${m.id}')"
+                        style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;line-height:1;flex-shrink:0;" title="Quitar">✕</button>
+                </div>`;
+            }).join('')
+            : `
+            <div style="font-size:0.78em;color:#bbb;text-align:center;padding:16px 0;border:1.5px dashed #eee;border-radius:8px;">
+                Sin medallas equipadas<br><span style="font-size:0.85em;">Usa "+ Equipar" en las tarjetas</span>
+            </div>`;
+
+        const tagsDelPJ = (gEq?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
+        const equipadosIds = new Set(equipados.map(m => m.id));
+        const sugeridas = medallas.filter(m =>
+            !m.propuesta &&
+            !equipadosIds.has(m.id) &&
+            mTags(m).some(t => tagsDelPJ.some(tp => tp.toLowerCase() === t.toLowerCase()))
+        ).slice(0, 30);
+
+        const poolHtml = sugeridas.length
+            ? sugeridas.map(m => {
+                const ctlLibre = ctl - ctlUsado;
+                const puedeFit = m.costo_ctl <= ctlLibre;
+                return `
+                <div style="display:flex;align-items:center;gap:5px;padding:5px 6px;border-radius:6px;margin-bottom:3px;cursor:pointer;
+                            border:1px solid ${puedeFit?'#dee2e6':'#f8d7da'};
+                            background:${puedeFit?'white':'#fff8f8'};"
+                     onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})">
+                    <span style="font-size:0.6em;padding:1px 4px;border-radius:3px;font-weight:700;flex-shrink:0;
+                        background:${m.tipo==='activa'?'rgba(26,74,128,0.1)':'rgba(108,52,131,0.1)'};
+                        color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡':'🛡'}</span>
+                    <span style="flex:1;font-size:0.75em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                                 color:${puedeFit?'#333':'#aaa'};">${m.nombre}</span>
+                    <span style="font-size:0.68em;color:${puedeFit?'var(--purple)':'#e74c3c'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
+                </div>`;
+            }).join('')
+            : `<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin sugerencias disponibles</div>`;
+
+        const guardarBtn = medallaState.esAdmin
+            ? `
+            <button onclick="window._medGuardarEquipacionValida()"
+                style="width:100%;padding:8px;font-size:0.8em;background:var(--green);border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">
+                💾 Guardar equipación
+            </button>`
+            : `
+            <button onclick="window._medProponerEquipacion()"
+                style="width:100%;padding:8px;font-size:0.8em;background:#e67e22;border:none;border-radius:8px;color:white;cursor:pointer;font-weight:700;letter-spacing:.3px;">
+                📝 Proponer equipación
+            </button>`;
+
+        let detalleHtml = '';
+        if (selDetalle) {
+            const md = equipados.find(m => m.id === selDetalle) || (medallaState.equipacionPropuesta || []).find(m => m.id === selDetalle);
+            if (md) {
+                const ptsMapa = getPuntosPJ(pj);
+                const reqsD = (md.requisitos_base||[]).map(r => {
+                    const pts = ptsMapa[r.tag] || ptsMapa[r.tag.replace('#','')] || 0;
+                    const ok = pts >= (r.pts_minimos||0);
+                    return `
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:0.75em;padding:4px 0;border-bottom:1px solid #f5f5f5;">
+                        <span style="color:var(--blue);font-weight:600;">${r.tag}</span>
+                        <span style="color:${ok?'var(--green-dark)':'#e74c3c'};font-weight:700;">${pts}/${r.pts_minimos} PT ${ok?'✓':'✗'}</span>
+                    </div>`;
+                }).join('') || '<div style="font-size:0.75em;color:#bbb;">Sin requisitos</div>';
+
+                const condsD = (md.efectos_condicionales||[]).map(ec => {
+                    const pts = ptsMapa[ec.tag] || ptsMapa[ec.tag.replace('#','')] || 0;
+                    const activo = pts >= (ec.pts_minimos||0);
+                    return `
+                    <div style="border-radius:8px;padding:8px;margin-bottom:6px;
+                                background:${activo?'rgba(39,174,96,0.06)':'rgba(0,0,0,0.03)'};
+                                border:1.5px solid ${activo?'var(--green)':'#dee2e6'};">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:0.72em;color:var(--orange);font-weight:700;">${ec.tag}</span>
+                            <span style="font-size:0.68em;font-weight:700;color:${activo?'var(--green-dark)':'#aaa'};">
+                                ${activo?'⚡ ACTIVO':'🔒 '+pts+'/'+ec.pts_minimos+' PT'}
+                            </span>
+                        </div>
+                        <div style="font-size:0.73em;color:#555;line-height:1.4;">${renderMarkup(ec.efecto||'')}</div>
+                    </div>`;
+                }).join('') || '<div style="font-size:0.75em;color:#bbb;">Sin efectos condicionales</div>';
+
+                const tagsD = mTags(md).map(t => `<span style="background:rgba(243,156,18,0.12);border:1px solid #f39c12;color:#d68910;padding:2px 7px;border-radius:8px;font-size:0.72em;">${t}</span>`).join(' ');
+
+                detalleHtml = `
+                <div style="background:white;border:1.5px solid var(--green);border-radius:12px;padding:14px;flex-shrink:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;">
+                        <div>
+                            <div style="font-size:0.88em;font-weight:800;color:#1a1a2e;line-height:1.2;margin-bottom:4px;">${md.nombre}</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsD}</div>
+                        </div>
+                        <div style="text-align:right;flex-shrink:0;">
+                            <div style="font-size:0.95em;font-weight:800;color:var(--purple);">${md.costo_ctl} CTL</div>
+                            <div style="font-size:0.7em;color:${md.tipo==='activa'?'#1a4a80':'#6c3483'};font-weight:700;">${md.tipo==='activa'?'⚡ Activa':'🛡 Pasiva'}</div>
+                        </div>
+                    </div>
+                    <div style="font-size:0.78em;color:#444;line-height:1.5;margin-bottom:10px;padding:8px;background:#f8f9fa;border-radius:6px;">
+                        ${renderMarkup(md.efecto_desc||'Sin descripción.')}
+                    </div>
+                    ${(md.requisitos_base||[]).length ? `
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:0.68em;font-weight:800;text-transform:uppercase;color:#aaa;letter-spacing:.5px;margin-bottom:6px;">Requisitos</div>
+                        ${reqsD}
+                    </div>` : ''}
+                    ${(md.efectos_condicionales||[]).length ? `
+                    <div>
+                        <div style="font-size:0.68em;font-weight:800;text-transform:uppercase;color:#aaa;letter-spacing:.5px;margin-bottom:6px;">Efectos condicionales</div>
+                        ${condsD}
+                    </div>` : ''}
+                    <button onclick="window._medEquipSelDetalle(null)"
+                        style="margin-top:10px;width:100%;padding:5px;font-size:0.72em;background:none;border:1.5px solid #dee2e6;border-radius:6px;cursor:pointer;color:#888;">
+                        Cerrar detalle
+                    </button>
+                </div>`;
+            }
+        }
+
+        // Propuesta Naranja
+        let propHtml = '';
+        if (medallaState.equipacionPropuesta?.length > 0) {
+            const pUsado = medallaState.equipacionPropuesta.reduce((s, m) => s + (m.costo_ctl||0), 0);
+            const filasProp = medallaState.equipacionPropuesta.map(m => `
+                <div onclick="window._medEquipSelDetalle('${m.id}')"
+                    style="display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:7px;margin-bottom:4px;cursor:pointer;
+                           background:rgba(230,126,34,0.06); border:1.5px solid rgba(230,126,34,0.3);">
+                    <span style="font-size:0.65em;padding:2px 5px;border-radius:4px;font-weight:700;flex-shrink:0;
+                        background:rgba(230,126,34,0.15); color:#d68910; border:1px solid #d68910;">${m.tipo==='activa'?'⚡ A':'🛡 P'}</span>
+                    <span style="flex:1;font-size:0.78em;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#d68910;">${m.nombre}</span>
+                    <span style="font-size:0.72em;color:#e67e22;font-weight:800;">${m.costo_ctl} CTL</span>
+                </div>
+            `).join('');
+
+            const btnAcc = medallaState.esAdmin
+                ? `
+                <div style="display:flex;gap:5px;margin-top:10px;">
+                    <button onclick="window._medAprobarPropuestaEq()" style="flex:1;padding:6px;background:var(--green);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">✅ Aprobar</button>
+                    <button onclick="window._medRechazarPropuestaEq()" style="flex:1;padding:6px;background:var(--red);color:white;border:none;border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">❌ Rechazar</button>
+                </div>`
+                : `
+                <button onclick="window._medRechazarPropuestaEq()" style="margin-top:10px;width:100%;padding:6px;background:none;border:1.5px solid var(--red);color:var(--red);border-radius:6px;font-weight:bold;cursor:pointer;font-size:0.75em;">
+                    🗑️ Retirar Propuesta
+                </button>`;
+
+            propHtml = `
+                <div style="background:#fffbf5;border:1.5px solid #e67e22;border-radius:12px;padding:14px;flex-shrink:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:0.72em;font-weight:800;color:#d68910;text-transform:uppercase;letter-spacing:.6px;">🟠 Propuesta Pendiente</span>
+                    </div>
+                    <div style="font-size:0.72em;color:#e67e22;margin-bottom:8px;font-weight:700;">
+                        CTL propuesto: ${pUsado} / ${ctl}
+                    </div>
+                    <div>${filasProp}</div>
+                    ${btnAcc}
+                </div>
+            `;
+        }
+
+        equipHtml = `
+        <div id="pj-equip-panel" style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
+                    display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 80px);overflow-y:auto;overflow-x:hidden;">
+
+            ${propHtml}
+
+            <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">⚔ Equipación</span>
+                    ${ctlUsado > 0 ? `
+                    <button onclick="window._medLimpiarEquipacion()"
+                        style="font-size:0.7em;background:none;border:1px solid #e74c3c;color:#c0392b;cursor:pointer;padding:2px 6px;border-radius:5px;font-weight:600;">
+                        ✕ Limpiar
+                    </button>` : ''}
+                </div>
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                        <span style="font-size:0.75em;color:#888;">CTL usado</span>
+                        <span style="font-size:0.82em;font-weight:800;color:${ctlColor};">${ctlUsado} / ${ctl}</span>
+                    </div>
+                    <div style="height:6px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
+                        <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
+                    </div>
+                    ${ctlUsado > ctl ? `<div style="font-size:0.7em;color:#e74c3c;margin-top:4px;font-weight:600;">⚠ Las marcadas con ⚠ exceden el límite y no se guardarán</div>` : ''}
+                </div>
+                <div style="margin-bottom:10px;">
+                    ${filaEq}
+                </div>
+                ${guardarBtn}
+            </div>
+
+            ${detalleHtml}
+
+            <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:14px;flex-shrink:0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:0.72em;font-weight:800;color:#555;text-transform:uppercase;letter-spacing:.6px;">💡 Sugeridas</span>
+                    <span style="font-size:0.68em;color:#bbb;">${sugeridas.length} disponibles</span>
+                </div>
+                <div style="font-size:0.7em;color:#aaa;margin-bottom:8px;">Tags del PJ · Click para equipar · <span style="color:#e74c3c;">Rojo = sin CTL</span></div>
+                <div>
+                    ${poolHtml}
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // Guardar el foco antes de redibujar
+    const prevFocus = document.activeElement?.id === 'pj-med-buscar';
+    
+    wrap.innerHTML = `
+        <div style="display:flex;gap:16px;align-items:flex-start;">
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
+                <div class="card" id="pj-selector-card" style="position:sticky;top:0;z-index:15;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
+                    <div class="card-title">Personaje</div>
+                    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+                        ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
+                        <span style="width:1px;background:var(--gray-200);display:inline-block;margin:0 2px;"></span>
+                        ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
+                    </div>
+                    <div class="char-grid">${charHtml || '<span style="color:#aaa;font-size:0.85em;">Sin personajes</span>'}</div>
+                    ${pj ? `
+                    <input id="pj-med-buscar" placeholder="Filtrar medallas o tags..."
+                        oninput="window._medPJBuscar(this.value)"
+                        value="${_esc(medallaState.pjBusqueda||'')}"
+                        style="margin-top:10px;padding:7px 12px;font-size:0.82em;border:1.5px solid #dee2e6;border-radius:8px;outline:none;width:100%;box-sizing:border-box;">
+                    ` : ''}
+                </div>
+                ${content}
+            </div>
+            ${equipHtml}
+        </div>`;
+
+    // Restaurar foco
+    if (prevFocus) {
+        const inp = document.getElementById('pj-med-buscar');
+        if (inp) {
+            inp.focus();
+            inp.setSelectionRange(inp.value.length, inp.value.length);
+        }
+    }
+
+    // Calcular offset real del header para los elementos sticky
+    requestAnimationFrame(() => {
+        const header = document.querySelector('.app-header');
+        if (!header) return;
+        const hh = header.getBoundingClientRect().height + 'px';
+        const card = document.getElementById('pj-selector-card');
+        if (card) card.style.top = hh;
+        const equip = document.getElementById('pj-equip-panel');
+        if (equip) equip.style.top = hh;
+    });
+}
 
     // ── Panel equipación ────────────────────────────────────
     let equipHtml = '';
