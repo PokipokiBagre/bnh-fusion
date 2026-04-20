@@ -83,19 +83,41 @@ export function medallasDe(tagNombre) {
 export function getMedallasAccesibles(nombrePJ) {
     const g = grupos.find(x => x.nombre_refinado === nombrePJ);
     if (!g) return [];
+    
     const ptsMapa = getPuntosPJ(nombrePJ);
+    // Crear un mapa en minúsculas para evitar errores de Case Sensitivity
+    const ptsLookup = {};
+    Object.keys(ptsMapa).forEach(k => {
+        const cleanKey = k.startsWith('#') ? k.toLowerCase() : '#' + k.toLowerCase();
+        ptsLookup[cleanKey] = ptsMapa[k];
+    });
+
     const tagsGrupo = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
 
-    return medallasCat.filter(m => {
+    const medallasValidas = medallasCat.filter(m => {
         if (m.propuesta) return false;
         const reqs = m.requisitos_base || [];
         if (reqs.length === 0) return false; 
+        
         for (const r of reqs) {
             const tNorm = (r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
             if (!tagsGrupo.includes(tNorm)) return false;
-            const pts = ptsMapa[tNorm] || ptsMapa[tNorm.slice(1)] || 0;
+            
+            const pts = ptsLookup[tNorm] || 0;
             if (pts < (r.pts_minimos||0)) return false;
         }
         return true;
-    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+    });
+
+    // Eliminar duplicados usando un Set
+    const unicas = [];
+    const ids = new Set();
+    for (const m of medallasValidas) {
+        if (!ids.has(m.id)) {
+            ids.add(m.id);
+            unicas.push(m);
+        }
+    }
+
+    return unicas.sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
