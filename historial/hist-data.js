@@ -497,95 +497,83 @@ export async function toggleHiloActivo(board, threadId, activo) {
 }
 
 // ── Calcular PT extra para un subconjunto de posts ────────────
-export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtra, soloEnCupoRestante = false) {
+// ── Procesar PT explícito para una selección de posts ────────────
+export async function procesarPTSeleccion(board, threadId, postNos, soloEnCupoRestante = false) {
     try {
         await initOpciones();
 
-        // Cargar los posts pedidos con su contenido
         const { data: postsDB } = await supabase
             .from('historial_posts')
             .select('post_no, poster_name, contenido, post_time')
-            .eq('board', board)
-            .eq('thread_id', threadId)
-            .in('post_no', postNos);
+            .eq('board', board).eq('thread_id', threadId).in('post_no', postNos);
 
         if (!postsDB?.length) return { ok: true, transacciones: 0 };
 
-        // Índice de autores de todo el hilo
         const { data: indice } = await supabase
-            .from('historial_posts')
-            .select('post_no, poster_name')
-            .eq('board', board)
-            .eq('thread_id', threadId);
+            .from('historial_posts').select('post_no, poster_name')
+            .eq('board', board).eq('thread_id', threadId);
+        
         const postAutor = {};
         (indice || []).forEach(p => { postAutor[p.post_no] = p.poster_name; });
-
-        // Mapa nombre → { nombre, tags, tieneGrupo }
         const mapaNombres = await db.historial.getMapaNombres();
 
-        // Si soloEnCupoRestante=true, cargamos los PT ya existentes
         let ptYaUsadosPorPost = {}; 
         if (soloEnCupoRestante) {
             const { data: logExist } = await supabase
-                .from('log_puntos_tag')
-                .select('origen_post_no, motivo, personaje_nombre')
-                .eq('origen_thread_id', threadId)
-                .in('origen_post_no', postNos);
+                .from('log_puntos_tag').select('origen_post_no, motivo, personaje_nombre')
+                .eq('origen_thread_id', threadId).in('origen_post_no', postNos);
+            
             (logExist || []).forEach(r => {
                 if (!ptYaUsadosPorPost[r.origen_post_no]) ptYaUsadosPorPost[r.origen_post_no] = {};
-                const m = r.motivo;
-                ptYaUsadosPorPost[r.origen_post_no][m] = (ptYaUsadosPorPost[r.origen_post_no][m] || 0) + 1;
+                const k = `${r.personaje_nombre}||${r.motivo}`;
+                ptYaUsadosPorPost[r.origen_post_no][k] = (ptYaUsadosPorPost[r.origen_post_no][k] || 0) + 1;
             });
         }
 
         const { OPCIONES } = await import('../bnh-opciones-tags.js');
-        const limites = {
-            interaccion: OPCIONES.max_no_compartidos ?? 5,
-            compartido:  OPCIONES.max_compartidos    ?? 5,
-            lectura:     OPCIONES.max_lectura        ?? 5,
-        };
-
-        const mapaConExtra = { ...mapaNombres };
-        pjsExtra.forEach(pj => {
-            mapaConExtra[pj.nombre_refinado] = {
-                nombre:     pj.nombre_refinado,
-                tags:       pj.tags || [],
-                tieneGrupo: true
-            };
-        });
+        const limites = { interaccion: OPCIONES.max_no_compartidos ?? 5, compartido: OPCIONES.max_compartidos ?? 5, lectura: OPCIONES.max_lectura ?? 5 };
 
         let todasTransacciones = [];
 
         for (const post of postsDB) {
-            const cupoUsado = soloEnCupoRestante ? (ptYaUsadosPorPost[post.post_no] || {}) : {};
+            const partes = post.poster_name.split(',').map(s => s.trim()).filter(Boolean);
+            const pjsNativos = [];
+            for (const parte of partes) {
+                const pj = mapaNombres[parte] ?? mapaNombres[parte.replace(/##?\S+/, '').trim()];
+                if (pj) pjsNativos.push(pj);
+            }
 
-            for (const pjExtra of pjsExtra) {
-                const tagsExtraLow = new Set((pjExtra.tags || []).map(t => t.toLowerCase()));
+            if (!pjsNativos.length) continue;
+
+            const texto = post.contenido || '';
+            const replyNums = []; let m; const reR = />>(\d+)/g;
+            while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
+            const misReplies = [...new Set(replyNums)];
+
+            for (const pjActual of pjsNativos) {
+                const tagsActualLow = new Set((pjActual.tags || []).map(t => t.toLowerCase()));
                 const tagOrig = {};
-                (pjExtra.tags || []).forEach(t => {
+                (pjActual.tags || []).forEach(t => {
                     const norm = t.toLowerCase();
                     tagOrig[norm] = t.startsWith('#') ? t : '#' + t;
                 });
-
-                const texto = post.contenido || '';
-
-                const replyNums = []; let m; const reR = />>(\d+)/g;
-                while ((m = reR.exec(texto)) !== null) replyNums.push(Number(m[1]));
-                const misReplies = [...new Set(replyNums)];
 
                 const tagsReplyados = new Set();
                 let hayPJ = false;
                 misReplies.forEach(rno => {
                     const autor = postAutor[rno];
                     if (!autor) return;
-                    const partes = autor.split(',').map(s => s.trim()).filter(Boolean);
-                    partes.forEach(p => {
-                        const pjCit = mapaConExtra[p] || mapaConExtra[p.replace(/##?\S+/, '').trim()];
-                        if (!pjCit || pjCit.nombre === pjExtra.nombre_refinado) return;
+                    const partesAutor = autor.split(',').map(s => s.trim()).filter(Boolean);
+                    partesAutor.forEach(p => {
+                        const pjCit = mapaNombres[p] || mapaNombres[p.replace(/##?\S+/, '').trim()];
+                        if (!pjCit || pjCit.nombre === pjActual.nombre) return;
                         hayPJ = true;
                         (pjCit.tags || []).forEach(t => tagsReplyados.add(t.toLowerCase()));
                     });
                 });
+
+                const cupoUsadoPorPJ = soloEnCupoRestante ? (ptYaUsadosPorPost[post.post_no] || {}) : {};
+                const getCupo = (motivo) => cupoUsadoPorPJ[`${pjActual.nombre}||${motivo}`] || 0;
 
                 function shuffle(arr) {
                     const a = [...arr];
@@ -596,10 +584,9 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                     return a;
                 }
 
-                // Generamos los PT puros sin divisores de fusión
                 const empujar = (tagLow, delta, motivo) => {
                     todasTransacciones.push({
-                        personaje_nombre: pjExtra.nombre_refinado,
+                        personaje_nombre: pjActual.nombre,
                         tag:              tagOrig[tagLow] || ('#' + tagLow),
                         delta:            delta, 
                         motivo,
@@ -609,14 +596,13 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                 };
 
                 // LECTURA
-                const cupoLectUsado  = cupoUsado['lectura'] || 0;
-                const cupoLectQueda  = Math.max(0, limites.lectura - cupoLectUsado);
+                const cupoLectQueda  = Math.max(0, limites.lectura - getCupo('lectura'));
                 if (cupoLectQueda > 0) {
                     const re2 = /#([A-Za-zÀ-ɏ][A-Za-zÀ-ɏ0-9_.]*)/g;
                     const leidos = [];
                     while ((m = re2.exec(texto)) !== null) {
                         const t = ('#' + m[1]).toLowerCase();
-                        if (tagsExtraLow.has(t)) leidos.push(t);
+                        if (tagsActualLow.has(t)) leidos.push(t);
                     }
                     shuffle([...new Set(leidos)]).slice(0, cupoLectQueda)
                         .forEach(t => empujar(t, OPCIONES.delta_lectura, 'lectura'));
@@ -625,86 +611,53 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                 if (!hayPJ) continue;
 
                 // NO COMPARTIDOS
-                const cupoNoCompUsado = cupoUsado['interaccion'] || 0;
-                const cupoNoCompQueda  = Math.max(0, limites.interaccion - cupoNoCompUsado);
+                const cupoNoCompQueda  = Math.max(0, limites.interaccion - getCupo('interaccion'));
                 if (cupoNoCompQueda > 0) {
-                    const noComp = [...tagsExtraLow].filter(t => !tagsReplyados.has(t));
+                    const noComp = [...tagsActualLow].filter(t => !tagsReplyados.has(t));
                     shuffle(noComp).slice(0, cupoNoCompQueda)
                         .forEach(t => empujar(t, OPCIONES.delta_no_compartido, 'interaccion'));
                 }
 
                 // COMPARTIDOS
-                const cupoCompUsado = cupoUsado['compartido'] || 0;
-                const cupoCompQueda  = Math.max(0, limites.compartido - cupoCompUsado);
+                const cupoCompQueda  = Math.max(0, limites.compartido - getCupo('compartido'));
                 if (cupoCompQueda > 0) {
-                    const comp = [...tagsExtraLow].filter(t => tagsReplyados.has(t));
+                    const comp = [...tagsActualLow].filter(t => tagsReplyados.has(t));
                     shuffle(comp).slice(0, cupoCompQueda)
                         .forEach(t => empujar(t, OPCIONES.delta_compartido, 'compartido'));
                 }
             }
         }
 
-        // NUEVO: Filtro de seguridad antes de aplicar
         todasTransacciones = await _limpiarTransaccionesBaneadas(todasTransacciones);
-
         if (!todasTransacciones.length) return { ok: true, transacciones: 0 };
 
         await db.progresion.aplicarTransacciones(todasTransacciones);
         return { ok: true, transacciones: todasTransacciones.length };
     } catch(e) {
-        console.error('[calcularPTExtraParaPosts]', e);
+        console.error('[procesarPTSeleccion]', e);
         return { ok: false, msg: e.message };
     }
 }
 
-// ── Revertir PT de un personaje extra en posts específicos ────
-// Borra del log_puntos_tag las entradas de ese personaje en esos posts,
-// luego reconstruye puntos_tag desde el log limpio.
-export async function revertirPTExtraParaPosts(threadId, nombrePJ, postNos) {
+// ── Eliminar PT indiscriminado para posts seleccionados ────────
+export async function eliminarPTPorPosts(threadId, postNos) {
     if (!postNos.length) return { ok: true };
     try {
-        // Borrar del log en lotes de 50
         const LOTE = 50;
         for (let i = 0; i < postNos.length; i += LOTE) {
             const lote = postNos.slice(i, i + LOTE);
             await supabase.from('log_puntos_tag')
                 .delete()
                 .eq('origen_thread_id', threadId)
-                .eq('personaje_nombre', nombrePJ)
                 .in('origen_post_no', lote);
         }
-
-        // Reconstruir puntos_tag desde el log completo
-        const { data: log } = await supabase
-            .from('log_puntos_tag')
-            .select('personaje_nombre, tag, delta')
-            .eq('personaje_nombre', nombrePJ);
-
-        // Borrar todas las entradas del PJ en puntos_tag
-        await supabase.from('puntos_tag')
-            .delete()
-            .eq('personaje_nombre', nombrePJ);
-
-        // Reinsertar sumando desde el log restante
-        if (log && log.length) {
-            const sumas = {};
-            log.forEach(r => {
-                sumas[r.tag] = (sumas[r.tag] || 0) + r.delta;
-            });
-            const rows = Object.entries(sumas)
-                .filter(([, v]) => v > 0)
-                .map(([tag, cantidad]) => ({ personaje_nombre: nombrePJ, tag, cantidad }));
-            if (rows.length) {
-                await supabase.from('puntos_tag').insert(rows);
-            }
-        }
-
+        await reconstruirPuntosTotales();
         return { ok: true };
     } catch(e) {
-        console.error('[revertirPTExtraParaPosts]', e);
+        console.error('[eliminarPTPorPosts]', e);
         return { ok: false, msg: e.message };
     }
-    }
+}
 
     // ── Verificador de seguridad para Tags Baneados ────────────────
 async function _limpiarTransaccionesBaneadas(transacciones) {
