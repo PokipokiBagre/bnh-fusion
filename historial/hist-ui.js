@@ -316,7 +316,7 @@ export function renderTimeline() {
 function _renderPanelSeleccion() {
     if (!selPostsState.activo || !estadoUI.esAdmin) return '';
 
-    const { filtroRol, filtroEstado, todosPJs, personajesExtra, postsSel } = selPostsState;
+    const { filtroRol, filtroEstado, todosPJs, postsSel } = selPostsState;
 
     // Filtrar pool de personajes
     const pool = todosPJs.filter(g => {
@@ -325,6 +325,20 @@ function _renderPanelSeleccion() {
         const estOk  = filtroEstado === 'todos' || tags.includes(filtroEstado.toLowerCase());
         return rolOk && estOk;
     });
+
+    // Detectar qué personajes ya están en los posts seleccionados
+    const pjsNativos = new Set();
+    const hayPosts = postsSel.size > 0;
+    if (hayPosts) {
+        const posts = window._histPostsRef || [];
+        posts.forEach(p => {
+            if (!postsSel.has(p.post_no)) return;
+            p.poster_name.split(',').map(s => s.trim()).filter(Boolean).forEach(alias => {
+                const grupo = (window._histMapaAlias || {})[alias] || (window._histMapaAlias || {})[alias.replace(/##?\S+/, '').trim()];
+                if (grupo) pjsNativos.add(grupo);
+            });
+        });
+    }
 
     const btnRol = (val, lbl) => {
         const a = filtroRol === val;
@@ -339,68 +353,39 @@ function _renderPanelSeleccion() {
                    background:${a?'var(--green)':'white'};color:${a?'white':'#555'};cursor:pointer;font-weight:600;">${lbl}</button>`;
     };
 
-    // PJs nativos de los posts seleccionados (ya están en el poster_name)
-    const pjsNativos = new Set();
-    if (selPostsState.postsSel.size > 0) {
-        const { postsState } = selPostsState._postsRef || {};
-        const posts = window._histPostsRef || [];
-        posts.forEach(p => {
-            if (!selPostsState.postsSel.has(p.post_no)) return;
-            p.poster_name.split(',').map(s => s.trim()).filter(Boolean).forEach(alias => {
-                const grupo = (window._histMapaAlias || {})[alias]
-                           || (window._histMapaAlias || {})[alias.replace(/##?\S+/, '').trim()];
-                if (grupo) pjsNativos.add(grupo);
-            });
-        });
-    }
-
-    // Ordenar: nativos del post → extras añadidos → resto alfabético
+    // Ordenar: en post primero → resto alfabético
     const poolOrdenado = [
         ...pool.filter(g => pjsNativos.has(g.nombre_refinado)),
-        ...pool.filter(g => !pjsNativos.has(g.nombre_refinado) && personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)),
-        ...pool.filter(g => !pjsNativos.has(g.nombre_refinado) && !personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)),
+        ...pool.filter(g => !pjsNativos.has(g.nombre_refinado))
     ];
 
-    // Separador visual entre grupos
     const nNativos = pool.filter(g => pjsNativos.has(g.nombre_refinado)).length;
-    const nExtras  = pool.filter(g => !pjsNativos.has(g.nombre_refinado) && personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado)).length;
 
     const pjCards = poolOrdenado.map((g, i) => {
-        const esNativo  = pjsNativos.has(g.nombre_refinado);
-        const esExtra   = personajesExtra.some(e => e.nombre_refinado === g.nombre_refinado);
-        const marcado   = esNativo || esExtra;
+        const esNativo = pjsNativos.has(g.nombre_refinado);
         const img = imgPJ(g.nombre_refinado);
-        const bg     = esNativo  ? 'rgba(0,180,216,0.08)' : esExtra ? 'rgba(39,174,96,0.1)' : 'white';
-        const border = esNativo  ? '#00b4d8'              : esExtra ? 'var(--green)'         : '#dee2e6';
-        const textC  = esNativo  ? '#0097b2'              : esExtra ? 'var(--green-dark)'    : '#333';
+        const bg     = esNativo ? 'rgba(0,180,216,0.08)' : 'white';
+        const border = esNativo ? '#00b4d8' : '#dee2e6';
+        const textC  = esNativo ? '#0097b2' : '#333';
         const badge  = esNativo
-            ? `<span style="margin-left:auto;font-size:0.65em;color:#00b4d8;font-weight:800;background:rgba(0,180,216,0.1);padding:1px 5px;border-radius:4px;">post</span>`
-            : esExtra
-            ? `<span style="margin-left:auto;font-size:0.7em;color:var(--green);font-weight:800;">✓</span>`
-            : '';
-        // Separador visual entre secciones
-        const sep = (i === nNativos && nNativos > 0 && nExtras > 0)
-            ? `<div data-sep="extra" style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Añadir extra</div>`
-            : (i === nNativos + nExtras && (nNativos > 0 || nExtras > 0))
-            ? `<div data-sep="otros" style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Otros</div>`
-            : '';
+            ? `<span style="margin-left:auto;font-size:0.65em;color:#00b4d8;font-weight:800;background:rgba(0,180,216,0.1);padding:1px 5px;border-radius:4px;">en post</span>` : '';
+        
+        const sep = (i === nNativos && nNativos > 0)
+            ? `<div data-sep="otros" style="font-size:0.65em;color:#aaa;text-transform:uppercase;letter-spacing:.5px;padding:4px 2px 2px;margin-top:2px;">Otros</div>` : '';
+            
         const safeNombre = g.nombre_refinado.replace(/'/g,"\\'");
         return sep + `<div data-pj-nombre="${g.nombre_refinado}" onclick="window._histTogglePJExtra('${safeNombre}')"
             style="display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;cursor:pointer;
                    background:${bg};border:1.5px solid ${border};transition:background 0.12s,border 0.12s;">
             <img src="${img}" onerror="${_onErr}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
-            <span style="font-size:0.78em;font-weight:${marcado?700:500};color:${textC};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.nombre_refinado}</span>
+            <span style="font-size:0.78em;font-weight:${esNativo?700:500};color:${textC};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.nombre_refinado}</span>
             ${badge}
         </div>`;
     }).join('');
 
-    const extraNombres = personajesExtra.map(e => e.nombre_refinado).join(', ');
-    const hayExtra = personajesExtra.length > 0;
-    const hayPosts = postsSel.size > 0;
-
     return `
     <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;padding:12px;
-        display:flex;flex-direction:column;gap:10px;">
+        display:flex;flex-direction:column;gap:14px;">
 
         <div style="display:flex;justify-content:space-between;align-items:center;">
             <b style="font-size:0.85em;color:var(--green-dark);">☑ Selección de posts</b>
@@ -408,68 +393,54 @@ function _renderPanelSeleccion() {
                 style="background:none;border:none;font-size:1.1em;cursor:pointer;color:#999;">×</button>
         </div>
 
-        <!-- Posts seleccionados -->
         <div style="font-size:0.78em;color:#555;background:#f8f9fa;border-radius:6px;padding:6px 8px;">
             <b>${postsSel.size}</b> post${postsSel.size!==1?'s':''} seleccionado${postsSel.size!==1?'s':''}
             ${hayPosts?`<button onclick="window._histLimpiarPosts()"
                 style="margin-left:8px;font-size:0.8em;color:#c0392b;background:none;border:none;cursor:pointer;">✕ Limpiar</button>`:''}
         </div>
 
-        <!-- Personajes añadidos -->
-        ${hayExtra ? `<div style="background:rgba(39,174,96,0.07);border:1px solid var(--green);border-radius:6px;padding:6px 8px;">
-            <span style="font-size:0.72em;font-weight:700;color:var(--green-dark);">Seleccionado:</span>
-            <div style="font-size:0.78em;margin-top:2px;color:var(--green-dark);">
-                ${personajesExtra.map(e=>`<span style="display:inline-flex;align-items:center;gap:3px;margin-right:4px;">
-                    ${e.nombre_refinado}
-                    <span onclick="window._histTogglePJExtra('${e.nombre_refinado.replace(/'/g,"\\'")}',true)"
-                        style="cursor:pointer;color:#c0392b;font-weight:800;font-size:0.9em;">×</span>
-                </span>`).join('')}
+        ${hayPosts ? `
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:rgba(41,128,185,0.02);">
+            <div style="font-size:0.72em;font-weight:700;color:#2980b9;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">⚡ Gestión de PTs</div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+                <button onclick="window._histCalcPT('faltantes')" class="btn btn-green btn-sm" style="width:100%;font-size:0.75em;box-shadow:0 2px 4px rgba(39,174,96,0.3);">
+                    + Recalcular PT Faltantes
+                </button>
+                <button onclick="window._histCalcPT('completo')" class="btn btn-outline btn-sm" style="width:100%;font-size:0.75em;border-color:var(--green);color:var(--green-dark);">
+                    🔄 Recalcular PT Completo
+                </button>
+                <div style="height:1px;background:var(--border);margin:2px 0;"></div>
+                <button onclick="window._histCalcPTHijos('faltantes')" class="btn btn-outline btn-sm" style="width:100%;font-size:0.75em;border-color:#8e44ad;color:#8e44ad;">
+                    🔗 PT Faltantes de Hijos (Citas)
+                </button>
+                <button onclick="window._histCalcPTHijos('completo')" class="btn btn-outline btn-sm" style="width:100%;font-size:0.75em;border-color:#8e44ad;color:#8e44ad;">
+                    🔄 PT Completo de Hijos
+                </button>
+                <div style="height:1px;background:var(--border);margin:2px 0;"></div>
+                <button onclick="window._histEliminarPT()" class="btn btn-outline btn-sm" style="width:100%;font-size:0.75em;border-color:var(--red);color:var(--red);">
+                    🗑 Eliminar todos los PT
+                </button>
             </div>
-        </div>` : ''}
+        </div>
 
-        <!-- Botones de acción -->
-        ${hayExtra && hayPosts ? `
-        <div style="display:flex;flex-direction:column;gap:6px;">
-            <button onclick="window._histCalcPTExtra()"
-                style="background:#1a4a80;color:white;border:2px solid #2980b9;border-radius:8px;
-                       padding:8px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;
-                       box-shadow:0 2px 6px rgba(26,74,128,0.3);">
-                ⚡ Calcular PT para posts seleccionados
-            </button>
-            <button onclick="window._histCalcPTCitas()"
-                style="background:#6c3483;color:white;border:none;border-radius:8px;
-                       padding:7px 10px;font-size:0.8em;font-weight:700;cursor:pointer;width:100%;">
-                🔗 Calcular PT para posts que citan seleccionados
-            </button>
-        </div>` : `<div style="font-size:0.72em;color:#aaa;text-align:center;">
-            Selecciona posts y al menos un personaje extra para calcular PT
-        </div>`}
-
-        <!-- Pool de personajes -->
-        <div>
-            <div style="font-size:0.72em;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Añadir personaje extra</div>
+        <div style="border:1px solid var(--border);border-radius:8px;padding:10px;background:rgba(214,137,16,0.02);">
+            <div style="font-size:0.72em;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;">👥 Participantes</div>
+            <div style="font-size:0.68em;color:#666;margin-bottom:8px;line-height:1.3;">
+                Modifica quiénes participan en los posts. <b>No altera los PT automáticamente.</b>
+            </div>
             <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;">
-                <div style="display:flex;gap:4px;">
-                    ${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}
-                </div>
-                <div style="display:flex;gap:4px;">
-                    ${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}
-                </div>
+                <div style="display:flex;gap:4px;">${btnRol('todos','Todos')} ${btnRol('#Jugador','Jugador')} ${btnRol('#NPC','NPC')}</div>
+                <div style="display:flex;gap:4px;">${btnEst('todos','Todos')} ${btnEst('#Activo','Activo')} ${btnEst('#Inactivo','Inactivo')}</div>
             </div>
             <input id="hist-pj-buscar" type="text" placeholder="🔍 Buscar personaje…"
                 oninput="window._histBuscarPJ(this.value)"
                 style="width:100%;box-sizing:border-box;padding:5px 8px;font-size:0.78em;
-                       border:1.5px solid #dee2e6;border-radius:6px;margin-bottom:6px;outline:none;"
-                onfocus="this.style.borderColor='var(--green)'"
-                onblur="this.style.borderColor='#dee2e6'">
-            <div id="hist-pj-pool" style="display:flex;flex-direction:column;gap:4px;">
+                       border:1.5px solid #dee2e6;border-radius:6px;margin-bottom:6px;outline:none;">
+            <div id="hist-pj-pool" style="display:flex;flex-direction:column;gap:4px;max-height:300px;overflow-y:auto;padding-right:4px;">
                 ${pjCards || '<span style="font-size:0.78em;color:#aaa;">Sin personajes</span>'}
             </div>
         </div>
-
-        <div style="font-size:0.68em;color:#aaa;line-height:1.4;border-top:1px solid #f1f3f4;padding-top:6px;">
-            <b>Gris</b> = exclusivo · <b style="color:var(--green)">Verde</b> = compartido · <b style="color:#00b4d8">Celeste</b> = lectura
-        </div>
+        ` : `<div style="font-size:0.72em;color:#aaa;text-align:center;">Selecciona posts para ver las opciones</div>`}
     </div>`;
 }
 
