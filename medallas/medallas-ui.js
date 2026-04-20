@@ -1,9 +1,10 @@
 // medallas/medallas-ui.js
 import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './medallas-state.js';
-import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ } from './medallas-logic.js';
+import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ, proyectarPJ } from './medallas-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 import { initBloques, updateBloques, clearBloques } from './bloques.js';
+import { renderFusionBadge } from '../bnh-fusion.js';
 
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
