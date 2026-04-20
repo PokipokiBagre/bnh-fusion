@@ -207,18 +207,26 @@ window._fusionTagModeChange = (val) => {
         fusionsState.tagFusionNombre = val.trim();
     };
 
-    window._fusionOficializar = async () => {
+window._fusionOficializar = async () => {
         if (!fusionsState.resultadoCalculado) return;
         if (!fusionsState.esAdmin) { toast('Solo el OP puede oficializar fusiones.', 'error'); return; }
 
-        const { pjA, pjB, d100 } = fusionsState.resultadoCalculado;
-        const rendBase = fusionsState.resultadoCalculado.d100Base || d100;
+        const r = fusionsState.resultadoCalculado;
+        const { pjA, pjB, d100 } = r;
+        const modoTag = fusionsState.modoTagLocal || 'ninguno';
+        let tagFusion = null;
 
-        if (opcionesState.crear_tag_fusion && !fusionsState.tagFusionNombre) {
-            const inp = document.getElementById('inp-tag-fusion');
-            if (inp) { inp.style.borderColor = 'var(--red)'; inp.focus(); }
-            toast('Escribe el nombre del tag de fusión antes de oficializar.', 'error');
-            return;
+        if (modoTag === 'nuevo') {
+            const tagRaw = fusionsState.tagFusionNombre;
+            tagFusion = tagRaw ? (tagRaw.startsWith('#') ? tagRaw : '#' + tagRaw) : null;
+            if (!tagFusion) {
+                const inp = document.getElementById('inp-tag-fusion');
+                if (inp) { inp.style.borderColor = 'var(--red)'; inp.focus(); }
+                toast('Escribe el nombre del tag nuevo.', 'error'); return;
+            }
+        } else if (modoTag === 'compartido') {
+            tagFusion = r.maxTagCompartido;
+            if (!tagFusion) { toast('No hay tag compartido para potenciar.', 'error'); return; }
         }
 
         if (!confirm(`¿Oficializar la fusión de ${pjA} y ${pjB}?`)) return;
@@ -227,7 +235,6 @@ window._fusionTagModeChange = (val) => {
         if (btn) { btn.disabled = true; btn.textContent = '⏳ Procesando…'; }
 
         try {
-            const r  = fusionsState.resultadoCalculado;
             const sf = fusionsState.statsEditadas;
             const statsFinales = {
                 pot: sf.pot !== null ? sf.pot : r.statsFinales.pot,
@@ -235,13 +242,7 @@ window._fusionTagModeChange = (val) => {
                 ctl: sf.ctl !== null ? sf.ctl : r.statsFinales.ctl,
             };
 
-            const tagFusionRaw = fusionsState.tagFusionNombre;
-            const tagFusion = opcionesState.crear_tag_fusion && tagFusionRaw
-                ? (tagFusionRaw.startsWith('#') ? tagFusionRaw : '#' + tagFusionRaw)
-                : null;
-
-        // Pasamos 'd100', que en resultadoCalculado ya contiene la suma del dado + el bonus de tags
-        const res = await activarFusion(pjA, pjB, d100, statsFinales);
+            const res = await activarFusion(pjA, pjB, d100, statsFinales);
             if (!res.ok) {
                 toast('❌ ' + res.msg, 'error');
                 if (btn) { btn.disabled = false; btn.textContent = '⚡ Oficializar en Base de Datos'; }
@@ -252,8 +253,12 @@ window._fusionTagModeChange = (val) => {
 
             if (tagFusion) {
                 const tagKey = tagFusion.slice(1);
-                await supabase.from('tags_catalogo')
-                    .upsert({ nombre: tagKey, descripcion: `Tag temporal de fusión: ${pjA} ⚡ ${pjB}` }, { onConflict: 'nombre', ignoreDuplicates: true });
+                
+                // Si es nuevo, forzamos que se guarde como quirk y sin descripción
+                if (modoTag === 'nuevo') {
+                    await supabase.from('tags_catalogo')
+                        .upsert({ nombre: tagKey, descripcion: '', tipo: 'quirk' }, { onConflict: 'nombre', ignoreDuplicates: true });
+                }
 
                 for (const nombre of [pjA, pjB]) {
                     const { data: g } = await supabase.from('personajes_refinados')
@@ -264,20 +269,18 @@ window._fusionTagModeChange = (val) => {
                     }
                 }
 
-                const ptsFusion = opcionesState.pts_tag_fusion || 0;
-                if (ptsFusion > 0) {
-                    await supabase.from('puntos_tag').upsert([
-                        { personaje_nombre: pjA, tag: tagFusion, cantidad: ptsFusion, actualizado_en: new Date().toISOString() },
-                        { personaje_nombre: pjB, tag: tagFusion, cantidad: ptsFusion, actualizado_en: new Date().toISOString() },
-                    ], { onConflict: 'personaje_nombre,tag' });
-                }
+                // Asignar los 20 pt a ambos personajes
+                await supabase.from('puntos_tag').upsert([
+                    { personaje_nombre: pjA, tag: tagFusion, cantidad: 20, actualizado_en: new Date().toISOString() },
+                    { personaje_nombre: pjB, tag: tagFusion, cantidad: 20, actualizado_en: new Date().toISOString() },
+                ], { onConflict: 'personaje_nombre,tag' });
 
                 if (fusionActivaId) {
                     await supabase.from('fusiones_activas').update({ tag_fusion: tagFusion }).eq('id', fusionActivaId);
                 }
             }
 
-            const regPayload = buildRegistroFusion(r, statsFinales, tagFusion, opcionesState.pts_tag_fusion, fusionActivaId);
+            const regPayload = buildRegistroFusion(r, statsFinales, tagFusion, tagFusion ? 20 : 0, fusionActivaId);
             await supabase.from('registro_fusiones').insert(regPayload);
 
             toast(`✅ Fusión ${pjA} + ${pjB} oficializada${tagFusion ? ' · Tag: ' + tagFusion : ''}`, 'ok');
@@ -287,6 +290,7 @@ window._fusionTagModeChange = (val) => {
             fusionsState.resultadoCalculado = null;
             fusionsState.statsEditadas = { pot: null, agi: null, ctl: null };
             fusionsState.tagFusionNombre = '';
+            fusionsState.modoTagLocal = 'ninguno';
 
             _renderTab('registro');
         } catch(e) {
@@ -297,11 +301,21 @@ window._fusionTagModeChange = (val) => {
 
     window._fusionEnviarSugerencia = async () => {
         if (!fusionsState.resultadoCalculado) return;
-        const { pjA, pjB } = fusionsState.resultadoCalculado;
-        const d100raw = fusionsState.resultadoCalculado.d100Base || fusionsState.resultadoCalculado.d100;
-        const rendTotal = fusionsState.resultadoCalculado.d100;
+        const r = fusionsState.resultadoCalculado;
+        const { pjA, pjB } = r;
+        
+        const modoTag = fusionsState.modoTagLocal || 'ninguno';
+        let tagFusion = null;
 
-        const r  = fusionsState.resultadoCalculado;
+        if (modoTag === 'nuevo') {
+            const tagRaw = fusionsState.tagFusionNombre;
+            tagFusion = tagRaw ? (tagRaw.startsWith('#') ? tagRaw : '#' + tagRaw) : null;
+            if (!tagFusion) { toast('Escribe el nombre del tag nuevo.', 'error'); return; }
+        } else if (modoTag === 'compartido') {
+            tagFusion = r.maxTagCompartido;
+        }
+
+        const d100raw = r.d100Base || r.d100;
         const sf = fusionsState.statsEditadas;
         const statsFinales = {
             pot: sf.pot !== null ? sf.pot : r.statsFinales.pot,
@@ -309,18 +323,13 @@ window._fusionTagModeChange = (val) => {
             ctl: sf.ctl !== null ? sf.ctl : r.statsFinales.ctl,
         };
 
-        const tagFusionRaw = fusionsState.tagFusionNombre;
-        const tagFusion = opcionesState.crear_tag_fusion && tagFusionRaw
-            ? (tagFusionRaw.startsWith('#') ? tagFusionRaw : '#' + tagFusionRaw)
-            : null;
-
         const payload = {
             pj_a:           pjA,
             pj_b:           pjB,
             rendimiento:    d100raw,
-            rend_total:     rendTotal,
+            rend_total:     r.d100,
             compat_bonus:   r.d100Bonus || 0,
-            tag_fusion:     tagFusion,
+            tag_fusion:     tagFusion, // Se manda al OP
             stats_pot:      statsFinales.pot,
             stats_agi:      statsFinales.agi,
             stats_ctl:      statsFinales.ctl,
@@ -330,6 +339,17 @@ window._fusionTagModeChange = (val) => {
             estado:         'pendiente',
             creado_en:      new Date().toISOString(),
         };
+
+        const { error } = await supabase.from('sugerencias_fusion').insert(payload);
+        if (error) { toast('❌ Error al enviar sugerencia: ' + error.message, 'error'); return; }
+
+        toast('✅ Sugerencia enviada. El OP la revisará pronto.', 'ok');
+        fusionsState.resultadoCalculado = null;
+        fusionsState.statsEditadas = { pot: null, agi: null, ctl: null };
+        fusionsState.tagFusionNombre = '';
+        fusionsState.modoTagLocal = 'ninguno';
+        document.getElementById('resultado-fusion')?.classList.add('oculto');
+    };
 
         const { error } = await supabase.from('sugerencias_fusion').insert(payload);
         if (error) { toast('❌ Error al enviar sugerencia: ' + error.message, 'error'); return; }
@@ -351,10 +371,12 @@ window._fusionTagModeChange = (val) => {
 
         const fusionActivaId = res.fusion?.id;
 
-        if (sug.tag_fusion) {
+if (sug.tag_fusion) {
             const tagKey = sug.tag_fusion.slice(1);
+            
+            // Asumimos que si no existe, se insertará como quirk
             await supabase.from('tags_catalogo')
-                .upsert({ nombre: tagKey, descripcion: `Tag de fusión aprobada: ${sug.pj_a} ⚡ ${sug.pj_b}` }, { onConflict: 'nombre', ignoreDuplicates: true });
+                .upsert({ nombre: tagKey, descripcion: '', tipo: 'quirk' }, { onConflict: 'nombre', ignoreDuplicates: true });
 
             for (const nombre of [sug.pj_a, sug.pj_b]) {
                 const { data: g } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', nombre).maybeSingle();
@@ -364,13 +386,11 @@ window._fusionTagModeChange = (val) => {
                 }
             }
 
-            const ptsFusion = opcionesState.pts_tag_fusion || 0;
-            if (ptsFusion > 0) {
-                await supabase.from('puntos_tag').upsert([
-                    { personaje_nombre: sug.pj_a, tag: sug.tag_fusion, cantidad: ptsFusion, actualizado_en: new Date().toISOString() },
-                    { personaje_nombre: sug.pj_b, tag: sug.tag_fusion, cantidad: ptsFusion, actualizado_en: new Date().toISOString() },
-                ], { onConflict: 'personaje_nombre,tag' });
-            }
+            // Asignar los 20 pt explícitamente
+            await supabase.from('puntos_tag').upsert([
+                { personaje_nombre: sug.pj_a, tag: sug.tag_fusion, cantidad: 20, actualizado_en: new Date().toISOString() },
+                { personaje_nombre: sug.pj_b, tag: sug.tag_fusion, cantidad: 20, actualizado_en: new Date().toISOString() },
+            ], { onConflict: 'personaje_nombre,tag' });
 
             if (fusionActivaId) {
                 await supabase.from('fusiones_activas').update({ tag_fusion: sug.tag_fusion }).eq('id', fusionActivaId);
