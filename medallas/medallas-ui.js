@@ -452,69 +452,68 @@ export function renderPersonaje() {
         const ptsMapa = getPuntosPJ(pj);
         const tagsDelPJ = (g?.tags||[]).map(t => '#'+(t.startsWith('#')?t.slice(1):t));
 
-        const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
+      const busqPJ = (medallaState.pjBusqueda||'').toLowerCase();
         
-        const secciones = tagsDelPJ.filter(tag => {
-            if (!busqPJ) return true;
-            if (tag.toLowerCase().includes(busqPJ)) return true;
-            return medallas.some(m => !m.propuesta &&
-                mTags(m).some(t => t.toLowerCase() === tag.toLowerCase()) &&
-                (m.nombre.toLowerCase().includes(busqPJ) || (m.efecto_desc||'').toLowerCase().includes(busqPJ))
-            );
-        }).map(tag => {
-            const medallasDeltag = medallas.filter(m =>
-                !m.propuesta &&
-                mTags(m).some(t => t.toLowerCase() === tag.toLowerCase()) &&
-                (!busqPJ || m.nombre.toLowerCase().includes(busqPJ) ||
-                 (m.efecto_desc||'').toLowerCase().includes(busqPJ) ||
-                 tag.toLowerCase().includes(busqPJ))
-            );
-            if (!medallasDeltag.length) return '';
-            
-            const pts = ptsMapa[tag] || ptsMapa[tag.slice(1)] || 0;
+        // 1. Obtener todas las medallas (sin agrupar)
+        let medallasUnicas = medallas.filter(m => !m.propuesta);
+        medallaState.filtroTagsPJ = medallaState.filtroTagsPJ || [];
 
-           const cards = medallasDeltag.map(m => {
-                const estado      = estadoMedallaPJ(m, pj);
-                const condActivos = efectosActivosPJ(m, pj);
-                const condHtml    = condActivos.map(ec => `
-                    <div class="cond-badge ${ec.activo?'cond-activa':'cond-inactiva'}">
-                        ${ec.activo?'⚡':'🔒'} ${ec.tag} ${ec.pts_minimos}pt
-                    </div>`).join('');
-                
-                const equipada = (medallaState.equipacion||[]).some(e => e.id === m.id);
-                
-                return `
-                <div class="medalla-card ${estado}" style="${equipada?'border-color:var(--green);background:rgba(39,174,96,0.04);':''}">
-                    <div onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}, '${pj.replace(/'/g,"\\'")}'); event.stopPropagation();" style="cursor:pointer;">
-                        <div class="medalla-status">${estado==='activable'?'✅':estado==='parcial'?'⚠️':'🔒'}</div>
-                        <div class="medalla-nombre">${m.nombre}</div>
-                        <div style="font-size:0.78em;color:var(--purple);font-weight:700;">${m.costo_ctl} CTL
-                            <span style="font-size:0.85em;color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};margin-left:5px;">${m.tipo==='activa'?'⚡A':'🛡P'}</span>
-                        </div>
-                        <div class="medalla-efecto">${renderMarkup(m.efecto_desc||'')}</div>
-                        ${condHtml ? `<div style="margin-top:4px;">${condHtml}</div>` : ''}
-                    </div>
-                    <button onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"'")})"
-                        style="margin-top:6px;width:100%;padding:3px;font-size:0.72em;border-radius:5px;cursor:pointer;
-                               border:1.5px solid ${equipada?'var(--green)':'#dee2e6'};
-                               background:${equipada?'rgba(39,174,96,0.1)':'white'};
-                               color:${equipada?'var(--green-dark)':'#888'};font-weight:600;">
-                        ${equipada ? '✅ Equipada' : '+ Equipar'}
-                    </button>
-                </div>`;
-            }).join('');
+        // 2. Extraer tags para los filtros (solo de las medallas existentes)
+        const mTagsList = [...new Set(medallasUnicas.flatMap(m => mTags(m)))].sort();
 
-            return `
-            <div style="margin-bottom:24px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-                    <span class="tag-pill" style="font-size:0.85em;">${tag}</span>
-                    <span style="font-size:0.82em;color:var(--gray-500);">${pts} PT acumulados</span>
-                </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
-                    ${cards}
-                </div>
-            </div>`;
+        // 3. Filtrar por búsqueda de texto
+        if (busqPJ) {
+            medallasUnicas = medallasUnicas.filter(m =>
+                m.nombre.toLowerCase().includes(busqPJ) ||
+                (m.efecto_desc||'').toLowerCase().includes(busqPJ) ||
+                mTags(m).some(t => t.toLowerCase().includes(busqPJ))
+            );
+        }
+
+        // 4. Filtrar por tags seleccionados (Lógica AND)
+        if (medallaState.filtroTagsPJ.length > 0) {
+            medallasUnicas = medallasUnicas.filter(m => {
+                const tagsMed = mTags(m).map(t => t.toLowerCase());
+                return medallaState.filtroTagsPJ.every(f => tagsMed.includes(f.toLowerCase()));
+            });
+        }
+
+        // 5. Construir HTML de los filtros
+        const tagsFiltrosHtml = mTagsList.map(tag => {
+            const activo = medallaState.filtroTagsPJ.includes(tag);
+            return `<button class="btn btn-sm"
+                    style="padding:3px 8px; font-size:0.75em; border-radius:12px; margin:2px; cursor:pointer;
+                           border:1.5px solid ${activo ? 'var(--green)' : '#dee2e6'};
+                           background:${activo ? 'rgba(39,174,96,0.1)' : 'white'};
+                           color:${activo ? 'var(--green-dark)' : '#555'}; font-weight:${activo ? '700' : '600'};"
+                    onclick="window._medToggleFiltroTagPJ('${tag}')">
+                ${tag}
+            </button>`;
         }).join('');
+
+        const controlesFiltroHtml = `
+            <div style="margin-bottom: 14px; background: white; padding: 12px; border-radius: 8px; border: 1px solid var(--gray-200);">
+                <div style="font-size: 0.75em; font-weight: 800; color: var(--gray-500); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Filtros por Tags
+                    ${medallaState.filtroTagsPJ.length > 0 ? `<span style="float:right; cursor:pointer; color:var(--red);" onclick="window._medLimpiarFiltrosTagPJ()">✕ Limpiar (${medallaState.filtroTagsPJ.length})</span>` : ''}
+                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                    ${tagsFiltrosHtml}
+                </div>
+            </div>
+        `;
+
+        // 6. Generar las nuevas tarjetas completas
+        const tarjetasHtml = medallasUnicas.length > 0
+            ? medallasUnicas.map(m => _renderCardCompletaParaPJ(m, pj, ptsMapa)).join('')
+            : '<div class="empty-state" style="grid-column:1/-1;"><h3>No se encontraron medallas.</h3></div>';
+
+        content = `
+            ${controlesFiltroHtml}
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; align-items:start;">
+                ${tarjetasHtml}
+            </div>
+        `;
 
         content = secciones || `<div class="empty-state"><h3>Sin medallas disponibles para los tags de este personaje</h3></div>`;
     }
@@ -1090,4 +1089,82 @@ export function toast(msg, tipo='ok') {
     if (!el) return;
     el.textContent = msg; el.className = 'toast-' + tipo;
     setTimeout(() => { el.className = ''; }, 3000);
+}
+// --- NUEVA TARJETA COMPLETA PARA TAB PERSONAJE ---
+function _renderCardCompletaParaPJ(m, pjNombre, ptsMapa) {
+    const estado      = estadoMedallaPJ(m, pjNombre);
+    const condActivos = efectosActivosPJ(m, pjNombre);
+    const equipada    = (medallaState.equipacion||[]).some(e => e.id === m.id);
+
+    let iconoEstado = '🔒';
+    let colorBorde = 'var(--gray-200)';
+    let opacity = '0.7';
+
+    if (estado === 'activable') {
+        iconoEstado = '✅';
+        colorBorde = 'var(--green)';
+        opacity = '1';
+    } else if (estado === 'parcial') {
+        iconoEstado = '⚠️';
+        colorBorde = 'var(--orange)';
+        opacity = '0.9';
+    }
+
+    if (equipada) colorBorde = 'var(--green-dark)';
+
+    const tagsD = mTags(m).map(t => `<span style="font-size:0.68em;background:rgba(52,152,219,0.1);color:var(--blue);border:1px solid rgba(52,152,219,0.3);padding:2px 6px;border-radius:10px;margin-right:3px;font-weight:600;">${t}</span>`).join('');
+
+    const reqsHtml = (m.requisitos_base||[]).map(r => {
+        const pts = ptsMapa[r.tag] || ptsMapa[r.tag.replace('#','')] || 0;
+        const ok = pts >= (r.pts_minimos||0);
+        return `<div style="font-size:0.75em; display:flex; justify-content:space-between; margin-bottom:2px;">
+            <span style="color:var(--gray-600);">${r.tag}</span>
+            <span style="color:${ok?'var(--green-dark)':'#e74c3c'};font-weight:bold;">${pts}/${r.pts_minimos} PT ${ok?'✓':'✗'}</span>
+        </div>`;
+    }).join('');
+
+    const condHtml = condActivos.map(ec => `
+        <div style="font-size:0.72em; padding:6px; margin-top:4px; background:${ec.activo?'rgba(39,174,96,0.06)':'rgba(0,0,0,0.03)'}; border:1px solid ${ec.activo?'var(--green)':'#eee'}; border-radius:6px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:2px;">
+                <span style="font-weight:bold; color:var(--orange);">${ec.tag}</span>
+                <span style="font-weight:bold; color:${ec.activo?'var(--green-dark)':'#aaa'};">${ec.activo?'⚡ ACTIVO':'🔒 '+ec.pts_actuales+'/'+ec.pts_minimos+' PT'}</span>
+            </div>
+            <div style="color:var(--gray-600); line-height:1.3;">${renderMarkup(ec.efecto||'')}</div>
+        </div>
+    `).join('');
+
+    return `
+    <div class="medalla-card" style="opacity:${opacity}; border-color:${colorBorde}; background:${equipada ? 'rgba(39,174,96,0.05)' : 'white'}; padding:14px; border-radius:10px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.06); transition:all 0.2s;">
+        <div onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}, '${pjNombre.replace(/'/g,"\\'")}'); event.stopPropagation();" style="cursor:pointer; flex-grow:1;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+                <div style="font-weight:800; font-size:0.95em; color:var(--gray-900); display:flex; align-items:center; gap:6px; line-height:1.2;">
+                    <span title="Estado: ${estado}">${iconoEstado}</span> 
+                    ${m.nombre}
+                </div>
+                <div style="font-size:0.8em; font-weight:800; color:var(--purple); background:rgba(142,68,173,0.08); border:1px solid rgba(142,68,173,0.22); padding:2px 8px; border-radius:8px; white-space:nowrap; flex-shrink:0;">
+                    ${m.costo_ctl} CTL
+                </div>
+            </div>
+
+            <div style="margin-bottom:8px; display:flex; flex-wrap:wrap; gap:4px;">${tagsD}</div>
+            
+            <div style="font-size:0.78em; color:var(--gray-600); line-height:1.5; border-top:1px solid var(--gray-100); padding-top:8px; margin-bottom:8px;">
+                ${renderMarkup(m.efecto_desc || 'Sin descripción.')}
+            </div>
+
+            ${reqsHtml ? `<div style="border-top:1px dashed var(--gray-200); padding-top:6px; margin-bottom:6px;"><div style="font-size:0.68em; font-weight:800; color:#aaa; text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px;">Requisitos</div>${reqsHtml}</div>` : ''}
+            ${condHtml ? `<div style="border-top:1px dashed var(--gray-200); padding-top:6px;"><div style="font-size:0.68em; font-weight:800; color:#aaa; text-transform:uppercase; margin-bottom:4px; letter-spacing:0.5px;">Condicionales</div>${condHtml}</div>` : ''}
+        </div>
+
+        <button onclick="window._medEquiparToggle('${m.id}',${JSON.stringify(m).replace(/"/g,"&quot;")})"
+            style="margin-top:10px; width:100%; padding:8px; font-size:0.8em; border-radius:8px; cursor:${estado === 'activable' || equipada ? 'pointer' : 'not-allowed'};
+                   border:1.5px solid ${equipada ? 'var(--green)' : 'var(--gray-300)'};
+                   background:${equipada ? 'var(--green)' : 'white'};
+                   color:${equipada ? 'white' : 'var(--gray-700)'}; font-weight:700;
+                   transition:all 0.2s;"
+            ${estado !== 'activable' && !equipada ? 'disabled title="No cumples los requisitos"' : ''}>
+            ${equipada ? '✅ Equipada' : (estado === 'activable' ? '+ Equipar' : '🔒 Bloqueada')}
+        </button>
+    </div>`;
 }
