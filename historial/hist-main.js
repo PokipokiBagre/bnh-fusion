@@ -9,8 +9,7 @@ import {
 import {
     cargarHilos, cargarPostsDB, cargarRankingDB,
     cargarPTTagDelHilo, scrapearHilo, calcularPTHilo, eliminarPTHilo,
-    agregarHilo, eliminarHilo, toggleHiloActivo,
-    calcularPTExtraParaPosts, revertirPTExtraParaPosts
+    agregarHilo, eliminarHilo, toggleHiloActivo
 } from './hist-data.js';
 import {
     renderRanking, renderTimeline, renderHilos,
