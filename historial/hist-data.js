@@ -704,7 +704,7 @@ export async function revertirPTExtraParaPosts(threadId, nombrePJ, postNos) {
         console.error('[revertirPTExtraParaPosts]', e);
         return { ok: false, msg: e.message };
     }
-
+    }
 
     // ── Verificador de seguridad para Tags Baneados ────────────────
 async function _limpiarTransaccionesBaneadas(transacciones) {
