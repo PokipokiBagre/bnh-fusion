@@ -1,20 +1,25 @@
-// ============================================================
-// fichas-data.js — Todo opera sobre grupos, no sobre aliases
-// ============================================================
+// fichas-data.js (fragmento actualizado)
 import { supabase }  from '../bnh-auth.js';
 import { db }        from '../bnh-db.js';
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal } from './fichas-state.js';
 
+// NUEVO: Exportar opciones y baneados
+export let opcionesFusion = {};
+export let bannedTags = [];
+
 export async function cargarTodo() {
-    const [grupos, aliases, ptRows, hilos] = await Promise.all([
-        // Grupos con todos sus campos (stats, tags, lore, quirk)
+    const [grupos, aliases, ptRows, hilos, opts, baneados] = await Promise.all([
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
-        // Aliases: solo nombre e id de grupo
         supabase.from('personajes').select('id, nombre, refinado_id').order('nombre'),
-        // PT por grupo (personaje_nombre = nombre_refinado del grupo)
         db.progresion.getPuntosAll(),
-        supabase.from('historial_hilos').select('thread_id, titulo').order('creado_en', { ascending: false })
+        supabase.from('historial_hilos').select('thread_id, titulo').order('creado_en', { ascending: false }),
+        // NUEVO: Descargar opciones y tags baneados en paralelo
+        supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
     ]);
+
+    opcionesFusion = opts.data || {};
+    bannedTags = (baneados.data || []).map(t => (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase());
 
     gruposGlobal.length  = 0;
     gruposGlobal.push(...(grupos.data  || []));
