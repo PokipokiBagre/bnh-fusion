@@ -231,7 +231,8 @@ function _exponerGlobales() {
                 ? (tagFusionRaw.startsWith('#') ? tagFusionRaw : '#' + tagFusionRaw)
                 : null;
 
-            const res = await activarFusion(pjA, pjB, rendBase, statsFinales);
+        // Pasamos 'd100', que en resultadoCalculado ya contiene la suma del dado + el bonus de tags
+        const res = await activarFusion(pjA, pjB, d100, statsFinales);
             if (!res.ok) {
                 toast('❌ ' + res.msg, 'error');
                 if (btn) { btn.disabled = false; btn.textContent = '⚡ Oficializar en Base de Datos'; }
@@ -336,7 +337,7 @@ function _exponerGlobales() {
         const { data: sug } = await supabase.from('sugerencias_fusion').select('*').eq('id', id).maybeSingle();
         if (!sug) return;
 
-        const res = await activarFusion(sug.pj_a, sug.pj_b, sug.rendimiento);
+        const res = await activarFusion(sug.pj_a, sug.pj_b, sug.rend_total || sug.rendimiento);
         if (!res.ok) { toast('❌ ' + res.msg, 'error'); return; }
 
         const fusionActivaId = res.fusion?.id;
@@ -368,8 +369,8 @@ function _exponerGlobales() {
         }
 
         await supabase.from('registro_fusiones').insert({
-            pj_a: sug.pj_a, pj_b: sug.pj_b,
-            rendimiento: sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
+        pj_a: sug.pj_a, pj_b: sug.pj_b,
+            rendimiento: sug.rend_total || sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
             tag_fusion: sug.tag_fusion || null, tag_fusion_pts: opcionesState.pts_tag_fusion || 0,
             stats_pot: sug.stats_pot, stats_agi: sug.stats_agi, stats_ctl: sug.stats_ctl,
             tags_resultado: sug.tags_resultado || [],
