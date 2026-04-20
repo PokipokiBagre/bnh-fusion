@@ -689,4 +689,32 @@ export async function revertirPTExtraParaPosts(threadId, nombrePJ, postNos) {
         console.error('[revertirPTExtraParaPosts]', e);
         return { ok: false, msg: e.message };
     }
+
+
+    // ── Verificador de seguridad para Tags Baneados ────────────────
+async function _limpiarTransaccionesBaneadas(transacciones) {
+    if (!transacciones.length) return [];
+
+    // 1. Obtener tags baneados directamente del catálogo
+    const { data: tagsBaneados } = await supabase
+        .from('tags_catalogo')
+        .select('nombre')
+        .eq('baneado', true);
+
+    if (!tagsBaneados || tagsBaneados.length === 0) return transacciones;
+
+    // 2. Crear un Set de búsqueda rápida (normalizado a minúsculas y con #)
+    const listaNegra = new Set(tagsBaneados.map(t => 
+        (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase()
+    ));
+
+    // 3. Filtrar: solo pasan las transacciones cuyo tag NO esté en la lista negra
+    return transacciones.filter(t => {
+        const tagNorm = (t.tag.startsWith('#') ? t.tag : '#' + t.tag).toLowerCase();
+        const esBaneado = listaNegra.has(tagNorm);
+        if (esBaneado) {
+            console.warn(`[Seguridad-PT] Bloqueada adquisición de PT para tag baneado: ${t.tag} (${t.personaje_nombre})`);
+        }
+        return !esBaneado;
+    });
 }
