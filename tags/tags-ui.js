@@ -114,131 +114,59 @@ export function renderProgresion() {
     // Las tarjetas se renderizan UNA SOLA VEZ aquí. El buscador opera in-place
     // sobre el DOM (ver window._tagsBuscarMedallasAcc en tags-main.js), sin
     // destruir ni recrear este bloque, evitando pérdida de foco y scroll jumps.
+    // ── Medallas Accesibles ──
     let secMedallas = '';
     if (pj) {
-        // Deduplicar por id antes de renderizar
-        const seen = new Set();
-        const accMedallas = getMedallasAccesibles(pj).filter(m => {
-            if (seen.has(m.id)) return false;
-            seen.add(m.id);
-            return true;
-        });
+        const accMedallas = getMedallasAccesibles(pj);
+        const busqMed = (tagsState.busquedaMedallasAcc || '').toLowerCase();
+        let visiblesInit = 0;
+        
+        const mHtml = accMedallas.map(m => {
+            // Verificar si la medalla está en el inventario
+            const equipada = inventarioMedallas.includes(m.id);
+            
+            const tagsD = (m.requisitos_base||[]).map(r => `
+                <span style="font-size:0.7em; font-weight:600; background:rgba(52,152,219,0.1); color:var(--blue,#2980b9); border:1px solid rgba(52,152,219,0.3); padding:2px 8px; border-radius:12px; white-space:nowrap;">
+                    ${_esc(r.tag.startsWith('#')?r.tag:'#'+r.tag)} ≥${r.pts_minimos}pt
+                </span>`).join(' ');
 
-        const mHtml = accMedallas.length
-            ? accMedallas.map(m => {
-                // Cruzar con inventarioMedallas para saber si ya está equipada
-                const equipada = inventarioMedallas.includes(m.id);
+            // Filtrado inicial
+            const mostrar = !busqMed || m.nombre.toLowerCase().includes(busqMed) || (m.efecto_desc||'').toLowerCase().includes(busqMed);
+            if (mostrar) visiblesInit++;
 
-                const tagsReqs = (m.requisitos_base || []).map(r => {
-                    const t = r.tag.startsWith('#') ? r.tag : '#' + r.tag;
-                    return `<span style="
-                        display:inline-block;
-                        font-size:0.7em;font-weight:600;
-                        background:rgba(52,152,219,0.1);
-                        color:var(--blue,#2980b9);
-                        border:1px solid rgba(52,152,219,0.3);
-                        padding:2px 8px;border-radius:12px;white-space:nowrap;">
-                        ${_esc(t)}${r.pts_minimos ? ` ≥${r.pts_minimos}pt` : ''}
-                    </span>`;
-                }).join(' ');
-
-                return `
-                <div class="medalla-acc-card"
-                     data-nombre="${_esc(m.nombre)}"
-                     data-efecto="${_esc(m.efecto_desc || '')}"
-                     onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')"
-                     onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)';this.style.transform='translateY(-1px)'"
-                     onmouseout="this.style.boxShadow='';this.style.transform=''"
-                     style="
-                        background:${equipada ? 'rgba(39,174,96,0.06)' : '#fff'};
-                        border:1.5px solid ${equipada ? 'var(--green,#27ae60)' : 'var(--gray-200,#e5e7eb)'};
-                        border-radius:10px;
-                        padding:13px 14px;
-                        display:flex;flex-direction:column;gap:8px;
-                        cursor:pointer;
-                        transition:box-shadow .15s, transform .15s, border-color .15s;">
-
-                    <!-- Fila superior: nombre + costo + badge equipada -->
-                    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
-                        <span style="
-                            font-weight:700;font-size:0.88em;
-                            color:var(--gray-900,#111);
-                            line-height:1.3;flex:1;">
-                            🏅 ${_esc(m.nombre)}
-                        </span>
-                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
-                            <span style="
-                                font-size:0.75em;font-weight:800;
-                                color:var(--purple,#8e44ad);
-                                background:rgba(142,68,173,0.08);
-                                border:1px solid rgba(142,68,173,0.22);
-                                padding:2px 9px;border-radius:8px;white-space:nowrap;">
-                                ${m.costo_ctl} CTL
-                            </span>
-                            ${equipada ? `
-                            <span style="
-                                font-size:0.68em;font-weight:700;
-                                color:#27ae60;
-                                background:rgba(39,174,96,0.12);
-                                border:1px solid rgba(39,174,96,0.3);
-                                padding:2px 8px;border-radius:8px;white-space:nowrap;">
-                                ✅ Equipada
-                            </span>` : ''}
-                        </div>
+            return `
+            <div class="medalla-acc-card" 
+                 data-nombre="${_esc(m.nombre)}" 
+                 data-efecto="${_esc(m.efecto_desc || '')}"
+                 onclick="window.open('../medallas/index.html?medalla=${encodeURIComponent(m.nombre)}','_blank')"
+                 onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,0.12)'; this.style.transform='translateY(-2px)';"
+                 onmouseout="this.style.boxShadow=''; this.style.transform='';"
+                 style="display:${mostrar ? 'flex' : 'none'}; background:${equipada ? 'rgba(39,174,96,0.05)' : '#fff'}; border:1.5px solid ${equipada ? 'var(--green)' : 'var(--gray-200)'}; border-radius:10px; padding:14px; flex-direction:column; gap:8px; cursor:pointer; transition:all .15s;">
+                 
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                    <span style="font-weight:700; font-size:0.9em; color:var(--gray-900); line-height:1.2;">🏅 ${_esc(m.nombre)}</span>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;">
+                        <span style="font-size:0.75em; font-weight:800; color:var(--purple); background:rgba(142,68,173,0.08); border:1px solid rgba(142,68,173,0.22); padding:2px 8px; border-radius:8px;">${m.costo_ctl} CTL</span>
+                        ${equipada ? `<span style="font-size:0.68em; font-weight:700; color:var(--green); background:var(--green-pale); border:1px solid var(--green); padding:2px 6px; border-radius:6px;">✅ Equipada</span>` : ''}
                     </div>
-
-                    <!-- Tags requisito como pills -->
-                    ${tagsReqs
-                        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsReqs}</div>`
-                        : ''}
-
-                    <!-- Descripción del efecto -->
-                    ${m.efecto_desc ? `
-                    <div style="
-                        font-size:0.78em;
-                        color:var(--gray-600,#555);
-                        line-height:1.5;
-                        border-top:1px solid var(--gray-100,#f0f0f0);
-                        padding-top:7px;">
-                        ${renderMarkup(m.efecto_desc)}
-                    </div>` : ''}
-                </div>`;
-            }).join('')
-            : `<p style="
-                grid-column:1/-1;
-                color:var(--gray-400,#9ca3af);
-                font-size:0.85em;
-                text-align:center;
-                padding:24px 0;">
-                Sin medallas accesibles con los requisitos actuales.
-               </p>`;
+                </div>
+                
+                ${tagsD ? `<div style="display:flex; flex-wrap:wrap; gap:4px;">${tagsD}</div>` : ''}
+                
+                ${m.efecto_desc ? `<div style="font-size:0.78em; color:var(--gray-600); line-height:1.5; border-top:1px solid var(--gray-100); padding-top:6px;">${renderMarkup(m.efecto_desc)}</div>` : ''}
+            </div>`;
+        }).join('');
 
         secMedallas = `
         <div class="card" style="margin-top:16px;">
-            <div style="
-                display:flex;align-items:center;justify-content:space-between;
-                flex-wrap:wrap;gap:8px;margin-bottom:12px;">
-                <div id="medallas-acc-titulo" class="card-title" style="margin:0;">
-                    Medallas Accesibles (${accMedallas.length})
-                </div>
-                <input
-                    id="buscador-medallas-acc"
-                    class="inp"
-                    placeholder="🔍 Buscar medalla…"
-                    value="${_esc(tagsState.busquedaMedallasAcc)}"
-                    oninput="window._tagsBuscarMedallasAcc(this.value)"
-                    style="width:100%;max-width:260px;padding:6px 10px;font-size:0.85em;">
+            <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+                <div id="medallas-acc-titulo" class="card-title" style="margin:0;">Medallas Posibles Accesibles (${visiblesInit})</div>
+                <input class="inp" placeholder="🔍 Buscar medalla..." value="${_esc(tagsState.busquedaMedallasAcc)}" oninput="window._tagsBuscarMedallasAcc(this.value)" style="width:100%; max-width:250px; padding:6px 10px; font-size:0.85em;">
             </div>
-            <div id="medallas-acc-grid"
-                 style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;">
-                ${mHtml}
+            <div id="medallas-acc-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); gap:12px;">
+                ${mHtml || '<p class="empty-state" style="grid-column:1/-1; padding:20px 0;">No se encontraron medallas.</p>'}
             </div>
         </div>`;
-
-        // Re-aplicar filtro guardado en estado tras re-render (sin mover el foco)
-        if (tagsState.busquedaMedallasAcc) {
-            requestAnimationFrame(() => window._tagsBuscarMedallasAcc(tagsState.busquedaMedallasAcc));
-        }
     }
     // ─────────────────────────────────────────────────────────────────────────
 
