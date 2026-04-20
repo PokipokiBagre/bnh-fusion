@@ -10,7 +10,7 @@ import {
     renderOpciones, actualizarVsPanelPublic, actualizarSlotPublic, toast,
     actualizarCompatibilidadDisplay,
 } from './fusions-ui.js';
-import { calcularResultadoFusion, buildRegistroFusion, calcCompatibilidadTags } from './fusions-logic.js';
+import { ccalcularResultadoFusion, buildRegistroFusion, calcCompatibilidadTags, getRegla } from './fusions-logic.js';
 import { cargarOpciones, guardarOpciones, opcionesState } from './fusions-options.js';
 import { cargarFusiones, activarFusion, terminarFusion } from '../bnh-fusion.js';
 
@@ -516,8 +516,8 @@ function _actualizarBarraD100() {
     if (label)   label.textContent   = val ? `D100: ${val} + ${bonus}% tags = ${val + bonus}%` : 'Ingresa el dado';
     if (totalEl) totalEl.textContent = val + bonus;
 
-    const { getRegla } = window._fusionLogicRef || {};
-    if (reglaEl && getRegla) {
+    // AHORA SÍ LLAMAMOS A LA FUNCIÓN CORRECTAMENTE
+    if (reglaEl) {
         const regla = getRegla(val + bonus);
         reglaEl.className = `regla-badge ${regla?.clase || ''}`;
         reglaEl.textContent = regla?.label || '';
