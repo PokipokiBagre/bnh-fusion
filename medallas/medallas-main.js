@@ -1,6 +1,6 @@
 // medallas/medallas-main.js
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
-import { medallaState, medallas, grupos, STORAGE_URL } from './medallas-state.js';
+import { medallaState, medallas, grupos, puntosAll, STORAGE_URL } from './medallas-state.js';
 import { cargarTodo, guardarMedalla, eliminarMedalla } from './medallas-data.js';
 import {
     renderCatalogo, renderGrafo, renderPersonaje,
