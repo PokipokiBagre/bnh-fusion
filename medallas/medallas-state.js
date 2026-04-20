@@ -19,20 +19,27 @@ export const medallaState = {
     grafoTagsSel:      [],
     grafoTagPagina:    0,
     grafoBusqueda:     '',
-    pjBloquesSel:      null,         // PJ seleccionado en tab Bloques
+    pjBloquesSel:      null,
     filtroRolBloques:  '#Jugador',
     filtroEstBloques:  '#Activo',
-    equipacion:        [],           // medallas equipadas en tab Personaje
-    equipacionPropuesta: [],         // propuesta pendiente
-    equipacionDetalleId: null,       // id de medalla seleccionada para ver detalle en panel
-    pjBusqueda:        '',           // buscador en tab Personaje
+    equipacion:        [],
+    equipacionPropuesta: [],
+    equipacionDetalleId: null,
+    pjBusqueda:        '',
 };
 
 // Datos globales
-export let medallas  = [];   // catálogo completo (aprobadas + propuestas)
-export let grupos    = [];   // personajes_refinados con tags y stats
-export let puntosAll = [];   // puntos_tag
+export let medallas  = [];
+export let grupos    = [];
+export let puntosAll = [];
 
-export function setMedallas(d)  { medallas  = d; }
-export function setGrupos(d)    { grupos    = d; }
+// NUEVO: Variables del Lente de Fusión
+export let opcionesFusion = {};
+export let bannedTags     = [];
+
+export function setMedallas(d)  { medallas = d; }
+export function setGrupos(d)    { grupos = d; }
 export function setPuntosAll(d) { puntosAll = d; }
+
+export function setOpcionesFusion(d) { opcionesFusion = d; }
+export function setBannedTags(d)     { bannedTags = d; }
