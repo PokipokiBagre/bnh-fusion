@@ -2,8 +2,8 @@
 // fichas-ui.js — Catálogo y Detalle centrado en GRUPOS
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { guardarTagsGrupo, borrarPTDeTag } from './fichas-data.js';
-import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag } from './fichas-logic.js';
+import { guardarTagsGrupo, borrarPTDeTag, opcionesFusion, bannedTags } from './fichas-data.js';
+import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, proyectarFicha } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
 import { renderMarkup } from './fichas-markup.js';
