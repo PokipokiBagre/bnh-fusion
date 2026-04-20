@@ -250,7 +250,7 @@ async function procesarPTDePostsNuevos(postsNuevos, threadId, board) {
 
     const transacciones = calcularTransaccionesPT(
         postsEnriquecidos, mapaNombres, threadId,
-        postsParaIndice, fusionados, yaProcessados
+        postsParaIndice, yaProcessados // <-- Le quitamos el "fusionados" del medio
     );
 
     console.log('[PT] hilo:', threadId, '| posts:', postsEnriquecidos.length,
@@ -521,14 +521,6 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
         // Mapa nombre → { nombre, tags, tieneGrupo }
         const mapaNombres = await db.historial.getMapaNombres();
 
-        // Personajes en fusión
-        const fusionados = new Set();
-        try {
-            const { data: fusiones } = await supabase
-                .from('fusiones_activas').select('pj_a, pj_b').eq('activa', true);
-            (fusiones || []).forEach(f => { fusionados.add(f.pj_a); fusionados.add(f.pj_b); });
-        } catch(_) {}
-
         // Si soloEnCupoRestante=true, cargamos los PT ya existentes por post/motivo
         // para calcular cuánto cupo queda
         let ptYaUsadosPorPost = {}; // { post_no: { motivo: count } }
@@ -618,7 +610,7 @@ export async function calcularPTExtraParaPosts(board, threadId, postNos, pjsExtr
                     todasTransacciones.push({
                         personaje_nombre: pjExtra.nombre_refinado,
                         tag:              tagOrig[tagLow] || ('#' + tagLow),
-                        delta:            Math.max(1, Math.round(delta / divFusion)),
+                        delta:            delta, // <-- Solo el delta normal
                         motivo,
                         origen_post_no:   post.post_no,
                         origen_thread_id: threadId
