@@ -21,70 +21,95 @@ export function getReglas(opciones = opcionesState) {
 
 export function getRegla(d100, opciones = opcionesState) {
     const reglas = getReglas(opciones);
-    for (const r of reglas) {
-        if (d100 <= r.max) return r;
-    }
-    return reglas[reglas.length - 1];
+    return reglas.find(r => d100 <= r.max) || reglas[reglas.length - 1];
 }
 
-export function calcCompatibilidadTags(pjA, pjB, bannedTags = []) {
-    const tagsA = (pjA.tags || []).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase()).filter(t => !bannedTags.includes(t));
-    const tagsB = (pjB.tags || []).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase()).filter(t => !bannedTags.includes(t));
-    const setA = new Set(tagsA);
-    const compartidos = tagsB.filter(t => setA.has(t));
-    return compartidos.length;
+// ─── Helpers internos ─────────────────────────────────────────
+function _calcStat(valA, valB, modo) {
+    if (modo === 'suma')     return valA + valB;
+    if (modo === 'promedio') return Math.ceil((valA + valB) / 2);
+    if (modo === 'mayor')    return Math.max(valA, valB);
+    return valA + valB;
 }
 
-export function calcularResultadoFusion(pjA, pjB, ptA, ptB, d100, sobreRecarga, bannedTags = [], opciones = opcionesState) {
+function _calcPT(valA, valB, comportamiento) {
+    if (comportamiento === 'mayor')    return Math.max(valA, valB);
+    if (comportamiento === 'suma')     return valA + valB;
+    if (comportamiento === 'promedio') return Math.ceil((valA + valB) / 2);
+    if (comportamiento === 'cero')     return 0;
+    return Math.max(valA, valB);
+}
+
+function _tipoTag(valA, valB, comportamiento) {
+    const compartido = valA > 0 && valB > 0;
+    if (comportamiento === 'suma')     return compartido ? 'suma'     : 'herencia';
+    if (comportamiento === 'promedio') return compartido ? 'sinergia' : 'herencia';
+    if (comportamiento === 'mayor')    return compartido ? 'sinergia' : 'base';
+    if (comportamiento === 'cero')     return 'cero';
+    return 'base';
+}
+
+// ─── Cálculo completo ─────────────────────────────────────────
+// NUEVO: Agregamos bannedTags como parámetro
+export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = opcionesState, bannedTags = []) {
+    const sobreRecarga = d100 > 100;
     const MULT = sobreRecarga ? 1.5 : 1;
-    const regla = getRegla(d100, opciones);
-    
-    const tagsA = (pjA.tags || []).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase()).filter(t => !bannedTags.includes(t));
-    const tagsB = (pjB.tags || []).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase()).filter(t => !bannedTags.includes(t));
-    
-    const tagsUnicos = [...new Set([...tagsA, ...tagsB])];
-    const tagsCompartidos = tagsA.filter(t => tagsB.includes(t));
 
-    let maxTagCompartido = null;
-    let maxPtsCompartidos = -1;
+    const d100Clamp = Math.min(d100, 100);
+    const regla = getRegla(d100Clamp, opciones);
 
-    if (tagsCompartidos.length > 0) {
-        tagsCompartidos.forEach(t => {
-            const pts = (ptA[t]||0) + (ptB[t]||0);
-            if (pts > maxPtsCompartidos) {
-                maxPtsCompartidos = pts;
-                maxTagCompartido = t;
-            }
-        });
-    }
+    const statsBase = {
+        pot: Math.round(_calcStat(pjA.pot || 0, pjB.pot || 0, opciones.modo_stats) * MULT),
+        agi: Math.round(_calcStat(pjA.agi || 0, pjB.agi || 0, opciones.modo_stats) * MULT),
+        ctl: Math.round(_calcStat(pjA.ctl || 0, pjB.ctl || 0, opciones.modo_stats) * MULT),
+    };
 
-    const tagsFinales = {};
-    tagsUnicos.forEach(tag => {
-        const pA = ptA[tag] || 0;
-        const pB = ptB[tag] || 0;
-        const esCompartido = tagsCompartidos.includes(tag);
+    const ptsA = {}, ptsB = {};
+    todosLosPTs.forEach(p => {
+        const tagNorm = (p.tag.startsWith('#') ? p.tag : '#' + p.tag).toLowerCase();
+        if (bannedTags.includes(tagNorm)) return; // <-- IGNORAR TAGS BANEADOS (PT)
         
-        let pts = 0;
-        if (regla.comportamiento === 'mayor') pts = Math.max(pA, pB);
-        else if (regla.comportamiento === 'suma') pts = pA + pB;
-        else if (regla.comportamiento === 'promedio') pts = Math.ceil((pA + pB) / 2);
-        else if (regla.comportamiento === 'cero') pts = 0;
-        else pts = pA + pB;
+        if (p.personaje_nombre === pjA.nombre) ptsA[p.tag] = p.cantidad;
+        if (p.personaje_nombre === pjB.nombre) ptsB[p.tag] = p.cantidad;
+    });
 
-        tagsFinales[tag] = {
-            pts: Math.round(pts * MULT),
-            tipo: esCompartido ? 'compartido' : (tagsA.includes(tag) ? 'soloA' : 'soloB'),
-            aportaA: pA, aportaB: pB
+    const todosLosTags = [...new Set([...Object.keys(ptsA), ...Object.keys(ptsB)])];
+    const tagsResultantes = {};
+    todosLosTags.forEach(tag => {
+        const valA = ptsA[tag] || 0;
+        const valB = ptsB[tag] || 0;
+        const ptsCalc = _calcPT(valA, valB, regla.comportamiento);
+        tagsResultantes[tag] = {
+            pts:     Math.round(ptsCalc * MULT),
+            tipo:    _tipoTag(valA, valB, regla.comportamiento),
+            aportaA: valA,
+            aportaB: valB,
         };
     });
 
+    let maxTagCompartido = null, maxPtsCompartidos = 0;
+    Object.entries(tagsResultantes).forEach(([tag, d]) => {
+        if (d.aportaA > 0 && d.aportaB > 0 && d.pts > maxPtsCompartidos) {
+            maxPtsCompartidos = d.pts;
+            maxTagCompartido  = tag;
+        }
+    });
+
+    // <-- IGNORAR TAGS BANEADOS EN LA UNIÓN (Para que no se hereden formalmente)
+    const tagsA = (pjA.tags || []).map(t => t.startsWith('#') ? t : '#' + t).filter(t => !bannedTags.includes(t.toLowerCase()));
+    const tagsB = (pjB.tags || []).map(t => t.startsWith('#') ? t : '#' + t).filter(t => !bannedTags.includes(t.toLowerCase()));
+
     return {
-        pjA:               pjA.nombre_refinado,
-        pjB:               pjB.nombre_refinado,
         regla,
-        tags:              tagsFinales,
+        opciones:          { ...opciones },
+        statsBase,
+        statsFinales:      { ...statsBase },
+        tags:              tagsResultantes,
+        tagsUnion:         [...new Set([...tagsA, ...tagsB])],
         maxTagCompartido,
-        maxPtsCompartidos: maxPtsCompartidos > -1 ? Math.round(maxPtsCompartidos * MULT) : 0,
+        maxPtsCompartidos,
+        pjA:               pjA.nombre,
+        pjB:               pjB.nombre,
         snapshotA:         { pot: pjA.pot, agi: pjA.agi, ctl: pjA.ctl, tags: tagsA },
         snapshotB:         { pot: pjB.pot, agi: pjB.agi, ctl: pjB.ctl, tags: tagsB },
         d100,
@@ -104,7 +129,7 @@ export function buildRegistroFusion(resultado, statsFinales, tagFusion, ptsFusio
         rendimiento:         resultado.d100,
         regla_aplicada:      resultado.regla.key,
         tag_fusion:          tagFusion  || null,
-        // ELIMINADO: tag_fusion_pts: ptsFusion || 0 -> Supabase lo estaba rechazando por no existir
+        // ⚡ CORRECCIÓN: Se elimina tag_fusion_pts para no crashear la DB
         stats_pot:           statsFinales.pot,
         stats_agi:           statsFinales.agi,
         stats_ctl:           statsFinales.ctl,
@@ -115,4 +140,11 @@ export function buildRegistroFusion(resultado, statsFinales, tagFusion, ptsFusio
         tags_resultado:      tagsArr,
         fusion_activa_id:    fusionActivaId || null,
     };
+}
+
+// ─── Compatibilidad por tags compartidos ─────────────────────
+export function calcCompatibilidadTags(nTagsCompartidos) {
+    if (nTagsCompartidos <= 0) return 0;
+    if (nTagsCompartidos === 1) return 1;
+    return 10 + (nTagsCompartidos - 2) * 8;
 }
