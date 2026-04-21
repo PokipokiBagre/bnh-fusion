@@ -38,8 +38,29 @@ window.onload = async () => {
 
     document.getElementById('pantalla-carga').classList.add('oculto');
     document.getElementById('interfaz-tags').classList.remove('oculto');
-    renderTab('progresion'); // ← Inicia en progresión por defecto
-    _exponerGlobales();
+
+    // ⚡ NUEVO: Leer la URL para ver si venimos desde un click del Markup
+    const urlParams = new URLSearchParams(window.location.search);
+    const tagParam = urlParams.get('tag');
+
+    if (tagParam) {
+        // Si hay tag en la URL, forzamos abrir la pestaña Catálogo
+        if (typeof window._tagsTab === 'function') {
+            window._tagsTab('catalogo'); 
+        } else if (typeof renderTab === 'function') {
+            renderTab('catalogo'); 
+        }
+        
+        // Esperamos un instante a que el DOM del catálogo se dibuje y abrimos el detalle
+        setTimeout(() => {
+            if (window._tagsVerDetalle) window._tagsVerDetalle(tagParam);
+        }, 50);
+    } else {
+        // Si no hay tag, iniciamos en progresión por defecto
+        if (typeof renderTab === 'function') renderTab('progresion');
+    }
+
+    if (typeof _exponerGlobales === 'function') _exponerGlobales();
 };
 
 function renderTab(tab) {
