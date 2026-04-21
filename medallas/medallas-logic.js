@@ -1,105 +1,142 @@
+// ============================================================
 // medallas/medallas-logic.js
+// ============================================================
 import { medallas, grupos, puntosAll, opcionesFusion, bannedTags } from './medallas-state.js';
 import { getFusionDe } from '../bnh-fusion.js';
+import { aplicarDelta } from '../bnh-pac.js'; 
 
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
-const normTag = t => (t||'').trim().startsWith('#') ? t.trim().toLowerCase() : '#' + t.trim().toLowerCase();
-const normKey = t => (t||'').trim().startsWith('#') ? t.trim() : '#' + t.trim();
+export const normTag = t => (t||'').trim().startsWith('#') ? t.trim().toLowerCase() : '#' + t.trim().toLowerCase();
+
+// Helper interno para aplicar de 1 a 5 deltas en cadena respetando el orden matemático
+function aplicarDeltas(base, d1, d2, d3, d4, d5) {
+    let acc = base;
+    for (const d of [d1, d2, d3, d4, d5]) {
+        acc = aplicarDelta(acc, d);
+    }
+    return acc;
+}
 
 export function getPuntosPJ(nombrePJ) {
     const m = {};
     puntosAll.filter(p => p.personaje_nombre === nombrePJ)
-             .forEach(p => { m[p.tag] = p.cantidad; });
+             .forEach(p => { m[normTag(p.tag)] = p.cantidad; });
     return m;
 }
 
-// ── LENTE DE FUSIÓN PARA MEDALLAS ────────────────────────────
+// ── LENTE DE FUSIÓN PARA MEDALLAS (CON PTs Y DELTAS ACTIVOS) ───────────
 export function proyectarPJ(nombrePJ) {
     const g = grupos.find(x => x.nombre_refinado === nombrePJ);
     if (!g) return null;
-    
+
     const f = getFusionDe(nombrePJ);
     const ptOriginal = getPuntosPJ(nombrePJ);
     const tagsOriginal = g.tags || [];
 
-    if (!f) return {
-        esFusion: false, pot: g.pot||0, agi: g.agi||0, ctl: g.ctl||0,
-        tags: tagsOriginal, ptsMapa: ptOriginal, ptOriginal, gOriginal: g
-    };
+    // 1. Extraer progresión estructural proveniente de los Puntos de Tag (50 PT = +1 Stat)
+    const bonoPot = Math.floor((ptOriginal['#stat_pot'] || 0) / 50);
+    const bonoAgi = Math.floor((ptOriginal['#stat_agi'] || 0) / 50);
+    const bonoCtl = Math.floor((ptOriginal['#stat_ctl'] || 0) / 50);
 
-    const compNombre = f.pj_a === nombrePJ ? f.pj_b : f.pj_a;
-    const compG = grupos.find(x => x.nombre_refinado === compNombre) || {};
-    const compPt = getPuntosPJ(compNombre);
+    // 2. Base Pura = (Estadística de BD) + (Bonos fijos por Tags)
+    const potPura = (g.pot || 0) + bonoPot;
+    const agiPura = (g.agi || 0) + bonoAgi;
+    const ctlPura = (g.ctl || 0) + bonoCtl;
 
-    const MULT = f.rendimiento > 100 ? 1.5 : 1;
-    const calcStat = (valA, valB) => {
-        const modo = opcionesFusion?.modo_stats || 'suma';
-        if (modo === 'promedio') return Math.ceil((valA + valB) / 2);
-        if (modo === 'mayor') return Math.max(valA, valB);
-        return valA + valB; 
-    };
+    if (!f) {
+        // NO HAY FUSIÓN: Aplicamos los deltas sobre la "Base Pura" del personaje
+        const finalPot = aplicarDeltas(potPura, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+        const finalAgi = aplicarDeltas(agiPura, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+        const finalCtl = aplicarDeltas(ctlPura, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
 
-    const pot = Math.round(calcStat(g.pot || 0, compG.pot || 0) * MULT);
-    const agi = Math.round(calcStat(g.agi || 0, compG.agi || 0) * MULT);
-    const ctl = Math.round(calcStat(g.ctl || 0, compG.ctl || 0) * MULT);
-
-    const tagsA = tagsOriginal.filter(t => !(bannedTags||[]).includes(normTag(t)));
-    const tagsB = (compG.tags || []).filter(t => !(bannedTags||[]).includes(normTag(t)));
-    
-    const tagsUnionSet = new Set([...tagsA, ...tagsB]);
-    tagsOriginal.filter(t => (bannedTags||[]).includes(normTag(t))).forEach(t => tagsUnionSet.add(normKey(t)));
-    if (f.tag_fusion) tagsUnionSet.add(f.tag_fusion);
-
-    const d100 = Math.min(f.rendimiento, 100);
-    let comp = 'suma'; 
-    if (opcionesFusion) {
-        if (d100 <= (opcionesFusion.umbral_1 || 33)) comp = opcionesFusion.comportamiento_z1;
-        else if (opcionesFusion.num_umbrales === 3 && d100 <= (opcionesFusion.umbral_2 || 66)) comp = opcionesFusion.comportamiento_z2;
-        else comp = opcionesFusion.comportamiento_z3;
+        return {
+            esFusion: false,
+            pot: finalPot, agi: finalAgi, ctl: finalCtl,
+            pot_chain_base: potPura, agi_chain_base: agiPura, ctl_chain_base: ctlPura, // Ancla para el UI (Gris)
+            tags: tagsOriginal,
+            ptsMapa: ptOriginal,
+            ptOriginal,
+            gOriginal: g
+        };
     }
 
-    const calcPT = (valA, valB) => {
-        if (comp === 'mayor') return Math.max(valA, valB);
-        if (comp === 'suma') return valA + valB;
-        if (comp === 'promedio') return Math.ceil((valA + valB) / 2);
-        if (comp === 'cero') return 0;
-        return valA + valB;
-    };
+    // --- LÓGICA DE FUSIÓN ACTIVA ---
+    const compNombre = f.pj_a === nombrePJ ? f.pj_b : f.pj_a;
+    const comp = grupos.find(x => x.nombre_refinado === compNombre);
+    if (!comp) return { /* fallback si falta el compañero */ };
 
-    const ptsMapa = {};
-    const todosTags = [...new Set([...Object.keys(ptOriginal), ...Object.keys(compPt)])];
-    
-    todosTags.forEach(tag => {
-        if ((bannedTags||[]).includes(normTag(tag))) {
-            if (ptOriginal[tag]) ptsMapa[normKey(tag)] = ptOriginal[tag]; 
-        } else {
-            const valA = ptOriginal[tag] || 0;
-            const valB = compPt[tag] || 0;
-            ptsMapa[normKey(tag)] = Math.round(calcPT(valA, valB) * MULT);
-        }
-    });
+    const ptComp = getPuntosPJ(compNombre);
+    const bonoPotC = Math.floor((ptComp['#stat_pot'] || 0) / 50);
+    const bonoAgiC = Math.floor((ptComp['#stat_agi'] || 0) / 50);
+    const bonoCtlC = Math.floor((ptComp['#stat_ctl'] || 0) / 50);
 
-    if (f.tag_fusion && !ptsMapa[f.tag_fusion]) {
-        ptsMapa[f.tag_fusion] = opcionesFusion?.pts_tag_fusion || 0;
+    const potPuraC = (comp.pot || 0) + bonoPotC;
+    const agiPuraC = (comp.agi || 0) + bonoAgiC;
+    const ctlPuraC = (comp.ctl || 0) + bonoCtlC;
+
+    const mult = f.rendimiento > 100 ? 1.5 : 1;
+    const modo = opcionesFusion?.modo_stats || 'suma';
+
+    let rawPot, rawAgi, rawCtl;
+    if (modo === 'mayor') {
+        rawPot = Math.max(potPura, potPuraC) * mult;
+        rawAgi = Math.max(agiPura, agiPuraC) * mult;
+        rawCtl = Math.max(ctlPura, ctlPuraC) * mult;
+    } else if (modo === 'promedio') {
+        rawPot = ((potPura + potPuraC) / 2) * mult;
+        rawAgi = ((agiPura + agiPuraC) / 2) * mult;
+        rawCtl = ((ctlPura + ctlPuraC) / 2) * mult;
+    } else { // suma
+        rawPot = (potPura + potPuraC) * mult;
+        rawAgi = (agiPura + agiPuraC) * mult;
+        rawCtl = (ctlPura + ctlPuraC) * mult;
+    }
+
+    rawPot = Math.round(rawPot);
+    rawAgi = Math.round(rawAgi);
+    rawCtl = Math.round(rawCtl);
+
+    // Se aplican los deltas PROPIOS del personaje principal sobre los stats crudos fusionados
+    const finalPotF = aplicarDeltas(rawPot, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+    const finalAgiF = aplicarDeltas(rawAgi, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+    const finalCtlF = aplicarDeltas(rawCtl, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
+
+    // Fusión de Tags (Ignorando los tags baneados del compañero)
+    const bans = (bannedTags || []).map(t => normTag(t));
+    const tagsCompValidos = (comp.tags || []).filter(t => !bans.includes(normTag(t)));
+    const tagsUnionSet = new Set([...tagsOriginal.map(t => normTag(t)), ...tagsCompValidos.map(t => normTag(t))]);
+
+    // Fusión de Puntos de Tag (PT)
+    const modoPt = opcionesFusion?.comportamiento_pt || 'sumar';
+    const ptsMapaF = { ...ptOriginal };
+    if (modoPt === 'sumar') {
+        tagsCompValidos.forEach(t => {
+            const k = normTag(t);
+            ptsMapaF[k] = (ptsMapaF[k] || 0) + (ptComp[k] || 0);
+        });
     }
 
     return {
-        esFusion: true, compañero: compNombre, rendimiento: f.rendimiento,
-        pot, agi, ctl, tags: [...tagsUnionSet], ptsMapa, 
-        tagFusion: f.tag_fusion, ptOriginal, gOriginal: g
+        esFusion: true,
+        pot: finalPotF, agi: finalAgiF, ctl: finalCtlF,
+        pot_chain_base: rawPot, agi_chain_base: rawAgi, ctl_chain_base: rawCtl,
+        tags: [...tagsUnionSet],
+        ptsMapa: ptsMapaF,
+        ptOriginal,
+        gOriginal: g,
+        compañero: compNombre,
+        rendimiento: f.rendimiento
     };
 }
 
-// ── GETTERS REESCRITOS PARA USAR EL LENTE ────────────────────
 export function estadoMedallaPJ(medalla, nombrePJ) {
     const proy = proyectarPJ(nombrePJ);
     if (!proy) return 'bloqueada';
-
+    
     const tagsGrupo = proy.tags.map(t => normTag(t));
-    const ptsMapa = {};
-    Object.keys(proy.ptsMapa).forEach(k => ptsMapa[normTag(k)] = proy.ptsMapa[k]);
-
+    const ptsMapa = proy.ptsMapa;
     const reqs = medalla.requisitos_base || [];
+    
     for (const req of reqs) {
         const tNorm = normTag(req.tag);
         if (!tagsGrupo.includes(tNorm)) return 'bloqueada';
@@ -114,8 +151,7 @@ export function efectosActivosPJ(medalla, nombrePJ) {
     if (!proy) return [];
     
     const tagsGrupo = proy.tags.map(t => normTag(t));
-    const ptsMapa = {};
-    Object.keys(proy.ptsMapa).forEach(k => ptsMapa[normTag(k)] = proy.ptsMapa[k]);
+    const ptsMapa = proy.ptsMapa;
 
     return (medalla.efectos_condicionales || []).map(ec => {
         const tNorm = normTag(ec.tag);
@@ -126,23 +162,15 @@ export function efectosActivosPJ(medalla, nombrePJ) {
     });
 }
 
-export function getTagsClusters() {
-    const map = {};
-    medallas.forEach(m => {
-        mTags(m).forEach(t => {
-            const k = normTag(t);
-            if (!map[k]) map[k] = { tag: k, medallas: [] };
-            map[k].medallas.push(m);
-        });
-    });
-    return Object.values(map);
-}
-
-export function filtrarMedallas({ busqueda = '', tag = '' } = {}) {
-    return medallas.filter(m => {
-        const q = busqueda.toLowerCase();
-        const matchBusq = !q || m.nombre.toLowerCase().includes(q) || (m.efecto_desc||'').toLowerCase().includes(q);
-        const matchTag = !tag || mTags(m).map(t=>normTag(t)).includes(normTag(tag));
-        return matchBusq && matchTag;
-    });
+export function filtrarMedallas({ busqueda = '', tag = '' }) {
+    let res = [...medallas];
+    if (busqueda) {
+        const b = busqueda.toLowerCase();
+        res = res.filter(m => m.nombre.toLowerCase().includes(b) || (m.efecto_desc||'').toLowerCase().includes(b) || mTags(m).some(t => t.toLowerCase().includes(b)));
+    }
+    if (tag) {
+        const tNorm = normTag(tag);
+        res = res.filter(m => mTags(m).some(t => normTag(t) === tNorm));
+    }
+    return res;
 }
