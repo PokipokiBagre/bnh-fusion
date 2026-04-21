@@ -785,6 +785,11 @@ export function renderUploadPanel(nombreGrupo) {
     </div>`;
 }
 
+export function cerrarUploadPanel() {
+    const panel = document.getElementById('fichas-upload-panel');
+    if (panel) { panel.style.display = 'none'; panel.dataset.grupo = ''; }
+}
+
 // ── Función para copiar Tags y PT en vista Detalle ──
 window._fichasCopiarTagsPT = (encodedData) => {
     try {
