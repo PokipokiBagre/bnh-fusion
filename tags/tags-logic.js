@@ -3,6 +3,7 @@
 // ============================================================
 import { grupos, puntosAll, catalogoTags, medallasCat, opcionesFusion, bannedTags } from './tags-state.js';
 import { getFusionDe } from '../bnh-fusion.js';
+import { aplicarDeltas } from '../bnh-pac.js';
 
 export const UMBRALES = [
     { pts: 50,  tipo: 'stat_pot', label: '50 → +1 POT' },
@@ -29,8 +30,15 @@ export function proyectarPJ(nombrePJ) {
     const ptOriginal = getPuntosPJ(nombrePJ);
     const tagsOriginal = g.tags || [];
 
+    // Caso sin fusión: aplicar 5 deltas encadenados directamente al raw
+    const potSolo = aplicarDeltas(g.pot||0, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+    const agiSolo = aplicarDeltas(g.agi||0, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+    const ctlSolo = aplicarDeltas(g.ctl||0, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
+
     if (!f) return {
-        esFusion: false, pot: g.pot||0, agi: g.agi||0, ctl: g.ctl||0,
+        esFusion: false,
+        pot: potSolo, agi: agiSolo, ctl: ctlSolo,
+        pot_chain_base: g.pot||0, agi_chain_base: g.agi||0, ctl_chain_base: g.ctl||0,
         tags: tagsOriginal, ptsMapa: ptOriginal, ptOriginal, gOriginal: g
     };
 
@@ -38,6 +46,7 @@ export function proyectarPJ(nombrePJ) {
     const compG = grupos.find(x => x.nombre_refinado === compNombre) || {};
     const compPt = getPuntosPJ(compNombre);
 
+    // Fusión: 1) combinar raws × MULT, 2) aplicar deltas propios sobre el resultado
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
     const calcStat = (valA, valB) => {
         const modo = opcionesFusion?.modo_stats || 'suma';
@@ -46,9 +55,13 @@ export function proyectarPJ(nombrePJ) {
         return valA + valB; 
     };
 
-    const pot = Math.round(calcStat(g.pot || 0, compG.pot || 0) * MULT);
-    const agi = Math.round(calcStat(g.agi || 0, compG.agi || 0) * MULT);
-    const ctl = Math.round(calcStat(g.ctl || 0, compG.ctl || 0) * MULT);
+    const potFusionRaw = Math.round(calcStat(g.pot||0, compG.pot||0) * MULT);
+    const agiFusionRaw = Math.round(calcStat(g.agi||0, compG.agi||0) * MULT);
+    const ctlFusionRaw = Math.round(calcStat(g.ctl||0, compG.ctl||0) * MULT);
+
+    const pot = aplicarDeltas(potFusionRaw, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+    const agi = aplicarDeltas(agiFusionRaw, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+    const ctl = aplicarDeltas(ctlFusionRaw, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
 
     const norm = t => (t.startsWith('#') ? t : '#' + t).toLowerCase();
     const tagsA = tagsOriginal.filter(t => !(bannedTags||[]).includes(norm(t)));
@@ -93,7 +106,9 @@ export function proyectarPJ(nombrePJ) {
 
     return {
         esFusion: true, compañero: compNombre, rendimiento: f.rendimiento,
-        pot, agi, ctl, tags: [...tagsUnionSet], ptsMapa, 
+        pot, agi, ctl,
+        pot_chain_base: potFusionRaw, agi_chain_base: agiFusionRaw, ctl_chain_base: ctlFusionRaw,
+        tags: [...tagsUnionSet], ptsMapa, 
         tagFusion: f.tag_fusion, ptOriginal, gOriginal: g
     };
 }

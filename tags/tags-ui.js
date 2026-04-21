@@ -9,6 +9,27 @@ import {
 import { getTagsConPuntos, tagsMasComunes, tagsCercaDeCanje, medallasDe, descDe, UMBRAL_MAX, rankingPorPT, getMedallasAccesibles, proyectarPJ } from './tags-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { renderFusionBadge } from '../bnh-fusion.js';
+import { aplicarDeltas } from '../bnh-pac.js';
+
+// Helper: muestra cadena de hasta 5 deltas con anotación en rojo
+// base = valor antes de deltas, total = resultado final
+function _fmtDChain(base, total, deltas) {
+    const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
+    if (!activos.length || base === total) return String(total);
+    let pasos = String(base), acc = base;
+    for (const d of activos) {
+        const s = String(d).trim();
+        const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+        const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+        const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+        let op = '';
+        if (multM)     { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
+        else if (divM) { acc = Math.round(acc / parseFloat(divM[1]));  op = `÷${divM[1]}`; }
+        else if (addM) { const n = parseFloat(addM[1]); acc = Math.round(acc + n); op = n >= 0 ? `+${n}` : `${n}`; }
+        if (op) pasos = `(${pasos}${op})`;
+    }
+    return `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${pasos})</span>`;
+}
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const fb = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -222,7 +243,7 @@ export function renderProgresion() {
             </div>
 
             <div style="display:flex;flex-direction:column;gap:14px;position:sticky;top:80px;">
-                ${pj ? `<div class="card"><div class="card-title">Resumen</div>${_resumenPJ(pj)}</div>` : ''}
+                ${pj ? `<div class="card"><div class="card-title">Resumen</div>${_resumenPJ(pj, proy)}</div>` : ''}
                 ${pj ? _renderSolicitudes(pj) : ''}
                 <div class="card">
                     <div class="card-title">🏆 Ranking Top 5</div>
@@ -272,87 +293,90 @@ function _renderSolicitudes(pj) {
     </div>`;
 }
 
-function _resumenPJ(pj) {
+function _resumenPJ(pj, proy) {
     const g = grupos.find(x => x.nombre_refinado === pj);
     if (!g) return '';
+
+    // Si proy no fue pasado, calcularlo
+    if (!proy) { const { proyectarPJ: _p } = { proyectarPJ }; proy = _p(pj); }
+
     const ptsMapa = {};
-    puntosAll.filter(p=>p.personaje_nombre===pj).forEach(p=>{ ptsMapa[p.tag]=p.cantidad; });
-    const total   = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
-    const listos  = Object.values(ptsMapa).filter(v=>v>=50).length;
+    puntosAll.filter(p => p.personaje_nombre === pj).forEach(p => { ptsMapa[p.tag] = p.cantidad; });
+    const total  = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
+    const listos = Object.values(ptsMapa).filter(v => v >= 50).length;
 
-    // Helper: aplica delta string a base y devuelve { total, label }
-    // label = "(base×mult)" etc, vacío si no hay delta
-    function applyD(base, deltaStr) {
-        const s = String(deltaStr || '0').trim();
-        if (!s || s === '0') return { total: base, label: '' };
-        const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
-        if (multM) { const t = Math.round(base * parseFloat(multM[1])); return { total: t, label: `${base}×${multM[1]}` }; }
-        const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
-        if (divM)  { const t = Math.round(base / parseFloat(divM[1])); return { total: t, label: `${base}÷${divM[1]}` }; }
-        const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-        if (addM)  { const d = parseFloat(addM[1]); const t = Math.round(base + d); return { total: t, label: d >= 0 ? `${base}+${d}` : `${base}${d}` }; }
-        return { total: base, label: '' };
-    }
+    // Stats finales ya calculados (fusion+deltas) vienen del proy
+    const pot = proy?.pot ?? (g.pot||0);
+    const agi = proy?.agi ?? (g.agi||0);
+    const ctl = proy?.ctl ?? (g.ctl||0);
 
-    const dPot = applyD(g.pot||0, g.delta_pot);
-    const dAgi = applyD(g.agi||0, g.delta_agi);
-    const dCtl = applyD(g.ctl||0, g.delta_ctl);
-    const pot = dPot.total, agi = dAgi.total, ctl = dCtl.total;
+    // Base para la cadena de anotación: en fusión es el raw fusionado, sino el raw propio
+    const potBase = proy?.pot_chain_base ?? (g.pot||0);
+    const agiBase = proy?.agi_chain_base ?? (g.agi||0);
+    const ctlBase = proy?.ctl_chain_base ?? (g.ctl||0);
 
-    const pac = pot+agi+ctl;
+    const potDeltas = [1,2,3,4,5].map(n => g['delta_pot_'+n]);
+    const agiDeltas = [1,2,3,4,5].map(n => g['delta_agi_'+n]);
+    const ctlDeltas = [1,2,3,4,5].map(n => g['delta_ctl_'+n]);
+
+    const pac = pot + agi + ctl;
     const tierData = (() => {
-        if (pac>=100) return { tier:4, label:'TIER 4', color:'#f39c12' };
-        if (pac>=80)  return { tier:3, label:'TIER 3', color:'#8e44ad' };
-        if (pac>=60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
+        if (pac >= 100) return { tier:4, label:'TIER 4', color:'#f39c12' };
+        if (pac >= 80)  return { tier:3, label:'TIER 3', color:'#8e44ad' };
+        if (pac >= 60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
         return              { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
 
-    const dCambios = applyD(Math.floor(agi/4), g.delta_cambios);
-    const bonoPV   = [5,10,15,20][tierData.tier-1] || 5;
-    const pvMaxBase = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV;
-    const dPvMax   = applyD(pvMaxBase, g.delta_pv);
-    const pvMax    = dPvMax.total;
-
-    // PV Actual: también puede tener su propio delta
-    const pvActualBase = g.pv_actual ?? pvMax;
-    const dPvActual    = applyD(pvActualBase, g.delta_pv_actual);
-    const pvActual     = dPvActual.total;
-
-    // Helper HTML: muestra total + anotación en rojo pequeño si hay delta
-    const sv = (val, label) => label
-        ? `${val} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${label})</span>`
-        : `${val}`;
+    const bonoPV = [5,10,15,20][tierData.tier-1] || 5;
+    const pvMaxPuro = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoPV;
+    const pvMax     = aplicarDeltas(pvMaxPuro,  g.delta_pv_1, g.delta_pv_2, g.delta_pv_3, g.delta_pv_4, g.delta_pv_5);
+    const pvActBase = (g.pv_actual !== null && g.pv_actual !== undefined) ? g.pv_actual : pvMax;
+    const pvActual  = aplicarDeltas(pvActBase, g.delta_pv_actual_1, g.delta_pv_actual_2, g.delta_pv_actual_3, g.delta_pv_actual_4, g.delta_pv_actual_5);
+    const cambios   = aplicarDeltas(Math.floor(agi/4), g.delta_cambios_1, g.delta_cambios_2, g.delta_cambios_3, g.delta_cambios_4, g.delta_cambios_5);
 
     const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'profile.png';
     const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'icon.png';
     const noImg      = STORAGE_URL + '/imginterfaz/no_encontrado.png';
-    
+
+    const fusionBanner = proy?.esFusion ? `
+        <div style="background:rgba(139,47,201,0.08);border:1px solid #8b2fc9;border-radius:6px;padding:5px 10px;
+            font-size:0.75em;color:#6c3483;font-weight:700;margin-bottom:8px;text-align:center;">
+            ⚡ Fusión con ${proy.compañero} (×${proy.rendimiento > 100 ? '1.5' : '1'})
+        </div>` : '';
+
     return `
     <div style="display:flex;flex-direction:column;gap:0;">
         <div style="border-radius:8px;overflow:hidden;background:#f8f9fa;margin-bottom:12px;max-height:320px;">
             <img src="${profileUrl}" onerror="this.src='${iconUrl}';this.onerror=()=>this.src='${noImg}'"
                 style="width:100%;display:block;object-fit:cover;object-position:top;">
         </div>
+        ${fusionBanner}
         <div style="text-align:center;font-family:'Cinzel',serif;font-size:1em;font-weight:800;
             color:${tierData.color};letter-spacing:1px;margin-bottom:10px;">${tierData.label}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
             <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
-                <div style="font-size:1.1em;font-weight:800;color:#d68910;">${sv(pot, dPot.label)}</div>
+                <div style="font-size:1em;font-weight:800;color:#d68910;">${_fmtDChain(potBase, pot, potDeltas)}</div>
             </div>
             <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
-                <div style="font-size:1.1em;font-weight:800;color:#2980b9;">${sv(agi, dAgi.label)}</div>
+                <div style="font-size:1em;font-weight:800;color:#2980b9;">${_fmtDChain(agiBase, agi, agiDeltas)}</div>
             </div>
             <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                <div style="font-size:1.1em;font-weight:800;color:#27ae60;">${sv(ctl, dCtl.label)}</div>
+                <div style="font-size:1em;font-weight:800;color:#27ae60;">${_fmtDChain(ctlBase, ctl, ctlDeltas)}</div>
             </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:0.82em;border-top:1px solid var(--gray-200);padding-top:8px;">
             <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${sv(pvActual, dPvActual.label)} / ${sv(pvMax, dPvMax.label)}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${sv(dCambios.total, dCambios.label)}</b></div>
+            <div style="display:flex;justify-content:space-between;">
+                <span>PV</span>
+                <b>${_fmtDChain(pvActBase, pvActual, [1,2,3,4,5].map(n=>g['delta_pv_actual_'+n]))} / ${_fmtDChain(pvMaxPuro, pvMax, [1,2,3,4,5].map(n=>g['delta_pv_'+n]))}</b>
+            </div>
+            <div style="display:flex;justify-content:space-between;">
+                <span>Cambios/t</span>
+                <b>${_fmtDChain(Math.floor(agi/4), cambios, [1,2,3,4,5].map(n=>g['delta_cambios_'+n]))}</b>
+            </div>
             <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:5px;margin-top:2px;">
                 <span>PT totales</span><b style="color:var(--green);">${total}</b>
             </div>
@@ -360,7 +384,7 @@ function _resumenPJ(pj) {
                 <span>Tags ≥50 PT</span><b style="color:var(--orange);">${listos}</b>
             </div>
             <div style="display:flex;justify-content:space-between;">
-                <span>Tags totales</span><b>${(g.tags||[]).length}</b>
+                <span>Tags totales</span><b>${(proy?.tags || g.tags||[]).length}</b>
             </div>
         </div>
     </div>`;
