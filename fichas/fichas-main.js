@@ -84,27 +84,28 @@ function sincronizarVista() {
     }
 }
 
-function exponerGlobales() {
-    window.abrirFicha = async (nombreGrupo) => {
-        const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
-        if (!g) return;
-        // Pre-cargar equipación en cache de bnh-pac para que fichas-ui la lea sync
-        const medEq = await getEquipacionPJ(nombreGrupo, { forzar: true });
-        window._equipCache = window._equipCache || {};
-        window._equipCache[nombreGrupo] = medEq;
-        fichasUI.vistaActual  = 'detalle';
-        fichasUI.seleccionado = nombreGrupo;
-        sincronizarVista();
-        window.scrollTo(0, 0);
-    };
+window._equipCache = window._equipCache || {};
 
-await Promise.all(
-    gruposGlobal.map(async g => {
-        const medEq = await getEquipacionPJ(g.nombre_refinado);
-        window._equipCache[g.nombre_refinado] = medEq;
-    })
-);
-    
+function exponerGlobales() {
+window.abrirFicha = async (nombreGrupo) => {
+    const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+    if (!g) return;
+
+    // ✅ Cargar SIEMPRE equipación (no depender de fusión)
+    let medEq = window._equipCache[nombreGrupo];
+
+    if (!medEq) {
+        medEq = await getEquipacionPJ(nombreGrupo, { forzar: true });
+        window._equipCache[nombreGrupo] = medEq;
+    }
+
+    fichasUI.vistaActual  = 'detalle';
+    fichasUI.seleccionado = nombreGrupo;
+
+    sincronizarVista();
+    window.scrollTo(0, 0);
+};
+
     window.volverCatalogo = () => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
