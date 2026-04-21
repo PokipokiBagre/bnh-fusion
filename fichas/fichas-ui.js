@@ -327,60 +327,51 @@ export function renderCatalogo(postersDelHilo) {
     }).join('');
 }
 
-export function renderDetalle(nombreGrupo) {
+export function renderDetalle(grupoCrudo, htmlLore) {
+    const wrap = $('fichas-detalle-wrap');
     const cont = $('fichas-contenido');
-    if (!cont) return;
+    if (!wrap || !cont || !grupoCrudo) return;
 
-    const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
-    if (!g) { window.volverCatalogo(); return; }
+    // 1. PROYECCIÓN: Pasamos el grupo crudo por el motor matemático
+    const grupo = proyectarFicha(grupoCrudo);
+    if (!grupo) return;
 
-    // --- 1. APLICAR EL LENTE DE FUSIÓN ---
-    // proyectarFicha aplica delta_pot/agi/ctl internamente
-    const proy = proyectarFicha(g, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
-    
-    // Stats proyectadas (ya con deltas aplicados)
-    const pot = proy.pot;
-    const agi = proy.agi;
-    const ctl = proy.ctl;
-    
-    // PT y Tags proyectados
-    const ptG = proy.ptsMapa;
-    const tagsProy = proy.tags;
-    const baseTagsNorm = (g.tags || []).map(x => (x.startsWith('#') ? x : '#' + x).toLowerCase());
+    // 2. Extraemos los valores ya calculados con sus deltas
+    const pot = grupo.pot_total;
+    const agi = grupo.agi_total;
+    const ctl = grupo.ctl_total;
+    const pvMax = grupo.pv_total;
+    const pvActual = grupo.pv_actual_total;
+    const cambios = grupo.cambios_total;
+    const pac = grupo.pac_total;
 
     const { tier } = calcTier(pot, agi, ctl);
-    const pvMaxBase = calcPVMax(pot, agi, ctl);
-    const pvMax     = aplicarDelta(pvMaxBase, g.delta_pv);
-    const pac       = pot + agi + ctl;
-    const cambiosBase = calcCambios(agi);
-    const cambios   = aplicarDelta(cambiosBase, g.delta_cambios);
-    const tc        = colorTier(tier);
-    const fusion    = getFusionDe(nombreGrupo);
-    const safeN     = nombreGrupo.replace(/'/g,"\\'");
-
-    // PV Actual con su propio delta
-    const pvActualBase = g.pv_actual ?? pvMax;
-    const pvActual     = aplicarDelta(pvActualBase, g.delta_pv_actual);
-
-    const misAliases = aliasesGlobal.filter(a=>a.refinado_id===g.id).map(a=>a.nombre);
+    const tierData = colorTier(tier);
     
-    // Stats actuales (usando la base o el proyectado)
-    const potA = g.pot_actual ?? pot;
-    const agiA = g.agi_actual ?? agi;
-    const _cachedEquip = window._equipCache?.[nombreGrupo] || [];
-    const ctlEquip = aplicarDelta(calcCTLUsado(_cachedEquip), g.delta_ctl_usado);
-    const ctlA = ctlEquip;
+    const enFusion = estaEnFusion(grupo.nombre_refinado);
+    const safeN = grupo.nombre_refinado.replace(/'/g,"\\'");
 
-    function statDisplay(total, actual, baseVal) {
-        const esBuffeado = proy.esFusion && total !== baseVal;
-        const icon = esBuffeado ? '<span style="color:#8e44ad;font-size:0.85em;margin-right:2px;" title="Modificado por Fusión">⚡</span>' : '';
-        const clr = esBuffeado ? '#8e44ad' : '';
-        const strTotal = `<span style="color:${clr};font-weight:${esBuffeado?'800':'normal'};">${total}</span>`;
-        return actual === total ? `${icon}${strTotal}` : `${icon}<span style="color:#2980b9;">${actual}</span>/${strTotal}`;
-    }
+    // Si hay un delta en PV Máximo o PV Actual, creamos un tooltip combinado para la UI
+    const hasPvDelta = (grupo.delta_pv && grupo.delta_pv !== '0') || (grupo.delta_pv_actual && grupo.delta_pv_actual !== '0');
+    const pvNotaCombinada = `Máx: ${grupo.delta_pv||0} (${grupo.nota_pv||'-'}) | Act: ${grupo.delta_pv_actual||0} (${grupo.nota_pv_actual||'-'})`;
+    const pvDisplay = `${pvActual} / ${pvMax}`;
 
-    const tagsOrdenados = [...tagsProy].sort((a,b) => (ptG[b]||0) - (ptG[a]||0));
-
+    // (Tu función boxStat interna...)
+    const boxStat = (lbl, base, total, delta, nota) => {
+        const hasDelta = delta && delta !== '0';
+        return `
+        <div style="background:white; border:1px solid var(--gray-200); border-radius:10px; padding:12px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.02); position:relative;">
+            <div style="font-size:0.7em; font-weight:800; color:var(--gray-500); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${lbl}</div>
+            <div style="font-size:1.8em; font-weight:800; color:var(--fp-dark); font-family:'Cinzel',serif; line-height:1;">${total}</div>
+            <div style="margin-top:6px; min-height:16px; display:flex; justify-content:center; align-items:center;">
+                ${hasDelta 
+                    ? `<span style="font-size:0.7em; background:rgba(214,137,16,0.1); color:#b9770e; padding:2px 6px; border-radius:4px; font-weight:700; border:1px solid rgba(214,137,16,0.2);" title="${nota}">${delta}</span>`
+                    : `<span style="font-size:0.65em; color:var(--gray-400);">Base: ${base}</span>`
+                }
+            </div>
+        </div>`;
+    };
+    
     cont.innerHTML = `
     <div class="detalle-layout">
       <div>
