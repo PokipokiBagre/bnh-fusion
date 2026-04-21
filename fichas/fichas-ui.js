@@ -333,44 +333,47 @@ export function renderDetalle(grupoCrudo, htmlLore) {
     const cont = $('fichas-contenido');
     if (!wrap || !cont || !grupoCrudo) return;
 
-    // 1. PROYECCIÓN: Pasamos el grupo crudo por el motor matemático
-    const grupo = proyectarFicha(grupoCrudo);
-    if (!grupo) return;
+    // 1. PROYECCIÓN: Le pasamos todas las variables globales
+    const g = proyectarFicha(grupoCrudo, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
+    if (!g) return;
 
-    // 2. Extraemos los valores ya calculados con sus deltas
-    const pot = grupo.pot_total;
-    const agi = grupo.agi_total;
-    const ctl = grupo.ctl_total;
-    const pvMax = grupo.pv_total;
-    const pvActual = grupo.pv_actual_total;
-    const cambios = grupo.cambios_total;
-    const pac = grupo.pac_total;
+    // Alias requeridos por tu lógica HTML
+    const proy = g; 
+    const nombreGrupo = g.nombre_refinado;
+    const safeN = nombreGrupo.replace(/'/g,"\\'");
+    const fusion = getFusionDe(nombreGrupo);
+
+    // 2. Extraemos los valores ya calculados (Total = Base + Delta)
+    const pot = g.pot_total;
+    const agi = g.agi_total;
+    const ctl = g.ctl_total;
+    const pvMax = g.pv_total;
+    const pvActual = g.pv_actual_total;
+    const cambios = g.cambios_total;
+    const pac = g.pac_total;
 
     const { tier } = calcTier(pot, agi, ctl);
-    const tierData = colorTier(tier);
-    
-    const enFusion = estaEnFusion(grupo.nombre_refinado);
-    const safeN = grupo.nombre_refinado.replace(/'/g,"\\'");
+    const tc = colorTier(tier);
 
-    // Si hay un delta en PV Máximo o PV Actual, creamos un tooltip combinado para la UI
-    const hasPvDelta = (grupo.delta_pv && grupo.delta_pv !== '0') || (grupo.delta_pv_actual && grupo.delta_pv_actual !== '0');
-    const pvNotaCombinada = `Máx: ${grupo.delta_pv||0} (${grupo.nota_pv||'-'}) | Act: ${grupo.delta_pv_actual||0} (${grupo.nota_pv_actual||'-'})`;
-    const pvDisplay = `${pvActual} / ${pvMax}`;
+    // 3. Variables base y actuales necesarias para el display de tu tabla
+    const potA = g.pot_actual ?? pot;
+    const agiA = g.agi_actual ?? agi;
+    const ctlA = g.ctl_actual ?? ctl;
+    const pvMaxBase = calcPVMax(grupoCrudo.pot||0, grupoCrudo.agi||0, grupoCrudo.ctl||0);
+    const pvActualBase = (grupoCrudo.pv_actual !== null && grupoCrudo.pv_actual !== undefined) ? grupoCrudo.pv_actual : pvMaxBase;
+    const cambiosBase = Math.floor((grupoCrudo.agi||0)/4);
 
-    // (Tu función boxStat interna...)
-    const boxStat = (lbl, base, total, delta, nota) => {
-        const hasDelta = delta && delta !== '0';
-        return `
-        <div style="background:white; border:1px solid var(--gray-200); border-radius:10px; padding:12px; text-align:center; box-shadow:0 2px 6px rgba(0,0,0,0.02); position:relative;">
-            <div style="font-size:0.7em; font-weight:800; color:var(--gray-500); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">${lbl}</div>
-            <div style="font-size:1.8em; font-weight:800; color:var(--fp-dark); font-family:'Cinzel',serif; line-height:1;">${total}</div>
-            <div style="margin-top:6px; min-height:16px; display:flex; justify-content:center; align-items:center;">
-                ${hasDelta 
-                    ? `<span style="font-size:0.7em; background:rgba(214,137,16,0.1); color:#b9770e; padding:2px 6px; border-radius:4px; font-weight:700; border:1px solid rgba(214,137,16,0.2);" title="${nota}">${delta}</span>`
-                    : `<span style="font-size:0.65em; color:var(--gray-400);">Base: ${base}</span>`
-                }
-            </div>
-        </div>`;
+    // 4. Matrices para Tags, PTs y Aliases requeridas por tu HTML
+    const misAliases = aliasesGlobal.filter(a => a.refinado_id === g.id).map(a => a.nombre);
+    const ptG = g.ptsMapa || ptGlobal[nombreGrupo] || {};
+    const tagsProy = g.tags || [];
+    const tagsOrdenados = [...tagsProy].sort();
+    const baseTagsNorm = (grupoCrudo.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+
+    // Helper original de tu HTML
+    const statDisplay = (totalHTML, actualVal, baseVal) => {
+        if (actualVal === undefined || actualVal === null || String(actualVal) === String(baseVal)) return totalHTML;
+        return `<span style="color:#2980b9;">${actualVal}</span> / ${totalHTML}`;
     };
     
     cont.innerHTML = `
