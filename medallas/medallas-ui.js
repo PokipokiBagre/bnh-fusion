@@ -14,10 +14,14 @@ const _onErr = () => `this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_
 // Helper: muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
 function _fmtDChain(base, total, deltas, prefix = '') {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
-    if (!activos.length || base === total) return `<span style="white-space:nowrap;">${prefix}${total}</span>`;
+    
+    // Si no hay modificadores (deltas), devolvemos solo el número perfectamente centrado
+    if (!activos.length || base === total) {
+        return `<div style="text-align:center; width:100%; white-space:nowrap;">${prefix}${total}</div>`;
+    }
     
     const makeBadge = (text, bg, color, border) => 
-        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 3px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.1;">${text}</span>`;
+        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2; margin:0 1px;">${text}</span>`;
 
     let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
     let acc = base;
@@ -45,7 +49,12 @@ function _fmtDChain(base, total, deltas, prefix = '') {
             else badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
         }
     }
-    return `<span style="white-space:nowrap;">${prefix}${total}</span> <div style="display:flex; justify-content:center; gap:3px; flex-wrap:wrap; margin-top:4px; width:100%;">${badgesHtml}</div>`;
+    
+    // Envolvemos el número y las etiquetas en DIVs separados para forzar el apilamiento y centrado absoluto
+    return `
+        <div style="text-align:center; width:100%; white-space:nowrap;">${prefix}${total}</div>
+        <div style="display:flex; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:4px; width:100%; gap:2px;">${badgesHtml}</div>
+    `;
 }
 
 // Exponer initMarkupTextarea para uso en callbacks
