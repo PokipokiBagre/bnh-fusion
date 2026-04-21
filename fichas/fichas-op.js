@@ -52,12 +52,7 @@ export async function abrirPanelOP(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
 
-    const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
-    const pvDelta = g.pv_max_delta || 0;
-    const pvMax   = calcPVMax(pot, agi, ctl) + pvDelta;
-    const potA    = g.pot_actual ?? pot;
-    const agiA    = g.agi_actual ?? agi;
-    // CTL usado = suma costo_ctl de medallas equipadas desde medallas_inventario
+    // Calculamos CTL usado base (equipación) para mostrarlo
     const medallaEquipadas = await getEquipacionPJ(nombreGrupo, { forzar: true });
     const ctlEquipacion = calcCTLUsado(medallaEquipadas);
 
@@ -68,49 +63,69 @@ export async function abrirPanelOP(nombreGrupo) {
     const html = `
     <div class="op-tabs">${tabs}</div>
 
-    <!-- TAB 0: STATS -->
     <div id="op-p0">
-        <p class="stat-hint">
-            <b>Total</b> = base permanente (determina Tier y PV Máx).<br>
-            <b>Actual</b> = valor en este momento (puede variar en combate).<br>
-            Si Actual = Total, la ficha muestra solo el número. Si difieren, muestra <span style="color:#2980b9;">Actual</span>/Total.
+        <p class="stat-hint" style="line-height:1.4;">
+            <b>Base</b> = Stat nativo (POT, AGI, CTL). PV, Cambios y CTL Usado se calculan solos.<br>
+            <b>Delta (Δ)</b> = Operador matemático (ej: <code>+20</code>, <code>x1.5</code>, <code>/2</code>).<br>
+            <b>Nota</b> = Origen del delta (ej: "Medalla de Fuego").
         </p>
-        <div class="stats-grid">
-            <div class="stat-field"><label style="color:#2980b9;">POT Actual</label>
-                <input id="op-pot-a" type="number" class="actual" value="${potA}"></div>
-            <div class="stat-field"><label>POT Total</label>
-                <input id="op-pot-t" type="number" value="${pot}" oninput="window._opRecalcPV()"></div>
-            <div class="stat-field"><label style="color:#2980b9;">AGI Actual</label>
-                <input id="op-agi-a" type="number" class="actual" value="${agiA}"></div>
-            <div class="stat-field"><label>AGI Total</label>
-                <input id="op-agi-t" type="number" value="${agi}" oninput="window._opRecalcPV()"></div>
-            <div class="stat-field"><label style="color:#2980b9;">CTL Usado <span style="font-size:0.72em;color:#aaa;font-weight:400;">(equipación)</span></label>
-                <input id="op-ctl-a" type="number" class="actual" value="${ctlEquipacion}" readonly
-                    style="background:var(--gray-100);color:var(--gray-500);cursor:not-allowed;"
-                    title="Suma del costo CTL de las medallas equipadas"></div>
-            <div class="stat-field"><label>CTL Total</label>
-                <input id="op-ctl-t" type="number" value="${ctl}" oninput="window._opRecalcPV()"></div>
-            <div class="stat-field"><label style="color:#2980b9;">PV Actual</label>
-                <input id="op-pv-a" type="number" class="actual" value="${g.pv_actual??pvMax}"></div>
-            <div class="stat-field">
-                <label>PV Máx <span id="op-pvm" style="color:var(--green);">(${pvMax})</span>
-                    <span style="font-size:0.7em;color:#aaa;margin-left:4px;">(calculado)</span></label>
-                <input id="op-pv-max" type="number" value="${pvMax}" readonly
-                    style="background:var(--gray-100);color:var(--gray-500);cursor:not-allowed;">
-                <label style="margin-top:4px;font-size:0.72em;color:var(--gray-600);">Delta PV Máx</label>
-                <input id="op-pv-delta" type="number" value="${g.pv_max_delta||0}"
-                    oninput="window._opRecalcPV()"
-                    placeholder="0"
-                    style="margin-top:2px;"
-                    title="Bonus/malus al PV Máx por medallas u otras fuentes">
+        
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            ${['pot', 'agi', 'ctl'].map(s => `
+            <div style="display:flex; gap:6px; align-items:center; background:var(--gray-50); padding:6px; border-radius:6px; border:1px solid var(--gray-200);">
+                <div style="width:35px; font-weight:800; color:var(--fp-dark); text-transform:uppercase;">${s}</div>
+                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
+                    <span style="font-size:0.65em; color:var(--gray-500);">Base</span>
+                    <input id="op-${s}-base" type="number" value="${g[s]||0}" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
+                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
+                    <input id="op-${s}-delta" type="text" value="${g['delta_'+s]||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
+                    <input id="op-${s}-nota" type="text" value="${g['nota_'+s]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                </div>
+            </div>
+            `).join('')}
+
+            <div style="height:1px; background:var(--gray-200); margin:4px 0;"></div>
+
+            ${[
+                { id: 'pv', lbl: 'PV Máx', base: 'Auto' },
+                { id: 'cambios', lbl: 'Camb/T', base: 'Auto' },
+                { id: 'ctl_usado', lbl: 'CTL Usd', base: ctlEquipacion }
+            ].map(s => `
+            <div style="display:flex; gap:6px; align-items:center; background:var(--gray-50); padding:6px; border-radius:6px; border:1px solid var(--gray-200);">
+                <div style="width:45px; font-size:0.75em; font-weight:800; color:var(--gray-600); line-height:1;">${s.lbl}</div>
+                <div style="display:flex; flex-direction:column; gap:2px; width:50px;">
+                    <span style="font-size:0.65em; color:var(--gray-500);">Base</span>
+                    <div style="text-align:center; background:#e9ecef; border-radius:4px; padding:2px; font-size:0.85em; color:#666; height:21px; display:flex; align-items:center; justify-content:center; border:1px solid transparent;">${s.base}</div>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
+                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
+                    <input id="op-${s.id}-delta" type="text" value="${g['delta_'+s.id]||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
+                    <input id="op-${s.id}-nota" type="text" value="${g['nota_'+s.id]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                </div>
+            </div>
+            `).join('')}
+
+            <div style="height:1px; background:var(--gray-200); margin:4px 0;"></div>
+
+            <div style="display:flex; gap:6px; align-items:center; background:rgba(46, 204, 113, 0.1); padding:8px; border-radius:6px; border:1px solid rgba(46, 204, 113, 0.3);">
+                <div style="font-weight:800; color:var(--green-dark);">Salud (PV Actual):</div>
+                <input id="op-pv-actual" type="number" value="${g.pv_actual ?? ''}" placeholder="Lleno" style="width:70px; text-align:center; border:1px solid var(--green); border-radius:4px; padding:4px; font-weight:bold; color:var(--green-dark);">
+                <div style="font-size:0.7em; color:var(--green-dark); margin-left:auto;">(Vacío = Max PV)</div>
             </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <button class="op-btn op-btn-green" onclick="window._opGuardarStats('${g.id}')">💾 Guardar</button>
-            <button class="op-btn op-btn-blue"  onclick="window._opRestaurarPV('${g.id}')">↺ Restaurar PV</button>
-            <button class="op-btn op-btn-gray"  onclick="window._opIgualarActualTotal('${g.id}')">= Igualar Actual a Total</button>
+
+        <div style="display:flex; gap:8px; margin-top:14px; align-items:center;">
+            <button class="op-btn op-btn-green" onclick="window._opGuardarStats('${g.nombre_refinado.replace(/'/g,"\\'")}')">💾 Guardar Stats</button>
+            <div id="msg-stats" class="op-msg"></div>
         </div>
-        <div id="msg-stats" class="op-msg"></div>
     </div>
 
     <!-- TAB 1: TAGS & PT -->
