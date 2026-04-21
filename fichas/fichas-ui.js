@@ -502,7 +502,7 @@ ${fusion?(()=>{
         style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:white; padding:2px 8px; font-size:0.8em; cursor:pointer; border-radius:4px; transition:0.2s;"
         onmouseover="this.style.background='rgba(255,255,255,0.25)'"
         onmouseout="this.style.background='rgba(255,255,255,0.15)'"
-        onclick="window._fichasCopiarTagsPT('${_esc(grupo.nombre_refinado)}')">
+        onclick="window._fichasCopiarTagsPT('${safeN}')">
         📋 Copiar
     </button>
 </div>
