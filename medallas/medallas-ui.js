@@ -629,19 +629,19 @@ export function renderPersonaje() {
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
                     <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">POT</div>
-                        <div style="font-size:0.95em;font-weight:800;color:#d68910;text-align:center;line-height:1;width:100%;">
+                        <div style="font-size:0.95em;font-weight:800;color:#d68910;display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
                             ${_fmtDChain(proy.pot_chain_base, pot, [1,2,3,4,5].map(n=>gEq?.['delta_pot_'+n]), proy.esFusion ? '⚡ ' : '')}
                         </div>
                     </div>
                     <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">AGI</div>
-                        <div style="font-size:0.95em;font-weight:800;color:#2980b9;text-align:center;line-height:1;width:100%;">
+                        <div style="font-size:0.95em;font-weight:800;color:#2980b9;display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
                             ${_fmtDChain(proy.agi_chain_base, agi, [1,2,3,4,5].map(n=>gEq?.['delta_agi_'+n]), proy.esFusion ? '⚡ ' : '')}
                         </div>
                     </div>
                     <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">CTL</div>
-                        <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};text-align:center;line-height:1;width:100%;">
+                        <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
                             ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl + ctlUsado + ' / ')}
                         </div>
                     </div>
