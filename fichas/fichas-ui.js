@@ -497,12 +497,12 @@ ${fusion?(()=>{
         ${Object.keys(ptG).length?`
         <div class="wiki-section">
 <div class="wiki-section-header" style="background:#1e5631; display:flex; justify-content:space-between; align-items:center;">
-    <span>📈 Progresión — Puntos de Tag</span>
+    <span>Progresión — Puntos de Tag</span>
     <button class="btn btn-sm" 
         style="background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.3); color:white; padding:2px 8px; font-size:0.8em; cursor:pointer; border-radius:4px; transition:0.2s;"
         onmouseover="this.style.background='rgba(255,255,255,0.25)'"
         onmouseout="this.style.background='rgba(255,255,255,0.15)'"
-        onclick="window._fichasCopiarTagsPT('${safeN}')">
+        onclick="window._fichasCopiarTagsPT('${encodeURIComponent(JSON.stringify(ptG))}')">
         📋 Copiar
     </button>
 </div>
@@ -786,35 +786,37 @@ export function renderUploadPanel(nombreGrupo) {
 }
 
 // ── Función para copiar Tags y PT en vista Detalle ──
-window._fichasCopiarTagsPT = (nombreRefinado) => {
-    const proy = proyectarFicha(nombreRefinado);
-    if (!proy) return;
+window._fichasCopiarTagsPT = (encodedData) => {
+    try {
+        // Descodificamos los puntos que ya estaban listos en la pantalla
+        const ptG = JSON.parse(decodeURIComponent(encodedData));
+        
+        // Formateamos asegurando el # y extrayendo los puntos
+        const data = Object.entries(ptG).map(([tag, pts]) => ({
+            tag: tag.startsWith('#') ? tag : '#' + tag,
+            pts: Number(pts)
+        }));
 
-    // Mapear tags asegurando el '#' y buscando sus PT exactos
-    const data = proy.tags.map(t => {
-        const tN = t.startsWith('#') ? t : '#' + t;
-        const pts = proy.ptsMapa[tN] || proy.ptsMapa[tN.slice(1)] || 0;
-        return { tag: tN, pts: pts };
-    });
+        // Ordenar de mayor a menor cantidad de PT
+        data.sort((a, b) => b.pts - a.pts);
 
-    // Ordenar de mayor a menor cantidad de PT
-    data.sort((a, b) => b.pts - a.pts);
+        // Formatear como: #Tag [PT]
+        const texto = data.map(d => `${d.tag} [${d.pts}]`).join('\n');
 
-    // Formatear como: #Tag [PT]
-    const texto = data.map(d => `${d.tag} [${d.pts}]`).join('\n');
-
-    // Copiar al portapapeles y lanzar el toast nativo de fichas
-    navigator.clipboard.writeText(texto).then(() => {
-        const toastEl = document.getElementById('fichas-toast');
-        if (toastEl) {
-            toastEl.textContent = '✅ Tags copiados al portapapeles';
-            toastEl.className = 'toast-ok';
-            setTimeout(() => toastEl.className = '', 3000);
-        }
-    }).catch(err => console.error('Error al copiar:', err));
+        // Copiar al portapapeles
+        navigator.clipboard.writeText(texto).then(() => {
+            const toastEl = document.getElementById('fichas-toast');
+            if (toastEl) {
+                toastEl.textContent = '✅ Tags copiados al portapapeles';
+                toastEl.className = 'toast-ok';
+                toastEl.style.display = 'block';
+                setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 3000);
+            } else {
+                alert('✅ Tags copiados al portapapeles');
+            }
+        }).catch(err => console.error('Error al copiar:', err));
+        
+    } catch (e) {
+        console.error('Error procesando datos para copiar:', e);
+    }
 };
-
-export function cerrarUploadPanel() {
-    const panel = document.getElementById('fichas-upload-panel');
-    if (panel) { panel.style.display = 'none'; panel.dataset.grupo = ''; }
-}
