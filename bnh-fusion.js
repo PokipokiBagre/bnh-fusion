@@ -76,9 +76,13 @@ export function renderFusionBadge(nombrePJ, storageUrl, norm) {
     const imgB = `${storageUrl}/imgpersonajes/${norm(compañero)}icon.png`;
     const fallback = `${storageUrl}/imginterfaz/no_encontrado.png`;
 
-return `
-        <div class="fusion-badge" title="En fusión con ${compañero}" style="padding-left: 2px;">
-            <div style="position:relative; display:inline-block; width:28px; height:28px; margin-right: 2px;">
+    return `
+        <div title="En fusión con ${compañero}" style="
+            display: inline-flex; align-items: center; 
+            background: #f4ecf8; border: 1.5px solid #9b59b6; 
+            color: #6c3483; font-weight: 800; font-size: 0.75em; 
+            padding: 2px 8px 2px 2px; border-radius: 20px; gap: 4px; letter-spacing: 0.5px;">
+            <div style="position:relative; display:inline-block; width:34px; height:24px;">
                 <img src="${imgA}" onerror="this.src='${fallback}'"
                     style="width:24px; height:24px; border-radius:50%; border:1.5px solid #9b59b6;
                            position:absolute; left:0; top:0; object-fit:cover; z-index:2; background:#fff;">
