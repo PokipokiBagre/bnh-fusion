@@ -12,12 +12,12 @@ const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const _onErr = () => `this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
 
 // Helper: muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
-function _fmtDChain(base, total, deltas) {
+function _fmtDChain(base, total, deltas, prefix = '') {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
-    if (!activos.length || base === total) return String(total);
+    if (!activos.length || base === total) return `<span style="white-space:nowrap;">${prefix}${total}</span>`;
     
     const makeBadge = (text, bg, color, border) => 
-        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2;">${text}</span>`;
+        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 3px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.1;">${text}</span>`;
 
     let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
     let acc = base;
@@ -45,7 +45,7 @@ function _fmtDChain(base, total, deltas) {
             else badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
         }
     }
-    return `${total} <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; vertical-align:middle; flex-wrap:wrap; margin-top:-2px;">${badgesHtml}</span>`;
+    return `<span style="white-space:nowrap;">${prefix}${total}</span> <div style="display:flex; justify-content:center; gap:3px; flex-wrap:wrap; margin-top:4px; width:100%;">${badgesHtml}</div>`;
 }
 
 // Exponer initMarkupTextarea para uso en callbacks
@@ -621,24 +621,30 @@ export function renderPersonaje() {
                     style="width:100%;display:block;object-fit:cover;object-position:top;">
             </div>
             <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
-                <div style="display:flex; justify-content:center; align-items:center; gap:8px;">
+                <div style="display:flex; justify-content:center; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
                     <div style="text-align:center;font-family:'Cinzel',serif;font-size:0.9em;font-weight:800;
                         color:${tierData.color};letter-spacing:1px;">${tierData.label}</div>
                     ${badgeFusion}
                 </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
-            <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:5px;text-align:center;">
-                <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
-                <div style="font-size:1em;font-weight:800;color:#d68910;">${proy.esFusion ? '⚡' : ''}${_fmtDChain(proy.pot_chain_base, pot, [1,2,3,4,5].map(n=>gEq?.['delta_pot_'+n]))}</div>
-            </div>
-            <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:5px;text-align:center;">
-                <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
-                <div style="font-size:1em;font-weight:800;color:#2980b9;">${proy.esFusion ? '⚡' : ''}${_fmtDChain(proy.agi_chain_base, agi, [1,2,3,4,5].map(n=>gEq?.['delta_agi_'+n]))}</div>
-            </div>
-            <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:5px;text-align:center;">
-                <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                <div style="font-size:1em;font-weight:800;color:${colorCtlTxt};" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">${iconCtl}${ctlUsado} / ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]))}</div>
-            </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
+                    <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">POT</div>
+                        <div style="font-size:0.95em;font-weight:800;color:#d68910;text-align:center;line-height:1;width:100%;">
+                            ${_fmtDChain(proy.pot_chain_base, pot, [1,2,3,4,5].map(n=>gEq?.['delta_pot_'+n]), proy.esFusion ? '⚡ ' : '')}
+                        </div>
+                    </div>
+                    <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">AGI</div>
+                        <div style="font-size:0.95em;font-weight:800;color:#2980b9;text-align:center;line-height:1;width:100%;">
+                            ${_fmtDChain(proy.agi_chain_base, agi, [1,2,3,4,5].map(n=>gEq?.['delta_agi_'+n]), proy.esFusion ? '⚡ ' : '')}
+                        </div>
+                    </div>
+                    <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
+                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">CTL</div>
+                        <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};text-align:center;line-height:1;width:100%;">
+                            ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl + ctlUsado + ' / ')}
+                        </div>
+                    </div>
                 </div>
                 <div style="height:5px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
                     <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
