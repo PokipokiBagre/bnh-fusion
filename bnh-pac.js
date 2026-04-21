@@ -1,7 +1,46 @@
 // ============================================================
-// bnh-pac.js — Módulo Compartido de Lógica BNH v4
-// Importar desde cualquier página: import { calcPVMax, ... } from '../bnh-pac.js';
+// bnh-pac.js — Módulo Compartido de Lógica BNH v4.1 (Base+Delta)
+// Importar desde cualquier página: import { calcPVMax, proyectarStats... } from '../bnh-pac.js';
 // ============================================================
+
+// ── NUEVO: Motor de parseo de Deltas ──────────────────────────
+export function aplicarDelta(base, deltaStr) {
+    const valorBase = Number(base) || 0;
+    const ds = String(deltaStr || '0').trim().toLowerCase();
+    if (ds === '0' || ds === '') return valorBase;
+
+    const op = ds.charAt(0);
+    const num = Number(ds.slice(1).replace(',', '.')) || 0;
+
+    switch (op) {
+        case '+': return valorBase + num;
+        case '-': return valorBase - num;
+        case 'x':
+        case '*': return valorBase * num;
+        case '/': return num !== 0 ? valorBase / num : valorBase;
+        default: 
+            return !isNaN(Number(ds)) ? valorBase + Number(ds) : valorBase;
+    }
+}
+
+// ── NUEVO: Función Maestra de Proyección ──────────────────────
+// Convierte un personaje "crudo" (con base y deltas) en uno con totales
+export function proyectarStats(p) {
+    if (!p) return null;
+    const potT = aplicarDelta(p.pot || 0, p.delta_pot);
+    const agiT = aplicarDelta(p.agi || 0, p.delta_agi);
+    const ctlT = aplicarDelta(p.ctl || 0, p.delta_ctl);
+    
+    return {
+        ...p,
+        pot_total: potT,
+        agi_total: agiT,
+        ctl_total: ctlT,
+        pv_total: calcPVMax(potT, agiT, ctlT, p.delta_pv),
+        cambios_total: calcCambios(agiT, p.delta_cambios),
+        pac_total: potT + agiT + ctlT
+    };
+}
 
 // ── Cálculo de Tier según PAC ─────────────────────────────────
 export function calcTier(pot, agi, ctl) {
@@ -12,55 +51,50 @@ export function calcTier(pot, agi, ctl) {
     return              { tier: 1, bono: 5,  label: 'TIER 1' };
 }
 
-// ── Cálculo de PV Máximo ──────────────────────────────────────
-export function calcPVMax(pot, agi, ctl) {
-    const { bono } = calcTier(pot, agi, ctl);
-    return Math.floor(pot / 4) + Math.floor(agi / 4) + Math.floor(ctl / 4) + bono;
+// ── Cálculo de PV Máximo (MODIFICADO: Soporta Delta) ──────────
+export function calcPVMax(potTotal, agiTotal, ctlTotal, deltaPV = '0') {
+    const { bono } = calcTier(potTotal, agiTotal, ctlTotal);
+    const basePV = Math.floor(potTotal / 4) + Math.floor(agiTotal / 4) + Math.floor(ctlTotal / 4) + bono;
+    return Math.floor(aplicarDelta(basePV, deltaPV));
 }
 
-// ── Cambios por turno (AGI) ───────────────────────────────────
-export function calcCambios(agi) {
-    return Math.floor(agi / 4);
+// ── Cambios por turno (MODIFICADO: Soporta Delta) ─────────────
+export function calcCambios(agiTotal, deltaCambios = '0') {
+    const baseCambios = Math.floor(agiTotal / 4);
+    return Math.floor(aplicarDelta(baseCambios, deltaCambios));
 }
 
 // ── Slots activos según tirada 1d100 ─────────────────────────
-// totalSlots = número total de medallas equipadas (suma de costos <= CTL)
 export function calcSlotsActivos(tirada, totalSlots) {
     if (totalSlots === 0 || tirada === 0) return 0;
     const activos = Math.floor((tirada / 100) * totalSlots);
-    return Math.max(1, activos); // mínimo 1 si tirada > 0 y hay medallas
+    return Math.max(1, activos); 
 }
 
-// ── CTL usado por las medallas equipadas ─────────────────────
+// ── CTL usado por las medallas equipadas (Base Pura) ─────────
 export function calcCTLUsado(medallas) {
     return medallas.reduce((acc, m) => acc + (m.costo_ctl || 0), 0);
 }
 
 // ── Verifica si una configuración de medallas es válida ───────
-export function esConfigValida(medallas, ctl) {
-    return calcCTLUsado(medallas) <= ctl;
+export function esConfigValida(medallas, ctlTotal) {
+    return calcCTLUsado(medallas) <= ctlTotal;
 }
 
 // ── Tags que NO tiene el personaje A pero SÍ el personaje B ──
-// Regla de interacción: se otorgan PT de los tags del compañero
-// que el propio personaje NO posee (Contraste)
 export function tagsDeContraste(tagsPropio, tagsCompanero) {
     const propioSet = new Set(tagsPropio.map(t => t.toLowerCase()));
     return tagsCompanero.filter(t => !propioSet.has(t.toLowerCase()));
 }
 
 // ── Genera las transacciones de PT para una interacción ───────
-// Devuelve array de { tag, delta, motivo }
-// tipo: 'interaccion' (+1 PT por tag de contraste) | 'fusion' (+5 PT por tag de contraste)
 export function calcPTInteraccion(tagsPropio, tagsCompanero, tipo = 'interaccion') {
     const contraste = tagsDeContraste(tagsPropio, tagsCompanero);
     if (contraste.length === 0) return [];
     const delta = tipo === 'fusion' ? 5 : 1;
-    // Solo 1 tag aleatorio en interacción normal; todos en fusión
     if (tipo === 'fusion') {
         return contraste.map(tag => ({ tag, delta, motivo: 'fusion' }));
     }
-    // Interacción normal: 1 PT a 1 tag aleatorio de los de contraste
     const tagElegido = contraste[Math.floor(Math.random() * contraste.length)];
     return [{ tag: tagElegido, delta: 1, motivo: 'interaccion' }];
 }
@@ -82,23 +116,23 @@ export function calcDeltaGasto(tipoCanje) {
     return -(COSTOS_CANJE[tipoCanje] ?? 0);
 }
 
-// ── Resumen de un personaje (objeto compacto para UI) ─────────
+// ── Resumen de un personaje (MODIFICADO: Usa proyectarStats) ──
 export function resumenPJ(p) {
-    const pac   = (p.pot || 0) + (p.agi || 0) + (p.ctl || 0);
-    const tier  = calcTier(p.pot || 0, p.agi || 0, p.ctl || 0);
-    const pvMax = calcPVMax(p.pot || 0, p.agi || 0, p.ctl || 0);
+    const pt = proyectarStats(p) || p; // Proyectamos para usar los totales
+    const tier  = calcTier(pt.pot_total, pt.agi_total, pt.ctl_total);
+    
     return {
-        nombre:   p.nombre,
-        pot:      p.pot || 0,
-        agi:      p.agi || 0,
-        ctl:      p.ctl || 0,
-        pac,
+        nombre:   pt.nombre_refinado || pt.nombre,
+        pot:      pt.pot_total,
+        agi:      pt.agi_total,
+        ctl:      pt.ctl_total,
+        pac:      pt.pac_total,
         tier:     tier.tier,
         tierLabel: tier.label,
-        pvMax,
-        pvActual: p.pv_actual || 0,
-        tags:     p.tags || [],
-        cambios:  calcCambios(p.agi || 0)
+        pvMax:    pt.pv_total,
+        pvActual: pt.pv_actual || 0,
+        tags:     pt.tags || [],
+        cambios:  pt.cambios_total
     };
 }
 
@@ -114,24 +148,13 @@ export function fmtTag(tag) {
 }
 
 // ── Equipación de personajes (fuente: medallas_inventario) ──────────
-// Cache en memoria para la sesión actual
 const _equipCache = {};
 let _supabaseRef = null;
 
-/**
- * Inyectar la referencia de supabase (llamar una vez al init de cada página).
- * import { setSupabaseRef } from '../bnh-pac.js';
- * setSupabaseRef(supabase);
- */
 export function setSupabaseRef(sb) {
     _supabaseRef = sb;
 }
 
-/**
- * Obtiene las medallas equipadas de un personaje desde medallas_inventario.
- * Devuelve array de objetos medalla: [{ id, nombre, costo_ctl, tipo, ... }]
- * Usa cache por personaje para evitar queries repetidas.
- */
 export async function getEquipacionPJ(nombrePJ, { forzar = false } = {}) {
     if (!_supabaseRef) return [];
     if (!forzar && _equipCache[nombrePJ]) return _equipCache[nombrePJ];
@@ -154,28 +177,19 @@ export async function getEquipacionPJ(nombrePJ, { forzar = false } = {}) {
     }
 }
 
-/**
- * Invalida el cache de equipación de un personaje (llamar tras guardar equipación).
- */
 export function invalidarCacheEquipacion(nombrePJ) {
     if (nombrePJ) delete _equipCache[nombrePJ];
     else Object.keys(_equipCache).forEach(k => delete _equipCache[k]);
 }
 
-/**
- * Calcula el CTL usado por la equipación actual de un personaje.
- * Async: hace query si no está en cache.
- */
-export async function calcCTLUsadoPJ(nombrePJ) {
+// ── CTL Usado y Libre (MODIFICADO: Soporta Delta en CTL Usado) ──
+export async function calcCTLUsadoPJ(nombrePJ, deltaCTLUsado = '0') {
     const medallas = await getEquipacionPJ(nombrePJ);
-    return calcCTLUsado(medallas);
+    const base = calcCTLUsado(medallas);
+    return Math.floor(aplicarDelta(base, deltaCTLUsado));
 }
 
-/**
- * Calcula el CTL libre (disponible) de un personaje.
- * ctlTotal: el stat CTL base del personaje.
- */
-export async function calcCTLLibrePJ(nombrePJ, ctlTotal) {
-    const usado = await calcCTLUsadoPJ(nombrePJ);
-    return Math.max(0, ctlTotal - usado);
+export async function calcCTLLibrePJ(nombrePJ, ctlTotal, deltaCTLUsado = '0') {
+    const usadoTotal = await calcCTLUsadoPJ(nombrePJ, deltaCTLUsado);
+    return Math.max(0, ctlTotal - usadoTotal);
 }
