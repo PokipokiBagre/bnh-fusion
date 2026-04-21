@@ -758,23 +758,36 @@ function _exponerGlobales() {
         }
     };
 
-    window._tagsEliminar = async (tag, count) => {
-        const msg = count > 0
-            ? `¿Eliminar ${tag}? Se quitará de ${count} personaje${count!==1?'s':''} y del catálogo. Esta acción no se puede deshacer.`
-            : `¿Eliminar ${tag} del catálogo?`;
-        if (!confirm(msg)) return;
-        
-        const { deleteTag, cargarTodo } = await import('./tags-data.js');
-        const res = await deleteTag(tag);
-        
-        if (res.ok) {
-            toast(`🗑️ ${tag} eliminado de ${res.afectados} personajes`, 'ok');
-            await cargarTodo(); await _refreshMarkup();
-            renderCatalogo();
-        } else {
-            toast('❌ ' + res.msg, 'error');
-        }
-    };
+window._tagsEliminar = async (tag, count) => {
+    // Primer mensaje (eliminar del catálogo y de los perfiles)
+    const msg1 = count > 0 
+        ? `Se va a eliminar el tag ${tag}. Esta acción quitará el tag de los ${count} personajes que lo tienen equipado. ¿Continuar?`
+        : `¿Seguro que deseas eliminar el tag ${tag}?`;
+    
+    if (!confirm(msg1)) return;
+
+    // ⚡ Segundo mensaje (¿Qué hacemos con los PT?)
+    const borrarPuntos = confirm(`¿Borrar también los PT (puntos) asociados al tag ${tag} de todos los personajes?\n\nSi cancelas, el tag se borrará pero los personajes conservarán sus puntos de forma "huérfana".`);
+
+    // Bloquear botones temporalmente si lo deseas
+    const btn = document.activeElement;
+    if (btn) btn.disabled = true;
+
+    // Ejecutar el borrado pasando la decisión del OP
+    const res = await deleteTag(tag, borrarPuntos); 
+    
+    if (res.ok) {
+        toast('🗑️ Tag eliminado');
+        await cargarTodo();
+        await _refreshMarkup();
+        // Si tienes una función para redibujar, llámala (e.g. renderCatalogo())
+        if (typeof renderCatalogo === 'function') renderCatalogo();
+    } else {
+        toast('❌ ' + res.msg, 'error');
+    }
+    
+    if (btn) btn.disabled = false;
+};
 
     window._tagsDescargar = (orden) => {
         const tagMapa = {};
