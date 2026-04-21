@@ -1,7 +1,9 @@
-// medallas/medallas-data.js (fragmento de cargarTodo actualizado)
+// ============================================================
+// medallas/medallas-data.js
+// ============================================================
 import { supabase } from '../bnh-auth.js';
 import { setMedallas, setGrupos, setPuntosAll, setOpcionesFusion, setBannedTags } from './medallas-state.js';
-import { cargarFusiones } from '../bnh-fusion.js'; // <-- IMPORTANTE
+import { cargarFusiones } from '../bnh-fusion.js'; 
 import { registrarTagEnDB, TAGS_CANONICOS } from '../bnh-tags.js';
 
 export async function cargarTodo() {
@@ -86,4 +88,65 @@ export async function guardarPosicionesGrafo(posiciones) {
         await supabase.from('medallas_catalogo')
             .update({ pos_x: p.pos_x, pos_y: p.pos_y }).eq('id', p.id);
     }
+}
+
+// ============================================================
+// ── FUNCIONES DE GESTIÓN DE INVENTARIO Y CTL ────────────────
+// ============================================================
+
+/**
+ * Guarda el inventario de medallas equipadas.
+ * Recibe un array de IDs que ya han sido filtrados por el Main
+ * para asegurar que NO superen el CTL proyectado.
+ */
+export async function guardarEquipacionDB(pjNombre, idsValidos) {
+    // 1. Borrar la equipación actual de este PJ
+    await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pjNombre);
+    
+    // 2. Insertar los nuevos IDs
+    if (idsValidos && idsValidos.length > 0) {
+        const inserts = idsValidos.map(mId => ({ 
+            personaje_nombre: pjNombre, 
+            medalla_id: mId, 
+            equipada: true 
+        }));
+        
+        const { error } = await supabase.from('medallas_inventario').insert(inserts);
+        if (error) return { ok: false, msg: error.message };
+    }
+    return { ok: true };
+}
+
+/**
+ * Limpia totalmente el inventario de un personaje (Desequipar todo)
+ */
+export async function limpiarEquipacionDB(pjNombre) {
+    const { error } = await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pjNombre);
+    return !error ? { ok: true } : { ok: false, msg: error.message };
+}
+
+/**
+ * Guarda una propuesta de equipación en la base de datos para que el OP la revise.
+ */
+export async function proponerEquipacionDB(pjNombre, idsPropuestos) {
+    // Borramos la propuesta anterior si existiera
+    await supabase.from('medallas_propuestas_equipacion').delete().eq('personaje_nombre', pjNombre);
+    
+    if (idsPropuestos && idsPropuestos.length > 0) {
+        const inserts = idsPropuestos.map(mId => ({ 
+            personaje_nombre: pjNombre, 
+            medalla_id: mId 
+        }));
+        const { error } = await supabase.from('medallas_propuestas_equipacion').insert(inserts);
+        if (error) return { ok: false, msg: error.message };
+    }
+    return { ok: true };
+}
+
+/**
+ * Rechaza o retira una propuesta de equipación existente.
+ */
+export async function rechazarPropuestaEqDB(pjNombre) {
+    const { error } = await supabase.from('medallas_propuestas_equipacion').delete().eq('personaje_nombre', pjNombre);
+    return !error ? { ok: true } : { ok: false, msg: error.message };
 }
