@@ -235,7 +235,7 @@ export async function renameTag(viejoNombre, nuevoNombre) {
     } catch(e) { return { ok: false, msg: e.message }; }
 }
 
-export async function deleteTag(nombre) {
+export async function deleteTag(nombre, borrarPuntos = false) {
     const tagNorm = nombre.startsWith('#') ? nombre : '#' + nombre;
     const tagKey  = tagNorm.slice(1);
     try {
@@ -248,10 +248,13 @@ export async function deleteTag(nombre) {
         }));
         for (const u of updates) await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
         
-        await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
-        await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
-        await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
+        // ⚡ CONDICIONAL: Solo borramos los puntos y el historial si el OP dijo que SÍ en el prompt
+        if (borrarPuntos) {
+            await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
+            await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
+        }
         
-        return { ok: true, afectados: updates.length };
+        await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
+        return { ok: true };
     } catch(e) { return { ok: false, msg: e.message }; }
 }
