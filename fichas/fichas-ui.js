@@ -254,8 +254,9 @@ export function renderCatalogo(postersDelHilo) {
     }
 
     cont.innerHTML = lista.map(grupoCrudo => {
-        // 1. PROYECCIÓN: Toma el grupo crudo de Supabase y le aplica todos los deltas
-        const g = proyectarFicha(grupoCrudo);
+        // 1. PROYECCIÓN: Toma el grupo crudo de Supabase y le aplica todos los deltas y fusiones
+        // ¡OJO! Le pasamos las variables globales para que no se rompa la fusión
+        const g = proyectarFicha(grupoCrudo, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
         
         // 2. Extraer totales calculados (ya no usamos aplicarDelta manualmente aquí)
         const pot      = g.pot_total;
