@@ -1299,21 +1299,28 @@ export function renderEstadisticas() {
 
 window._tagsCopiarTextoTags = () => {
     const tagConteo = {};
-    // Contamos tags de todos los personajes
+    
+    // 1. Inicializar TODOS los tags del catálogo en 0
+    catalogoTags.forEach(ct => {
+        const nombreLimpio = ct.nombre.startsWith('#') ? ct.nombre.slice(1) : ct.nombre;
+        tagConteo[nombreLimpio] = 0;
+    });
+
+    // 2. Sumar los tags que están equipados en los personajes
     grupos.forEach(g => {
         (g.tags || []).forEach(t => {
             const k = t.startsWith('#') ? t.slice(1) : t;
+            // Lo sumamos (por si acaso un personaje tiene un tag que no está en el catálogo)
             tagConteo[k] = (tagConteo[k] || 0) + 1;
         });
     });
 
-    // Formateamos el texto ordenado por cantidad (descendente)
+    // 3. Ordenar: Primero por cantidad (mayor a menor), luego alfabéticamente
     const texto = Object.entries(tagConteo)
-        .sort((a, b) => b[1] - a[1]) 
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) 
         .map(([nombre, conteo]) => `${nombre} (${conteo})`)
         .join('\n');
 
-    // Copiar al portapapeles
     navigator.clipboard.writeText(texto).then(() => {
         toast('✅ Lista de tags copiada');
     }).catch(() => {
