@@ -74,22 +74,19 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
     return { ok: true, grupo: data };
 }
 
-export async function guardarStatsGrupo(grupoId, { pot, agi, ctl, pot_actual, agi_actual, pv_actual, pv_max_delta }) {
-    const pvBase = calcPVSimple(pot, agi, ctl);
-    const delta  = pv_max_delta ?? 0;
-    const pvMax  = pvBase + delta;
-    const payload = {
-        pot, agi, ctl,
-        pot_actual:   pot_actual ?? null,
-        agi_actual:   agi_actual ?? null,
-        // ctl_actual eliminado: se calcula desde la equipación de medallas
-        pv_actual:    Math.min(pv_actual ?? pvMax, pvMax),
-        pv_max_delta: delta,
-    };
-    const { error } = await supabase.from('personajes_refinados').update(payload).eq('id', grupoId);
+// ── Guardar Stats y Deltas ────────────────────────────────────
+export async function guardarStatsGrupo(nombreRefinado, payloadStats) {
+    const { error } = await supabase.from('personajes_refinados')
+        .update(payloadStats)
+        .eq('nombre_refinado', nombreRefinado);
+
     if (error) return { ok: false, msg: error.message };
-    const g = gruposGlobal.find(x => x.id === grupoId);
-    if (g) Object.assign(g, payload);
+
+    // Actualizar en la memoria local al instante
+    const idx = gruposGlobal.findIndex(g => g.nombre_refinado === nombreRefinado);
+    if (idx !== -1) {
+        Object.assign(gruposGlobal[idx], payloadStats);
+    }
     return { ok: true };
 }
 
