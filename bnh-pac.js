@@ -24,11 +24,10 @@ export function calcCambios(agi) {
 }
 
 // ── Slots activos según tirada 1d100 ─────────────────────────
-// totalSlots = número total de medallas equipadas (suma de costos <= CTL)
 export function calcSlotsActivos(tirada, totalSlots) {
     if (totalSlots === 0 || tirada === 0) return 0;
     const activos = Math.floor((tirada / 100) * totalSlots);
-    return Math.max(1, activos); // mínimo 1 si tirada > 0 y hay medallas
+    return Math.max(1, activos); 
 }
 
 // ── CTL usado por las medallas equipadas ─────────────────────
@@ -42,42 +41,34 @@ export function esConfigValida(medallas, ctl) {
 }
 
 // ── Tags que NO tiene el personaje A pero SÍ el personaje B ──
-// Regla de interacción: se otorgan PT de los tags del compañero
-// que el propio personaje NO posee (Contraste)
 export function tagsDeContraste(tagsPropio, tagsCompanero) {
     const propioSet = new Set(tagsPropio.map(t => t.toLowerCase()));
     return tagsCompanero.filter(t => !propioSet.has(t.toLowerCase()));
 }
 
 // ── Genera las transacciones de PT para una interacción ───────
-// Devuelve array de { tag, delta, motivo }
-// tipo: 'interaccion' (+1 PT por tag de contraste) | 'fusion' (+5 PT por tag de contraste)
 export function calcPTInteraccion(tagsPropio, tagsCompanero, tipo = 'interaccion') {
     const contraste = tagsDeContraste(tagsPropio, tagsCompanero);
     if (contraste.length === 0) return [];
     const delta = tipo === 'fusion' ? 5 : 1;
-    // Solo 1 tag aleatorio en interacción normal; todos en fusión
     if (tipo === 'fusion') {
         return contraste.map(tag => ({ tag, delta, motivo: 'fusion' }));
     }
-    // Interacción normal: 1 PT a 1 tag aleatorio de los de contraste
     const tagElegido = contraste[Math.floor(Math.random() * contraste.length)];
     return [{ tag: tagElegido, delta: 1, motivo: 'interaccion' }];
 }
 
-// ── Costos de canje (Regla de Pureza: mismo tag) ─────────────
+// ── Costos de canje ───────────────────────────────────────────
 export const COSTOS_CANJE = {
     stat:     50,   // +1 a POT, AGI o CTL
     medalla:  75,   // codificar medalla nueva
     mutacion: 100   // mutar un tag del personaje
 };
 
-// ── Valida si hay suficientes PT de un tag para un canje ──────
 export function puedeCanjearse(ptDelTag, tipoCanje) {
     return ptDelTag >= (COSTOS_CANJE[tipoCanje] ?? Infinity);
 }
 
-// ── Genera el delta negativo de un gasto ─────────────────────
 export function calcDeltaGasto(tipoCanje) {
     return -(COSTOS_CANJE[tipoCanje] ?? 0);
 }
@@ -102,69 +93,53 @@ export function resumenPJ(p) {
     };
 }
 
-// ── Normaliza un nombre de tag (sin # ni espacios extra) ──────
+// ── Normaliza un nombre de tag ────────────────────────────────
 export function normTag(tag) {
     return tag.trim().toLowerCase().replace(/^#/, '');
 }
 
-// ── Formatea un tag para display con # ───────────────────────
 export function fmtTag(tag) {
     const t = tag.trim();
     return t.startsWith('#') ? t : '#' + t;
 }
 
 // ── Aplica un delta string a un valor base ────────────────────
-// Soporta: "+20" | "-10" | "x1.5" | "*2" | "/2" | "^2" | "^0.5" | "0" | ""
-// Devuelve siempre un número entero redondeado.
 export function aplicarDelta(base, deltaStr) {
     const s = String(deltaStr || '0').trim();
     if (!s || s === '0') return base;
     
-    // Potencia: ^2 ó ^0.5
     const powM = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
     if (powM) return Math.round(Math.pow(base, parseFloat(powM[1])));
     
-    // Multiplicación: x1.5 ó *1.5
     const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
     if (multM) return Math.round(base * parseFloat(multM[1]));
     
-    // División: /2 ó /0.5
     const divM = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
     if (divM) return Math.round(base / parseFloat(divM[1]));
     
-    // Suma/Resta: +20 ó -10 ó simplemente 20
     const addM = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
     if (addM) return Math.round(base + parseFloat(addM[1]));
     
-    // Fallback: ignorar delta inválido
     return base;
 }
 
-// ── Aplica hasta 5 deltas encadenados: (((base Δ1) Δ2) Δ3)… ──
-// Uso: aplicarDeltas(base, d1, d2, d3, d4, d5)
-// Los deltas vacíos o "0" se ignoran sin romper la cadena.
+// ── Aplica hasta 5 deltas encadenados ─────────────────────────
 export function aplicarDeltas(base, ...deltaStrs) {
     return deltaStrs.reduce((acc, d) => aplicarDelta(acc, d), base);
 }
 
-// ── Equipación de personajes (fuente: medallas_inventario) ──────────
-// Cache en memoria para la sesión actual
+// ============================================================
+// ── EQUIPACIÓN Y CONEXIÓN CON SUPABASE ──────────────────────
+// ============================================================
 const _equipCache = {};
 let _supabaseRef = null;
 
-/**
- * Inyectar la referencia de supabase (llamar una vez al init de cada página).
- * import { setSupabaseRef } from '../bnh-pac.js';
- * setSupabaseRef(supabase);
- */
 export function setSupabaseRef(sb) {
     _supabaseRef = sb;
 }
 
 /**
- * Obtiene las medallas equipadas de un personaje desde medallas_inventario.
- * Devuelve array de objetos medalla: [{ id, nombre, costo_ctl, tipo, ... }]
- * Usa cache por personaje para evitar queries repetidas.
+ * Obtiene las medallas equipadas de un personaje.
  */
 export async function getEquipacionPJ(nombrePJ, { forzar = false } = {}) {
     if (!_supabaseRef) return [];
@@ -189,7 +164,7 @@ export async function getEquipacionPJ(nombrePJ, { forzar = false } = {}) {
 }
 
 /**
- * Invalida el cache de equipación de un personaje (llamar tras guardar equipación).
+ * Invalida el cache de equipación de un personaje.
  */
 export function invalidarCacheEquipacion(nombrePJ) {
     if (nombrePJ) delete _equipCache[nombrePJ];
@@ -198,7 +173,6 @@ export function invalidarCacheEquipacion(nombrePJ) {
 
 /**
  * Calcula el CTL usado por la equipación actual de un personaje.
- * Async: hace query si no está en cache.
  */
 export async function calcCTLUsadoPJ(nombrePJ) {
     const medallas = await getEquipacionPJ(nombrePJ);
@@ -207,7 +181,6 @@ export async function calcCTLUsadoPJ(nombrePJ) {
 
 /**
  * Calcula el CTL libre (disponible) de un personaje.
- * ctlTotal: el stat CTL base del personaje.
  */
 export async function calcCTLLibrePJ(nombrePJ, ctlTotal) {
     const usado = await calcCTLUsadoPJ(nombrePJ);
