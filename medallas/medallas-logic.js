@@ -20,7 +20,10 @@ function aplicarDeltas(base, d1, d2, d3, d4, d5) {
 export function getPuntosPJ(nombrePJ) {
     const m = {};
     puntosAll.filter(p => p.personaje_nombre === nombrePJ)
-             .forEach(p => { m[normTag(p.tag)] = p.cantidad; });
+             .forEach(p => { 
+                const tagNorm = p.tag.startsWith('#') ? p.tag.toLowerCase() : '#' + p.tag.toLowerCase();
+                m[tagNorm] = p.cantidad; 
+             });
     return m;
 }
 
@@ -30,29 +33,30 @@ export function proyectarPJ(nombrePJ) {
     if (!g) return null;
 
     const f = getFusionDe(nombrePJ);
-    const ptOriginal = getPuntosPJ(nombrePJ);
+    const ptOriginal = getPuntosPJ(nombrePJ); // Ahora viene normalizado
     const tagsOriginal = g.tags || [];
 
-    // 1. Extraer progresión estructural proveniente de los Puntos de Tag (50 PT = +1 Stat)
+    // 1. Extraer progresión estructural (50 PT = +1 Stat)
+    // Usamos las claves en minúscula que definimos en getPuntosPJ
     const bonoPot = Math.floor((ptOriginal['#stat_pot'] || 0) / 50);
     const bonoAgi = Math.floor((ptOriginal['#stat_agi'] || 0) / 50);
     const bonoCtl = Math.floor((ptOriginal['#stat_ctl'] || 0) / 50);
 
-    // 2. Base Pura = (Estadística de BD) + (Bonos fijos por Tags)
-    const potPura = (g.pot || 0) + bonoPot;
-    const agiPura = (g.agi || 0) + bonoAgi;
-    const ctlPura = (g.ctl || 0) + bonoCtl;
+    // 2. Base Real = Base de BD + Bonos de PT
+    const potBaseReal = (g.pot || 0) + bonoPot;
+    const agiBaseReal = (g.agi || 0) + bonoAgi;
+    const ctlBaseReal = (g.ctl || 0) + bonoCtl;
 
     if (!f) {
-        // NO HAY FUSIÓN: Aplicamos los deltas sobre la "Base Pura" del personaje
-        const finalPot = aplicarDeltas(potPura, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
-        const finalAgi = aplicarDeltas(agiPura, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
-        const finalCtl = aplicarDeltas(ctlPura, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
+        // Sin fusión: Aplicar deltas sobre la Base Real (Base + PT)
+        const finalPot = aplicarDeltas(potBaseReal, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+        const finalAgi = aplicarDeltas(agiBaseReal, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+        const finalCtl = aplicarDeltas(ctlBaseReal, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
 
         return {
             esFusion: false,
             pot: finalPot, agi: finalAgi, ctl: finalCtl,
-            pot_chain_base: potPura, agi_chain_base: agiPura, ctl_chain_base: ctlPura, // Ancla para el UI (Gris)
+            pot_chain_base: potBaseReal, agi_chain_base: agiBaseReal, ctl_chain_base: ctlBaseReal,
             tags: tagsOriginal,
             ptsMapa: ptOriginal,
             ptOriginal,
