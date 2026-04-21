@@ -47,7 +47,6 @@ function setMsg(id, txt, ok) {
     if (el) { el.className='op-msg '+(ok?'ok':'err'); el.textContent = txt; }
 }
 
-// ── Panel principal del GRUPO ─────────────────────────────────
 export async function abrirPanelOP(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
@@ -127,7 +126,7 @@ export async function abrirPanelOP(nombreGrupo) {
             <div id="msg-stats" class="op-msg"></div>
         </div>
     </div>
-
+    
     <!-- TAB 1: TAGS & PT -->
     <div id="op-p1" style="display:none;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">Tags actuales</div>
