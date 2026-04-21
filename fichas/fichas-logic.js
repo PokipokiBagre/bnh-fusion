@@ -96,23 +96,26 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const compañero = gruposGlobal.find(g => g.nombre_refinado === nombreCompañero) || {};
     const ptCompañero = ptGlobal[nombreCompañero] || {};
 
-    // Aplicar deltas encadenados del compañero también
-    const potComp = aplicarDeltas(compañero.pot||0, compañero.delta_pot_1, compañero.delta_pot_2, compañero.delta_pot_3, compañero.delta_pot_4, compañero.delta_pot_5);
-    const agiComp = aplicarDeltas(compañero.agi||0, compañero.delta_agi_1, compañero.delta_agi_2, compañero.delta_agi_3, compañero.delta_agi_4, compañero.delta_agi_5);
-    const ctlComp = aplicarDeltas(compañero.ctl||0, compañero.delta_ctl_1, compañero.delta_ctl_2, compañero.delta_ctl_3, compañero.delta_ctl_4, compañero.delta_ctl_5);
-
     // --- 1. Lente de STATS ---
+    // Fusionar los RAWs primero (sin deltas del compañero, sin deltas propios aún),
+    // luego aplicar los deltas del PJ base sobre el resultado fusionado.
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
     const calcStat = (valA, valB) => {
         const modo = opcionesFusion?.modo_stats || 'suma';
         if (modo === 'promedio') return Math.ceil((valA + valB) / 2);
         if (modo === 'mayor') return Math.max(valA, valB);
-        return valA + valB; 
+        return valA + valB;
     };
 
-    const pot = Math.round(calcStat(potBase, potComp) * MULT);
-    const agi = Math.round(calcStat(agiBase, agiComp) * MULT);
-    const ctl = Math.round(calcStat(ctlBase, ctlComp) * MULT);
+    // Paso 1: combinar raws y aplicar multiplicador
+    const potFusionRaw = Math.round(calcStat(grupoBase.pot||0, compañero.pot||0) * MULT);
+    const agiFusionRaw = Math.round(calcStat(grupoBase.agi||0, compañero.agi||0) * MULT);
+    const ctlFusionRaw = Math.round(calcStat(grupoBase.ctl||0, compañero.ctl||0) * MULT);
+
+    // Paso 2: aplicar deltas propios sobre el raw fusionado → valor final
+    const pot = aplicarDeltas(potFusionRaw, grupoBase.delta_pot_1, grupoBase.delta_pot_2, grupoBase.delta_pot_3, grupoBase.delta_pot_4, grupoBase.delta_pot_5);
+    const agi = aplicarDeltas(agiFusionRaw, grupoBase.delta_agi_1, grupoBase.delta_agi_2, grupoBase.delta_agi_3, grupoBase.delta_agi_4, grupoBase.delta_agi_5);
+    const ctl = aplicarDeltas(ctlFusionRaw, grupoBase.delta_ctl_1, grupoBase.delta_ctl_2, grupoBase.delta_ctl_3, grupoBase.delta_ctl_4, grupoBase.delta_ctl_5);
 
     // --- 2. Lente de TAGS ---
     const norm = t => (t.startsWith('#') ? t : '#' + t).toLowerCase();
@@ -185,6 +188,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
         agi_total: agi,
         ctl_total: ctl,
         pac_total: pacFusion,
+        // Base pre-delta de la cadena: el raw ya fusionado (para _fmtDChain en la UI)
+        pot_fusion_raw: potFusionRaw,
+        agi_fusion_raw: agiFusionRaw,
+        ctl_fusion_raw: ctlFusionRaw,
         pv_total: pvMaxTotalFusion,
         pv_actual_total: pvActualTotalFusion,
         cambios_total: cambiosTotalFusion

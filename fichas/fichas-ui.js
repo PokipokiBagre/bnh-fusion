@@ -369,6 +369,10 @@ export function renderDetalle(grupoCrudo, htmlLore) {
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
     const ctlA = g.ctl_actual ?? ctl;
+    // En fusión, la base de la cadena de deltas es el raw fusionado (no el raw propio)
+    const potChainBase = g.esFusion ? (g.pot_fusion_raw ?? grupoCrudo.pot||0) : (grupoCrudo.pot||0);
+    const agiChainBase = g.esFusion ? (g.agi_fusion_raw ?? grupoCrudo.agi||0) : (grupoCrudo.agi||0);
+    const ctlChainBase = g.esFusion ? (g.ctl_fusion_raw ?? grupoCrudo.ctl||0) : (grupoCrudo.ctl||0);
     const pvMaxBase = calcPVMax(grupoCrudo.pot||0, grupoCrudo.agi||0, grupoCrudo.ctl||0);
     const pvActualBase = (grupoCrudo.pv_actual !== null && grupoCrudo.pv_actual !== undefined) ? grupoCrudo.pv_actual : pvMaxBase;
     const cambiosBase = Math.floor((grupoCrudo.agi||0)/4);
@@ -472,9 +476,9 @@ export function renderDetalle(grupoCrudo, htmlLore) {
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
-                <tr><td>POT</td><td>${statDisplay(_fmtDChain(grupoCrudo.pot||0, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, grupoCrudo.pot||0)}</td></tr>
-                <tr><td>AGI</td><td>${statDisplay(_fmtDChain(grupoCrudo.agi||0, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, grupoCrudo.agi||0)}</td></tr>
-                <tr><td>CTL</td><td>${statDisplay(_fmtDChain(grupoCrudo.ctl||0, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n])), ctlA, grupoCrudo.ctl||0)}</td></tr>
+                <tr><td>POT</td><td>${statDisplay(_fmtDChain(potChainBase, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, potChainBase)}</td></tr>
+                <tr><td>AGI</td><td>${statDisplay(_fmtDChain(agiChainBase, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, agiChainBase)}</td></tr>
+                <tr><td>CTL</td><td>${statDisplay(_fmtDChain(ctlChainBase, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n])), ctlA, ctlChainBase)}</td></tr>
                 <tr><td>PV</td><td>${_fmtDChain(pvActualBase, pvActual, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_actual_'+n]))} / ${_fmtDChain(pvMaxBase, pvMax, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_'+n]))}</td></tr>
                 <tr><td>Cambios/t</td><td>${_fmtDChain(cambiosBase, cambios, [1,2,3,4,5].map(n=>grupoCrudo['delta_cambios_'+n]))}</td></tr>
                 <tr><td>PT Total</td><td style="color:#2980b9;font-weight:700;">${Object.values(ptG).reduce((a,b)=>a+b,0)}</td></tr>
