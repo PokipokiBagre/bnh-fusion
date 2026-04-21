@@ -11,24 +11,55 @@ import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { renderFusionBadge } from '../bnh-fusion.js';
 import { aplicarDeltas } from '../bnh-pac.js';
 
-// Helper: muestra cadena de hasta 5 deltas con anotación en rojo
+// Helper: muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
 // base = valor antes de deltas, total = resultado final
 function _fmtDChain(base, total, deltas) {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
     if (!activos.length || base === total) return String(total);
-    let pasos = String(base), acc = base;
+    
+    // Función creadora de etiquetas (cuadritos) con colores suaves y modernos
+    const makeBadge = (text, bg, color, border) => 
+        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2;">${text}</span>`;
+
+    // Etiqueta inicial para mostrar la BASE (gris)
+    let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
+    let acc = base;
+
     for (const d of activos) {
         const s = String(d).trim();
+        // Expresiones regulares que capturan números enteros y decimales
+        const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
         const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
         const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
         const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-        let op = '';
-        if (multM)     { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
-        else if (divM) { acc = Math.round(acc / parseFloat(divM[1]));  op = `÷${divM[1]}`; }
-        else if (addM) { const n = parseFloat(addM[1]); acc = Math.round(acc + n); op = n >= 0 ? `+${n}` : `${n}`; }
-        if (op) pasos = `(${pasos}${op})`;
+
+        if (powM) {
+            acc = Math.round(Math.pow(acc, parseFloat(powM[1])));
+            // POTENCIA (^): Fondo rosa pastel, texto magenta oscuro
+            badgesHtml += makeBadge(`^${powM[1]}`, '#fce4ec', '#ad1457', '#f48fb1');
+        } else if (multM) {
+            acc = Math.round(acc * parseFloat(multM[1]));
+            // MULTIPLICACIÓN (x): Fondo violeta claro, texto morado
+            badgesHtml += makeBadge(`×${multM[1]}`, '#f3e5f5', '#6a1b9a', '#ce93d8'); 
+        } else if (divM) {
+            acc = Math.round(acc / parseFloat(divM[1]));
+            // DIVISIÓN (/): Fondo naranja clarito, texto naranja oscuro
+            badgesHtml += makeBadge(`÷${divM[1]}`, '#fff3e0', '#ef6c00', '#ffcc80'); 
+        } else if (addM) {
+            const n = parseFloat(addM[1]);
+            acc = Math.round(acc + n);
+            if (n >= 0) {
+                // SUMA (+): Fondo azul muy claro, texto azul marino
+                badgesHtml += makeBadge(`+${n}`, '#e3f2fd', '#1565c0', '#90caf9'); 
+            } else {
+                // RESTA (-): Fondo rojo claro, texto rojo oscuro
+                badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
+            }
+        }
     }
-    return `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${pasos})</span>`;
+
+    // Retorna el total grande seguido de las etiquetas alineadas de forma flexible
+    return `${total} <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; vertical-align:middle; flex-wrap:wrap; margin-top:-2px;">${badgesHtml}</span>`;
 }
 
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
