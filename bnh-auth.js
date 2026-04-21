@@ -117,37 +117,39 @@ export const bnhAuth = {
     renderLoginWidget() {
         return `
         <div id="bnh-login-widget" style="
-            background: rgba(0,5,20,0.97);
-            border: 2px solid #00b4d8;
+            background: var(--white, #ffffff);
+            border: 1px solid var(--booru-border, #cccccc);
             border-radius: 12px;
             padding: 30px;
             max-width: 380px;
             margin: 0 auto;
-            font-family: 'Rajdhani', 'Segoe UI', sans-serif;
-            box-shadow: 0 0 40px rgba(0,180,216,0.25);
+            font-family: inherit;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
         ">
-            <h3 style="color:#00b4d8; text-align:center; margin:0 0 20px 0; letter-spacing:2px;">⚡ ACCESO OP</h3>
+            <h3 style="color:#0073ff; text-align:center; margin:0 0 20px 0; letter-spacing:1px;">⚡ ACCESO OP</h3>
             <input id="bnh-login-email" type="email" placeholder="Correo electrónico"
-                style="width:100%; background:#000; color:#fff; border:1px solid #333;
+                style="width:100%; background:var(--gray-100, #f8f9fa); color:var(--gray-900, #212529); border:1.5px solid var(--gray-300, #dee2e6);
                        padding:12px; border-radius:6px; font-family:inherit; box-sizing:border-box;
-                       margin-bottom:12px; font-size:0.95em;"
+                       margin-bottom:12px; font-size:0.95em; outline:none; transition: border-color 0.2s;"
+                onfocus="this.style.borderColor='#0073ff'" onblur="this.style.borderColor='var(--gray-300, #dee2e6)'"
                 onkeydown="if(event.key==='Enter') bnhAuth._submitLogin()">
             <input id="bnh-login-pass" type="password" placeholder="Contraseña"
-                style="width:100%; background:#000; color:#fff; border:1px solid #333;
+                style="width:100%; background:var(--gray-100, #f8f9fa); color:var(--gray-900, #212529); border:1.5px solid var(--gray-300, #dee2e6);
                        padding:12px; border-radius:6px; font-family:inherit; box-sizing:border-box;
-                       margin-bottom:16px; font-size:0.95em;"
+                       margin-bottom:16px; font-size:0.95em; outline:none; transition: border-color 0.2s;"
+                onfocus="this.style.borderColor='#0073ff'" onblur="this.style.borderColor='var(--gray-300, #dee2e6)'"
                 onkeydown="if(event.key==='Enter') bnhAuth._submitLogin()">
             <button onclick="bnhAuth._submitLogin()" style="
-                width:100%; background:linear-gradient(145deg,#001a2c,#003049);
-                color:#00b4d8; border:1px solid #00b4d8; padding:14px;
-                border-radius:6px; font-family:inherit; font-weight:bold;
+                width:100%; background:#0073ff;
+                color:#fff; border:none; padding:14px;
+                border-radius:6px; font-family:inherit; font-weight:600;
                 font-size:1em; cursor:pointer; letter-spacing:1px; transition:0.2s;"
-                onmouseover="this.style.background='#00b4d8'; this.style.color='#000';"
-                onmouseout="this.style.background='linear-gradient(145deg,#001a2c,#003049)'; this.style.color='#00b4d8';">
+                onmouseover="this.style.background='#005bb5'; this.style.boxShadow='0 4px 12px rgba(0,115,255,0.25)';"
+                onmouseout="this.style.background='#0073ff'; this.style.boxShadow='none';">
                 ENTRAR
             </button>
-            <div id="bnh-login-error" style="color:#ff4444; font-size:0.82em;
-                 text-align:center; margin-top:10px; font-family:sans-serif; min-height:20px;"></div>
+            <div id="bnh-login-error" style="color:var(--red, #c0392b); font-size:0.85em;
+                 text-align:center; margin-top:12px; min-height:20px; font-weight:600;"></div>
         </div>`;
     },
 
