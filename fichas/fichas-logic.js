@@ -2,10 +2,11 @@
 // fichas-logic.js
 // ============================================================
 import { getFusionDe } from '../bnh-fusion.js';
+import { aplicarDelta } from '../bnh-pac.js';
 
 export { 
     calcTier, calcPVMax, calcCambios, fmtTag, normTag, 
-    calcCTLUsado 
+    calcCTLUsado, aplicarDelta
 } from '../bnh-pac.js';
 
 
@@ -46,12 +47,17 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const ptOriginal = ptGlobal[grupoBase.nombre_refinado] || {};
     const tagsOriginal = grupoBase.tags || [];
 
+    // Aplicar deltas de stats base propios
+    const potBase = aplicarDelta(grupoBase.pot || 0, grupoBase.delta_pot);
+    const agiBase = aplicarDelta(grupoBase.agi || 0, grupoBase.delta_agi);
+    const ctlBase = aplicarDelta(grupoBase.ctl || 0, grupoBase.delta_ctl);
+
     // Si no está en fusión, devolver los datos limpios sin alterar
     if (!f) return {
         esFusion: false,
-        pot: grupoBase.pot || 0,
-        agi: grupoBase.agi || 0,
-        ctl: grupoBase.ctl || 0,
+        pot: potBase,
+        agi: agiBase,
+        ctl: ctlBase,
         tags: tagsOriginal,
         ptsMapa: ptOriginal
     };
@@ -59,6 +65,11 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const nombreCompañero = f.pj_a === grupoBase.nombre_refinado ? f.pj_b : f.pj_a;
     const compañero = gruposGlobal.find(g => g.nombre_refinado === nombreCompañero) || {};
     const ptCompañero = ptGlobal[nombreCompañero] || {};
+
+    // Aplicar deltas del compañero también
+    const potComp = aplicarDelta(compañero.pot || 0, compañero.delta_pot);
+    const agiComp = aplicarDelta(compañero.agi || 0, compañero.delta_agi);
+    const ctlComp = aplicarDelta(compañero.ctl || 0, compañero.delta_ctl);
 
     // --- 1. Lente de STATS ---
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
@@ -69,9 +80,9 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
         return valA + valB; 
     };
 
-    const pot = Math.round(calcStat(grupoBase.pot || 0, compañero.pot || 0) * MULT);
-    const agi = Math.round(calcStat(grupoBase.agi || 0, compañero.agi || 0) * MULT);
-    const ctl = Math.round(calcStat(grupoBase.ctl || 0, compañero.ctl || 0) * MULT);
+    const pot = Math.round(calcStat(potBase, potComp) * MULT);
+    const agi = Math.round(calcStat(agiBase, agiComp) * MULT);
+    const ctl = Math.round(calcStat(ctlBase, ctlComp) * MULT);
 
     // --- 2. Lente de TAGS ---
     const norm = t => (t.startsWith('#') ? t : '#' + t).toLowerCase();

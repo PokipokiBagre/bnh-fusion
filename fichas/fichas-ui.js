@@ -3,7 +3,7 @@
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { guardarTagsGrupo, borrarPTDeTag, opcionesFusion, bannedTags } from './fichas-data.js';
-import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, proyectarFicha } from './fichas-logic.js';
+import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, proyectarFicha, aplicarDelta } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
 import { renderMarkup } from './fichas-markup.js';
@@ -236,10 +236,12 @@ export function renderCatalogo(postersDelHilo) {
     }
 
     cont.innerHTML = lista.map(g => {
-        const pot  = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
+        // Aplicar deltas de stats base
+        const pot  = aplicarDelta(g.pot||0, g.delta_pot);
+        const agi  = aplicarDelta(g.agi||0, g.delta_agi);
+        const ctl  = aplicarDelta(g.ctl||0, g.delta_ctl);
         const { tier } = calcTier(pot, agi, ctl);
-        const pvDelta  = g.pv_max_delta || 0;
-        const pvMax    = calcPVMax(pot, agi, ctl) + pvDelta;
+        const pvMax    = aplicarDelta(calcPVMax(pot, agi, ctl), g.delta_pv);
         const pac      = pot+agi+ctl;
         const tc       = colorTier(tier);
         const pvA      = g.pv_actual ?? pvMax;
@@ -309,9 +311,10 @@ export function renderDetalle(nombreGrupo) {
     if (!g) { window.volverCatalogo(); return; }
 
     // --- 1. APLICAR EL LENTE DE FUSIÓN ---
+    // proyectarFicha ya aplica delta_pot/agi/ctl internamente
     const proy = proyectarFicha(g, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
     
-    // Stats proyectadas
+    // Stats proyectadas (ya con deltas aplicados)
     const pot = proy.pot;
     const agi = proy.agi;
     const ctl = proy.ctl;
@@ -322,10 +325,9 @@ export function renderDetalle(nombreGrupo) {
     const baseTagsNorm = (g.tags || []).map(x => (x.startsWith('#') ? x : '#' + x).toLowerCase());
 
     const { tier } = calcTier(pot, agi, ctl);
-    const pvDeltaD = g.pv_max_delta || 0;
-    const pvMax    = calcPVMax(pot, agi, ctl) + pvDeltaD;
+    const pvMax    = aplicarDelta(calcPVMax(pot, agi, ctl), g.delta_pv);
     const pac      = pot + agi + ctl;
-    const cambios  = calcCambios(agi);
+    const cambios  = aplicarDelta(calcCambios(agi), g.delta_cambios);
     const tc       = colorTier(tier);
     const fusion   = getFusionDe(nombreGrupo);
     const safeN    = nombreGrupo.replace(/'/g,"\\'");
@@ -336,7 +338,7 @@ export function renderDetalle(nombreGrupo) {
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
     const _cachedEquip = window._equipCache?.[nombreGrupo] || [];
-    const ctlEquip = calcCTLUsado(_cachedEquip);
+    const ctlEquip = aplicarDelta(calcCTLUsado(_cachedEquip), g.delta_ctl_usado);
     const ctlA = ctlEquip;
 
     function statDisplay(total, actual, baseVal) {
