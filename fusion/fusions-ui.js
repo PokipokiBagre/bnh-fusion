@@ -17,9 +17,23 @@ export function renderSimulador() {
     const wrap = document.getElementById('vista-simulador');
     if (!wrap) return;
 
+    const btnRol = (v, l) => `<button class="btn btn-sm ${fusionsState.filtroRol === v ? 'btn-green' : 'btn-outline'}" style="padding:2px 8px;font-size:0.85em;" onclick="window._fusionFiltroRol('${v}')">${l}</button>`;
+    const btnEst = (v, l) => `<button class="btn btn-sm ${fusionsState.filtroEstado === v ? 'btn-green' : 'btn-outline'}" style="padding:2px 8px;font-size:0.85em;" onclick="window._fusionFiltroEst('${v}')">${l}</button>`;
+
     wrap.innerHTML = `
     <div class="card" style="margin-bottom:16px;">
-        <div class="card-title">Pool de Personajes</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div class="card-title" style="margin:0;">Pool de Personajes</div>
+            <div style="display:flex; gap:6px; align-items:center;">
+                <div style="display:flex; gap:3px;">
+                    ${btnRol('todos', 'Todos')} ${btnRol('#Jugador', 'Jugador')} ${btnRol('#NPC', 'NPC')}
+                </div>
+                <div style="width:1px; height:16px; background:var(--gray-300); margin:0 4px;"></div>
+                <div style="display:flex; gap:3px;">
+                    ${btnEst('todos', 'Todos')} ${btnEst('#Activo', 'Activo')} ${btnEst('#Inactivo', 'Inactivo')}
+                </div>
+            </div>
+        </div>
         <div class="char-pool" id="char-pool">${renderCharPool()}</div>
         <div style="margin-top:10px;font-size:0.78em;color:var(--gray-500);">
             Click para seleccionar <span style="color:var(--fp);font-weight:700;">Sujeto A</span> y 
@@ -52,7 +66,21 @@ function renderCharPool() {
     if (!personajes.length) {
         return `<div style="color:var(--gray-500);font-size:0.85em;padding:12px 0;">Cargando personajes…</div>`;
     }
-    return personajes.map(p => {
+
+    // ⚡ FILTROS APLICADOS AQUÍ
+    let pjs = personajes;
+    if (fusionsState.filtroRol && fusionsState.filtroRol !== 'todos') {
+        pjs = pjs.filter(p => (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === fusionsState.filtroRol.toLowerCase()));
+    }
+    if (fusionsState.filtroEstado && fusionsState.filtroEstado !== 'todos') {
+        pjs = pjs.filter(p => (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === fusionsState.filtroEstado.toLowerCase()));
+    }
+
+    if (!pjs.length) {
+        return `<div style="padding:10px;color:var(--gray-500);font-size:0.85em;text-align:center;width:100%;">No hay personajes que coincidan con los filtros actuales</div>`;
+    }
+
+    return pjs.map(p => {
         const enFusion = estaEnFusion(p.nombre);
         const isA = fusionsState.pjA === p.nombre;
         const isB = fusionsState.pjB === p.nombre;
@@ -119,7 +147,6 @@ function renderVsPanel() {
     return `
     <div class="vs-orb">${sobreRecarga ? '🔥' : 'VS'}</div>
 
-    <!-- Input D100 — sin oninput en el HTML para evitar pérdida de foco -->
     <div class="d100-wrap">
         <div class="d100-label">Rendimiento D100</div>
         <input type="number" id="inp-d100"
@@ -134,7 +161,6 @@ function renderVsPanel() {
             onfocus="this.style.boxShadow='0 0 0 3px var(--fp-glow)'"
             onblur="this.style.boxShadow=''">
 
-        <!-- Compatibilidad por tags -->
         ${(fusionsState.pjA && fusionsState.pjB) ? `
         <div style="
             display:flex;align-items:center;gap:6px;
@@ -305,7 +331,6 @@ export function renderResultado(resultado) {
             </div>
         </div>` : ''}
 
-        <!-- Stats editables -->
         <div style="padding:16px 20px;border-bottom:1px solid var(--border);">
             <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:10px;">
                 Stats Resultantes <span style="font-weight:400;text-transform:none;letter-spacing:0;margin-left:6px;color:var(--gray-400);">(edita si necesitas ajuste manual)</span>
@@ -335,7 +360,6 @@ export function renderResultado(resultado) {
 
         ${tagFusionSection}
 
-        <!-- Tags -->
         <div class="res-body">
             <div>
                 <div style="font-size:0.72em;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--gray-500);margin-bottom:8px;">
@@ -500,6 +524,7 @@ export async function renderRegistro() {
             ? `<button class="btn btn-outline btn-sm" style="border-color:var(--red);color:var(--red);" onclick="window._fusionBorrarRegistro('${f.id}')">🗑️</button>`
             : '';
 
+        // ⚡ REGISTRO LIMPIO: Eliminada la referencia a f.tag_fusion_pts
         return `
         <div style="background:white;border:1.5px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;display:flex;flex-direction:column;gap:8px;">
             <div style="display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;">
@@ -516,7 +541,7 @@ export async function renderRegistro() {
                 <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <div class="rendimiento-pill ${rendCls}" style="width:36px;height:36px;font-size:0.72em;">${rend}</div>
                     <span class="regla-badge ${reglaKey}" style="font-size:0.7em;">${f.regla_aplicada}</span>
-                    ${f.tag_fusion ? `<span style="font-size:0.78em;font-weight:700;color:var(--fp);background:var(--fp-pale);border:1px solid var(--fp);padding:2px 8px;border-radius:8px;">${_esc(f.tag_fusion)} · ${f.tag_fusion_pts}pt</span>` : ''}
+                    ${f.tag_fusion ? `<span style="font-size:0.78em;font-weight:700;color:var(--fp);background:var(--fp-pale);border:1px solid var(--fp);padding:2px 8px;border-radius:8px;">${_esc(f.tag_fusion)}</span>` : ''}
                     ${borrarBtn}
                 </div>
             </div>
