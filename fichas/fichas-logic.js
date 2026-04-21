@@ -162,13 +162,33 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
         ptsMapa[f.tag_fusion] = opcionesFusion?.pts_tag_fusion || 0;
     }
 
+    // --- 4. NUEVO: Lente de Totales para la UI (Basado en la fusión resultante) ---
+    const pacFusion = pot + agi + ctl;
+    const bonoTierFusion = pacFusion >= 100 ? 20 : pacFusion >= 80 ? 15 : pacFusion >= 60 ? 10 : 5;
+    const pvMaxPuroFusion = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoTierFusion;
+    
+    // Aplicamos los deltas del PJ base a su nuevo estado fusionado
+    const pvMaxTotalFusion = aplicarDelta(pvMaxPuroFusion, grupoBase.delta_pv);
+    const pvActualPuroFusion = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotalFusion;
+    const pvActualTotalFusion = aplicarDelta(pvActualPuroFusion, grupoBase.delta_pv_actual);
+    const cambiosTotalFusion = aplicarDelta(Math.floor(agi / 4), grupoBase.delta_cambios);
+
     return {
+        ...grupoBase, // Mantiene el Lore, Quirks, IDs...
         esFusion: true,
         compañero: nombreCompañero,
         rendimiento: f.rendimiento,
         pot, agi, ctl,
         tags: [...tagsUnionSet],
         ptsMapa,
-        tagFusion: f.tag_fusion
+        tagFusion: f.tag_fusion,
+        // Variables requeridas por la nueva UI:
+        pot_total: pot,
+        agi_total: agi,
+        ctl_total: ctl,
+        pac_total: pacFusion,
+        pv_total: pvMaxTotalFusion,
+        pv_actual_total: pvActualTotalFusion,
+        cambios_total: cambiosTotalFusion
     };
 }
