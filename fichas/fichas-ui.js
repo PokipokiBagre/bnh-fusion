@@ -574,7 +574,7 @@ _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado).catch(console.error);
 
 // Carga y renderiza el catálogo de medallas del PJ en la sección de fusión
 async function _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado) {
-    const body = document.getElementById('medallas-fusion-body');
+    const body = document.getElementById('medallas-body');
     if (!body) return;
 
     try {
@@ -647,7 +647,7 @@ async function _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado) {
         </details>` : ''}
         `;
     } catch(e) {
-        const body2 = document.getElementById('medallas-fusion-body');
+        const body2 = document.getElementById('medallas-body');
         if (body2) body2.innerHTML = `<p style="color:var(--red);font-size:0.82em;">Error cargando medallas: ${e.message}</p>`;
     }
 }
