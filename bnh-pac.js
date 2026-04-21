@@ -116,20 +116,8 @@ export function fmtTag(tag) {
 // ── Aplica un delta string a un valor base ────────────────────
 // Soporta: "+20" | "-10" | "x1.5" | "*2" | "/2" | "0" | ""
 // Devuelve siempre un número entero redondeado.
-export function aplicarDelta(base, deltaStr) {
-    const s = String(deltaStr || '0').trim();
-    if (!s || s === '0') return base;
-    // Multiplicación: x1.5 ó *1.5
-    const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
-    if (multM) return Math.round(base * parseFloat(multM[1]));
-    // División: /2
-    const divM = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
-    if (divM) return Math.round(base / parseFloat(divM[1]));
-    // Suma/Resta: +20 ó -10 ó simplemente 20
-    const addM = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-    if (addM) return Math.round(base + parseFloat(addM[1]));
-    // Fallback: ignorar delta inválido
-    return base;
+export function aplicarDeltas(base, ...deltaStrs) {
+    return deltaStrs.reduce((acc, d) => aplicarDelta(acc, d), base);
 }
 
 // ── Equipación de personajes (fuente: medallas_inventario) ──────────
