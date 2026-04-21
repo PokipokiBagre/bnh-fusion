@@ -253,20 +253,22 @@ export function renderCatalogo(postersDelHilo) {
         return;
     }
 
-    cont.innerHTML = lista.map(g => {
-        // Aplicar deltas de stats base
-        const pot  = aplicarDelta(g.pot||0, g.delta_pot);
-        const agi  = aplicarDelta(g.agi||0, g.delta_agi);
-        const ctl  = aplicarDelta(g.ctl||0, g.delta_ctl);
+    cont.innerHTML = lista.map(grupoCrudo => {
+        // 1. PROYECCIÓN: Toma el grupo crudo de Supabase y le aplica todos los deltas
+        const g = proyectarFicha(grupoCrudo);
+        
+        // 2. Extraer totales calculados (ya no usamos aplicarDelta manualmente aquí)
+        const pot      = g.pot_total;
+        const agi      = g.agi_total;
+        const ctl      = g.ctl_total;
         const { tier } = calcTier(pot, agi, ctl);
-        const pvMaxBase = calcPVMax(pot, agi, ctl);
-        const pvMax     = aplicarDelta(pvMaxBase, g.delta_pv);
-        const pac       = pot+agi+ctl;
-        const tc        = colorTier(tier);
-        const pvActualBase = g.pv_actual ?? pvMax;
-        const pvA       = aplicarDelta(pvActualBase, g.delta_pv_actual);
-        const pvPct    = pvMax>0 ? Math.round((pvA/pvMax)*100) : 100;
-        const pvCls    = pvPct<25?'pv-crit':pvPct<60?'pv-warn':'';
+        const pvMax    = g.pv_total;
+        const pac      = g.pac_total;
+        const tc       = colorTier(tier);
+        const pvA      = g.pv_actual_total; // Maneja null y delta interno
+        
+        const pvPct    = pvMax > 0 ? Math.round((pvA/pvMax)*100) : 100;
+        const pvCls    = pvPct < 25 ? 'pv-crit' : pvPct < 60 ? 'pv-warn' : '';
         const enFusion = estaEnFusion(g.nombre_refinado);
         const safeN    = g.nombre_refinado.replace(/'/g,"\\'");
 
@@ -286,11 +288,13 @@ export function renderCatalogo(postersDelHilo) {
             : [];
         const tieneAlgunTagActivo = tagsConAsignados.length > 0;
         const esGrupoSeleccionado = fichasUI.modoInverso && fichasUI.grupoAsignar === g.nombre_refinado;
+        
         const cardBorder = esGrupoSeleccionado
             ? 'outline:3px solid #9b59b6;outline-offset:-2px;background:rgba(155,89,182,0.1);'
             : tieneAlgunTagActivo
             ? 'outline:3px solid #27ae60;outline-offset:-2px;background:rgba(39,174,96,0.13);'
             : (enModoAsignar || fichasUI.modoInverso) ? 'opacity:0.7;' : '';
+            
         const cardClick = fichasUI.modoInverso
             ? `window._fichaInversoClick('${safeN}')`
             : fichasUI.modoAsignar
