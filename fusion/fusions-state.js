@@ -12,24 +12,25 @@ export const fusionsState = {
     resultadoCalculado:  null,
     statsEditadas:       { pot: null, agi: null, ctl: null },
     tagFusionNombre:     '',     
-    modoTagLocal:        'ninguno', // <-- AÑADIR ESTA LÍNEA
+    modoTagLocal:        'ninguno',
     compatTags:          0,      
     compatPct:           0,      
     esAdmin:             false,  
+    filtroRol:           '#Jugador', // NUEVO: Filtro por defecto
+    filtroEstado:        '#Activo',  // NUEVO: Filtro por defecto
 };
 
 export let personajes       = [];
 export let ptGlobales       = [];
 export let fusionesActivas  = [];
 export let registroFusiones = [];
-export let bannedTags       = []; // NUEVO: Tags excluidos
+export let bannedTags       = []; 
 
 export function setPersonajes(data)       { personajes       = data; }
 export function setPtGlobales(data)       { ptGlobales       = data; }
 export function setFusionesActivas(data)  { fusionesActivas  = data; }
 export function setRegistroFusiones(data) { registroFusiones = data; }
 
-// NUEVO: Almacenamos los tags baneados siempre en minúsculas y con #
 export function setBannedTags(data) { 
     bannedTags = data.map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase()); 
 }
