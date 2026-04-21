@@ -98,6 +98,13 @@ function exponerGlobales() {
         window.scrollTo(0, 0);
     };
 
+await Promise.all(
+    gruposGlobal.map(async g => {
+        const medEq = await getEquipacionPJ(g.nombre_refinado);
+        window._equipCache[g.nombre_refinado] = medEq;
+    })
+);
+    
     window.volverCatalogo = () => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
