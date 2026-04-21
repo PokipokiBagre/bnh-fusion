@@ -2,7 +2,10 @@
 // fichas-logic.js
 // ============================================================
 import { getFusionDe } from '../bnh-fusion.js';
-export { calcTier, calcPVMax, calcCambios, fmtTag, normTag } from '../bnh-pac.js';
+export { 
+    calcTier, calcPVMax, calcCambios, fmtTag, normTag, 
+    proyectarStats, calcCTLUsadoTotal 
+} from '../bnh-pac.js';
 
 // ─── Utilidades Visuales y de Datos Originales ──────────────
 
