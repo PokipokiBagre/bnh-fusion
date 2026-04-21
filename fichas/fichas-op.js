@@ -174,10 +174,6 @@ export async function abrirPanelOP(nombreGrupo) {
 
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
-    ['op-pot-t','op-agi-t','op-ctl-t'].forEach(id => {
-        setTimeout(()=>{ document.getElementById(id)?.addEventListener('input', window._opRecalcPV); }, 50);
-    });
-
     // Montar tab 1: widget input + pool de tags sugeridos + pool PT
     setTimeout(() => {
         const wrap = document.getElementById('op-tag-inp-wrap');
@@ -542,60 +538,43 @@ export function exponerGlobalesOP() {
         });
     };
 
-    window._opRecalcPV = () => {
-        const pot=parseInt(document.getElementById('op-pot-t')?.value)||0;
-        const agi=parseInt(document.getElementById('op-agi-t')?.value)||0;
-        const ctl=parseInt(document.getElementById('op-ctl-t')?.value)||0;
-        const delta=parseInt(document.getElementById('op-pv-delta')?.value)||0;
-        const pvBase=calcPVMax(pot,agi,ctl);
-        const pvTotal=pvBase+delta;
-        const el=document.getElementById('op-pvm'), el2=document.getElementById('op-pv-max');
-        if(el) el.textContent=`(${pvTotal})${delta!==0?' ['+pvBase+(delta>0?'+':'')+delta+']':''}`;
-        if(el2) el2.value=pvTotal;
-    };
+    // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado,
+    // el total se calcula al renderizar la ficha (fichas-ui.js / proyectarStats).
 
-    window._opGuardarStats = async (grupoId) => {
-        const pot=parseInt(document.getElementById('op-pot-t')?.value)||0;
-        const agi=parseInt(document.getElementById('op-agi-t')?.value)||0;
-        const ctl=parseInt(document.getElementById('op-ctl-t')?.value)||0;
-        const potA=parseInt(document.getElementById('op-pot-a')?.value);
-        const agiA=parseInt(document.getElementById('op-agi-a')?.value);
-        const pvA=parseInt(document.getElementById('op-pv-a')?.value)||0;
-        const pvDelta=parseInt(document.getElementById('op-pv-delta')?.value)||0;
-        // ctl_actual es automático (equipación), no se guarda manualmente
-        const res=await guardarStatsGrupo(grupoId,{
-            pot,agi,ctl,
-            pot_actual: isNaN(potA)||potA===pot?null:potA,
-            agi_actual: isNaN(agiA)||agiA===agi?null:agiA,
-            ctl_actual: null,   // calculado automáticamente por equipación
-            pv_actual:  pvA,
-            pv_max_delta: pvDelta
-        });
-        setMsg('msg-stats',res.ok?'✅ Guardado':'❌ '+res.msg,res.ok);
-        if(res.ok) window.sincronizarVista?.();
-    };
+    window._opGuardarStats = async (nombreGrupo) => {
+        const d = id => document.getElementById(id)?.value?.trim() ?? '';
 
-    window._opRestaurarPV = async (grupoId) => {
-        const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
-        const pvDelta=parseInt(document.getElementById('op-pv-delta')?.value)||g.pv_max_delta||0;
-        const pvMax=calcPVMax(g.pot||0,g.agi||0,g.ctl||0)+pvDelta;
-        document.getElementById('op-pv-a').value=pvMax;
-        const res=await guardarStatsGrupo(grupoId,{pot:g.pot,agi:g.agi,ctl:g.ctl,pv_actual:pvMax});
-        setMsg('msg-stats',res.ok?`✅ PV → ${pvMax}`:'❌ '+res.msg,res.ok);
-        if(res.ok) window.sincronizarVista?.();
-    };
+        const pvActRaw = d('op-pv-actual');
 
-    window._opIgualarActualTotal = () => {
-        // Iguala POT y AGI actuales a sus totales
-        // CTL actual no se toca (es la equipación, no un valor manual)
-        const pot=document.getElementById('op-pot-t')?.value;
-        const agi=document.getElementById('op-agi-t')?.value;
-        if(document.getElementById('op-pot-a')) document.getElementById('op-pot-a').value=pot;
-        if(document.getElementById('op-agi-a')) document.getElementById('op-agi-a').value=agi;
-        // También restaurar PV Actual al PV Máx (con delta)
-        const pvMaxEl=document.getElementById('op-pv-max');
-        const pvA=document.getElementById('op-pv-a');
-        if(pvMaxEl && pvA) pvA.value=pvMaxEl.value;
+        const payload = {
+            // Bases (stats nativos)
+            pot: parseInt(d('op-pot-base'))  || 0,
+            agi: parseInt(d('op-agi-base'))  || 0,
+            ctl: parseInt(d('op-ctl-base'))  || 0,
+
+            // Deltas (operadores matemáticos guardables)
+            delta_pot:      d('op-pot-delta')      || '0',
+            delta_agi:      d('op-agi-delta')      || '0',
+            delta_ctl:      d('op-ctl-delta')      || '0',
+            delta_pv:       d('op-pv-delta')       || '0',
+            delta_cambios:  d('op-cambios-delta')  || '0',
+            delta_ctl_usado:d('op-ctl_usado-delta')|| '0',
+
+            // Notas de origen de cada delta
+            nota_pot:       d('op-pot-nota'),
+            nota_agi:       d('op-agi-nota'),
+            nota_ctl:       d('op-ctl-nota'),
+            nota_pv:        d('op-pv-nota'),
+            nota_cambios:   d('op-cambios-nota'),
+            nota_ctl_usado: d('op-ctl_usado-nota'),
+
+            // Salud actual (null = lleno = se usa PV Máx al renderizar)
+            pv_actual: pvActRaw === '' ? null : (parseInt(pvActRaw) || 0),
+        };
+
+        const res = await guardarStatsGrupo(nombreGrupo, payload);
+        setMsg('msg-stats', res.ok ? '✅ Guardado' : '❌ ' + res.msg, res.ok);
+        if (res.ok) window.sincronizarVista?.();
     };
 
     window._opAddTag = async (grupoId, nombreGrupo, tagDirecto) => {

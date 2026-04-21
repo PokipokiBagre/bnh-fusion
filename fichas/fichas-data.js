@@ -76,19 +76,23 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
 
 // ── Guardar Stats y Deltas ────────────────────────────────────
 export async function guardarStatsGrupo(nombreRefinado, payloadStats) {
-    // 1. Envía el paquete completo (Bases, Deltas, Notas y PV Actual) a Supabase
+    // payloadStats puede contener:
+    //   Bases:  pot, agi, ctl
+    //   Deltas: delta_pot, delta_agi, delta_ctl, delta_pv, delta_cambios, delta_ctl_usado
+    //   Notas:  nota_pot, nota_agi, nota_ctl, nota_pv, nota_cambios, nota_ctl_usado
+    //   Salud:  pv_actual (null = lleno)
     const { error } = await supabase.from('personajes_refinados')
         .update(payloadStats)
         .eq('nombre_refinado', nombreRefinado);
 
     if (error) return { ok: false, msg: error.message };
 
-    // 2. Actualiza la memoria local al instante para que la UI no tenga que recargar
+    // Actualiza la memoria local para que la UI no tenga que recargar
     const idx = gruposGlobal.findIndex(g => g.nombre_refinado === nombreRefinado);
     if (idx !== -1) {
         Object.assign(gruposGlobal[idx], payloadStats);
     }
-    
+
     return { ok: true };
 }
 
