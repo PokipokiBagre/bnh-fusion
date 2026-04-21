@@ -1,4 +1,6 @@
+// ============================================================
 // medallas/medallas-main.js
+// ============================================================
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import { medallaState, medallas, grupos, puntosAll, STORAGE_URL } from './medallas-state.js';
 import { cargarTodo, guardarMedalla, eliminarMedalla } from './medallas-data.js';
@@ -8,7 +10,7 @@ import {
     _htmlReqRow, _htmlCondRow, toast, mountNewTagAC
 } from './medallas-ui.js';
 import { initMarkup } from '../bnh-markup.js';
-import { setSupabaseRef, getEquipacionPJ, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
+import { setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { initTags } from '../bnh-tags.js';
 
 window.onload = async () => {
@@ -19,7 +21,8 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     medallaState.esAdmin = bnhAuth.esAdmin();
-    // Inyectar supabase en bnh-pac para getEquipacionPJ
+    
+    // Inyectar supabase en bnh-pac para que pueda consultar equipación
     setSupabaseRef(supabase);
 
     try {
@@ -36,7 +39,7 @@ window.onload = async () => {
     _exponerGlobales();
     _renderTab(medallaState.tabActual);
 
-    // Leer la URL para abrir medallas con !Medalla!
+    // Leer la URL para abrir medallas por parámetro
     const params = new URLSearchParams(window.location.search);
     const mQuery = params.get('medalla');
     if (mQuery) {
@@ -67,6 +70,7 @@ function _exponerGlobales() {
     window._medTab        = _renderTab;
     window._medBuscar     = v => { medallaState.busqueda  = v; renderCatalogo(); };
     window._medFiltroTag  = v => { medallaState.filtroTag = v; renderCatalogo(); };
+    
     window._medSelPJ      = async n => {
         if (medallaState.pjSeleccionado === n) {
             medallaState.pjSeleccionado = null;
@@ -87,21 +91,21 @@ function _exponerGlobales() {
                 .eq('personaje_nombre', n)
                 .eq('equipada', true)
                 .order('slot_orden');
-   if (!error && data) {
+
+            if (!error && data) {
                 // Filtrar medallas normales (no propuestas)
                 const rawEquip = data
                     .filter(r => !r.propuesta)
                     .map(row => medallas.find(m => m.id === row.medalla_id))
                     .filter(Boolean);
                     
-
                 try {
                     const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
                     const { proyectarPJ } = await import('./medallas-logic.js');
                     
                     const proy = proyectarPJ(n); // Aplicar lente de fusión
                     
-                    // Ahora validamos usando los tags, pt y CTL Proyectados
+                    // Validamos usando los tags, pt y CTL Proyectados
                     medallaState.equipacion = await limpiarInventarioInvalido(
                         n, rawEquip, proy.tags, proy.ptsMapa, proy.ctl
                     );
@@ -110,7 +114,6 @@ function _exponerGlobales() {
                     medallaState.equipacion = rawEquip; 
                 }
 
-
                 medallaState.equipacionPropuesta = data
                     .filter(r => r.propuesta)
                     .map(row => medallas.find(m => m.id === row.medalla_id))
@@ -118,7 +121,6 @@ function _exponerGlobales() {
                     
                 renderPersonaje(); 
             }
-    }
         }
     };
 
@@ -142,6 +144,7 @@ function _exponerGlobales() {
         const g = grupos.find(x => x.nombre_refinado === nombre);
         if (!g) return;
         const tagsDelPJ = (g.tags||[]).map(t => t.startsWith('#') ? t : '#'+t);
+        
         if (medallaState.pjBloquesSel === nombre) {
             medallaState.grafoTagsSel = medallaState.grafoTagsSel.filter(t => !tagsDelPJ.includes(t));
             medallaState.pjBloquesSel = null;
@@ -154,7 +157,7 @@ function _exponerGlobales() {
         renderGrafo();
     };
 
-window._medEquiparToggle = async (id, mObj) => {
+    window._medEquiparToggle = async (id, mObj) => {
         const eq = medallaState.equipacion || [];
         const idx = eq.findIndex(e => e.id === id);
         if (idx >= 0) {
@@ -180,7 +183,6 @@ window._medEquiparToggle = async (id, mObj) => {
                     toast('❌ No tienes suficiente CTL (Incluso con la fusión activa)', 'error');
                     return;
                 }
-                // --------------------------------------------
 
                 eq.push(m);
             }
@@ -200,7 +202,7 @@ window._medEquiparToggle = async (id, mObj) => {
         renderPersonaje();
     };
 
-window._medGuardarEquipacionValida = async () => {
+    window._medGuardarEquipacionValida = async () => {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         
         // ⚡ LENTE DE FUSIÓN: Leemos el CTL Proyectado en lugar de la base de datos estática
@@ -222,6 +224,7 @@ window._medGuardarEquipacionValida = async () => {
         }
         medallaState.equipacion = validas;
         
+        // Borramos equipación actual
         await supabase.from('medallas_inventario').delete().eq('personaje_nombre', medallaState.pjSeleccionado).eq('propuesta', false);
 
         if (validas.length > 0) {
@@ -235,18 +238,20 @@ window._medGuardarEquipacionValida = async () => {
             const { error } = await supabase.from('medallas_inventario').insert(inserts);
             if (error) { toast('❌ Error guardando: ' + error.message, 'error'); return; }
         }
-        // Actualizar cache global para fichas-ui
-        window._equipCache = window._equipCache || {};
-        window._equipCache[medallaState.pjSeleccionado] = validas;
+        
+        // Actualizar cache global (Módulo bnh-pac) para que PAC se recalcule de inmediato
+        invalidarCacheEquipacion(medallaState.pjSeleccionado);
+        
         toast(`✅ Equipación guardada (${validas.length} medallas, ${ctlAcum} CTL)`, 'ok');
         renderPersonaje();
     };
+    
     window._medGuardarEquipacion = window._medGuardarEquipacionValida;
 
-  window._medProponerEquipacion = async () => { 
+    window._medProponerEquipacion = async () => { 
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         
-        // ⚡ LENTE DE FUSIÓN: Leemos el CTL Proyectado
+        // ⚡ LENTE DE FUSIÓN
         const { proyectarPJ } = await import('./medallas-logic.js');
         const proy = proyectarPJ(medallaState.pjSeleccionado);
         const ctl = proy ? proy.ctl : 0;
@@ -319,8 +324,12 @@ window._medGuardarEquipacionValida = async () => {
         const pj = medallaState.pjSeleccionado;
         const btn = event.target;
         btn.textContent = '⏳'; btn.disabled = true;
+        
         await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', false);
         await supabase.from('medallas_inventario').update({ propuesta: false, propuesta_por: null }).eq('personaje_nombre', pj).eq('propuesta', true);
+        
+        invalidarCacheEquipacion(pj); // Invalidar caché PAC
+        
         toast('✅ Propuesta de equipación aprobada', 'ok');
         window._medSelPJ(pj); 
     };
@@ -328,6 +337,7 @@ window._medGuardarEquipacionValida = async () => {
     window._medRechazarPropuestaEq = async () => {
         const pj = medallaState.pjSeleccionado;
         if (!confirm('¿Seguro que deseas eliminar/retirar esta propuesta de equipación?')) return;
+        
         await supabase.from('medallas_inventario').delete().eq('personaje_nombre', pj).eq('propuesta', true);
         toast('🗑️ Propuesta eliminada', 'ok');
         window._medSelPJ(pj); 
@@ -411,7 +421,6 @@ window._medGuardarEquipacionValida = async () => {
     window._medGrafoBuscarTag = v => { medallaState.grafoBusqueda  = v; medallaState.grafoTagPagina = 0; renderGrafo(); };
     window._medGrafoPag = p => { medallaState.grafoTagPagina = p; renderGrafo(); };
 
-    // Función para abrir la medalla desde el markup
     window._medallasAbrirDetalleByName = (nombre) => {
         const m = medallas.find(x => x.nombre.toLowerCase() === nombre.toLowerCase());
         if (m) window._medallasAbrirDetalle(m.id);
@@ -426,7 +435,6 @@ window._medGuardarEquipacionValida = async () => {
     window._medallasCloseModal = () => {
         const el = document.getElementById('medalla-modal');
         if (el) el.style.display = 'none';
-        // Limpiamos la URL para no reabrir accidentalmente
         const url = new URL(window.location);
         url.searchParams.delete('medalla');
         window.history.replaceState({}, '', url);
@@ -434,6 +442,7 @@ window._medGuardarEquipacionValida = async () => {
 
     window._medallasNueva  = () => renderFormMedalla(null);
     window._medallasEditar = m => { window._medallasCloseModal(); setTimeout(() => renderFormMedalla(m), 80); };
+    
     window._medallasEliminar = async id => {
         if (!confirm('¿Eliminar esta medalla permanentemente?')) return;
         const ok = await eliminarMedalla(id);
@@ -498,3 +507,4 @@ window._medGuardarEquipacionValida = async () => {
     };
 
     document.addEventListener('keydown', e => { if (e.key === 'Escape') window._medallasCloseModal(); });
+}
