@@ -370,9 +370,9 @@ export function renderDetalle(grupoCrudo, htmlLore) {
     const agiA = g.agi_actual ?? agi;
     const ctlA = g.ctl_actual ?? ctl;
     // En fusión, la base de la cadena de deltas es el raw fusionado (no el raw propio)
-    const potChainBase = g.esFusion ? (g.pot_fusion_raw ?? grupoCrudo.pot||0) : (grupoCrudo.pot||0);
-    const agiChainBase = g.esFusion ? (g.agi_fusion_raw ?? grupoCrudo.agi||0) : (grupoCrudo.agi||0);
-    const ctlChainBase = g.esFusion ? (g.ctl_fusion_raw ?? grupoCrudo.ctl||0) : (grupoCrudo.ctl||0);
+    const potChainBase = g.esFusion ? (g.pot_fusion_raw ?? (grupoCrudo.pot||0)) : (grupoCrudo.pot||0);
+    const agiChainBase = g.esFusion ? (g.agi_fusion_raw ?? (grupoCrudo.agi||0)) : (grupoCrudo.agi||0);
+    const ctlChainBase = g.esFusion ? (g.ctl_fusion_raw ?? (grupoCrudo.ctl||0)) : (grupoCrudo.ctl||0);
     const pvMaxBase = calcPVMax(grupoCrudo.pot||0, grupoCrudo.agi||0, grupoCrudo.ctl||0);
     const pvActualBase = (grupoCrudo.pv_actual !== null && grupoCrudo.pv_actual !== undefined) ? grupoCrudo.pv_actual : pvMaxBase;
     const cambiosBase = Math.floor((grupoCrudo.agi||0)/4);
