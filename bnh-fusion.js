@@ -76,20 +76,16 @@ export function renderFusionBadge(nombrePJ, storageUrl, norm) {
     const imgB = `${storageUrl}/imgpersonajes/${norm(compañero)}icon.png`;
     const fallback = `${storageUrl}/imginterfaz/no_encontrado.png`;
 
-    return `
-        <div class="fusion-badge" title="En fusión con ${compañero}" style="
-            display: inline-flex; align-items: center;
-            background: linear-gradient(135deg, #1a0040, #000d1a);
-            border: 1.5px solid #a855f7; border-radius: 20px;
-            padding: 2px 8px 2px 2px; gap: 4px;">
-            <div style="position:relative; display:inline-block; width:28px; height:28px;">
+return `
+        <div class="fusion-badge" title="En fusión con ${compañero}" style="padding-left: 2px;">
+            <div style="position:relative; display:inline-block; width:28px; height:28px; margin-right: 2px;">
                 <img src="${imgA}" onerror="this.src='${fallback}'"
-                    style="width:24px; height:24px; border-radius:50%; border:1px solid #a855f7;
-                           position:absolute; left:0; top:0; object-fit:cover; z-index:2;">
+                    style="width:24px; height:24px; border-radius:50%; border:1.5px solid #9b59b6;
+                           position:absolute; left:0; top:0; object-fit:cover; z-index:2; background:#fff;">
                 <img src="${imgB}" onerror="this.src='${fallback}'"
-                    style="width:24px; height:24px; border-radius:50%; border:1px solid #7c3aed;
-                           position:absolute; left:10px; top:0; object-fit:cover; z-index:1; opacity:0.85;">
+                    style="width:24px; height:24px; border-radius:50%; border:1.5px solid #d2b4de;
+                           position:absolute; left:10px; top:0; object-fit:cover; z-index:1; opacity:0.9; background:#fff;">
             </div>
-            <span style="color:#c084fc; font-size:0.7em; font-weight:700; white-space:nowrap;">⚡ FUSIÓN</span>
+            ⚡ FUSIÓN
         </div>`;
 }
