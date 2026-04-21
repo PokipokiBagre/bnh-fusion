@@ -7,8 +7,12 @@ import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, pro
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
 import { renderMarkup } from './fichas-markup.js';
+import { supabase } from '../bnh-auth.js';
 
-import { getEquipacionPJ, calcCTLUsado, setSupabaseRef } from '../bnh-pac.js';
+// ⚡ IMPORTANTE: Conectar con el PAC para el CTL real
+import { calcCTLUsadoPJ, setSupabaseRef } from '../bnh-pac.js';
+setSupabaseRef(supabase);
+
 // Inicializar tags del catálogo en cuanto carga el módulo
 initTags();
 
@@ -16,30 +20,41 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
+// ⚡ Helper: Muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
 function _fmtDChain(base, total, deltas) {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
     if (!activos.length || base === total) return String(total);
     
-    // Reconstruir la cadena paso a paso para el tooltip
-    let pasos = String(base);
+    const makeBadge = (text, bg, color, border) => 
+        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2; margin:0 1px;">${text}</span>`;
+
+    let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
     let acc = base;
-    
+
     for (const d of activos) {
         const s = String(d).trim();
         const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
         const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
         const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
         const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-        
-        let op = '';
-        if (powM)       { acc = Math.round(Math.pow(acc, parseFloat(powM[1]))); op = `^${powM[1]}`; }
-        else if (multM) { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
-        else if (divM)  { acc = Math.round(acc / parseFloat(divM[1]));  op = `÷${divM[1]}`; }
-        else if (addM)  { const n = parseFloat(addM[1]); acc = Math.round(acc + n); op = n >= 0 ? `+${n}` : `${n}`; }
-        
-        if (op) pasos = `(${pasos}${op})`;
+
+        if (powM) {
+            acc = Math.round(Math.pow(acc, parseFloat(powM[1])));
+            badgesHtml += makeBadge(`^${powM[1]}`, '#fce4ec', '#ad1457', '#f48fb1');
+        } else if (multM) {
+            acc = Math.round(acc * parseFloat(multM[1]));
+            badgesHtml += makeBadge(`×${multM[1]}`, '#f3e5f5', '#6a1b9a', '#ce93d8'); 
+        } else if (divM) {
+            acc = Math.round(acc / parseFloat(divM[1]));
+            badgesHtml += makeBadge(`÷${divM[1]}`, '#fff3e0', '#ef6c00', '#ffcc80'); 
+        } else if (addM) {
+            const n = parseFloat(addM[1]);
+            acc = Math.round(acc + n);
+            if (n >= 0) badgesHtml += makeBadge(`+${n}`, '#e3f2fd', '#1565c0', '#90caf9'); 
+            else badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
+        }
     }
-    return `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${pasos})</span>`;
+    return `${total} <span style="display:inline-flex; align-items:center; vertical-align:middle; flex-wrap:wrap; margin-top:-2px; margin-left:4px;">${badgesHtml}</span>`;
 }
 
 // Helper legacy de un solo delta — conservado por compatibilidad
@@ -268,10 +283,9 @@ export function renderCatalogo(postersDelHilo) {
 
     cont.innerHTML = lista.map(grupoCrudo => {
         // 1. PROYECCIÓN: Toma el grupo crudo de Supabase y le aplica todos los deltas y fusiones
-        // ¡OJO! Le pasamos las variables globales para que no se rompa la fusión
         const g = proyectarFicha(grupoCrudo, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
         
-        // 2. Extraer totales calculados (ya no usamos aplicarDelta manualmente aquí)
+        // 2. Extraer totales calculados
         const pot      = g.pot_total;
         const agi      = g.agi_total;
         const ctl      = g.ctl_total;
@@ -286,7 +300,7 @@ export function renderCatalogo(postersDelHilo) {
         const enFusion = estaEnFusion(g.nombre_refinado);
         const safeN    = g.nombre_refinado.replace(/'/g,"\\'");
 
-        // Aliases de este grupo (para mostrar como subtítulo)
+        // Aliases de este grupo
         const misAliases = aliasesGlobal
             .filter(a => a.refinado_id === g.id)
             .map(a => a.nombre).join(', ');
@@ -294,7 +308,7 @@ export function renderCatalogo(postersDelHilo) {
         const tagsPreview = (g.tags||[]).slice(0,5)
             .map(t=>`<span class="ficha-tag-mini">${t.replace(/^#/,'')}</span>`).join('');
 
-        // Modo asignar: detectar qué tags del Set activo ya tiene este grupo
+        // Modo asignar
         const enModoAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.size > 0;
         const tagsGrupoNorm = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
         const tagsConAsignados = enModoAsignar
@@ -341,7 +355,8 @@ export function renderCatalogo(postersDelHilo) {
     }).join('');
 }
 
-export function renderDetalle(grupoCrudo, htmlLore) {
+// ⚡ Convertimos a async para poder hacer await al cálculo del CTL Usado desde Supabase
+export async function renderDetalle(grupoCrudo, htmlLore) {
     const wrap = $('fichas-detalle-wrap');
     const cont = $('fichas-contenido');
     if (!wrap || !cont || !grupoCrudo) return;
@@ -350,13 +365,15 @@ export function renderDetalle(grupoCrudo, htmlLore) {
     const g = proyectarFicha(grupoCrudo, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
     if (!g) return;
 
-    // Alias requeridos por tu lógica HTML
     const proy = g; 
     const nombreGrupo = g.nombre_refinado;
     const safeN = nombreGrupo.replace(/'/g,"\\'");
     const fusion = getFusionDe(nombreGrupo);
 
-    // 2. Extraemos los valores ya calculados (Total = Base + Delta)
+    // ⚡ Consultamos al PAC el costo de las medallas equipadas (Esto usa caché si existe)
+    const ctlUsado = await calcCTLUsadoPJ(nombreGrupo);
+
+    // 2. Extraemos los valores calculados
     const pot = g.pot_total;
     const agi = g.agi_total;
     const ctl = g.ctl_total;
@@ -368,26 +385,25 @@ export function renderDetalle(grupoCrudo, htmlLore) {
     const { tier } = calcTier(pot, agi, ctl);
     const tc = colorTier(tier);
 
-    // 3. Variables base y actuales necesarias para el display de tu tabla
+    // 3. Variables base para la visualización de la cadena de deltas
     const potA = g.pot_actual ?? pot;
     const agiA = g.agi_actual ?? agi;
     const ctlA = g.ctl_actual ?? ctl;
-    // En fusión, la base de la cadena de deltas es el raw fusionado (no el raw propio)
+    
     const potChainBase = g.esFusion ? (g.pot_fusion_raw ?? (grupoCrudo.pot||0)) : (grupoCrudo.pot||0);
     const agiChainBase = g.esFusion ? (g.agi_fusion_raw ?? (grupoCrudo.agi||0)) : (grupoCrudo.agi||0);
     const ctlChainBase = g.esFusion ? (g.ctl_fusion_raw ?? (grupoCrudo.ctl||0)) : (grupoCrudo.ctl||0);
+    
     const pvMaxBase = calcPVMax(grupoCrudo.pot||0, grupoCrudo.agi||0, grupoCrudo.ctl||0);
     const pvActualBase = (grupoCrudo.pv_actual !== null && grupoCrudo.pv_actual !== undefined) ? grupoCrudo.pv_actual : pvMaxBase;
     const cambiosBase = Math.floor((grupoCrudo.agi||0)/4);
 
-    // 4. Matrices para Tags, PTs y Aliases requeridas por tu HTML
     const misAliases = aliasesGlobal.filter(a => a.refinado_id === g.id).map(a => a.nombre);
     const ptG = g.ptsMapa || ptGlobal[nombreGrupo] || {};
     const tagsProy = g.tags || [];
     const tagsOrdenados = [...tagsProy].sort();
     const baseTagsNorm = (grupoCrudo.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
 
-    // Helper original de tu HTML
     const statDisplay = (totalHTML, actualVal, baseVal) => {
         if (actualVal === undefined || actualVal === null || String(actualVal) === String(baseVal)) return totalHTML;
         return `<span style="color:#2980b9;">${actualVal}</span> / ${totalHTML}`;
@@ -481,7 +497,9 @@ export function renderDetalle(grupoCrudo, htmlLore) {
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
                 <tr><td>POT</td><td>${statDisplay(_fmtDChain(potChainBase, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, potChainBase)}</td></tr>
                 <tr><td>AGI</td><td>${statDisplay(_fmtDChain(agiChainBase, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, agiChainBase)}</td></tr>
-                <tr><td>CTL</td><td>${statDisplay(_fmtDChain(ctlChainBase, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n])), ctlA, ctlChainBase)}</td></tr>
+                
+                <tr><td>CTL</td><td><span style="color:#2980b9;font-weight:600;">${ctlUsado}</span> / ${_fmtDChain(ctlChainBase, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n]))}</td></tr>
+                
                 <tr><td>PV</td><td>${_fmtDChain(pvActualBase, pvActual, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_actual_'+n]))} / ${_fmtDChain(pvMaxBase, pvMax, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_'+n]))}</td></tr>
                 <tr><td>Cambios/t</td><td>${_fmtDChain(cambiosBase, cambios, [1,2,3,4,5].map(n=>grupoCrudo['delta_cambios_'+n]))}</td></tr>
                 <tr><td>PT Total</td><td style="color:#2980b9;font-weight:700;">${Object.values(ptG).reduce((a,b)=>a+b,0)}</td></tr>
