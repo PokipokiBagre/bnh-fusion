@@ -16,24 +16,27 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
-// Helper: muestra cadena de hasta 5 deltas encadenados con anotación roja.
-// base = valor antes de aplicar cualquier delta, total = resultado final.
-// deltas = array de hasta 5 strings (los vacíos/"0" se ignoran).
 function _fmtDChain(base, total, deltas) {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
     if (!activos.length || base === total) return String(total);
+    
     // Reconstruir la cadena paso a paso para el tooltip
     let pasos = String(base);
     let acc = base;
+    
     for (const d of activos) {
         const s = String(d).trim();
+        const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
         const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
         const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
         const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+        
         let op = '';
-        if (multM)      { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
+        if (powM)       { acc = Math.round(Math.pow(acc, parseFloat(powM[1]))); op = `^${powM[1]}`; }
+        else if (multM) { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
         else if (divM)  { acc = Math.round(acc / parseFloat(divM[1]));  op = `÷${divM[1]}`; }
         else if (addM)  { const n = parseFloat(addM[1]); acc = Math.round(acc + n); op = n >= 0 ? `+${n}` : `${n}`; }
+        
         if (op) pasos = `(${pasos}${op})`;
     }
     return `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${pasos})</span>`;
