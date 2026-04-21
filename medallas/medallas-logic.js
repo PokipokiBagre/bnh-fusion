@@ -82,19 +82,19 @@ export function proyectarPJ(nombrePJ) {
     const modo = opcionesFusion?.modo_stats || 'suma';
 
     let rawPot, rawAgi, rawCtl;
-    if (modo === 'mayor') {
-        rawPot = Math.max(potPura, potPuraC) * mult;
-        rawAgi = Math.max(agiPura, agiPuraC) * mult;
-        rawCtl = Math.max(ctlPura, ctlPuraC) * mult;
-    } else if (modo === 'promedio') {
-        rawPot = ((potPura + potPuraC) / 2) * mult;
-        rawAgi = ((agiPura + agiPuraC) / 2) * mult;
-        rawCtl = ((ctlPura + ctlPuraC) / 2) * mult;
-    } else { // suma
-        rawPot = (potPura + potPuraC) * mult;
-        rawAgi = (agiPura + agiPuraC) * mult;
-        rawCtl = (ctlPura + ctlPuraC) * mult;
-    }
+if (modo === 'mayor') {
+    rawPot = Math.max(potBaseReal, potPuraC) * mult;
+    rawAgi = Math.max(agiBaseReal, agiPuraC) * mult;
+    rawCtl = Math.max(ctlBaseReal, ctlPuraC) * mult;
+} else if (modo === 'promedio') {
+    rawPot = ((potBaseReal + potPuraC) / 2) * mult;
+    rawAgi = ((agiBaseReal + agiPuraC) / 2) * mult;
+    rawCtl = ((ctlBaseReal + ctlPuraC) / 2) * mult;
+} else { // suma
+    rawPot = (potBaseReal + potPuraC) * mult;
+    rawAgi = (agiBaseReal + agiPuraC) * mult;
+    rawCtl = (ctlBaseReal + ctlPuraC) * mult;
+}
 
     rawPot = Math.round(rawPot);
     rawAgi = Math.round(rawAgi);
