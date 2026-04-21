@@ -73,7 +73,8 @@ function sincronizarVista() {
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
         document.getElementById('fichas-layout').style.display = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
-        renderDetalle(fichasUI.seleccionado);
+        const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
+        if (_gDet) renderDetalle(_gDet);
     } else {
         document.getElementById('fichas-layout').style.display = 'grid';
         document.getElementById('fichas-detalle-wrap').style.display = 'none';
@@ -329,7 +330,7 @@ function exponerGlobales() {
             // Refrescar catálogo para que la nueva imagen aparezca
             setTimeout(() => {
                 renderCatalogo(postersDelHilo);
-                if (fichasUI.vistaActual === 'detalle') renderDetalle(fichasUI.seleccionado);
+                if (fichasUI.vistaActual === 'detalle') {     const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);     if (_gDet) renderDetalle(_gDet); }
             }, 800);
         } catch(e) {
             if (msg)  { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--red)'; }
