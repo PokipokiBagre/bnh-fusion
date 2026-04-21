@@ -451,7 +451,8 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
             <div class="wiki-section-header" style="background:#6c3483;">⚡ Fusión Activa</div>
             <div style="padding:12px 14px;">
                 <p style="color:#6c3483;font-weight:600;margin-bottom:4px;">Con: <b>${fusion.pj_a===nombreGrupo?fusion.pj_b:fusion.pj_a}</b></p>
-                <p style="font-size:0.8em;color:#8e44ad;">Para terminar la fusión, visita la <a href="../fusions/" style="color:#6c3483;font-weight:700;">página de Fusiones</a>.</p>
+                <p style="font-size:0.8em;color:#8e44ad;margin-bottom:${fichasUI.esAdmin?'10px':'0'};">Para gestionar fusiones, visita la <a href="../fusions/" style="color:#6c3483;font-weight:700;">página de Fusiones</a>.</p>
+                ${fichasUI.esAdmin?`<button onclick="window._opTerminarFusion('${fusion.id}')" class="op-btn op-btn-red" style="font-size:0.78em;">✕ Terminar Fusión</button>`:''}
             </div>
         </div>
 
@@ -682,6 +683,7 @@ function _renderMedallaFichaCard(m, estado, ptsMapa, tagsGrupo) {
         </div>` : ''}
         ${esEq ? `<div style="margin-top:5px;font-size:0.7em;font-weight:700;color:var(--green);">✅ EQUIPADA</div>` : ''}
     </div>`;
+}
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
