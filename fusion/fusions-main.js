@@ -123,7 +123,7 @@ function _recalcCompatibilidad() {
 function _exponerGlobales() {
     window._fusionTab = _renderTab;
 
-    // ⚡ NUEVOS FILTROS DE POOL 
+    // ⚡ Filtros para la Pool de personajes
     window._fusionFiltroRol = (v) => { fusionsState.filtroRol = v; renderSimulador(); };
     window._fusionFiltroEst = (v) => { fusionsState.filtroEstado = v; renderSimulador(); };
 
@@ -188,7 +188,6 @@ function _exponerGlobales() {
         if (uic) uic.style.display = val === 'compartido' ? 'block' : 'none';
     };
 
-    
     window._fusionEditStat = (stat, val) => {
         const n = parseInt(val);
         fusionsState.statsEditadas[stat] = isNaN(n) || n < 0 ? null : n;
@@ -253,23 +252,17 @@ function _exponerGlobales() {
 
             if (tagFusion) {
                 const tagKey = tagFusion.slice(1);
-                
-                // Si es nuevo, forzamos que se guarde como quirk y sin descripción
                 if (modoTag === 'nuevo') {
                     await supabase.from('tags_catalogo')
                         .upsert({ nombre: tagKey, descripcion: '', tipo: 'quirk' }, { onConflict: 'nombre', ignoreDuplicates: true });
                 }
-
                 for (const nombre of [pjA, pjB]) {
-                    const { data: g } = await supabase.from('personajes_refinados')
-                        .select('tags').eq('nombre_refinado', nombre).maybeSingle();
+                    const { data: g } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', nombre).maybeSingle();
                     if (g) {
                         const nuevosTags = [...new Set([...(g.tags || []), tagFusion])];
                         await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('nombre_refinado', nombre);
                     }
                 }
-
-                // Asignar los 20 pt a ambos personajes
                 await supabase.from('puntos_tag').upsert([
                     { personaje_nombre: pjA, tag: tagFusion, cantidad: 20, actualizado_en: new Date().toISOString() },
                     { personaje_nombre: pjB, tag: tagFusion, cantidad: 20, actualizado_en: new Date().toISOString() },
@@ -303,7 +296,6 @@ function _exponerGlobales() {
         if (!fusionsState.resultadoCalculado) return;
         const r = fusionsState.resultadoCalculado;
         const { pjA, pjB } = r;
-        
         const modoTag = fusionsState.modoTagLocal || 'ninguno';
         let tagFusion = null;
 
@@ -324,20 +316,12 @@ function _exponerGlobales() {
         };
 
         const payload = {
-            pj_a:           pjA,
-            pj_b:           pjB,
-            rendimiento:    d100raw,
-            rend_total:     r.d100,
-            compat_bonus:   r.d100Bonus || 0,
-            tag_fusion:     tagFusion, // Se manda al OP
-            stats_pot:      statsFinales.pot,
-            stats_agi:      statsFinales.agi,
-            stats_ctl:      statsFinales.ctl,
+            pj_a: pjA, pj_b: pjB, rendimiento: d100raw, rend_total: r.d100, compat_bonus: r.d100Bonus || 0,
+            tag_fusion: tagFusion, stats_pot: statsFinales.pot, stats_agi: statsFinales.agi, stats_ctl: statsFinales.ctl,
             tags_resultado: Object.entries(r.tags).map(([tag, d]) => ({
                 tag, pts: d.pts, tipo: d.tipo, aportaA: d.aportaA, aportaB: d.aportaB,
             })),
-            estado:         'pendiente',
-            creado_en:      new Date().toISOString(),
+            estado: 'pendiente', creado_en: new Date().toISOString(),
         };
 
         const { error } = await supabase.from('sugerencias_fusion').insert(payload);
@@ -363,11 +347,7 @@ function _exponerGlobales() {
 
         if (sug.tag_fusion) {
             const tagKey = sug.tag_fusion.slice(1);
-            
-            // Asumimos que si no existe, se insertará como quirk
-            await supabase.from('tags_catalogo')
-                .upsert({ nombre: tagKey, descripcion: '', tipo: 'quirk' }, { onConflict: 'nombre', ignoreDuplicates: true });
-
+            await supabase.from('tags_catalogo').upsert({ nombre: tagKey, descripcion: '', tipo: 'quirk' }, { onConflict: 'nombre', ignoreDuplicates: true });
             for (const nombre of [sug.pj_a, sug.pj_b]) {
                 const { data: g } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', nombre).maybeSingle();
                 if (g) {
@@ -375,25 +355,18 @@ function _exponerGlobales() {
                     await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('nombre_refinado', nombre);
                 }
             }
-
-            // Asignar los 20 pt explícitamente
             await supabase.from('puntos_tag').upsert([
                 { personaje_nombre: sug.pj_a, tag: sug.tag_fusion, cantidad: 20, actualizado_en: new Date().toISOString() },
                 { personaje_nombre: sug.pj_b, tag: sug.tag_fusion, cantidad: 20, actualizado_en: new Date().toISOString() },
             ], { onConflict: 'personaje_nombre,tag' });
 
-            if (fusionActivaId) {
-                await supabase.from('fusiones_activas').update({ tag_fusion: sug.tag_fusion }).eq('id', fusionActivaId);
-            }
+            if (fusionActivaId) await supabase.from('fusiones_activas').update({ tag_fusion: sug.tag_fusion }).eq('id', fusionActivaId);
         }
 
         await supabase.from('registro_fusiones').insert({
-            pj_a: sug.pj_a, pj_b: sug.pj_b,
-            rendimiento: sug.rend_total || sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
-            tag_fusion: sug.tag_fusion || null, tag_fusion_pts: opcionesState.pts_tag_fusion || 0,
-            stats_pot: sug.stats_pot, stats_agi: sug.stats_agi, stats_ctl: sug.stats_ctl,
-            tags_resultado: sug.tags_resultado || [],
-            fusion_activa_id: fusionActivaId || null,
+            pj_a: sug.pj_a, pj_b: sug.pj_b, rendimiento: sug.rend_total || sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
+            tag_fusion: sug.tag_fusion || null, stats_pot: sug.stats_pot, stats_agi: sug.stats_agi, stats_ctl: sug.stats_ctl,
+            tags_resultado: sug.tags_resultado || [], fusion_activa_id: fusionActivaId || null,
         });
 
         await supabase.from('sugerencias_fusion').update({ estado: 'aprobada' }).eq('id', id);
@@ -411,18 +384,22 @@ function _exponerGlobales() {
         renderRegistro();
     };
 
+    // ⚡ Función mejorada con REVALIDACIÓN DE MEDALLAS (limpiar exceso por pérdida de fusión)
     window._fusionTerminar = async (id, pjA, pjB) => {
         if (!fusionsState.esAdmin) { toast('Solo el OP puede terminar fusiones.', 'error'); return; }
         if (!confirm(`¿Terminar la fusión de ${pjA} y ${pjB}?`)) return;
+        
         try {
             await terminarFusion(id);
             const fusion = fusionesActivas.find(f => f.id === id);
+            
+            // Lógica de quitar tag si el OP lo desea
             if (fusion?.tag_fusion) {
                 if (confirm(`¿Quitar también el tag ${fusion.tag_fusion} de ${pjA} y ${pjB}?`)) {
                     for (const nombre of [pjA, pjB]) {
                         const { data: g } = await supabase.from('personajes_refinados').select('tags').eq('nombre_refinado', nombre).maybeSingle();
                         if (g) {
-                            const nuevosTags = (g.tags || []).filter(t =>
+                            const nuevosTags = (g.tags || []).filter(t => 
                                 (t.startsWith('#') ? t : '#' + t).toLowerCase() !== fusion.tag_fusion.toLowerCase()
                             );
                             await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('nombre_refinado', nombre);
@@ -430,29 +407,51 @@ function _exponerGlobales() {
                     }
                 }
             }
-            const [{ data: faData }, { data: pjData }] = await Promise.all([
-                supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
-                supabase.from('personajes_refinados').select('nombre_refinado, pot, agi, ctl, tags').order('nombre_refinado'),
-            ]);
-            setFusionesActivas(faData || []);
-            const pjNorm = (pjData || []).map(p => ({ nombre: p.nombre_refinado, pot: p.pot||0, agi: p.agi||0, ctl: p.ctl||0, tags: p.tags||[] }));
-            setPersonajes(pjNorm);
-            await cargarFusiones();
+
+            // Sincronizar datos base tras el cierre (fundamental para la limpieza posterior)
+            await _refrescarTodo();
+
+            // ─── REVALIDACIÓN DE INVENTARIO ───
+            const { limpiarInventarioInvalido } = await import('../bnh-medal.js');
+            const { getEquipacionPJ } = await import('../bnh-pac.js');
+
+            for (const nombre of [pjA, pjB]) {
+                const pj = personajes.find(p => p.nombre === nombre);
+                if (!pj) continue;
+
+                // Construimos mapa de PTs real para este personaje
+                const misPtsMap = {};
+                ptGlobales.filter(p => p.personaje_nombre === nombre).forEach(p => {
+                    const k = (p.tag.startsWith('#') ? p.tag : '#' + p.tag).toLowerCase();
+                    misPtsMap[k] = p.cantidad;
+                });
+
+                // Calculamos CTL real (Base + bono por PTs de #stat_ctl)
+                const ptsCtl = misPtsMap['#stat_ctl'] || 0;
+                const ctlReal = (pj.ctl || 0) + Math.floor(ptsCtl / 50);
+
+                // Forzamos obtención de equipación fresca (que puede estar en exceso)
+                const invActual = await getEquipacionPJ(nombre, { forzar: true });
+
+                // Ejecutamos la limpieza automática
+                await limpiarInventarioInvalido(nombre, invActual, pj.tags, misPtsMap, ctlReal);
+            }
+
             renderFusionesActivas();
-            toast(`Fusión ${pjA} + ${pjB} terminada.`, 'ok');
-        } catch(e) { toast('❌ Error: ' + e.message, 'error'); }
+            toast(`Fusión ${pjA} + ${pjB} terminada. Inventarios revalidados.`, 'ok');
+        } catch(e) { 
+            console.error(e);
+            toast('❌ Error: ' + e.message, 'error'); 
+        }
     };
 
     window._fusionBorrarRegistro = async (id) => {
         if (!fusionsState.esAdmin) return;
-        if (!confirm('¿Eliminar este registro del historial? No deshace la fusión en sí.')) return;
-        
-        const realId = parseInt(id, 10); 
+        if (!confirm('¿Eliminar este registro del historial?')) return;
+        const realId = parseInt(id, 10);
         const { error } = await supabase.from('registro_fusiones').delete().eq('id', realId);
-        
         if (error) { toast('❌ Error BD: ' + error.message, 'error'); return; }
-        
-        await _refrescarTodo(); 
+        await _refrescarTodo();
         _renderTab('registro');
         toast('✅ Registro eliminado.', 'ok');
     };
@@ -467,13 +466,11 @@ function _exponerGlobales() {
     window._fusionOpcionChange = (key, val) => {
         if (!fusionsState.esAdmin) return;
         let parsed = val;
-        if (val === 'true')  parsed = true;
+        if (val === 'true') parsed = true;
         if (val === 'false') parsed = false;
         if (!isNaN(val) && val !== '' && typeof val === 'string') parsed = Number(val);
         opcionesState[key] = parsed;
-        if (['num_umbrales', 'umbral_1', 'umbral_2', 'modo_stats', 'crear_tag_fusion'].includes(key)) {
-            renderOpciones();
-        }
+        if (['num_umbrales', 'umbral_1', 'umbral_2', 'modo_stats', 'crear_tag_fusion'].includes(key)) renderOpciones();
     };
 
     window._fusionGuardarOpciones = async () => {
@@ -494,7 +491,6 @@ async function _refrescarTodo() {
     ]);
     
     setBannedTags((tagsData || []).map(t => t.nombre));
-    
     setFusionesActivas(faData || []);
     setRegistroFusiones(regData || []);
     const pjNorm = (pjData || []).map(p => ({ nombre: p.nombre_refinado, pot: p.pot||0, agi: p.agi||0, ctl: p.ctl||0, tags: p.tags||[] }));
@@ -515,9 +511,9 @@ function _actualizarBarraD100() {
     const reglaEl = document.getElementById('regla-badge-display');
     const sobreEl = document.getElementById('sobrecarga-display');
 
-    if (fill)    fill.style.width    = Math.min(val, 100) + '%';
-    if (fillB)   fillB.style.width   = (total > 100 ? (total - 100) * 0.5 : bonus > 0 ? Math.min(bonus, 100 - val) : 0) + '%';
-    if (label)   label.textContent   = val ? `D100: ${val} + ${bonus}% tags = ${total}%` : 'Ingresa el dado';
+    if (fill) fill.style.width = Math.min(val, 100) + '%';
+    if (fillB) fillB.style.width = (total > 100 ? (total - 100) * 0.5 : bonus > 0 ? Math.min(bonus, 100 - val) : 0) + '%';
+    if (label) label.textContent = val ? `D100: ${val} + ${bonus}% tags = ${total}%` : 'Ingresa el dado';
     if (totalEl) totalEl.textContent = total;
 
     if (reglaEl) {
@@ -526,12 +522,7 @@ function _actualizarBarraD100() {
             reglaEl.style.display = 'block';
             reglaEl.className = `regla-badge ${regla?.clase || ''}`;
             reglaEl.textContent = regla?.label || '';
-        } else {
-            reglaEl.style.display = 'none';
-        }
+        } else reglaEl.style.display = 'none';
     }
-    
-    if (sobreEl) {
-        sobreEl.style.display = total > 100 ? 'block' : 'none';
-    }
+    if (sobreEl) sobreEl.style.display = total > 100 ? 'block' : 'none';
 }
