@@ -2,7 +2,7 @@
 // fichas-logic.js
 // ============================================================
 import { getFusionDe } from '../bnh-fusion.js';
-import { aplicarDelta } from '../bnh-pac.js';
+import { aplicarDelta, aplicarDeltas } from '../bnh-pac.js';
 
 import { ptGlobal } from './fichas-state.js';
 import { opcionesFusion, bannedTags } from './fichas-data.js';
@@ -54,10 +54,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const ptOriginal = ptGlobal ? (ptGlobal[grupoBase.nombre_refinado] || {}) : {};
     const tagsOriginal = grupoBase.tags || [];
 
-    // 1. Aplicar deltas de stats base propios
-    const potBase = aplicarDelta(grupoBase.pot || 0, grupoBase.delta_pot);
-    const agiBase = aplicarDelta(grupoBase.agi || 0, grupoBase.delta_agi);
-    const ctlBase = aplicarDelta(grupoBase.ctl || 0, grupoBase.delta_ctl);
+    // 1. Aplicar deltas encadenados de stats base propios (hasta 5 por stat)
+    const potBase = aplicarDeltas(grupoBase.pot||0, grupoBase.delta_pot_1, grupoBase.delta_pot_2, grupoBase.delta_pot_3, grupoBase.delta_pot_4, grupoBase.delta_pot_5);
+    const agiBase = aplicarDeltas(grupoBase.agi||0, grupoBase.delta_agi_1, grupoBase.delta_agi_2, grupoBase.delta_agi_3, grupoBase.delta_agi_4, grupoBase.delta_agi_5);
+    const ctlBase = aplicarDeltas(grupoBase.ctl||0, grupoBase.delta_ctl_1, grupoBase.delta_ctl_2, grupoBase.delta_ctl_3, grupoBase.delta_ctl_4, grupoBase.delta_ctl_5);
 
     // 2. Calcular PV y Cambios usando las bases con deltas
     // (Usamos la función interna para no tener dependencias circulares)
@@ -65,12 +65,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const bonoTier = pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
     
     const pvMaxPuro = Math.floor(potBase/4) + Math.floor(agiBase/4) + Math.floor(ctlBase/4) + bonoTier;
-    const pvMaxTotal = aplicarDelta(pvMaxPuro, grupoBase.delta_pv);
-
-    const pvActualPuro = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotal;
-    const pvActualTotal = aplicarDelta(pvActualPuro, grupoBase.delta_pv_actual);
-
-    const cambiosTotal = aplicarDelta(Math.floor(agiBase / 4), grupoBase.delta_cambios);
+    const pvMaxTotal     = aplicarDeltas(pvMaxPuro,       grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
+    const pvActualPuro   = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotal;
+    const pvActualTotal  = aplicarDeltas(pvActualPuro,    grupoBase.delta_pv_actual_1, grupoBase.delta_pv_actual_2, grupoBase.delta_pv_actual_3, grupoBase.delta_pv_actual_4, grupoBase.delta_pv_actual_5);
+    const cambiosTotal   = aplicarDeltas(Math.floor(agiBase/4), grupoBase.delta_cambios_1, grupoBase.delta_cambios_2, grupoBase.delta_cambios_3, grupoBase.delta_cambios_4, grupoBase.delta_cambios_5);
 
     // 3. Si no está en fusión, devolver los datos con TODAS las variables listas para la UI
     if (!f) {
@@ -98,10 +96,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const compañero = gruposGlobal.find(g => g.nombre_refinado === nombreCompañero) || {};
     const ptCompañero = ptGlobal[nombreCompañero] || {};
 
-    // Aplicar deltas del compañero también
-    const potComp = aplicarDelta(compañero.pot || 0, compañero.delta_pot);
-    const agiComp = aplicarDelta(compañero.agi || 0, compañero.delta_agi);
-    const ctlComp = aplicarDelta(compañero.ctl || 0, compañero.delta_ctl);
+    // Aplicar deltas encadenados del compañero también
+    const potComp = aplicarDeltas(compañero.pot||0, compañero.delta_pot_1, compañero.delta_pot_2, compañero.delta_pot_3, compañero.delta_pot_4, compañero.delta_pot_5);
+    const agiComp = aplicarDeltas(compañero.agi||0, compañero.delta_agi_1, compañero.delta_agi_2, compañero.delta_agi_3, compañero.delta_agi_4, compañero.delta_agi_5);
+    const ctlComp = aplicarDeltas(compañero.ctl||0, compañero.delta_ctl_1, compañero.delta_ctl_2, compañero.delta_ctl_3, compañero.delta_ctl_4, compañero.delta_ctl_5);
 
     // --- 1. Lente de STATS ---
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
@@ -168,10 +166,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const pvMaxPuroFusion = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoTierFusion;
     
     // Aplicamos los deltas del PJ base a su nuevo estado fusionado
-    const pvMaxTotalFusion = aplicarDelta(pvMaxPuroFusion, grupoBase.delta_pv);
-    const pvActualPuroFusion = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotalFusion;
-    const pvActualTotalFusion = aplicarDelta(pvActualPuroFusion, grupoBase.delta_pv_actual);
-    const cambiosTotalFusion = aplicarDelta(Math.floor(agi / 4), grupoBase.delta_cambios);
+    const pvMaxTotalFusion    = aplicarDeltas(pvMaxPuroFusion,   grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
+    const pvActualPuroFusion  = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotalFusion;
+    const pvActualTotalFusion = aplicarDeltas(pvActualPuroFusion, grupoBase.delta_pv_actual_1, grupoBase.delta_pv_actual_2, grupoBase.delta_pv_actual_3, grupoBase.delta_pv_actual_4, grupoBase.delta_pv_actual_5);
+    const cambiosTotalFusion  = aplicarDeltas(Math.floor(agi/4), grupoBase.delta_cambios_1,   grupoBase.delta_cambios_2,   grupoBase.delta_cambios_3,   grupoBase.delta_cambios_4,   grupoBase.delta_cambios_5);
 
     return {
         ...grupoBase, // Mantiene el Lore, Quirks, IDs...

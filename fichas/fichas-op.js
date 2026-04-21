@@ -64,26 +64,32 @@ export async function abrirPanelOP(nombreGrupo) {
 
     <div id="op-p0">
         <p class="stat-hint" style="line-height:1.4;">
-            <b>Base</b> = Stat nativo (POT, AGI, CTL). PV, Cambios y CTL Usado se calculan solos.<br>
-            <b>Delta (Δ)</b> = Operador matemático (ej: <code>+20</code>, <code>x1.5</code>, <code>/2</code>).<br>
-            <b>Nota</b> = Origen del delta (ej: "Medalla de Fuego").
+            <b>Base</b> = Stat nativo (POT, AGI, CTL). PV y Cambios se calculan solos.<br>
+            <b>Delta (Δ)</b> = Operador matemático encadenado (ej: <code>+20</code>, <code>x1.5</code>, <code>/2</code>). Se aplican en orden: (((Base Δ1) Δ2) Δ3)…<br>
+            <b>Nota</b> = Descripción general de los deltas del stat.
         </p>
         
         <div style="display:flex; flex-direction:column; gap:8px;">
             ${['pot', 'agi', 'ctl'].map(s => `
-            <div style="display:flex; gap:6px; align-items:center; background:var(--gray-50); padding:6px; border-radius:6px; border:1px solid var(--gray-200);">
-                <div style="width:35px; font-weight:800; color:var(--fp-dark); text-transform:uppercase;">${s}</div>
-                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
-                    <span style="font-size:0.65em; color:var(--gray-500);">Base</span>
-                    <input id="op-${s}-base" type="number" value="${g[s]||0}" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;">
+            <div style="background:var(--gray-50); padding:8px; border-radius:6px; border:1px solid var(--gray-200);">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <div style="width:35px; font-weight:800; color:var(--fp-dark); text-transform:uppercase; font-size:0.9em;">${s.toUpperCase()}</div>
+                    <div style="display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.62em; color:var(--gray-500);">Base</span>
+                        <input id="op-${s}-base" type="number" value="${g[s]||0}" style="width:60px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                    </div>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.62em; color:var(--gray-500);">Nota / Origen</span>
+                        <input id="op-${s}-nota" type="text" value="${g['nota_'+s]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                    </div>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
-                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
-                    <input id="op-${s}-delta" type="text" value="${g['delta_'+s]||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
-                </div>
-                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
-                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
-                    <input id="op-${s}-nota" type="text" value="${g['nota_'+s]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                <div style="display:flex; gap:4px;">
+                    ${[1,2,3,4,5].map(n => `
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.6em; color:var(--fp); text-align:center;">Δ${n}</span>
+                        <input id="op-${s}-delta-${n}" type="text" value="${g['delta_'+s+'_'+n]||'0'}" placeholder="0"
+                            style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px 1px; color:var(--fp); font-weight:bold; font-size:0.85em;">
+                    </div>`).join('')}
                 </div>
             </div>
             `).join('')}
@@ -91,23 +97,26 @@ export async function abrirPanelOP(nombreGrupo) {
             <div style="height:1px; background:var(--gray-200); margin:4px 0;"></div>
 
             ${[
-                { id: 'pv', lbl: 'PV Máx', base: 'Auto' },
-                { id: 'cambios', lbl: 'Camb/T', base: 'Auto' },
+                { id: 'pv',        lbl: 'PV Máx',  base: 'Auto' },
+                { id: 'cambios',   lbl: 'Camb/T',  base: 'Auto' },
                 { id: 'ctl_usado', lbl: 'CTL Usd', base: ctlEquipacion }
             ].map(s => `
-            <div style="display:flex; gap:6px; align-items:center; background:var(--gray-50); padding:6px; border-radius:6px; border:1px solid var(--gray-200);">
-                <div style="width:45px; font-size:0.75em; font-weight:800; color:var(--gray-600); line-height:1;">${s.lbl}</div>
-                <div style="display:flex; flex-direction:column; gap:2px; width:50px;">
-                    <span style="font-size:0.65em; color:var(--gray-500);">Base</span>
-                    <div style="text-align:center; background:#e9ecef; border-radius:4px; padding:2px; font-size:0.85em; color:#666; height:21px; display:flex; align-items:center; justify-content:center; border:1px solid transparent;">${s.base}</div>
+            <div style="background:var(--gray-50); padding:8px; border-radius:6px; border:1px solid var(--gray-200);">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <div style="width:50px; font-size:0.75em; font-weight:800; color:var(--gray-600); line-height:1.2;">${s.lbl}</div>
+                    <div style="background:#e9ecef; border-radius:4px; padding:2px 8px; font-size:0.82em; color:#666; white-space:nowrap;">${s.base}</div>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.62em; color:var(--gray-500);">Nota / Origen</span>
+                        <input id="op-${s.id}-nota" type="text" value="${g['nota_'+s.id]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                    </div>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
-                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
-                    <input id="op-${s.id}-delta" type="text" value="${g['delta_'+s.id]||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
-                </div>
-                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
-                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
-                    <input id="op-${s.id}-nota" type="text" value="${g['nota_'+s.id]||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                <div style="display:flex; gap:4px;">
+                    ${[1,2,3,4,5].map(n => `
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.6em; color:var(--fp); text-align:center;">Δ${n}</span>
+                        <input id="op-${s.id}-delta-${n}" type="text" value="${g['delta_'+s.id+'_'+n]||'0'}" placeholder="0"
+                            style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px 1px; color:var(--fp); font-weight:bold; font-size:0.85em;">
+                    </div>`).join('')}
                 </div>
             </div>
             `).join('')}
@@ -120,15 +129,21 @@ export async function abrirPanelOP(nombreGrupo) {
                 <div style="font-size:0.7em; color:var(--green-dark); margin-left:auto;">(Vacío = Max PV)</div>
             </div>
 
-            <div style="display:flex; gap:6px; align-items:center; background:rgba(46, 204, 113, 0.07); padding:6px; border-radius:6px; border:1px solid rgba(46, 204, 113, 0.2);">
-                <div style="width:45px; font-size:0.75em; font-weight:800; color:var(--green-dark); line-height:1;">PV Act Δ</div>
-                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
-                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
-                    <input id="op-pv_actual-delta" type="text" value="${g.delta_pv_actual||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
+            <div style="background:rgba(46,204,113,0.07); padding:8px; border-radius:6px; border:1px solid rgba(46,204,113,0.2);">
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+                    <div style="width:60px; font-size:0.75em; font-weight:800; color:var(--green-dark); line-height:1.2;">PV Act Δ</div>
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.62em; color:var(--gray-500);">Nota / Origen</span>
+                        <input id="op-pv_actual-nota" type="text" value="${g.nota_pv_actual||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                    </div>
                 </div>
-                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
-                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
-                    <input id="op-pv_actual-nota" type="text" value="${g.nota_pv_actual||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                <div style="display:flex; gap:4px;">
+                    ${[1,2,3,4,5].map(n => `
+                    <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
+                        <span style="font-size:0.6em; color:var(--fp); text-align:center;">Δ${n}</span>
+                        <input id="op-pv_actual-delta-${n}" type="text" value="${g['delta_pv_actual_'+n]||'0'}" placeholder="0"
+                            style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px 1px; color:var(--fp); font-weight:bold; font-size:0.85em;">
+                    </div>`).join('')}
                 </div>
             </div>
         </div>
@@ -557,26 +572,59 @@ export function exponerGlobalesOP() {
         const pvActRaw = d('op-pv-actual');
 
         const payload = {
-            pot: parseInt(d('op-pot-base'))  || 0,
-            agi: parseInt(d('op-agi-base'))  || 0,
-            ctl: parseInt(d('op-ctl-base'))  || 0,
+            pot: parseInt(d('op-pot-base')) || 0,
+            agi: parseInt(d('op-agi-base')) || 0,
+            ctl: parseInt(d('op-ctl-base')) || 0,
 
-            delta_pot:       d('op-pot-delta')       || '0',
-            delta_agi:       d('op-agi-delta')       || '0',
-            delta_ctl:       d('op-ctl-delta')       || '0',
-            delta_pv:        d('op-pv-delta')        || '0',
-            delta_cambios:   d('op-cambios-delta')   || '0',
-            delta_ctl_usado: d('op-ctl_usado-delta') || '0',
+            delta_pot_1: d('op-pot-delta-1') || '0',
+            delta_pot_2: d('op-pot-delta-2') || '0',
+            delta_pot_3: d('op-pot-delta-3') || '0',
+            delta_pot_4: d('op-pot-delta-4') || '0',
+            delta_pot_5: d('op-pot-delta-5') || '0',
 
-            nota_pot:        d('op-pot-nota'),
-            nota_agi:        d('op-agi-nota'),
-            nota_ctl:        d('op-ctl-nota'),
-            nota_pv:         d('op-pv-nota'),
-            nota_cambios:    d('op-cambios-nota'),
-            nota_ctl_usado:  d('op-ctl_usado-nota'),
+            delta_agi_1: d('op-agi-delta-1') || '0',
+            delta_agi_2: d('op-agi-delta-2') || '0',
+            delta_agi_3: d('op-agi-delta-3') || '0',
+            delta_agi_4: d('op-agi-delta-4') || '0',
+            delta_agi_5: d('op-agi-delta-5') || '0',
 
-            delta_pv_actual: d('op-pv_actual-delta') || '0',
-            nota_pv_actual:  d('op-pv_actual-nota'),
+            delta_ctl_1: d('op-ctl-delta-1') || '0',
+            delta_ctl_2: d('op-ctl-delta-2') || '0',
+            delta_ctl_3: d('op-ctl-delta-3') || '0',
+            delta_ctl_4: d('op-ctl-delta-4') || '0',
+            delta_ctl_5: d('op-ctl-delta-5') || '0',
+
+            delta_pv_1: d('op-pv-delta-1') || '0',
+            delta_pv_2: d('op-pv-delta-2') || '0',
+            delta_pv_3: d('op-pv-delta-3') || '0',
+            delta_pv_4: d('op-pv-delta-4') || '0',
+            delta_pv_5: d('op-pv-delta-5') || '0',
+
+            delta_cambios_1: d('op-cambios-delta-1') || '0',
+            delta_cambios_2: d('op-cambios-delta-2') || '0',
+            delta_cambios_3: d('op-cambios-delta-3') || '0',
+            delta_cambios_4: d('op-cambios-delta-4') || '0',
+            delta_cambios_5: d('op-cambios-delta-5') || '0',
+
+            delta_ctl_usado_1: d('op-ctl_usado-delta-1') || '0',
+            delta_ctl_usado_2: d('op-ctl_usado-delta-2') || '0',
+            delta_ctl_usado_3: d('op-ctl_usado-delta-3') || '0',
+            delta_ctl_usado_4: d('op-ctl_usado-delta-4') || '0',
+            delta_ctl_usado_5: d('op-ctl_usado-delta-5') || '0',
+
+            delta_pv_actual_1: d('op-pv_actual-delta-1') || '0',
+            delta_pv_actual_2: d('op-pv_actual-delta-2') || '0',
+            delta_pv_actual_3: d('op-pv_actual-delta-3') || '0',
+            delta_pv_actual_4: d('op-pv_actual-delta-4') || '0',
+            delta_pv_actual_5: d('op-pv_actual-delta-5') || '0',
+
+            nota_pot:       d('op-pot-nota'),
+            nota_agi:       d('op-agi-nota'),
+            nota_ctl:       d('op-ctl-nota'),
+            nota_pv:        d('op-pv-nota'),
+            nota_cambios:   d('op-cambios-nota'),
+            nota_ctl_usado: d('op-ctl_usado-nota'),
+            nota_pv_actual: d('op-pv_actual-nota'),
 
             pv_actual: pvActRaw === '' ? null : (parseInt(pvActRaw) || 0),
         };

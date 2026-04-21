@@ -16,22 +16,32 @@ const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
 
-// Helper: dado un valor total ya calculado y el deltaStr original,
-// devuelve HTML con el total + anotación roja pequeña si hay delta.
-// base = valor antes del delta, total = valor después.
+// Helper: muestra cadena de hasta 5 deltas encadenados con anotación roja.
+// base = valor antes de aplicar cualquier delta, total = resultado final.
+// deltas = array de hasta 5 strings (los vacíos/"0" se ignoran).
+function _fmtDChain(base, total, deltas) {
+    const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
+    if (!activos.length || base === total) return String(total);
+    // Reconstruir la cadena paso a paso para el tooltip
+    let pasos = String(base);
+    let acc = base;
+    for (const d of activos) {
+        const s = String(d).trim();
+        const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+        const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+        const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+        let op = '';
+        if (multM)      { acc = Math.round(acc * parseFloat(multM[1])); op = `×${multM[1]}`; }
+        else if (divM)  { acc = Math.round(acc / parseFloat(divM[1]));  op = `÷${divM[1]}`; }
+        else if (addM)  { const n = parseFloat(addM[1]); acc = Math.round(acc + n); op = n >= 0 ? `+${n}` : `${n}`; }
+        if (op) pasos = `(${pasos}${op})`;
+    }
+    return `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${pasos})</span>`;
+}
+
+// Helper legacy de un solo delta — conservado por compatibilidad
 function _fmtD(base, total, deltaStr) {
-    const s = String(deltaStr || '0').trim();
-    if (!s || s === '0' || base === total) return String(total);
-    let label = '';
-    const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
-    if (multM) label = `${base}×${multM[1]}`;
-    const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
-    if (divM)  label = `${base}÷${divM[1]}`;
-    const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-    if (addM)  { const d = parseFloat(addM[1]); label = d >= 0 ? `${base}+${d}` : `${base}${d}`; }
-    return label
-        ? `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${label})</span>`
-        : String(total);
+    return _fmtDChain(base, total, [deltaStr]);
 }
 
 // Imagen: siempre usa nombre_refinado (aliases no tienen imagen propia)
@@ -462,11 +472,11 @@ export function renderDetalle(grupoCrudo, htmlLore) {
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
-                <tr><td>POT</td><td>${statDisplay(_fmtD(g.pot||0, pot, g.delta_pot), potA, g.pot||0)}</td></tr>
-                <tr><td>AGI</td><td>${statDisplay(_fmtD(g.agi||0, agi, g.delta_agi), agiA, g.agi||0)}</td></tr>
-                <tr><td>CTL</td><td>${statDisplay(_fmtD(g.ctl||0, ctl, g.delta_ctl), ctlA, g.ctl||0)}</td></tr>
-                <tr><td>PV</td><td>${_fmtD(pvActualBase, pvActual, g.delta_pv_actual)} / ${_fmtD(pvMaxBase, pvMax, g.delta_pv)}</td></tr>
-                <tr><td>Cambios/t</td><td>${_fmtD(cambiosBase, cambios, g.delta_cambios)}</td></tr>
+                <tr><td>POT</td><td>${statDisplay(_fmtDChain(grupoCrudo.pot||0, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, grupoCrudo.pot||0)}</td></tr>
+                <tr><td>AGI</td><td>${statDisplay(_fmtDChain(grupoCrudo.agi||0, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, grupoCrudo.agi||0)}</td></tr>
+                <tr><td>CTL</td><td>${statDisplay(_fmtDChain(grupoCrudo.ctl||0, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n])), ctlA, grupoCrudo.ctl||0)}</td></tr>
+                <tr><td>PV</td><td>${_fmtDChain(pvActualBase, pvActual, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_actual_'+n]))} / ${_fmtDChain(pvMaxBase, pvMax, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_'+n]))}</td></tr>
+                <tr><td>Cambios/t</td><td>${_fmtDChain(cambiosBase, cambios, [1,2,3,4,5].map(n=>grupoCrudo['delta_cambios_'+n]))}</td></tr>
                 <tr><td>PT Total</td><td style="color:#2980b9;font-weight:700;">${Object.values(ptG).reduce((a,b)=>a+b,0)}</td></tr>
             </table>
             <div style="padding:6px 10px 4px;font-size:0.72em;font-weight:700;color:var(--gray-700);text-transform:uppercase;">Tags</div>
