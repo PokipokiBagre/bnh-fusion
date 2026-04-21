@@ -119,6 +119,18 @@ export async function abrirPanelOP(nombreGrupo) {
                 <input id="op-pv-actual" type="number" value="${g.pv_actual ?? ''}" placeholder="Lleno" style="width:70px; text-align:center; border:1px solid var(--green); border-radius:4px; padding:4px; font-weight:bold; color:var(--green-dark);">
                 <div style="font-size:0.7em; color:var(--green-dark); margin-left:auto;">(Vacío = Max PV)</div>
             </div>
+
+            <div style="display:flex; gap:6px; align-items:center; background:rgba(46, 204, 113, 0.07); padding:6px; border-radius:6px; border:1px solid rgba(46, 204, 113, 0.2);">
+                <div style="width:45px; font-size:0.75em; font-weight:800; color:var(--green-dark); line-height:1;">PV Act Δ</div>
+                <div style="display:flex; flex-direction:column; gap:2px; width:60px;">
+                    <span style="font-size:0.65em; color:var(--fp);">Delta (Δ)</span>
+                    <input id="op-pv_actual-delta" type="text" value="${g.delta_pv_actual||'0'}" placeholder="0" style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px; color:var(--fp); font-weight:bold;">
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; flex:1;">
+                    <span style="font-size:0.65em; color:var(--gray-500);">Nota / Origen</span>
+                    <input id="op-pv_actual-nota" type="text" value="${g.nota_pv_actual||''}" placeholder="Escribe el motivo..." style="width:100%; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                </div>
+            </div>
         </div>
 
         <div style="display:flex; gap:8px; margin-top:14px; align-items:center;">
@@ -538,37 +550,34 @@ export function exponerGlobalesOP() {
         });
     };
 
-    // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado,
-    // el total se calcula al renderizar la ficha (fichas-ui.js / proyectarStats).
+    // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.
 
     window._opGuardarStats = async (nombreGrupo) => {
         const d = id => document.getElementById(id)?.value?.trim() ?? '';
-
         const pvActRaw = d('op-pv-actual');
 
         const payload = {
-            // Bases (stats nativos)
             pot: parseInt(d('op-pot-base'))  || 0,
             agi: parseInt(d('op-agi-base'))  || 0,
             ctl: parseInt(d('op-ctl-base'))  || 0,
 
-            // Deltas (operadores matemáticos guardables)
-            delta_pot:      d('op-pot-delta')      || '0',
-            delta_agi:      d('op-agi-delta')      || '0',
-            delta_ctl:      d('op-ctl-delta')      || '0',
-            delta_pv:       d('op-pv-delta')       || '0',
-            delta_cambios:  d('op-cambios-delta')  || '0',
-            delta_ctl_usado:d('op-ctl_usado-delta')|| '0',
+            delta_pot:       d('op-pot-delta')       || '0',
+            delta_agi:       d('op-agi-delta')       || '0',
+            delta_ctl:       d('op-ctl-delta')       || '0',
+            delta_pv:        d('op-pv-delta')        || '0',
+            delta_cambios:   d('op-cambios-delta')   || '0',
+            delta_ctl_usado: d('op-ctl_usado-delta') || '0',
 
-            // Notas de origen de cada delta
-            nota_pot:       d('op-pot-nota'),
-            nota_agi:       d('op-agi-nota'),
-            nota_ctl:       d('op-ctl-nota'),
-            nota_pv:        d('op-pv-nota'),
-            nota_cambios:   d('op-cambios-nota'),
-            nota_ctl_usado: d('op-ctl_usado-nota'),
+            nota_pot:        d('op-pot-nota'),
+            nota_agi:        d('op-agi-nota'),
+            nota_ctl:        d('op-ctl-nota'),
+            nota_pv:         d('op-pv-nota'),
+            nota_cambios:    d('op-cambios-nota'),
+            nota_ctl_usado:  d('op-ctl_usado-nota'),
 
-            // Salud actual (null = lleno = se usa PV Máx al renderizar)
+            delta_pv_actual: d('op-pv_actual-delta') || '0',
+            nota_pv_actual:  d('op-pv_actual-nota'),
+
             pv_actual: pvActRaw === '' ? null : (parseInt(pvActRaw) || 0),
         };
 

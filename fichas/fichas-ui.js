@@ -3,7 +3,7 @@
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { guardarTagsGrupo, borrarPTDeTag, opcionesFusion, bannedTags } from './fichas-data.js';
-import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, proyectarFicha, aplicarDelta } from './fichas-logic.js';
+import { calcTier, calcPVMax, calcCambios, colorTier, buildTagIndex, fmtTag, proyectarFicha } from './fichas-logic.js';
 import { estaEnFusion, getFusionDe, renderFusionBadge } from '../bnh-fusion.js';
 import { TAGS_CANONICOS, initTags } from '../bnh-tags.js';
 import { renderMarkup } from './fichas-markup.js';
@@ -15,6 +15,24 @@ initTags();
 const $ = id => document.getElementById(id);
 const fallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const onErr    = `this.onerror=null;this.src='${fallback}'`;
+
+// Helper: dado un valor total ya calculado y el deltaStr original,
+// devuelve HTML con el total + anotación roja pequeña si hay delta.
+// base = valor antes del delta, total = valor después.
+function _fmtD(base, total, deltaStr) {
+    const s = String(deltaStr || '0').trim();
+    if (!s || s === '0' || base === total) return String(total);
+    let label = '';
+    const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+    if (multM) label = `${base}×${multM[1]}`;
+    const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+    if (divM)  label = `${base}÷${divM[1]}`;
+    const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+    if (addM)  { const d = parseFloat(addM[1]); label = d >= 0 ? `${base}+${d}` : `${base}${d}`; }
+    return label
+        ? `${total} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${label})</span>`
+        : String(total);
+}
 
 // Imagen: siempre usa nombre_refinado (aliases no tienen imagen propia)
 function imgGrupo(grupo) {
@@ -241,10 +259,12 @@ export function renderCatalogo(postersDelHilo) {
         const agi  = aplicarDelta(g.agi||0, g.delta_agi);
         const ctl  = aplicarDelta(g.ctl||0, g.delta_ctl);
         const { tier } = calcTier(pot, agi, ctl);
-        const pvMax    = aplicarDelta(calcPVMax(pot, agi, ctl), g.delta_pv);
-        const pac      = pot+agi+ctl;
-        const tc       = colorTier(tier);
-        const pvA      = g.pv_actual ?? pvMax;
+        const pvMaxBase = calcPVMax(pot, agi, ctl);
+        const pvMax     = aplicarDelta(pvMaxBase, g.delta_pv);
+        const pac       = pot+agi+ctl;
+        const tc        = colorTier(tier);
+        const pvActualBase = g.pv_actual ?? pvMax;
+        const pvA       = aplicarDelta(pvActualBase, g.delta_pv_actual);
         const pvPct    = pvMax>0 ? Math.round((pvA/pvMax)*100) : 100;
         const pvCls    = pvPct<25?'pv-crit':pvPct<60?'pv-warn':'';
         const enFusion = estaEnFusion(g.nombre_refinado);
@@ -311,7 +331,7 @@ export function renderDetalle(nombreGrupo) {
     if (!g) { window.volverCatalogo(); return; }
 
     // --- 1. APLICAR EL LENTE DE FUSIÓN ---
-    // proyectarFicha ya aplica delta_pot/agi/ctl internamente
+    // proyectarFicha aplica delta_pot/agi/ctl internamente
     const proy = proyectarFicha(g, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
     
     // Stats proyectadas (ya con deltas aplicados)
@@ -325,12 +345,18 @@ export function renderDetalle(nombreGrupo) {
     const baseTagsNorm = (g.tags || []).map(x => (x.startsWith('#') ? x : '#' + x).toLowerCase());
 
     const { tier } = calcTier(pot, agi, ctl);
-    const pvMax    = aplicarDelta(calcPVMax(pot, agi, ctl), g.delta_pv);
-    const pac      = pot + agi + ctl;
-    const cambios  = aplicarDelta(calcCambios(agi), g.delta_cambios);
-    const tc       = colorTier(tier);
-    const fusion   = getFusionDe(nombreGrupo);
-    const safeN    = nombreGrupo.replace(/'/g,"\\'");
+    const pvMaxBase = calcPVMax(pot, agi, ctl);
+    const pvMax     = aplicarDelta(pvMaxBase, g.delta_pv);
+    const pac       = pot + agi + ctl;
+    const cambiosBase = calcCambios(agi);
+    const cambios   = aplicarDelta(cambiosBase, g.delta_cambios);
+    const tc        = colorTier(tier);
+    const fusion    = getFusionDe(nombreGrupo);
+    const safeN     = nombreGrupo.replace(/'/g,"\\'");
+
+    // PV Actual con su propio delta
+    const pvActualBase = g.pv_actual ?? pvMax;
+    const pvActual     = aplicarDelta(pvActualBase, g.delta_pv_actual);
 
     const misAliases = aliasesGlobal.filter(a=>a.refinado_id===g.id).map(a=>a.nombre);
     
@@ -437,11 +463,11 @@ export function renderDetalle(nombreGrupo) {
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
-                <tr><td>POT</td><td>${statDisplay(pot, potA, g.pot||0)}</td></tr>
-                <tr><td>AGI</td><td>${statDisplay(agi, agiA, g.agi||0)}</td></tr>
-                <tr><td>CTL</td><td>${statDisplay(ctl, ctlA, g.ctl||0)}</td></tr>
-                <tr><td>PV</td><td>${g.pv_actual??pvMax} / ${pvMax}</td></tr>
-                <tr><td>Cambios/t</td><td>${cambios}</td></tr>
+                <tr><td>POT</td><td>${statDisplay(_fmtD(g.pot||0, pot, g.delta_pot), potA, g.pot||0)}</td></tr>
+                <tr><td>AGI</td><td>${statDisplay(_fmtD(g.agi||0, agi, g.delta_agi), agiA, g.agi||0)}</td></tr>
+                <tr><td>CTL</td><td>${statDisplay(_fmtD(g.ctl||0, ctl, g.delta_ctl), ctlA, g.ctl||0)}</td></tr>
+                <tr><td>PV</td><td>${_fmtD(pvActualBase, pvActual, g.delta_pv_actual)} / ${_fmtD(pvMaxBase, pvMax, g.delta_pv)}</td></tr>
+                <tr><td>Cambios/t</td><td>${_fmtD(cambiosBase, cambios, g.delta_cambios)}</td></tr>
                 <tr><td>PT Total</td><td style="color:#2980b9;font-weight:700;">${Object.values(ptG).reduce((a,b)=>a+b,0)}</td></tr>
             </table>
             <div style="padding:6px 10px 4px;font-size:0.72em;font-weight:700;color:var(--gray-700);text-transform:uppercase;">Tags</div>
