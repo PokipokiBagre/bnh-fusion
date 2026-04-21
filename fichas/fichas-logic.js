@@ -54,10 +54,29 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const ptOriginal = ptGlobal ? (ptGlobal[grupoBase.nombre_refinado] || {}) : {};
     const tagsOriginal = grupoBase.tags || [];
 
-    // 1. Aplicar deltas encadenados de stats base propios (hasta 5 por stat)
-    const potBase = aplicarDeltas(grupoBase.pot||0, grupoBase.delta_pot_1, grupoBase.delta_pot_2, grupoBase.delta_pot_3, grupoBase.delta_pot_4, grupoBase.delta_pot_5);
-    const agiBase = aplicarDeltas(grupoBase.agi||0, grupoBase.delta_agi_1, grupoBase.delta_agi_2, grupoBase.delta_agi_3, grupoBase.delta_agi_4, grupoBase.delta_agi_5);
-    const ctlBase = aplicarDeltas(grupoBase.ctl||0, grupoBase.delta_ctl_1, grupoBase.delta_ctl_2, grupoBase.delta_ctl_3, grupoBase.delta_ctl_4, grupoBase.delta_ctl_5);
+    // ⚡ 0. Extraer progresión estructural (50 PT = +1 Stat)
+    // Normalizamos claves de stats por seguridad
+    let ptPot = 0, ptAgi = 0, ptCtl = 0;
+    Object.keys(ptOriginal).forEach(k => {
+        const norm = k.toLowerCase().replace(/^#/, '');
+        if (norm === 'stat_pot') ptPot = ptOriginal[k];
+        if (norm === 'stat_agi') ptAgi = ptOriginal[k];
+        if (norm === 'stat_ctl') ptCtl = ptOriginal[k];
+    });
+
+    const bonoPot = Math.floor(ptPot / 50);
+    const bonoAgi = Math.floor(ptAgi / 50);
+    const bonoCtl = Math.floor(ptCtl / 50);
+
+    // ⚡ Base Real = Base DB + Bonos de PT
+    const potBaseReal = (grupoBase.pot || 0) + bonoPot;
+    const agiBaseReal = (grupoBase.agi || 0) + bonoAgi;
+    const ctlBaseReal = (grupoBase.ctl || 0) + bonoCtl;
+
+    // 1. Aplicar deltas encadenados sobre la Base Real (hasta 5 por stat)
+    const potBase = aplicarDeltas(potBaseReal, grupoBase.delta_pot_1, grupoBase.delta_pot_2, grupoBase.delta_pot_3, grupoBase.delta_pot_4, grupoBase.delta_pot_5);
+    const agiBase = aplicarDeltas(agiBaseReal, grupoBase.delta_agi_1, grupoBase.delta_agi_2, grupoBase.delta_agi_3, grupoBase.delta_agi_4, grupoBase.delta_agi_5);
+    const ctlBase = aplicarDeltas(ctlBaseReal, grupoBase.delta_ctl_1, grupoBase.delta_ctl_2, grupoBase.delta_ctl_3, grupoBase.delta_ctl_4, grupoBase.delta_ctl_5);
 
     // 2. Calcular PV y Cambios usando las bases con deltas
     // (Usamos la función interna para no tener dependencias circulares)
@@ -65,7 +84,7 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const bonoTier = pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
     
     const pvMaxPuro = Math.floor(potBase/4) + Math.floor(agiBase/4) + Math.floor(ctlBase/4) + bonoTier;
-    const pvMaxTotal     = aplicarDeltas(pvMaxPuro,       grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
+    const pvMaxTotal     = aplicarDeltas(pvMaxPuro,        grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
     const pvActualPuro   = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotal;
     const pvActualTotal  = aplicarDeltas(pvActualPuro,    grupoBase.delta_pv_actual_1, grupoBase.delta_pv_actual_2, grupoBase.delta_pv_actual_3, grupoBase.delta_pv_actual_4, grupoBase.delta_pv_actual_5);
     const cambiosTotal   = aplicarDeltas(Math.floor(agiBase/4), grupoBase.delta_cambios_1, grupoBase.delta_cambios_2, grupoBase.delta_cambios_3, grupoBase.delta_cambios_4, grupoBase.delta_cambios_5);
@@ -96,9 +115,21 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const compañero = gruposGlobal.find(g => g.nombre_refinado === nombreCompañero) || {};
     const ptCompañero = ptGlobal[nombreCompañero] || {};
 
+    // ⚡ Bonos PT del Compañero
+    let ptPotC = 0, ptAgiC = 0, ptCtlC = 0;
+    Object.keys(ptCompañero).forEach(k => {
+        const norm = k.toLowerCase().replace(/^#/, '');
+        if (norm === 'stat_pot') ptPotC = ptCompañero[k];
+        if (norm === 'stat_agi') ptAgiC = ptCompañero[k];
+        if (norm === 'stat_ctl') ptCtlC = ptCompañero[k];
+    });
+
+    const potBaseRealC = (compañero.pot || 0) + Math.floor(ptPotC / 50);
+    const agiBaseRealC = (compañero.agi || 0) + Math.floor(ptAgiC / 50);
+    const ctlBaseRealC = (compañero.ctl || 0) + Math.floor(ptCtlC / 50);
+
     // --- 1. Lente de STATS ---
-    // Fusionar los RAWs primero (sin deltas del compañero, sin deltas propios aún),
-    // luego aplicar los deltas del PJ base sobre el resultado fusionado.
+    // Fusionar los RAWs reales primero (sin deltas, pero con bonos de PT)
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
     const calcStat = (valA, valB) => {
         const modo = opcionesFusion?.modo_stats || 'suma';
@@ -107,10 +138,10 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
         return valA + valB;
     };
 
-    // Paso 1: combinar raws y aplicar multiplicador
-    const potFusionRaw = Math.round(calcStat(grupoBase.pot||0, compañero.pot||0) * MULT);
-    const agiFusionRaw = Math.round(calcStat(grupoBase.agi||0, compañero.agi||0) * MULT);
-    const ctlFusionRaw = Math.round(calcStat(grupoBase.ctl||0, compañero.ctl||0) * MULT);
+    // Paso 1: combinar raws reales y aplicar multiplicador
+    const potFusionRaw = Math.round(calcStat(potBaseReal, potBaseRealC) * MULT);
+    const agiFusionRaw = Math.round(calcStat(agiBaseReal, agiBaseRealC) * MULT);
+    const ctlFusionRaw = Math.round(calcStat(ctlBaseReal, ctlBaseRealC) * MULT);
 
     // Paso 2: aplicar deltas propios sobre el raw fusionado → valor final
     const pot = aplicarDeltas(potFusionRaw, grupoBase.delta_pot_1, grupoBase.delta_pot_2, grupoBase.delta_pot_3, grupoBase.delta_pot_4, grupoBase.delta_pot_5);
