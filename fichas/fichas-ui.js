@@ -450,11 +450,17 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
         <div class="wiki-section">
             <div class="wiki-section-header" style="background:#6c3483;">⚡ Fusión Activa</div>
             <div style="padding:12px 14px;">
-                <p style="color:#6c3483;font-weight:600;margin-bottom:8px;">Con: <b>${fusion.pj_a===nombreGrupo?fusion.pj_b:fusion.pj_a}</b></p>
-                <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                    ${(fusion.tags_fusionados||[]).map(t=>`<span style="background:#f5eeff;border:1px solid #9b59b6;color:#6c3483;padding:2px 8px;border-radius:8px;font-size:0.78em;">${t.startsWith('#')?t:'#'+t}</span>`).join('')}
+                <p style="color:#6c3483;font-weight:600;margin-bottom:4px;">Con: <b>${fusion.pj_a===nombreGrupo?fusion.pj_b:fusion.pj_a}</b></p>
+                <p style="font-size:0.8em;color:#8e44ad;">Para terminar la fusión, visita la <a href="../fusions/" style="color:#6c3483;font-weight:700;">página de Fusiones</a>.</p>
+            </div>
+        </div>
+
+        <div class="wiki-section" id="medallas-fusion-section">
+            <div class="wiki-section-header" style="background:#1a4a80;">🏅 Medallas equipadas</div>
+            <div id="medallas-fusion-body" style="padding:14px;">
+                <div style="display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:0.82em;">
+                    <div class="spinner" style="width:14px;height:14px;"></div> Cargando medallas…
                 </div>
-                ${fichasUI.esAdmin?`<button onclick="window._opTerminarFusion('${fusion.id}')" class="op-btn op-btn-red" style="margin-top:10px;font-size:0.78em;">✕ Terminar</button>`:''}
             </div>
         </div>`:''}
 
@@ -538,7 +544,144 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
         </div>
       </div>
     </div>`;
+
+    // ── Carga async de medallas (solo si está en fusión) ──────
+    if (fusion) {
+        _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado).catch(console.error);
+    }
 }
+
+// Carga y renderiza el catálogo de medallas del PJ en la sección de fusión
+async function _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado) {
+    const body = document.getElementById('medallas-fusion-body');
+    if (!body) return;
+
+    try {
+        // Traer catálogo completo y equipación actual
+        const { data: catalogo } = await supabase
+            .from('medallas_catalogo')
+            .select('*')
+            .eq('propuesta', false)
+            .order('nombre');
+
+        const { data: inventario } = await supabase
+            .from('medallas_inventario')
+            .select('medalla_id, equipada')
+            .eq('personaje_nombre', nombreGrupo)
+            .eq('equipada', true);
+
+        const equipadasIds = new Set((inventario || []).map(r => r.medalla_id));
+        const tagsGrupo = (proy.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase());
+        const ptsMapa = proy.ptsMapa || {};
+
+        // Clasificar medallas: solo las que el PJ puede usar (cumple requisitos de tag)
+        const medAccesibles = (catalogo || []).filter(m => {
+            const reqs = m.requisitos_base || [];
+            if (!reqs.length) return false; // sin requisitos de tag = no aplica
+            return reqs.every(req => {
+                const tNorm = (req.tag.startsWith('#') ? req.tag : '#' + req.tag).toLowerCase();
+                return tagsGrupo.includes(tNorm);
+            });
+        });
+
+        if (!medAccesibles.length) {
+            body.innerHTML = `<p style="color:var(--gray-500);font-size:0.82em;">Sin medallas disponibles para los tags actuales.</p>`;
+            return;
+        }
+
+        // Separar equipadas / disponibles / bloqueadas por PT
+        const equipadas  = medAccesibles.filter(m => equipadasIds.has(m.id));
+        const disponibles = medAccesibles.filter(m => !equipadasIds.has(m.id) && _cumplePT(m, ptsMapa));
+        const bloqueadas  = medAccesibles.filter(m => !equipadasIds.has(m.id) && !_cumplePT(m, ptsMapa));
+
+        const ctlTotal = proy.ctl || 0;
+        const ctlUsadoNow = ctlUsado || 0;
+
+        body.innerHTML = `
+        <div style="font-size:0.75em;color:var(--gray-500);margin-bottom:10px;">
+            CTL usado: <b style="color:#2980b9;">${ctlUsadoNow}</b> / ${ctlTotal}
+            &nbsp;·&nbsp; Tags fusionados: <b style="color:#8e44ad;">${tagsGrupo.filter(t=>![
+                '#jugador','#npc','#activo','#inactivo'
+            ].includes(t)).length}</b>
+        </div>
+
+        ${equipadas.length ? `
+        <div style="margin-bottom:12px;">
+            <div class="medalla-ficha-subheader" style="color:var(--green-dark);border-color:var(--green);">✅ Equipadas (${equipadas.length})</div>
+            <div class="medalla-ficha-grid">${equipadas.map(m => _renderMedallaFichaCard(m, 'equipada', ptsMapa, tagsGrupo)).join('')}</div>
+        </div>` : ''}
+
+        ${disponibles.length ? `
+        <div style="margin-bottom:12px;">
+            <div class="medalla-ficha-subheader" style="color:#1a4a80;border-color:#2980b9;">🏅 Disponibles (${disponibles.length})</div>
+            <div class="medalla-ficha-grid">${disponibles.map(m => _renderMedallaFichaCard(m, 'disponible', ptsMapa, tagsGrupo)).join('')}</div>
+        </div>` : ''}
+
+        ${bloqueadas.length ? `
+        <details style="margin-top:4px;">
+            <summary style="font-size:0.78em;color:var(--gray-500);cursor:pointer;padding:4px 0;">
+                🔒 Bloqueadas por PT insuficientes (${bloqueadas.length})
+            </summary>
+            <div class="medalla-ficha-grid" style="margin-top:8px;">${bloqueadas.map(m => _renderMedallaFichaCard(m, 'bloqueada', ptsMapa, tagsGrupo)).join('')}</div>
+        </details>` : ''}
+        `;
+    } catch(e) {
+        const body2 = document.getElementById('medallas-fusion-body');
+        if (body2) body2.innerHTML = `<p style="color:var(--red);font-size:0.82em;">Error cargando medallas: ${e.message}</p>`;
+    }
+}
+
+function _cumplePT(medalla, ptsMapa) {
+    const reqs = medalla.requisitos_base || [];
+    return reqs.every(req => {
+        const tNorm = (req.tag.startsWith('#') ? req.tag : '#' + req.tag).toLowerCase();
+        const pts = ptsMapa[tNorm] || ptsMapa[req.tag] || 0;
+        return pts >= (req.pts_minimos || 0);
+    });
+}
+
+function _renderMedallaFichaCard(m, estado, ptsMapa, tagsGrupo) {
+    const esEq = estado === 'equipada';
+    const esBloq = estado === 'bloqueada';
+    const reqs = m.requisitos_base || [];
+
+    // Para bloqueadas: mostrar cuánto PT falta
+    const reqsInfo = reqs.map(req => {
+        const tNorm = (req.tag.startsWith('#') ? req.tag : '#' + req.tag).toLowerCase();
+        const ptsAct = ptsMapa[tNorm] || ptsMapa[req.tag] || 0;
+        const ptsMin = req.pts_minimos || 0;
+        const cumple = ptsAct >= ptsMin;
+        return `<span style="font-size:0.68em;padding:1px 5px;border-radius:3px;
+            background:${cumple?'#d5f5e3':'#fdecea'};color:${cumple?'#1e8449':'#c0392b'};
+            border:1px solid ${cumple?'#27ae60':'#e74c3c'};">
+            ${req.tag.startsWith('#')?req.tag:'#'+req.tag}${ptsMin?` ${ptsAct}/${ptsMin}pt`:''}
+        </span>`;
+    }).join('');
+
+    // Efectos condicionales activos
+    const condsActivas = (m.efectos_condicionales || []).filter(ec => {
+        const tNorm = (ec.tag.startsWith('#') ? ec.tag : '#' + ec.tag).toLowerCase();
+        const pts = ptsMapa[tNorm] || 0;
+        return tagsGrupo.includes(tNorm) && pts >= (ec.pts_minimos || 0);
+    });
+
+    const borderColor = esEq ? 'var(--green)' : esBloq ? 'var(--gray-300)' : '#2980b9';
+    const bgColor = esEq ? '#f0faf4' : esBloq ? 'var(--gray-100)' : '#f0f6ff';
+
+    return `
+    <div class="medalla-ficha-card" style="border-color:${borderColor};background:${bgColor};opacity:${esBloq?'0.7':'1'};">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:4px;">
+            <div style="font-weight:700;font-size:0.82em;color:var(--gray-900);line-height:1.3;">${m.nombre}</div>
+            <div style="font-size:0.7em;font-weight:700;white-space:nowrap;color:#2980b9;flex-shrink:0;">${m.costo_ctl||0} CTL</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:5px;">${reqsInfo}</div>
+        ${m.efecto_desc ? `<div style="font-size:0.72em;color:var(--gray-700);line-height:1.4;">${m.efecto_desc}</div>` : ''}
+        ${condsActivas.length ? `
+        <div style="margin-top:5px;padding:4px 6px;background:#fffbea;border:1px solid #f1c40f;border-radius:3px;">
+            ${condsActivas.map(ec=>`<div style="font-size:0.68em;color:#7d6608;">⚡ <b>${ec.tag}</b>${ec.efecto?': '+ec.efecto:''}</div>`).join('')}
+        </div>` : ''}
+        ${esEq ? `<div style="margin-top:5px;font-size:0.7em;font-weight:700;color:var(--green);">✅ EQUIPADA</div>` : ''}
+    </div>`;
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 

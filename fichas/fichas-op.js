@@ -55,7 +55,7 @@ export async function abrirPanelOP(nombreGrupo) {
     const medallaEquipadas = await getEquipacionPJ(nombreGrupo, { forzar: true });
     const ctlEquipacion = calcCTLUsado(medallaEquipadas);
 
-    const tabs = ['Stats','Tags & PT','Fusión','Grupo'].map((t,i)=>
+    const tabs = ['Stats','Tags & PT','Grupo'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
     ).join('');
 
@@ -192,12 +192,8 @@ export async function abrirPanelOP(nombreGrupo) {
         <div id="msg-pt" class="op-msg"></div>
     </div>
 
-    <!-- TAB 2: LORE -->
-    <!-- TAB 2: FUSIÓN -->
-    <div id="op-p2" style="display:none;">${_fusionHTML(nombreGrupo)}</div>
-
-    <!-- TAB 3: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
-    <div id="op-p3" style="display:none;">${_grupoHTML(g)}</div>`;
+    <!-- TAB 2: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
+    <div id="op-p2" style="display:none;">${_grupoHTML(g)}</div>`;
 
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
@@ -556,8 +552,8 @@ export function exponerGlobalesOP() {
     setSupabaseRef(supabase);
 
     window._opTab = i => {
-        // Tabs: 0=Stats, 1=Tags&PT, 2=Fusión, 3=Grupo
-        [0,1,2,3].forEach(j=>{
+        // Tabs: 0=Stats, 1=Tags&PT, 2=Grupo
+        [0,1,2].forEach(j=>{
             const p=document.getElementById(`op-p${j}`);
             const t=document.getElementById(`op-tab-${j}`);
             if(p) p.style.display=j===i?'block':'none';
