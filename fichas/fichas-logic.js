@@ -48,24 +48,52 @@ export const COSTOS = { stat:50, medalla:75, mutacion:100 };
 // ─── LENTE DINÁMICO DE FUSIONES ─────────────────────────────
 
 export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion, bannedTags) {
+    if (!grupoBase) return null;
+
     const f = getFusionDe(grupoBase.nombre_refinado);
-    const ptOriginal = ptGlobal[grupoBase.nombre_refinado] || {};
+    // Verificación de seguridad por si ptGlobal aún no ha cargado
+    const ptOriginal = ptGlobal ? (ptGlobal[grupoBase.nombre_refinado] || {}) : {};
     const tagsOriginal = grupoBase.tags || [];
 
-    // Aplicar deltas de stats base propios
+    // 1. Aplicar deltas de stats base propios
     const potBase = aplicarDelta(grupoBase.pot || 0, grupoBase.delta_pot);
     const agiBase = aplicarDelta(grupoBase.agi || 0, grupoBase.delta_agi);
     const ctlBase = aplicarDelta(grupoBase.ctl || 0, grupoBase.delta_ctl);
 
-    // Si no está en fusión, devolver los datos limpios sin alterar
-    if (!f) return {
-        esFusion: false,
-        pot: potBase,
-        agi: agiBase,
-        ctl: ctlBase,
-        tags: tagsOriginal,
-        ptsMapa: ptOriginal
-    };
+    // 2. Calcular PV y Cambios usando las bases con deltas
+    // (Usamos la función interna para no tener dependencias circulares)
+    const pacBase = potBase + agiBase + ctlBase;
+    const bonoTier = pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
+    
+    const pvMaxPuro = Math.floor(potBase/4) + Math.floor(agiBase/4) + Math.floor(ctlBase/4) + bonoTier;
+    const pvMaxTotal = aplicarDelta(pvMaxPuro, grupoBase.delta_pv);
+
+    const pvActualPuro = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotal;
+    const pvActualTotal = aplicarDelta(pvActualPuro, grupoBase.delta_pv_actual);
+
+    const cambiosTotal = aplicarDelta(Math.floor(agiBase / 4), grupoBase.delta_cambios);
+
+    // 3. Si no está en fusión, devolver los datos con TODAS las variables listas para la UI
+    if (!f) {
+        return {
+            ...grupoBase, // Mantiene todas las propiedades originales (lore, quirk, etc)
+            esFusion: false,
+            // Mantiene tu estructura original:
+            pot: potBase,
+            agi: agiBase,
+            ctl: ctlBase,
+            tags: tagsOriginal,
+            ptsMapa: ptOriginal,
+            // Añade las variables _total para que renderCatalogo y el Detalle funcionen:
+            pot_total: potBase,
+            agi_total: agiBase,
+            ctl_total: ctlBase,
+            pv_total: pvMaxTotal,
+            pv_actual_total: pvActualTotal,
+            cambios_total: cambiosTotal,
+            pac_total: pacBase
+        };
+    }
 
     const nombreCompañero = f.pj_a === grupoBase.nombre_refinado ? f.pj_b : f.pj_a;
     const compañero = gruposGlobal.find(g => g.nombre_refinado === nombreCompañero) || {};
