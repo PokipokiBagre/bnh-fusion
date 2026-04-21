@@ -175,32 +175,32 @@ export const bnhAuth = {
         }
     },
 
-    // ── Badge de sesión ──
-    renderStatusBadge() {
+        renderStatusBadge() {
         if (this.esAdmin()) {
-            return `<span style="background:#001a2c; color:#00b4d8; border:1px dashed #00b4d8;
-                        padding:8px 14px; border-radius:4px; font-weight:bold;
-                        font-family:'Rajdhani','Segoe UI',sans-serif; cursor:pointer; font-size:0.85em;"
+            return `<span style="background:var(--white, #fff); color:#0073ff; border:1.5px solid #0073ff;
+                        padding:6px 12px; border-radius:4px; font-weight:bold; box-shadow:0 1px 3px rgba(0,115,255,0.15);
+                        font-family:inherit; cursor:pointer; font-size:0.85em;"
                     onclick="bnhAuth._mostrarPanelSesion()">
                     ⚡ OP
                     </span>`;
         } else if (this.estaLogueado()) {
-            return `<span style="background:#002200; color:#00ff88; border:1px solid #00ff88;
-                        padding:8px 14px; border-radius:4px; font-weight:bold;
-                        font-family:'Rajdhani','Segoe UI',sans-serif; cursor:pointer; font-size:0.85em;"
+            return `<span style="background:var(--white, #fff); color:var(--green, #1e8449); border:1.5px solid var(--green, #1e8449);
+                        padding:6px 12px; border-radius:4px; font-weight:bold; box-shadow:0 1px 3px rgba(30,132,73,0.15);
+                        font-family:inherit; cursor:pointer; font-size:0.85em;"
                     onclick="bnhAuth._mostrarPanelSesion()">
                     🟢 ${this.getPersonaje() || this.getEmail()}
                     </span>`;
         } else {
             return `<button onclick="bnhAuth._mostrarModalLogin()"
-                        style="background:#111; color:#00b4d8; border:1px dashed #444;
-                               padding:8px 14px; border-radius:4px; font-weight:bold;
-                               font-family:'Rajdhani','Segoe UI',sans-serif; cursor:pointer; font-size:0.85em;">
+                        style="background:var(--white, #fff); color:var(--gray-700, #495057); border:1.5px dashed var(--gray-500, #adb5bd);
+                               padding:6px 12px; border-radius:4px; font-weight:bold;
+                               font-family:inherit; cursor:pointer; font-size:0.85em; transition: 0.2s;"
+                        onmouseover="this.style.borderColor='#0073ff'; this.style.color='#0073ff';"
+                        onmouseout="this.style.borderColor='var(--gray-500)'; this.style.color='var(--gray-700)';">
                     🔒 Acceso OP
                     </button>`;
         }
     },
-
     _mostrarModalLogin() {
         let modal = document.getElementById('bnh-auth-modal');
         if (!modal) {
