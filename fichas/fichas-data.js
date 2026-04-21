@@ -1,4 +1,6 @@
-// fichas-data.js (fragmento actualizado)
+// ============================================================
+// fichas-data.js
+// ============================================================
 import { supabase }  from '../bnh-auth.js';
 import { db }        from '../bnh-db.js';
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal } from './fichas-state.js';
@@ -13,7 +15,6 @@ export async function cargarTodo() {
         supabase.from('personajes').select('id, nombre, refinado_id').order('nombre'),
         db.progresion.getPuntosAll(),
         supabase.from('historial_hilos').select('thread_id, titulo').order('creado_en', { ascending: false }),
-        // NUEVO: Descargar opciones y tags baneados en paralelo
         supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
         supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
     ]);
@@ -76,11 +77,10 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
 
 // ── Guardar Stats y Deltas ────────────────────────────────────
 export async function guardarStatsGrupo(nombreRefinado, payloadStats) {
-    // payloadStats puede contener:
-    //   Bases:  pot, agi, ctl
-    //   Deltas: delta_pot, delta_agi, delta_ctl, delta_pv, delta_cambios, delta_ctl_usado
-    //   Notas:  nota_pot, nota_agi, nota_ctl, nota_pv, nota_cambios, nota_ctl_usado
-    //   Salud:  pv_actual (null = lleno)
+    // payloadStats contiene:
+    // Bases: pot, agi, ctl
+    // Deltas y Notas para: pot, agi, ctl, pv, cambios, ctl_usado, pv_actual
+    // Salud: pv_actual (null = lleno)
     const { error } = await supabase.from('personajes_refinados')
         .update(payloadStats)
         .eq('nombre_refinado', nombreRefinado);
