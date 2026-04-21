@@ -486,7 +486,7 @@ ${fusion?(()=>{
         ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:''}
         ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
 <div class="wiki-section" id="medallas-section">
-    <div class="wiki-section-header" style="background:#1a4a80;">🏅 Medallas equipadas</div>
+    <div class="wiki-section-header" style="background:#1a4a80;">Medallas equipadas</div>
     <div id="medallas-body" style="padding:14px;">
         <div style="display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:0.82em;">
             <div class="spinner" style="width:14px;height:14px;"></div> Cargando medallas…
