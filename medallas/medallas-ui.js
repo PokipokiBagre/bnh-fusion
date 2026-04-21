@@ -1244,14 +1244,17 @@ function _renderCardCompletaParaPJ(m, pjNombre, ptsMapa) {
 
     const tagsD = mTags(m).map(t => `<span style="font-size:0.68em;background:rgba(52,152,219,0.1);color:var(--blue);border:1px solid rgba(52,152,219,0.3);padding:2px 6px;border-radius:10px;margin-right:3px;font-weight:600;">${t}</span>`).join('');
 
-    const reqsHtml = (m.requisitos_base||[]).map(r => {
-        const pts = ptsMapa[r.tag] || ptsMapa[r.tag.replace('#','')] || 0;
-        const ok = pts >= (r.pts_minimos||0);
-        return `<div style="font-size:0.75em; display:flex; justify-content:space-between; margin-bottom:2px;">
-            <span style="color:var(--gray-600);">${r.tag}</span>
-            <span style="color:${ok?'var(--green-dark)':'#e74c3c'};font-weight:bold;">${pts}/${r.pts_minimos} PT ${ok?'✓':'✗'}</span>
-        </div>`;
-    }).join('');
+const reqsHtml = (m.requisitos_base||[]).map(r => {
+    // NORMALIZACIÓN CRÍTICA: Convertir a minúsculas antes de buscar
+    const tagBusqueda = r.tag.startsWith('#') ? r.tag.toLowerCase() : '#' + r.tag.toLowerCase();
+    const pts = ptsMapa[tagBusqueda] || 0; 
+    const ok = pts >= (r.pts_minimos||0);
+    
+    return `<div style="font-size:0.75em; display:flex; justify-content:space-between; margin-bottom:2px;">
+        <span style="color:var(--gray-600);">${r.tag}</span>
+        <span style="color:${ok?'var(--green-dark)':'#e74c3c'};font-weight:bold;">${pts}/${r.pts_minimos} PT ${ok?'✓':'✗'}</span>
+    </div>`;
+}).join('');
 
     const condHtml = condActivos.map(ec => `
         <div style="font-size:0.72em; padding:6px; margin-top:4px; background:${ec.activo?'rgba(39,174,96,0.06)':'rgba(0,0,0,0.03)'}; border:1px solid ${ec.activo?'var(--green)':'#eee'}; border-radius:6px;">
