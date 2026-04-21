@@ -4,11 +4,16 @@
 import { getFusionDe } from '../bnh-fusion.js';
 import { aplicarDelta } from '../bnh-pac.js';
 
+// ¡AQUÍ ESTÁ LA MAGIA QUE FALTABA! Restauramos tus variables globales
+import { ptGlobal } from './fichas-state.js';
+import { opcionesFusion, bannedTags } from './fichas-data.js';
+
 export { 
     calcTier, calcPVMax, calcCambios, fmtTag, normTag, 
-    calcCTLUsado, aplicarDelta
+    calcCTLUsado, calcCTLUsadoTotal 
 } from '../bnh-pac.js';
 
+// ─── Utilidades Visuales y de Datos Originales ──────────────
 
 export function colorTier(tier) {
     const t = {
