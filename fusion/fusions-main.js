@@ -3,7 +3,7 @@ import { bnhAuth, supabase } from '../bnh-auth.js';
 import {
     fusionsState, setPersonajes, setPtGlobales, setFusionesActivas, setRegistroFusiones,
     personajes, ptGlobales, fusionesActivas, STORAGE_URL, 
-    bannedTags, setBannedTags // NUEVAS IMPORTACIONES
+    bannedTags, setBannedTags 
 } from './fusions-state.js';
 import {
     renderSimulador, renderFusionesActivas, renderRegistro, renderResultado,
@@ -33,7 +33,6 @@ window.onload = async () => {
     try {
         await Promise.all([cargarFusiones(), cargarOpciones()]);
 
-        // NUEVO: Agregamos la consulta e5 para los tags baneados
         const [
             { data: pjData,  error: e1 },
             { data: ptData,  error: e2 },
@@ -45,13 +44,12 @@ window.onload = async () => {
             supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
             supabase.from('fusiones_activas').select('*').eq('activa', true).order('creado_en', { ascending: false }),
             supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
-            supabase.from('tags_catalogo').select('nombre').eq('baneado', true) // <-- CONSULTA BANEADOS
+            supabase.from('tags_catalogo').select('nombre').eq('baneado', true)
         ]);
 
         if (e1) throw new Error(e1.message);
         if (e2) throw new Error(e2.message);
 
-        // Guardamos los tags baneados en el estado local
         setBannedTags((tagsData || []).map(t => t.nombre));
 
         const pjNorm = (pjData || []).map(p => ({
@@ -112,7 +110,6 @@ function _recalcCompatibilidad() {
         const tagsA = (pjA.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase());
         const tagsB = (pjB.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase());
         
-        // NUEVO: Limpiamos los arrays de cualquier tag que esté baneado ANTES de cruzar
         const tagsALimpios = tagsA.filter(t => !bannedTags.includes(t));
         const compartidos = tagsALimpios.filter(t => tagsB.includes(t)).length;
         
@@ -125,6 +122,10 @@ function _recalcCompatibilidad() {
 // ─── Globales ─────────────────────────────────────────────────
 function _exponerGlobales() {
     window._fusionTab = _renderTab;
+
+    // ⚡ NUEVOS FILTROS DE POOL 
+    window._fusionFiltroRol = (v) => { fusionsState.filtroRol = v; renderSimulador(); };
+    window._fusionFiltroEst = (v) => { fusionsState.filtroEstado = v; renderSimulador(); };
 
     window._fusionClickPJ = (nombre) => {
         if (fusionsState.pjA === nombre) { fusionsState.pjA = null; actualizarSlotPublic('a'); _recalcCompatibilidad(); return; }
@@ -170,7 +171,6 @@ function _exponerGlobales() {
         const pjA = personajes.find(p => p.nombre === fusionsState.pjA);
         const pjB = personajes.find(p => p.nombre === fusionsState.pjB);
 
-        // NUEVO: Mandamos el array bannedTags a la lógica
         fusionsState.resultadoCalculado = calcularResultadoFusion(pjA, pjB, rendTotal, ptGlobales, opcionesState, bannedTags);
         
         fusionsState.resultadoCalculado.d100Base  = d100raw;
@@ -180,7 +180,7 @@ function _exponerGlobales() {
         renderResultado(fusionsState.resultadoCalculado);
     };
     
-window._fusionTagModeChange = (val) => {
+    window._fusionTagModeChange = (val) => {
         fusionsState.modoTagLocal = val;
         const uin = document.getElementById('ui-tag-nuevo');
         const uic = document.getElementById('ui-tag-compartido');
@@ -207,7 +207,7 @@ window._fusionTagModeChange = (val) => {
         fusionsState.tagFusionNombre = val.trim();
     };
 
-window._fusionOficializar = async () => {
+    window._fusionOficializar = async () => {
         if (!fusionsState.resultadoCalculado) return;
         if (!fusionsState.esAdmin) { toast('Solo el OP puede oficializar fusiones.', 'error'); return; }
 
@@ -361,7 +361,7 @@ window._fusionOficializar = async () => {
 
         const fusionActivaId = res.fusion?.id;
 
-if (sug.tag_fusion) {
+        if (sug.tag_fusion) {
             const tagKey = sug.tag_fusion.slice(1);
             
             // Asumimos que si no existe, se insertará como quirk
@@ -388,7 +388,7 @@ if (sug.tag_fusion) {
         }
 
         await supabase.from('registro_fusiones').insert({
-        pj_a: sug.pj_a, pj_b: sug.pj_b,
+            pj_a: sug.pj_a, pj_b: sug.pj_b,
             rendimiento: sug.rend_total || sug.rendimiento, regla_aplicada: 'sugerencia_aprobada',
             tag_fusion: sug.tag_fusion || null, tag_fusion_pts: opcionesState.pts_tag_fusion || 0,
             stats_pot: sug.stats_pot, stats_agi: sug.stats_agi, stats_ctl: sug.stats_ctl,
@@ -443,16 +443,16 @@ if (sug.tag_fusion) {
         } catch(e) { toast('❌ Error: ' + e.message, 'error'); }
     };
 
-        window._fusionBorrarRegistro = async (id) => {
+    window._fusionBorrarRegistro = async (id) => {
         if (!fusionsState.esAdmin) return;
         if (!confirm('¿Eliminar este registro del historial? No deshace la fusión en sí.')) return;
         
-        const realId = parseInt(id, 10); // <-- Forzamos número entero para la BD
+        const realId = parseInt(id, 10); 
         const { error } = await supabase.from('registro_fusiones').delete().eq('id', realId);
         
         if (error) { toast('❌ Error BD: ' + error.message, 'error'); return; }
         
-        await _refrescarTodo(); // Refresco agresivo
+        await _refrescarTodo(); 
         _renderTab('registro');
         toast('✅ Registro eliminado.', 'ok');
     };
@@ -490,7 +490,7 @@ async function _refrescarTodo() {
         supabase.from('registro_fusiones').select('*').order('creado_en', { ascending: false }).limit(50),
         supabase.from('personajes_refinados').select('nombre_refinado, pot, agi, ctl, tags').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
-        supabase.from('tags_catalogo').select('nombre').eq('baneado', true) // <-- CONSULTA BANEADOS
+        supabase.from('tags_catalogo').select('nombre').eq('baneado', true) 
     ]);
     
     setBannedTags((tagsData || []).map(t => t.nombre));
