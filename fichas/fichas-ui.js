@@ -446,29 +446,53 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
             </div>
         </div>
 
-        ${fusion?`
-        <div class="wiki-section">
-            <div class="wiki-section-header" style="background:#6c3483;">⚡ Fusión Activa</div>
-            <div style="padding:12px 14px;">
-                <p style="color:#6c3483;font-weight:600;margin-bottom:4px;">Con: <b>${fusion.pj_a===nombreGrupo?fusion.pj_b:fusion.pj_a}</b></p>
-                <p style="font-size:0.8em;color:#8e44ad;margin-bottom:${fichasUI.esAdmin?'10px':'0'};">Para gestionar fusiones, visita la <a href="../fusions/" style="color:#6c3483;font-weight:700;">página de Fusiones</a>.</p>
-                ${fichasUI.esAdmin?`<button onclick="window._opTerminarFusion('${fusion.id}')" class="op-btn op-btn-red" style="font-size:0.78em;">✕ Terminar Fusión</button>`:''}
-            </div>
-        </div>
+${fusion?(()=>{
+    const otro = fusion.pj_a===nombreGrupo?fusion.pj_b:fusion.pj_a;
+    const comp = gruposGlobal.find(x => x.nombre_refinado === otro);
+    if (!comp) return '';
 
-        <div class="wiki-section" id="medallas-fusion-section">
-            <div class="wiki-section-header" style="background:#1a4a80;">🏅 Medallas equipadas</div>
-            <div id="medallas-fusion-body" style="padding:14px;">
-                <div style="display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:0.82em;">
-                    <div class="spinner" style="width:14px;height:14px;"></div> Cargando medallas…
+    const compProj = proyectarFicha(comp, gruposGlobal, ptGlobal, opcionesFusion, bannedTags);
+    const tierComp = calcTier(compProj.pot_total, compProj.agi_total, compProj.ctl_total).tier;
+
+    return `
+    <div class="wiki-section">
+        <div class="wiki-section-header" style="background:#6c3483;">⚡ Fusión Activa</div>
+        <div style="padding:12px 14px;">
+            
+            <div class="fusion-mini-card" onclick="window.abrirFicha('${otro.replace(/'/g,"\\'")}')">
+                <img src="${imgGrupo(comp)}" class="fusion-mini-img">
+
+                <div class="fusion-mini-info">
+                    <div class="fusion-mini-name">${otro}</div>
+                    <div class="fusion-mini-stats">
+                        T${tierComp} | PV ${compProj.pv_actual_total}/${compProj.pv_total}
+                        | ${compProj.pot_total}/${compProj.agi_total}/${compProj.ctl_total}
+                    </div>
                 </div>
             </div>
-        </div>`:''}
+
+            ${fichasUI.esAdmin?`
+            <button onclick="window._opTerminarFusion('${fusion.id}')" 
+                class="op-btn op-btn-red" style="font-size:0.78em;margin-top:8px;">
+                ✕ Terminar Fusión
+            </button>`:''}
+
+        </div>
+    </div>`;
+})():''}
 
         ${g.descripcion?`<div class="wiki-section"><div class="wiki-section-header">Descripción</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.descripcion)}</div></div>`:''}
         ${g.lore?`<div class="wiki-section"><div class="wiki-section-header">Historia</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.lore)}</div></div>`:''}
         ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:''}
         ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
+<div class="wiki-section" id="medallas-section">
+    <div class="wiki-section-header" style="background:#1a4a80;">🏅 Medallas equipadas</div>
+    <div id="medallas-body" style="padding:14px;">
+        <div style="display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:0.82em;">
+            <div class="spinner" style="width:14px;height:14px;"></div> Cargando medallas…
+        </div>
+    </div>
+</div>
 
         ${Object.keys(ptG).length?`
         <div class="wiki-section">
@@ -545,11 +569,7 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
         </div>
       </div>
     </div>`;
-
-    // ── Carga async de medallas (solo si está en fusión) ──────
-    if (fusion) {
-        _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado).catch(console.error);
-    }
+_cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado).catch(console.error);
 }
 
 // Carga y renderiza el catálogo de medallas del PJ en la sección de fusión
