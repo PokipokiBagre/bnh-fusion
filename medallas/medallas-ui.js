@@ -11,6 +11,43 @@ const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').re
 const fb    = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 const _onErr = () => `this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
 
+// Helper: muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
+function _fmtDChain(base, total, deltas) {
+    const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
+    if (!activos.length || base === total) return String(total);
+    
+    const makeBadge = (text, bg, color, border) => 
+        `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2;">${text}</span>`;
+
+    let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
+    let acc = base;
+
+    for (const d of activos) {
+        const s = String(d).trim();
+        const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
+        const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+        const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+        const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+
+        if (powM) {
+            acc = Math.round(Math.pow(acc, parseFloat(powM[1])));
+            badgesHtml += makeBadge(`^${powM[1]}`, '#fce4ec', '#ad1457', '#f48fb1');
+        } else if (multM) {
+            acc = Math.round(acc * parseFloat(multM[1]));
+            badgesHtml += makeBadge(`×${multM[1]}`, '#f3e5f5', '#6a1b9a', '#ce93d8'); 
+        } else if (divM) {
+            acc = Math.round(acc / parseFloat(divM[1]));
+            badgesHtml += makeBadge(`÷${divM[1]}`, '#fff3e0', '#ef6c00', '#ffcc80'); 
+        } else if (addM) {
+            const n = parseFloat(addM[1]);
+            acc = Math.round(acc + n);
+            if (n >= 0) badgesHtml += makeBadge(`+${n}`, '#e3f2fd', '#1565c0', '#90caf9'); 
+            else badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
+        }
+    }
+    return `${total} <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; vertical-align:middle; flex-wrap:wrap; margin-top:-2px;">${badgesHtml}</span>`;
+}
+
 // Exponer initMarkupTextarea para uso en callbacks
 window._initMarkupTA = initMarkupTextarea;
 
@@ -572,6 +609,10 @@ export function renderPersonaje() {
         const totalPT   = Object.values(ptsMapa2).reduce((a,b)=>a+b,0);
         const listos    = Object.values(ptsMapa2).filter(v=>v>=50).length;
 
+        const basePot = proy.esFusion ? (proy.pot_fusion_raw ?? gEq?.pot ?? 0) : (gEq?.pot ?? 0);
+        const baseAgi = proy.esFusion ? (proy.agi_fusion_raw ?? gEq?.agi ?? 0) : (gEq?.agi ?? 0);
+        const baseCtlVal = proy.esFusion ? (proy.ctl_fusion_raw ?? gEq?.ctl ?? 0) : (gEq?.ctl ?? 0);
+
         const resumenCard = `
         <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;overflow:hidden;flex-shrink:0;">
             <div style="background:#f8f9fa;max-height:220px;overflow:hidden;">
@@ -588,21 +629,22 @@ export function renderPersonaje() {
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;">
                     <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
-                        <div style="font-size:1em;font-weight:800;color:#d68910;">${proy.esFusion && pot !== gEq.pot ? '⚡' : ''}${pot}</div>
+                        <div style="font-size:1em;font-weight:800;color:#d68910;">${proy.esFusion && pot !== gEq?.pot ? '⚡' : ''}${_fmtDChain(basePot, pot, [1,2,3,4,5].map(n=>gEq?.['delta_pot_'+n]))}</div>
                     </div>
                     <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
-                        <div style="font-size:1em;font-weight:800;color:#2980b9;">${proy.esFusion && agi !== gEq.agi ? '⚡' : ''}${agi}</div>
+                        <div style="font-size:1em;font-weight:800;color:#2980b9;">${proy.esFusion && agi !== gEq?.agi ? '⚡' : ''}${_fmtDChain(baseAgi, agi, [1,2,3,4,5].map(n=>gEq?.['delta_agi_'+n]))}</div>
                     </div>
                     <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:5px;text-align:center;">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                        <div style="font-size:1em;font-weight:800;color:${colorCtlTxt};" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">${iconCtl}${ctlUsado}/${ctl}</div>
+                        <div style="font-size:1em;font-weight:800;color:${colorCtlTxt};" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">${iconCtl}${ctlUsado} / ${_fmtDChain(baseCtlVal, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]))}</div>
                     </div>
                 </div>
                 <div style="height:5px;background:#f0f0f0;border-radius:4px;overflow:hidden;">
                     <div style="height:100%;width:${Math.min(ctlRatio*100,100)}%;background:${barColor};border-radius:4px;transition:width .3s;"></div>
                 </div>
-                <div style="display:flex;flex-direction:column;gap:4px;font-size:0.78em;border-top:1px solid var(--gray-200);padding-top:6px;">
+                ${ctlExcedido ? `<div style="font-size:0.7em;color:#e74c3c;margin-top:4px;font-weight:700;">⚠ CTL EXCEDIDO. Desequipa o se auto-ajustará.</div>` : ''}
+                <div style="display:flex;flex-direction:column;gap:4px;font-size:0.78em;border-top:1px solid var(--gray-200);padding-top:6px;margin-top:4px;">
                     <div style="display:flex;justify-content:space-between;"><span>PAC</span><b style="${proy.esFusion ? 'color:#8e44ad;' : ''}">${proy.esFusion ? '⚡' : ''}${pac}</b></div>
                     <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
                     <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
@@ -891,6 +933,7 @@ export function renderPersonaje() {
         if (equip) equip.style.top = hh;
     });
 }
+
 // ── Modal detalle ─────────────────────────────────────────────
 export function renderDetalleMedalla(m, pjNombre = null) {
     const el = document.getElementById('medalla-modal');
