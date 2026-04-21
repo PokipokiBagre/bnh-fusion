@@ -725,12 +725,15 @@ export function renderCatalogo() {
         </div>`;
     }).join('');
 
-    wrap.innerHTML = `
+        wrap.innerHTML = `
         <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center;flex-wrap:wrap;">
             <input class="inp" id="cat-search" placeholder="🔍 Buscar tag o descripción…"
                 value="${_esc(tagsState.busquedaCat)}"
                 oninput="window._catFiltrarInPlace(this.value)"
                 style="max-width:360px;">
+            
+            <button class="btn btn-outline btn-sm" onclick="window._tagsCopiarTextoTags()">📋 Copiar lista</button>
+
             <span class="cat-count" style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
             ${tagsState.esAdmin ? `
                 <button class="btn btn-green btn-sm" onclick="window._catNuevoTag()">✨ Nuevo tag</button>
@@ -1293,6 +1296,30 @@ export function renderEstadisticas() {
             </div>
         </div>`;
 }
+
+window._tagsCopiarTextoTags = () => {
+    const tagConteo = {};
+    // Contamos tags de todos los personajes
+    grupos.forEach(g => {
+        (g.tags || []).forEach(t => {
+            const k = t.startsWith('#') ? t.slice(1) : t;
+            tagConteo[k] = (tagConteo[k] || 0) + 1;
+        });
+    });
+
+    // Formateamos el texto ordenado por cantidad (descendente)
+    const texto = Object.entries(tagConteo)
+        .sort((a, b) => b[1] - a[1]) 
+        .map(([nombre, conteo]) => `${nombre} (${conteo})`)
+        .join('\n');
+
+    // Copiar al portapapeles
+    navigator.clipboard.writeText(texto).then(() => {
+        toast('✅ Lista de tags copiada');
+    }).catch(() => {
+        toast('❌ Error al copiar', 'error');
+    });
+};
 
 export function toast(msg, tipo='ok') {
     const el = document.getElementById('toast-msg');
