@@ -945,3 +945,46 @@ body.upload-panel-open #fichas-detalle-wrap {
 details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details[open] > summary { margin-bottom: 4px; }
+
+/* ── Tarjeta mini de fusión ── */
+.fusion-mini-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 1.5px solid #9b59b6;
+    border-radius: 6px;
+    background: #f5eeff;
+    cursor: pointer;
+    transition: 0.12s;
+}
+
+.fusion-mini-card:hover {
+    background: #ede3ff;
+    box-shadow: 0 2px 8px rgba(155,89,182,0.25);
+}
+
+.fusion-mini-img {
+    width: 42px;
+    height: 42px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.fusion-mini-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.2;
+}
+
+.fusion-mini-name {
+    font-weight: 700;
+    color: #6c3483;
+    font-size: 0.85em;
+}
+
+.fusion-mini-stats {
+    font-size: 0.75em;
+    color: #8e44ad;
+}
