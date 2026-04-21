@@ -279,7 +279,26 @@ function _resumenPJ(pj) {
     puntosAll.filter(p=>p.personaje_nombre===pj).forEach(p=>{ ptsMapa[p.tag]=p.cantidad; });
     const total   = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
     const listos  = Object.values(ptsMapa).filter(v=>v>=50).length;
-    const pot = g.pot||0, agi = g.agi||0, ctl = g.ctl||0;
+
+    // Helper: aplica delta string a base y devuelve { total, label }
+    // label = "(base×mult)" etc, vacío si no hay delta
+    function applyD(base, deltaStr) {
+        const s = String(deltaStr || '0').trim();
+        if (!s || s === '0') return { total: base, label: '' };
+        const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+        if (multM) { const t = Math.round(base * parseFloat(multM[1])); return { total: t, label: `${base}×${multM[1]}` }; }
+        const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+        if (divM)  { const t = Math.round(base / parseFloat(divM[1])); return { total: t, label: `${base}÷${divM[1]}` }; }
+        const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+        if (addM)  { const d = parseFloat(addM[1]); const t = Math.round(base + d); return { total: t, label: d >= 0 ? `${base}+${d}` : `${base}${d}` }; }
+        return { total: base, label: '' };
+    }
+
+    const dPot = applyD(g.pot||0, g.delta_pot);
+    const dAgi = applyD(g.agi||0, g.delta_agi);
+    const dCtl = applyD(g.ctl||0, g.delta_ctl);
+    const pot = dPot.total, agi = dAgi.total, ctl = dCtl.total;
+
     const pac = pot+agi+ctl;
     const tierData = (() => {
         if (pac>=100) return { tier:4, label:'TIER 4', color:'#f39c12' };
@@ -287,11 +306,23 @@ function _resumenPJ(pj) {
         if (pac>=60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
         return              { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
-    const cambios = Math.floor(agi/4);
-    const bonoPV  = [5,10,15,20][tierData.tier-1] || 5;
-    const pvMax   = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV + (g.pv_max_delta||0);
-    const pvActual = g.pv_actual ?? pvMax;
-    
+
+    const dCambios = applyD(Math.floor(agi/4), g.delta_cambios);
+    const bonoPV   = [5,10,15,20][tierData.tier-1] || 5;
+    const pvMaxBase = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV;
+    const dPvMax   = applyD(pvMaxBase, g.delta_pv);
+    const pvMax    = dPvMax.total;
+
+    // PV Actual: también puede tener su propio delta
+    const pvActualBase = g.pv_actual ?? pvMax;
+    const dPvActual    = applyD(pvActualBase, g.delta_pv_actual);
+    const pvActual     = dPvActual.total;
+
+    // Helper HTML: muestra total + anotación en rojo pequeño si hay delta
+    const sv = (val, label) => label
+        ? `${val} <span style="color:#e74c3c;font-size:0.72em;font-weight:400;">(${label})</span>`
+        : `${val}`;
+
     const profileUrl = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'profile.png';
     const iconUrl    = STORAGE_URL + '/imgpersonajes/' + norm(pj) + 'icon.png';
     const noImg      = STORAGE_URL + '/imginterfaz/no_encontrado.png';
@@ -307,21 +338,21 @@ function _resumenPJ(pj) {
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px;">
             <div style="background:#fef9f0;border:1px solid #f39c12;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">POT</div>
-                <div style="font-size:1.1em;font-weight:800;color:#d68910;">${pot}</div>
+                <div style="font-size:1.1em;font-weight:800;color:#d68910;">${sv(pot, dPot.label)}</div>
             </div>
             <div style="background:#f0f8fe;border:1px solid #2980b9;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
-                <div style="font-size:1.1em;font-weight:800;color:#2980b9;">${agi}</div>
+                <div style="font-size:1.1em;font-weight:800;color:#2980b9;">${sv(agi, dAgi.label)}</div>
             </div>
             <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px;text-align:center;">
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                <div style="font-size:1.1em;font-weight:800;color:#27ae60;">${ctl}</div>
+                <div style="font-size:1.1em;font-weight:800;color:#27ae60;">${sv(ctl, dCtl.label)}</div>
             </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:0.82em;border-top:1px solid var(--gray-200);padding-top:8px;">
             <div style="display:flex;justify-content:space-between;"><span>PAC</span><b>${pac}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
-            <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${sv(pvActual, dPvActual.label)} / ${sv(pvMax, dPvMax.label)}</b></div>
+            <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${sv(dCambios.total, dCambios.label)}</b></div>
             <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:5px;margin-top:2px;">
                 <span>PT totales</span><b style="color:var(--green);">${total}</b>
             </div>
