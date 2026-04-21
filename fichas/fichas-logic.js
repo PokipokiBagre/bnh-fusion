@@ -5,7 +5,7 @@ import { getFusionDe } from '../bnh-fusion.js';
 
 export { 
     calcTier, calcPVMax, calcCambios, fmtTag, normTag, 
-    proyectarStats, calcCTLUsadoTotal 
+    calcCTLUsado 
 } from '../bnh-pac.js';
 
 
