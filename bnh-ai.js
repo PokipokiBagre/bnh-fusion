@@ -5,13 +5,12 @@ import { supabase } from './bnh-auth.js';
 import { REGLAS_SISTEMA } from './bnh-reglas.js';
 import { gruposGlobal, ptGlobal } from './fichas/fichas-state.js';
 
-/**
- * 1. Función base: Invoca la Edge Function en Supabase.
- * Envía siempre las REGLAS_SISTEMA como contexto de instrucción.
- */
-// bnh-ai.js (reemplaza solo esta función)
 export async function llamarIA(peticionUsuario, contextoDeDatos) {
     try {
+        // Agregamos un abort controller para que no se quede colgado eternamente
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 segundos máximo
+
         const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
             body: { 
                 prompt: peticionUsuario, 
@@ -21,18 +20,18 @@ export async function llamarIA(peticionUsuario, contextoDeDatos) {
                     DATOS DE LA BASE DE DATOS ACTUAL:
                     ${contextoDeDatos}
                 `
-            }
+            },
+            signal: controller.signal
         });
 
-        // Si la función falla, extraemos el error real
+        clearTimeout(timeoutId);
+
         if (error) {
             console.error("Detalle de Supabase:", error);
-            // Supabase a veces esconde el mensaje en error.context
             const msgReal = (error.context && error.context.error) ? error.context.error : error.message;
             throw new Error(msgReal);
         }
 
-        // Si Deno devolvió un error JSON controlado por nosotros
         if (data && data.error) {
             throw new Error(data.error);
         }
@@ -40,7 +39,9 @@ export async function llamarIA(peticionUsuario, contextoDeDatos) {
         return data.resultado;
     } catch (err) {
         console.error("Error crítico en IA:", err);
-        // Ahora sí mostraremos el mensaje real en la cajita de la UI
+        if (err.name === 'AbortError') {
+             throw new Error("Tiempo de espera agotado. La IA tardó demasiado en responder.");
+        }
         throw new Error(err.message || "Error desconocido de conexión.");
     }
 }
