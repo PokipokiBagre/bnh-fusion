@@ -629,9 +629,10 @@ window._ejecutarIALore = async (nombre) => {
             status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
-        } catch (e) {
+            } catch (e) {
             console.error(e);
-            status.textContent = "❌ Error de formato. Pide la instrucción de nuevo.";
+            // ⚡ AHORA MOSTRARÁ EL ERROR REAL DE GOOGLE, NO UNO INVENTADO
+            status.textContent = "❌ " + (e.message || "Error desconocido.");
             status.style.color = "var(--red)";
         } finally {
             btn.disabled = false;
