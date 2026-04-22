@@ -593,7 +593,7 @@ window._ejecutarIALore = async (nombre) => {
         const status = document.getElementById('ia-lore-status');
         const btn = document.getElementById('btn-ia-lore');
 
-        // ⚡ CAPTURAMOS LAS 4 CAJAS
+        // CAPTURAMOS LAS 4 CAJAS
         const taDesc = document.getElementById('lore-descripcion');
         const taLore = document.getElementById('lore-lore');
         const taPers = document.getElementById('lore-personalidad');
@@ -603,10 +603,10 @@ window._ejecutarIALore = async (nombre) => {
 
         try {
             btn.disabled = true;
-            status.innerHTML = "⏳ Analizando y repartiendo en cajas...";
+            status.textContent = "⏳ Analizando y repartiendo en cajas...";
             status.style.color = "#2980b9";
             
-            // Guardamos lo que hay actualmente en las cajas
+            // Guardamos lo que hay actualmente en las cajas para dar contexto a la IA
             const textosActuales = {
                 descripcion: taDesc.value,
                 lore: taLore.value,
@@ -616,22 +616,36 @@ window._ejecutarIALore = async (nombre) => {
 
             const resultadoRaw = await iaGestionarLore(nombre, input.value, textosActuales);
             
-            // Forzamos a que sea un JSON válido quitando posibles basuras
-            const cleanJson = resultadoRaw.replace(/```json/gi, '').replace(/```/g, '').trim();
-            const resultadoJson = JSON.parse(cleanJson);
+            // 1. Limpieza de posibles bloques de código markdown (```json ... ```)
+            let cleanJson = resultadoRaw.replace(/```json/gi, '').replace(/```/g, '').trim();
+            
+            // 2. ESCUDO: Limpieza de caracteres de control (saltos de línea literales)
+            // Esto evita el error "Unterminated string in JSON" si la IA no usa \n correctamente.
+            cleanJson = cleanJson.replace(/[\u0000-\u0019]+/g, ""); 
 
-            // ⚡ REPARTIMOS LA RESPUESTA DE LA IA EN SUS CAJAS
+            // 3. Intento de parseo con validación defensiva
+            let resultadoJson;
+            try {
+                resultadoJson = JSON.parse(cleanJson);
+            } catch (jsonErr) {
+                console.error("JSON malformado recibido:", cleanJson);
+                throw new Error("La IA devolvió un formato ilegible. Intenta ser más específico en la orden.");
+            }
+
+            // 4. REPARTIMOS LA RESPUESTA EN SUS CAJAS
+            // Solo actualizamos si la clave existe para no borrar texto por accidente
             if (resultadoJson.descripcion !== undefined) taDesc.value = resultadoJson.descripcion;
-            if (resultadoJson.lore !== undefined) taLore.value = resultadoJson.lore;
+            if (resultadoJson.lore !== undefined)        taLore.value = resultadoJson.lore;
             if (resultadoJson.personalidad !== undefined) taPers.value = resultadoJson.personalidad;
-            if (resultadoJson.quirk !== undefined) taQuirk.value = resultadoJson.quirk;
+            if (resultadoJson.quirk !== undefined)       taQuirk.value = resultadoJson.quirk;
 
             status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
-            } catch (e) {
-            console.error(e);
-            // ⚡ AHORA MOSTRARÁ EL ERROR REAL DE GOOGLE, NO UNO INVENTADO
+
+        } catch (e) {
+            console.error("Error en proceso IA:", e);
+            // Ahora mostrará el mensaje real (ej: saturación de Google o error de parseo)
             status.textContent = "❌ " + (e.message || "Error desconocido.");
             status.style.color = "var(--red)";
         } finally {
