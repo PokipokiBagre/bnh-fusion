@@ -53,6 +53,14 @@ export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
     const pts = ptGlobal[nombrePJ] || {};
     const tagsStr = Object.entries(pts).map(([t, p]) => `${t} [${p} PT]`).join(', ');
 
+    // Serializar info_extra actual para el contexto
+    const ie = textosActuales.info_extra || {};
+    const infoExtraStr = Object.entries({
+        estado: ie.estado, edad: ie.edad, altura: ie.altura, peso: ie.peso,
+        genero: ie.genero, lugar_nac: ie.lugar_nac, ocupacion: ie.ocupacion,
+        afiliacion: ie.afiliacion, familia: ie.familia, nota: ie.nota
+    }).map(([k, v]) => `  - ${k}: ${v || 'Vacío'}`).join('\n');
+
     const contexto = `
         PERSONAJE: @${pj.nombre_refinado}@
         STATS: POT ${pj.pot}, AGI ${pj.agi}, CTL ${pj.ctl}.
@@ -63,23 +71,45 @@ export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
         - lore: ${textosActuales.lore || 'Vacío'}
         - personalidad: ${textosActuales.personalidad || 'Vacío'}
         - quirk: ${textosActuales.quirk || 'Vacío'}
+        
+        INFORMACIÓN EXTRA ACTUAL:
+        ${infoExtraStr}
     `;
 
-        const prompt = `
+    const prompt = `
         INSTRUCCIÓN DEL OP: ${instruccion}
 
-        REGLA CRÍTICA: Debes responder ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. No incluyas markdown, ni texto antes o después. Usa estas 4 claves exactas: "descripcion", "lore", "personalidad", "quirk".
+        REGLA CRÍTICA: Debes responder ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. No incluyas markdown, ni texto antes o después.
         
-        ⚠️ REGLA DE FORMATO: Si necesitas hacer párrafos o saltos de línea dentro de tus textos, utiliza obligatoriamente los caracteres "\\n". NUNCA uses saltos de línea reales en el código JSON.
+        Usa estas claves exactas: "descripcion", "lore", "personalidad", "quirk", e "info_extra" (objeto con las claves: estado, edad, altura, peso, genero, lugar_nac, ocupacion, afiliacion, familia, nota).
         
-        Si el OP pide editar solo una sección, inventa esa y copia el texto actual de las demás para no borrarlas. Si dice "Vacío", inventa un texto acorde.
-
-        Ejemplo de tu respuesta OBLIGATORIA:
+        ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
+        
+        REGLA DE info_extra:
+        - Si el OP da datos concretos (altura, edad, familia, ocupación, etc.), extráelos y colócalos en info_extra.
+        - Si un campo de info_extra ya tiene valor en el contexto, consérvalo a menos que el OP pida cambiarlo.
+        - Si el OP no menciona un campo y estaba "Vacío", puedes inferir un valor razonable basado en el lore (ej: altura estimada por físico, ocupación por sus tags, familia por el lore).
+        - Para "familia", usa marcado @Nombre@ para cada miembro mencionado.
+        - Si el OP solo pide editar una sección de texto, copia las demás sin cambios.
+        
+        Ejemplo de respuesta OBLIGATORIA:
         {
           "descripcion": "texto...",
-          "lore": "Párrafo uno.\\n\\nPárrafo dos...",
+          "lore": "Párrafo uno.\\n\\nPárrafo dos.",
           "personalidad": "texto...",
-          "quirk": "texto..."
+          "quirk": "texto...",
+          "info_extra": {
+            "estado": "#Activo",
+            "edad": "#Madurez",
+            "altura": "1.85 m (Estimada)",
+            "peso": "Normal",
+            "genero": "Masculino",
+            "lugar_nac": "Desconocido",
+            "ocupacion": "#Héroe (Clase S) / #Profesor",
+            "afiliacion": "#U.A. / Agencia Propia",
+            "familia": "Hija: @Lexi@",
+            "nota": ""
+          }
         }
     `;
 
