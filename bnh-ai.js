@@ -46,12 +46,6 @@ export async function llamarIA(peticionUsuario, contextoDeDatos) {
     }
 }
 
-/**
- * 2. LORE: Genera o edita la historia de un personaje.
- */
-/**
- * 2. LORE: Genera o edita la historia de un personaje usando JSON routing.
- */
 export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
     const pj = gruposGlobal.find(g => g.nombre_refinado === nombrePJ);
     if (!pj) throw new Error("Personaje no encontrado.");
@@ -65,25 +59,25 @@ export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
         TAGS EQUIPADOS: ${tagsStr}
         
         TEXTOS ACTUALES EN LA UI:
-        - Descripción: ${textosActuales.descripcion || 'Vacío'}
-        - Historia: ${textosActuales.lore || 'Vacío'}
-        - Personalidad: ${textosActuales.personalidad || 'Vacío'}
-        - Quirk: ${textosActuales.quirk || 'Vacío'}
+        - descripcion: ${textosActuales.descripcion || 'Vacío'}
+        - lore: ${textosActuales.lore || 'Vacío'}
+        - personalidad: ${textosActuales.personalidad || 'Vacío'}
+        - quirk: ${textosActuales.quirk || 'Vacío'}
     `;
 
     const prompt = `
         INSTRUCCIÓN DEL OP: ${instruccion}
 
-        REGLA CRÍTICA DE FORMATO: No respondas con texto libre ni markdown. Tu respuesta debe ser ÚNICA Y ESTRICTAMENTE un objeto JSON válido con 4 claves. 
-        Si el OP te pide editar solo una sección (ej: "Mejora su historia"), inventa esa sección y copia exactamente el texto de las demás secciones actuales para no borrarlas.
-        Si la sección actual dice "Vacío" y no se te pide llenarla, déjala en blanco ("").
+        REGLA CRÍTICA: Debes responder ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. No incluyas markdown, ni texto antes o después. Usa estas 4 claves exactas: "descripcion", "lore", "personalidad", "quirk".
+        
+        Si el OP pide editar solo una sección, inventa esa y copia el texto actual de las demás para no borrarlas. Si dice "Vacío", inventa un texto acorde.
 
-        Devuelve exactamente esto:
+        Ejemplo de tu respuesta OBLIGATORIA:
         {
-          "descripcion": "...",
-          "lore": "...",
-          "personalidad": "...",
-          "quirk": "..."
+          "descripcion": "texto...",
+          "lore": "texto...",
+          "personalidad": "texto...",
+          "quirk": "texto..."
         }
     `;
 
