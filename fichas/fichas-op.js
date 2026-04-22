@@ -455,10 +455,11 @@ export function abrirEditarLore(nombreGrupo) {
             <div style="background:#fef9f0; border:1px solid #f39c12; border-radius:6px; padding:10px; margin-bottom:16px;">
                 <div style="font-size:0.75em; font-weight:800; color:#d68910; margin-bottom:6px;">✨ ASISTENTE IA (Gemini)</div>
                 <div style="display:flex; gap:6px;">
-                    <input id="ia-lore-input" type="text" class="op-input" style="flex:1; font-size:0.85em;" 
-                           placeholder="Ej: Redacta un párrafo épico para la Historia o describe su Quirk...">
-                    <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:0 12px;" 
-                            onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
+                <textarea id="ia-lore-input" rows="2" class="op-input" 
+                    style="width:100%; font-size:0.85em; resize:vertical; font-family:monospace; margin-bottom:6px;"
+                    placeholder="Ej: Rellena la info extra con datos del personaje, redacta su lore épico, describe su Quirk..."></textarea>
+                <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:4px 12px; width:100%;" 
+                        onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
                 </div>
                 <div id="ia-lore-status" style="font-size:0.75em; color:var(--gray-500); margin-top:4px; min-height:1em;"></div>
             </div>
