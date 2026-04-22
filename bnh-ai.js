@@ -65,17 +65,19 @@ export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
         - quirk: ${textosActuales.quirk || 'Vacío'}
     `;
 
-    const prompt = `
+        const prompt = `
         INSTRUCCIÓN DEL OP: ${instruccion}
 
         REGLA CRÍTICA: Debes responder ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. No incluyas markdown, ni texto antes o después. Usa estas 4 claves exactas: "descripcion", "lore", "personalidad", "quirk".
+        
+        ⚠️ REGLA DE FORMATO: Si necesitas hacer párrafos o saltos de línea dentro de tus textos, utiliza obligatoriamente los caracteres "\\n". NUNCA uses saltos de línea reales en el código JSON.
         
         Si el OP pide editar solo una sección, inventa esa y copia el texto actual de las demás para no borrarlas. Si dice "Vacío", inventa un texto acorde.
 
         Ejemplo de tu respuesta OBLIGATORIA:
         {
           "descripcion": "texto...",
-          "lore": "texto...",
+          "lore": "Párrafo uno.\\n\\nPárrafo dos...",
           "personalidad": "texto...",
           "quirk": "texto..."
         }
