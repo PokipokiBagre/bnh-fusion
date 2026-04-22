@@ -10,9 +10,10 @@ import {
     crearAlias, asignarAlias, eliminarAlias,
     aplicarDeltaPT, crearGrupo
 } from './fichas-data.js';
+import { iaGestionarLore, iaSugerirMedalla } from '../bnh-ai.js';
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
-import { initMarkupTextarea } from './fichas-markup.js';
+import { initMarkupTextarea, renderMarkup } from './fichas-markup.js';
 import { crearTagInput, TAGS_CANONICOS } from '../bnh-tags.js';
 
 // ── Modal ─────────────────────────────────────────────────────
@@ -55,7 +56,7 @@ export async function abrirPanelOP(nombreGrupo) {
     const medallaEquipadas = await getEquipacionPJ(nombreGrupo, { forzar: true });
     const ctlEquipacion = calcCTLUsado(medallaEquipadas);
 
-    const tabs = ['Stats','Tags & PT','Grupo'].map((t,i)=>
+    const tabs = ['Stats','Tags & PT','Grupo', 'IA'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
     ).join('');
 
@@ -214,9 +215,39 @@ export async function abrirPanelOP(nombreGrupo) {
     </div>
 
     <!-- TAB 2: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
-    <div id="op-p2" style="display:none;">${_grupoHTML(g)}</div>`;
+<div id="op-p2" style="display:none;">${_grupoHTML(g)}</div>
 
-    abrirModal(`⚙️ ${g.nombre_refinado}`, html);
+    <div id="op-p3" style="display:none; padding:8px;">
+        <div style="background:rgba(142,68,173,0.05); padding:14px; border-radius:8px; border:1px dashed #8e44ad;">
+            <div style="font-size:0.8em; font-weight:800; color:#8e44ad; margin-bottom:10px; text-transform:uppercase;">Brainstorming de Medallas</div>
+            <p style="font-size:0.75em; color:var(--gray-600); margin-top:0; margin-bottom:10px;">
+                La IA leerá los tags y PT actuales de <b>${g.nombre_refinado}</b> para crear una medalla balanceada.
+            </p>
+            
+            <div style="display:flex; gap:10px; margin-bottom:10px;">
+                <div style="flex:1;">
+                    <label class="op-label">Tipo de Medalla</label>
+                    <select id="ia-med-tipo" class="op-select" style="width:100%;">
+                        <option value="PASIVA">Pasiva (1-7 CTL)</option>
+                        <option value="ACTIVA" selected>Activa (3-12 CTL)</option>
+                        <option value="DEFINITIVA">Definitiva (8-16 CTL)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <label class="op-label">Concepto / Idea</label>
+            <input id="ia-med-concepto" type="text" class="op-input" style="width:100%; box-sizing:border-box; margin-bottom:10px;" placeholder="Ej: Escudo de hielo reflectante...">
+            
+            <button id="btn-ia-med" class="op-btn" style="background:#8e44ad; color:white; border:none; width:100%;"
+                    onclick="window._ejecutarIAMedalla('${g.nombre_refinado.replace(/'/g,"\\'")}')">
+                Generar Sugerencia
+            </button>
+            
+            <div id="ia-med-res" style="margin-top:12px; font-size:0.85em; color:var(--gray-800); background:white; padding:10px; border-radius:6px; border:1px solid var(--gray-200); display:none; line-height:1.5;"></div>
+        </div>
+    </div>`; // <-- AHORA SÍ CERRAMOS LAS COMILLAS DEL HTML AQUÍ
+
+    abrirModal(`⚙️ ${g.nombre_refinado}`, html); // <-- SOLO LLAMAMOS A ABRIR MODAL UNA VEZ
 
     // Montar tab 1: widget input + pool de tags sugeridos + pool PT
     setTimeout(() => {
@@ -435,7 +466,6 @@ function _grupoHTML(g) {
     </div>`;
 }
 
-// ── Modal editar Lore (accesible para todos) ─────────────────
 export function abrirEditarLore(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
@@ -458,6 +488,17 @@ export function abrirEditarLore(nombreGrupo) {
             <button class="op-modal-close" onclick="document.getElementById('op-overlay').style.display='none'">×</button>
         </div>
         <div id="op-body" style="padding:16px;">
+            
+            <div style="background:#fef9f0; border:1px solid #f39c12; border-radius:6px; padding:10px; margin-bottom:16px;">
+                <div style="font-size:0.75em; font-weight:800; color:#d68910; margin-bottom:6px;">✨ ASISTENTE IA (Gemini)</div>
+                <div style="display:flex; gap:6px;">
+                    <input id="ia-lore-input" type="text" class="op-input" style="flex:1; font-size:0.85em;" 
+                           placeholder="Ej: Redacta un párrafo épico para la Historia o describe su Quirk...">
+                    <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:0 12px;" 
+                            onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
+                </div>
+                <div id="ia-lore-status" style="font-size:0.75em; color:var(--gray-500); margin-top:4px; min-height:1em;"></div>
+            </div>
             <div style="font-size:0.72em;color:var(--gray-500);line-height:1.6;margin-bottom:12px;">
                 <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha &nbsp;·&nbsp;
                 <span style="color:var(--red);font-weight:700;">#Tag</span> → tags &nbsp;·&nbsp;
@@ -572,9 +613,9 @@ export function exponerGlobalesOP() {
     // Inyectar supabase en bnh-pac para que getEquipacionPJ funcione
     setSupabaseRef(supabase);
 
-    window._opTab = i => {
-        // Tabs: 0=Stats, 1=Tags&PT, 2=Grupo
-        [0,1,2].forEach(j=>{
+window._opTab = i => {
+        // Tabs: 0=Stats, 1=Tags&PT, 2=Grupo, 3=IA
+        [0,1,2,3].forEach(j=>{ // <-- AÑADIDO EL 3 AQUÍ
             const p=document.getElementById(`op-p${j}`);
             const t=document.getElementById(`op-tab-${j}`);
             if(p) p.style.display=j===i?'block':'none';
@@ -584,7 +625,68 @@ export function exponerGlobalesOP() {
 
     // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.
 
-    window._opGuardarStats = async (nombreGrupo) => {
+
+
+window._ejecutarIALore = async (nombre) => {
+        const input = document.getElementById('ia-lore-input');
+        const status = document.getElementById('ia-lore-status');
+        
+        // ⚡ APUNTAMOS AL TEXTAREA DE LA HISTORIA (o puedes cambiarlo a lore-quirk)
+        const textarea = document.getElementById('lore-lore'); 
+        const btn = document.getElementById('btn-ia-lore');
+
+        if (!input.value.trim()) return;
+
+        try {
+            btn.disabled = true;
+            status.textContent = "⏳ Analizando reglas y personaje...";
+            
+            const textoActual = textarea.value;
+            const esEdicion = textoActual.length > 20;
+
+            const resultado = await iaGestionarLore(nombre, input.value, esEdicion, textoActual);
+            
+            // Si el textarea ya tiene mucho texto, asumimos que es una edición y lo reemplazamos.
+            // Si está vacío o tiene poco, lo añadimos al final.
+            if (esEdicion) textarea.value = resultado;
+            else textarea.value += (textarea.value ? "\n\n" : "") + resultado;
+
+            status.textContent = "✅ Contenido generado.";
+            status.style.color = "var(--green)";
+            input.value = "";
+        } catch (e) {
+            status.textContent = "❌ " + e.message;
+            status.style.color = "var(--red)";
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+    window._ejecutarIAMedalla = async (nombre) => {
+        const tipo = document.getElementById('ia-med-tipo').value;
+        const concepto = document.getElementById('ia-med-concepto').value;
+        const resultDiv = document.getElementById('ia-med-res');
+        const btn = document.getElementById('btn-ia-med');
+
+        if (!concepto.trim()) return;
+
+        try {
+            btn.disabled = true;
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = `<span style="color:#8e44ad;">⏳ Generando medalla balanceada...</span>`;
+
+            const sugerencia = await iaSugerirMedalla(nombre, tipo, concepto);
+            
+            // Renderizamos con markup para que se vean los #tags y !medallas! de colores
+            resultDiv.innerHTML = renderMarkup(sugerencia);
+        } catch (e) {
+            resultDiv.innerHTML = `<span style="color:var(--red);">❌ Error: ${e.message}</span>`;
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+        window._opGuardarStats = async (nombreGrupo) => {
         const d = id => document.getElementById(id)?.value?.trim() ?? '';
         const pvActRaw = d('op-pv-actual');
 
@@ -650,7 +752,7 @@ export function exponerGlobalesOP() {
         setMsg('msg-stats', res.ok ? '✅ Guardado' : '❌ ' + res.msg, res.ok);
         if (res.ok) window.sincronizarVista?.();
     };
-
+    
     window._opAddTag = async (grupoId, nombreGrupo, tagDirecto) => {
         const tag = tagDirecto || (() => {
             const raw=document.getElementById('op-tag-inp')?.value?.trim();
