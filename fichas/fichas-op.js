@@ -452,17 +452,17 @@ export function abrirEditarLore(nombreGrupo) {
         </div>
         <div id="op-body" style="padding:16px;">
             
-            <div style="background:#fef9f0; border:1px solid #f39c12; border-radius:6px; padding:10px; margin-bottom:16px;">
-                <div style="font-size:0.75em; font-weight:800; color:#d68910; margin-bottom:6px;">✨ ASISTENTE IA (Gemini)</div>
-                <div style="display:flex; gap:6px;">
-                <textarea id="ia-lore-input" rows="2" class="op-input" 
-                    style="width:100%; font-size:0.85em; resize:vertical; font-family:monospace; margin-bottom:6px;"
-                    placeholder="Ej: Rellena la info extra con datos del personaje, redacta su lore épico, describe su Quirk..."></textarea>
-                <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:4px 12px; width:100%;" 
-                        onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
-                </div>
-                <div id="ia-lore-status" style="font-size:0.75em; color:var(--gray-500); margin-top:4px; min-height:1em;"></div>
-            </div>
+<div style="background:#fef9f0; border:1px solid #f39c12; border-radius:6px; padding:10px; margin-bottom:16px;">
+    <div style="font-size:0.75em; font-weight:800; color:#d68910; margin-bottom:6px;">✨ ASISTENTE IA (Gemini)</div>
+    <textarea id="ia-lore-input" rows="2" class="op-input" 
+        style="width:100%; font-size:0.85em; resize:vertical; font-family:monospace; margin-bottom:6px; box-sizing:border-box;"
+        placeholder="Ej: Rellena la info extra con datos del personaje, redacta su lore épico, describe su Quirk..."></textarea>
+    <div style="display:flex; justify-content:flex-end;">
+        <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:4px 16px;" 
+                onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
+    </div>
+    <div id="ia-lore-status" style="font-size:0.75em; color:var(--gray-500); margin-top:4px; min-height:1em;"></div>
+</div>
             <div style="font-size:0.72em;color:var(--gray-500);line-height:1.6;margin-bottom:12px;">
                 <span style="color:var(--green);font-weight:700;">@Nombre</span> → ficha &nbsp;·&nbsp;
                 <span style="color:var(--red);font-weight:700;">#Tag</span> → tags &nbsp;·&nbsp;
