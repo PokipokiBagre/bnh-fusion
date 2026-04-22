@@ -113,7 +113,7 @@ ${infoExtraStr}
             · "estado": usa #Activo o #Inactivo según corresponda.
             · "altura" y "peso": estima según el lore y stats (POT alto = complexión robusta).
             · "edad": usa etiquetas como #Madurez, #Joven, etc. si hay tags relevantes.
-        - Para "familia", usa marcado @Nombre@ para cada miembro mencionado.
+        - Para "familia", usa marcado @Nombre@ para cada miembro mencionado. CRÍTICO: el nombre va EXACTAMENTE como aparece en el contexto o como lo escribió el OP, con espacios y tildes incluidos. NUNCA uses guiones bajos en nombres de personas. Correcto: @Coyote Peterson@. Incorrecto: @Coyote_Peterson@.
         - NUNCA inventes tags que no estén en la lista de TAGS EQUIPADOS.
         - Si el OP solo pide editar una sección de texto, copia las demás sin cambios.
         
