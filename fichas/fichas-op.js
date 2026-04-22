@@ -593,7 +593,7 @@ window._ejecutarIALore = async (nombre) => {
         const status = document.getElementById('ia-lore-status');
         const btn = document.getElementById('btn-ia-lore');
 
-        // Capturamos los 4 textareas
+        // ⚡ CAPTURAMOS LAS 4 CAJAS
         const taDesc = document.getElementById('lore-descripcion');
         const taLore = document.getElementById('lore-lore');
         const taPers = document.getElementById('lore-personalidad');
@@ -603,10 +603,10 @@ window._ejecutarIALore = async (nombre) => {
 
         try {
             btn.disabled = true;
-            status.textContent = "⏳ Analizando y redactando parámetros...";
-            status.style.color = "var(--blue)";
+            status.innerHTML = "⏳ Analizando y repartiendo en cajas...";
+            status.style.color = "#2980b9";
             
-            // Guardamos lo que hay actualmente para enviárselo a la IA
+            // Guardamos lo que hay actualmente en las cajas
             const textosActuales = {
                 descripcion: taDesc.value,
                 lore: taLore.value,
@@ -616,22 +616,22 @@ window._ejecutarIALore = async (nombre) => {
 
             const resultadoRaw = await iaGestionarLore(nombre, input.value, textosActuales);
             
-            // Limpiamos los backticks (```json) que a veces la IA pone por costumbre
+            // Forzamos a que sea un JSON válido quitando posibles basuras
             const cleanJson = resultadoRaw.replace(/```json/gi, '').replace(/```/g, '').trim();
             const resultadoJson = JSON.parse(cleanJson);
 
-            // Inyectamos cada texto en su caja correspondiente
+            // ⚡ REPARTIMOS LA RESPUESTA DE LA IA EN SUS CAJAS
             if (resultadoJson.descripcion !== undefined) taDesc.value = resultadoJson.descripcion;
             if (resultadoJson.lore !== undefined) taLore.value = resultadoJson.lore;
             if (resultadoJson.personalidad !== undefined) taPers.value = resultadoJson.personalidad;
             if (resultadoJson.quirk !== undefined) taQuirk.value = resultadoJson.quirk;
 
-            status.textContent = "✅ Ficha actualizada. Revisa los textos y dale a Guardar.";
+            status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
         } catch (e) {
             console.error(e);
-            status.textContent = "❌ Error: La IA no devolvió el formato correcto. Intenta de nuevo.";
+            status.textContent = "❌ Error de formato. Pide la instrucción de nuevo.";
             status.style.color = "var(--red)";
         } finally {
             btn.disabled = false;
