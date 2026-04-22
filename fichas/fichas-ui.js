@@ -486,7 +486,7 @@ ${fusion?(()=>{
         ${g.personalidad?`<div class="wiki-section"><div class="wiki-section-header">Personalidad</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.personalidad)}</div></div>`:''}
         ${g.quirk?`<div class="wiki-section"><div class="wiki-section-header">Quirk</div><div class="wiki-section-body" style="white-space:normal;">${renderMarkup(g.quirk)}</div></div>`:''}
 <div class="wiki-section" id="medallas-section">
-    <div class="wiki-section-header" style="background:#1a4a80;">Medallas equipadas</div>
+    <div class="wiki-section-header" style="background:#1a4a80;">Medallas</div>
     <div id="medallas-body" style="padding:14px;">
         <div style="display:flex;align-items:center;gap:8px;color:var(--gray-500);font-size:0.82em;">
             <div class="spinner" style="width:14px;height:14px;"></div> Cargando medallas…
@@ -494,7 +494,7 @@ ${fusion?(()=>{
     </div>
 </div>
 
-        ${Object.keys(ptG).length?`
+        ${(Object.keys(ptG).length > 0 || tagsProy.length > 0)?`
         <div class="wiki-section">
 <div class="wiki-section-header" style="background:#1e5631; display:flex; justify-content:space-between; align-items:center;">
     <span>Progresión — Puntos de Tag</span>
@@ -508,20 +508,28 @@ ${fusion?(()=>{
 </div>
             <table class="pt-table">
                 <thead><tr><th>Tag</th><th>PT</th><th>Stat (50)</th><th>Medalla (75)</th><th>Mutación (100)</th></tr></thead>
-                <tbody>${Object.entries(ptG).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=> {
+                <tbody>${(()=>{
+                    // Construir mapa unificado: PT real + tags del PJ con 0
+                    const allPT = {...ptG};
+                    tagsProy.forEach(t => {
+                        const tf = t.startsWith('#') ? t : '#'+t;
+                        if (!(tf in allPT) && !(t in allPT)) allPT[tf] = 0;
+                    });
+                    return Object.entries(allPT).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=> {
                     const basePt = (ptGlobal[nombreGrupo] || {})[tag] || 0;
                     const esAlterado = proy.esFusion && pts !== basePt;
                     const icon = esAlterado ? '<span style="color:#8e44ad; margin-right:4px;" title="Alterado por Fusión">⚡</span>' : '';
-                    const colorTxt = esAlterado ? '#8e44ad' : (pts>=50?'#d68910':pts>=20?'#8e44ad':'var(--gray-900)');
+                    const colorTxt = pts===0 ? 'var(--gray-400)' : esAlterado ? '#8e44ad' : (pts>=50?'#d68910':pts>=20?'#8e44ad':'var(--gray-900)');
                     
                     return `
-                <tr>
+                <tr style="${pts===0?'opacity:0.55;':''}">
                     <td style="color:var(--booru-link);font-weight:600;">${tag.startsWith('#')?tag:'#'+tag}</td>
                     <td style="font-weight:700;color:${colorTxt};">${icon}${pts}</td>
                     <td style="color:${pts>=50?'var(--green)':'var(--gray-400)'};">${pts>=50?'✓':`${50-pts}↑`}</td>
                     <td style="color:${pts>=75?'var(--green)':'var(--gray-400)'};">${pts>=75?'✓':`${75-pts}↑`}</td>
                     <td style="color:${pts>=100?'var(--green)':'var(--gray-400)'};">${pts>=100?'✓':`${100-pts}↑`}</td>
-                </tr>`}).join('')}</tbody>
+                </tr>`}).join('');
+                })()}</tbody>
             </table>
         </div>`:''} 
       </div>
@@ -615,7 +623,7 @@ async function _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado) {
         });
 
         if (!medAccesibles.length) {
-            body.innerHTML = `<p style="color:var(--gray-500);font-size:0.82em;">Sin medallas disponibles para los tags actuales.</p>`;
+            body.innerHTML = `<p style="color:var(--gray-500);font-size:0.82em;">Sin medallas disponibles para los tags actuales del personaje.</p>`;
             return;
         }
 
@@ -648,12 +656,13 @@ async function _cargarMedallasEnFicha(nombreGrupo, proy, ctlUsado) {
         </div>` : ''}
 
         ${bloqueadas.length ? `
-        <details style="margin-top:4px;">
-            <summary style="font-size:0.78em;color:var(--gray-500);cursor:pointer;padding:4px 0;">
-                🔒 Bloqueadas por PT insuficientes (${bloqueadas.length})
-            </summary>
-            <div class="medalla-ficha-grid" style="margin-top:8px;">${bloqueadas.map(m => _renderMedallaFichaCard(m, 'bloqueada', ptsMapa, tagsGrupo)).join('')}</div>
-        </details>` : ''}
+        <div style="margin-bottom:12px;">
+            <div class="medalla-ficha-subheader" style="color:#7f8c8d;border-color:#95a5a6;">🔒 Bloqueadas por PT insuficientes (${bloqueadas.length})</div>
+            <div class="medalla-ficha-grid">${bloqueadas.map(m => _renderMedallaFichaCard(m, 'bloqueada', ptsMapa, tagsGrupo)).join('')}</div>
+        </div>` : ''}
+
+        ${!equipadas.length && !disponibles.length && !bloqueadas.length ? `
+        <p style="color:var(--gray-500);font-size:0.82em;">Sin medallas para mostrar.</p>` : ''}
         `;
     } catch(e) {
         const body2 = document.getElementById('medallas-body');

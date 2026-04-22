@@ -172,6 +172,18 @@ export async function abrirPanelOP(nombreGrupo) {
             Delta PT Manual <span style="font-weight:400;color:var(--gray-400);font-size:0.9em;">(selecciona tags → aplica a todos)</span>
         </div>
         <div id="op-pt-pool" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;max-height:110px;overflow-y:auto;padding:4px 0;"></div>
+        <div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center;margin-bottom:7px;padding:6px 8px;background:#f8f9fa;border-radius:6px;border:1px solid var(--gray-200);">
+            <span style="font-size:0.7em;font-weight:700;color:var(--gray-500);margin-right:2px;white-space:nowrap;">Rápido:</span>
+            ${[1,5,10,50,100].map(v=>`
+            <button onclick="document.getElementById('op-pt-d').value='${v}';window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')"
+                style="background:#d5f5e3;border:1px solid #27ae60;color:#1a5e35;border-radius:5px;padding:2px 7px;font-size:0.72em;font-weight:700;cursor:pointer;white-space:nowrap;"
+                onmouseover="this.style.background='#27ae60';this.style.color='white'" onmouseout="this.style.background='#d5f5e3';this.style.color='#1a5e35'">+${v}</button>`).join('')}
+            <span style="color:var(--gray-300);margin:0 2px;">|</span>
+            ${[1,5,10,50,100].map(v=>`
+            <button onclick="document.getElementById('op-pt-d').value='-${v}';window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')"
+                style="background:#fdecea;border:1px solid #e74c3c;color:#7b241c;border-radius:5px;padding:2px 7px;font-size:0.72em;font-weight:700;cursor:pointer;white-space:nowrap;"
+                onmouseover="this.style.background='#e74c3c';this.style.color='white'" onmouseout="this.style.background='#fdecea';this.style.color='#7b241c'">−${v}</button>`).join('')}
+        </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
             <span class="op-label" style="flex:none;">Delta (±)</span>
             <input id="op-pt-d" type="number" class="op-input" value="1" style="width:70px;">
@@ -185,11 +197,20 @@ export async function abrirPanelOP(nombreGrupo) {
                 <option value="manual">Manual libre</option>
             </select>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <button class="op-btn op-btn-blue" onclick="window._opAplicarPT('${nombreGrupo.replace(/'/g,"\\'")}')">Aplicar a seleccionados</button>
             <span id="op-pt-sel-count" style="font-size:0.78em;color:var(--gray-500);"></span>
         </div>
         <div id="msg-pt" class="op-msg"></div>
+
+        <hr style="border:none;border-top:1px solid var(--gray-200);margin:10px 0 8px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button class="op-btn op-btn-gray" style="font-size:0.78em;" onclick="window._opLimpiarHuerfanos('${nombreGrupo.replace(/'/g,"\\'")}')">
+                🧹 Limpiar PT de tags huérfanos
+            </button>
+            <span style="font-size:0.7em;color:var(--gray-400);">PT de tags que el PJ ya no tiene</span>
+        </div>
+        <div id="msg-huerfanos" class="op-msg"></div>
     </div>
 
     <!-- TAB 2: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
@@ -656,11 +677,11 @@ export function exponerGlobalesOP() {
         const nuevosTags=(g.tags||[]).filter(t=>t!==tag);
         const res=await guardarTagsGrupo(grupoId,nuevosTags);
         if(res.ok){
-            // Borrar PT del tag si los había
-            if (pts > 0) await borrarPTDeTag(g.nombre_refinado, tag);
+            // PT del tag NO se borra automáticamente — usar el botón de huérfanos para eso
             const chips=document.getElementById('op-chips');
             const nombre=g.nombre_refinado;
             if(chips) chips.innerHTML=_chipsHTML(grupoId,nuevosTags,ptGlobal[nombre]||{});
+            window._opRefreshTab1Pools?.(grupoId, nombre);
             window.sincronizarVista?.();
         }
     };
@@ -693,6 +714,46 @@ export function exponerGlobalesOP() {
 
         // Refrescar pool PT con los nuevos valores
         window._opRefreshTab1Pools(g?.id, nombreGrupo);
+        window.sincronizarVista?.();
+    };
+
+    window._opLimpiarHuerfanos = async (nombreGrupo) => {
+        const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        if (!g) return;
+        const ptDePJ = ptGlobal[nombreGrupo] || {};
+        const tagsDelPJ = new Set([
+            ...(g.tags||[]).map(t => t.startsWith('#')?t:'#'+t),
+            ...(g.tags||[]).map(t => t.startsWith('#')?t.slice(1):t)
+        ]);
+        const msgEl = document.getElementById('msg-huerfanos');
+
+        const huerfanos = Object.keys(ptDePJ).filter(tag => {
+            const conHash = tag.startsWith('#') ? tag : '#'+tag;
+            const sinHash = tag.startsWith('#') ? tag.slice(1) : tag;
+            return !tagsDelPJ.has(conHash) && !tagsDelPJ.has(sinHash);
+        });
+
+        if (!huerfanos.length) {
+            if (msgEl) { msgEl.className='op-msg ok'; msgEl.textContent='✅ No hay tags huérfanos'; }
+            return;
+        }
+
+        const lista = huerfanos.map(t => `${t} (${ptDePJ[t]}pt)`).join(', ');
+        if (!confirm(`¿Limpiar PT de ${huerfanos.length} tag(s) huérfano(s)?\n\n${lista}\n\nEsta acción borrará del historial también.`)) return;
+
+        let errores = 0;
+        for (const tag of huerfanos) {
+            try { await borrarPTDeTag(nombreGrupo, tag); } catch(e) { errores++; }
+        }
+
+        if (msgEl) {
+            msgEl.className = 'op-msg ' + (errores ? 'err' : 'ok');
+            msgEl.textContent = errores
+                ? `⚠ ${huerfanos.length - errores} eliminados, ${errores} con error`
+                : `✅ ${huerfanos.length} tag(s) huérfanos limpiados`;
+        }
+        const gRef = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
+        window._opRefreshTab1Pools?.(gRef?.id, nombreGrupo);
         window.sincronizarVista?.();
     };
 
