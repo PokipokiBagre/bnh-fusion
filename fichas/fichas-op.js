@@ -588,35 +588,50 @@ export function exponerGlobalesOP() {
 
     // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.
 
-    window._ejecutarIALore = async (nombre) => {
+window._ejecutarIALore = async (nombre) => {
         const input = document.getElementById('ia-lore-input');
         const status = document.getElementById('ia-lore-status');
-        
-        // ⚡ APUNTAMOS AL TEXTAREA DE LA HISTORIA (o puedes cambiarlo a lore-quirk)
-        const textarea = document.getElementById('lore-lore'); 
         const btn = document.getElementById('btn-ia-lore');
+
+        // Capturamos los 4 textareas
+        const taDesc = document.getElementById('lore-descripcion');
+        const taLore = document.getElementById('lore-lore');
+        const taPers = document.getElementById('lore-personalidad');
+        const taQuirk = document.getElementById('lore-quirk');
 
         if (!input.value.trim()) return;
 
         try {
             btn.disabled = true;
-            status.textContent = "⏳ Analizando reglas y personaje...";
+            status.textContent = "⏳ Analizando y redactando parámetros...";
+            status.style.color = "var(--blue)";
             
-            const textoActual = textarea.value;
-            const esEdicion = textoActual.length > 20;
+            // Guardamos lo que hay actualmente para enviárselo a la IA
+            const textosActuales = {
+                descripcion: taDesc.value,
+                lore: taLore.value,
+                personalidad: taPers.value,
+                quirk: taQuirk.value
+            };
 
-            const resultado = await iaGestionarLore(nombre, input.value, esEdicion, textoActual);
+            const resultadoRaw = await iaGestionarLore(nombre, input.value, textosActuales);
             
-            // Si el textarea ya tiene mucho texto, asumimos que es una edición y lo reemplazamos.
-            // Si está vacío o tiene poco, lo añadimos al final.
-            if (esEdicion) textarea.value = resultado;
-            else textarea.value += (textarea.value ? "\n\n" : "") + resultado;
+            // Limpiamos los backticks (```json) que a veces la IA pone por costumbre
+            const cleanJson = resultadoRaw.replace(/```json/gi, '').replace(/```/g, '').trim();
+            const resultadoJson = JSON.parse(cleanJson);
 
-            status.textContent = "✅ Contenido generado.";
+            // Inyectamos cada texto en su caja correspondiente
+            if (resultadoJson.descripcion !== undefined) taDesc.value = resultadoJson.descripcion;
+            if (resultadoJson.lore !== undefined) taLore.value = resultadoJson.lore;
+            if (resultadoJson.personalidad !== undefined) taPers.value = resultadoJson.personalidad;
+            if (resultadoJson.quirk !== undefined) taQuirk.value = resultadoJson.quirk;
+
+            status.textContent = "✅ Ficha actualizada. Revisa los textos y dale a Guardar.";
             status.style.color = "var(--green)";
             input.value = "";
         } catch (e) {
-            status.textContent = "❌ " + e.message;
+            console.error(e);
+            status.textContent = "❌ Error: La IA no devolvió el formato correcto. Intenta de nuevo.";
             status.style.color = "var(--red)";
         } finally {
             btn.disabled = false;
