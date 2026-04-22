@@ -607,14 +607,27 @@ window._ejecutarIALore = async (nombre) => {
             status.textContent = "⏳ Analizando y repartiendo en cajas...";
             status.style.color = "#2980b9";
             
-            // Guardamos lo que hay actualmente en las cajas para dar contexto a la IA
+            const infoExtraActual = {
+                estado:     document.getElementById('lore-info-estado')?.value    || '',
+                edad:       document.getElementById('lore-info-edad')?.value      || '',
+                altura:     document.getElementById('lore-info-altura')?.value    || '',
+                peso:       document.getElementById('lore-info-peso')?.value      || '',
+                genero:     document.getElementById('lore-info-genero')?.value    || '',
+                lugar_nac:  document.getElementById('lore-info-lugar_nac')?.value || '',
+                ocupacion:  document.getElementById('lore-info-ocupacion')?.value || '',
+                afiliacion: document.getElementById('lore-info-afiliacion')?.value|| '',
+                familia:    document.getElementById('lore-info-familia')?.value   || '',
+                nota:       document.getElementById('lore-info-nota')?.value      || '',
+            };
+            
             const textosActuales = {
                 descripcion: taDesc.value,
                 lore: taLore.value,
                 personalidad: taPers.value,
-                quirk: taQuirk.value
+                quirk: taQuirk.value,
+                info_extra: infoExtraActual
             };
-
+            
             const resultadoRaw = await iaGestionarLore(nombre, input.value, textosActuales);
             
             // 1. Limpieza de posibles bloques de código markdown (```json ... ```)
@@ -639,7 +652,21 @@ window._ejecutarIALore = async (nombre) => {
             if (resultadoJson.lore !== undefined)        taLore.value = resultadoJson.lore;
             if (resultadoJson.personalidad !== undefined) taPers.value = resultadoJson.personalidad;
             if (resultadoJson.quirk !== undefined)       taQuirk.value = resultadoJson.quirk;
-
+            if (resultadoJson.info_extra && typeof resultadoJson.info_extra === 'object') {
+                const ie = resultadoJson.info_extra;
+                const setIE = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                setIE('lore-info-estado',    ie.estado);
+                setIE('lore-info-edad',      ie.edad);
+                setIE('lore-info-altura',    ie.altura);
+                setIE('lore-info-peso',      ie.peso);
+                setIE('lore-info-genero',    ie.genero);
+                setIE('lore-info-lugar_nac', ie.lugar_nac);
+                setIE('lore-info-ocupacion', ie.ocupacion);
+                setIE('lore-info-afiliacion',ie.afiliacion);
+                setIE('lore-info-familia',   ie.familia);
+                setIE('lore-info-nota',      ie.nota);
+            }
+            
             status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
