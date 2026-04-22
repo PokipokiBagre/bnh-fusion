@@ -9,6 +9,7 @@ import { gruposGlobal, ptGlobal } from './fichas/fichas-state.js';
  * 1. Función base: Invoca la Edge Function en Supabase.
  * Envía siempre las REGLAS_SISTEMA como contexto de instrucción.
  */
+// bnh-ai.js (reemplaza solo esta función)
 export async function llamarIA(peticionUsuario, contextoDeDatos) {
     try {
         const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
@@ -23,11 +24,24 @@ export async function llamarIA(peticionUsuario, contextoDeDatos) {
             }
         });
 
-        if (error) throw error;
+        // Si la función falla, extraemos el error real
+        if (error) {
+            console.error("Detalle de Supabase:", error);
+            // Supabase a veces esconde el mensaje en error.context
+            const msgReal = (error.context && error.context.error) ? error.context.error : error.message;
+            throw new Error(msgReal);
+        }
+
+        // Si Deno devolvió un error JSON controlado por nosotros
+        if (data && data.error) {
+            throw new Error(data.error);
+        }
+
         return data.resultado;
     } catch (err) {
-        console.error("Error en motor IA:", err);
-        throw new Error("No se pudo conectar con el motor de IA.");
+        console.error("Error crítico en IA:", err);
+        // Ahora sí mostraremos el mensaje real en la cajita de la UI
+        throw new Error(err.message || "Error desconocido de conexión.");
     }
 }
 
