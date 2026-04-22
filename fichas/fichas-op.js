@@ -10,7 +10,7 @@ import {
     crearAlias, asignarAlias, eliminarAlias,
     aplicarDeltaPT, crearGrupo
 } from './fichas-data.js';
-import { iaGestionarLore, iaSugerirMedalla } from '../bnh-ai.js';
+import { iaGestionarLore } from '../bnh-ai.js'; // ⚡ SOLO LORE
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
 import { initMarkupTextarea, renderMarkup } from './fichas-markup.js';
@@ -56,7 +56,7 @@ export async function abrirPanelOP(nombreGrupo) {
     const medallaEquipadas = await getEquipacionPJ(nombreGrupo, { forzar: true });
     const ctlEquipacion = calcCTLUsado(medallaEquipadas);
 
-    const tabs = ['Stats','Tags & PT','Grupo', 'IA'].map((t,i)=>
+    const tabs = ['Stats','Tags & PT','Grupo'].map((t,i)=>
         `<button class="op-tab${i===0?' active':''}" id="op-tab-${i}" onclick="window._opTab(${i})">${t}</button>`
     ).join('');
 
@@ -155,7 +155,6 @@ export async function abrirPanelOP(nombreGrupo) {
         </div>
     </div>
     
-    <!-- TAB 1: TAGS & PT -->
     <div id="op-p1" style="display:none;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">Tags actuales</div>
         <div class="tags-chips" id="op-chips">${_chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{})}</div>
@@ -214,40 +213,10 @@ export async function abrirPanelOP(nombreGrupo) {
         <div id="msg-huerfanos" class="op-msg"></div>
     </div>
 
-    <!-- TAB 2: GRUPO (renombrar, aliases, fusionar grupos, eliminar) -->
-<div id="op-p2" style="display:none;">${_grupoHTML(g)}</div>
+    <div id="op-p2" style="display:none;">${_grupoHTML(g)}</div>
+    `;
 
-    <div id="op-p3" style="display:none; padding:8px;">
-        <div style="background:rgba(142,68,173,0.05); padding:14px; border-radius:8px; border:1px dashed #8e44ad;">
-            <div style="font-size:0.8em; font-weight:800; color:#8e44ad; margin-bottom:10px; text-transform:uppercase;">Brainstorming de Medallas</div>
-            <p style="font-size:0.75em; color:var(--gray-600); margin-top:0; margin-bottom:10px;">
-                La IA leerá los tags y PT actuales de <b>${g.nombre_refinado}</b> para crear una medalla balanceada.
-            </p>
-            
-            <div style="display:flex; gap:10px; margin-bottom:10px;">
-                <div style="flex:1;">
-                    <label class="op-label">Tipo de Medalla</label>
-                    <select id="ia-med-tipo" class="op-select" style="width:100%;">
-                        <option value="PASIVA">Pasiva (1-7 CTL)</option>
-                        <option value="ACTIVA" selected>Activa (3-12 CTL)</option>
-                        <option value="DEFINITIVA">Definitiva (8-16 CTL)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <label class="op-label">Concepto / Idea</label>
-            <input id="ia-med-concepto" type="text" class="op-input" style="width:100%; box-sizing:border-box; margin-bottom:10px;" placeholder="Ej: Escudo de hielo reflectante...">
-            
-            <button id="btn-ia-med" class="op-btn" style="background:#8e44ad; color:white; border:none; width:100%;"
-                    onclick="window._ejecutarIAMedalla('${g.nombre_refinado.replace(/'/g,"\\'")}')">
-                Generar Sugerencia
-            </button>
-            
-            <div id="ia-med-res" style="margin-top:12px; font-size:0.85em; color:var(--gray-800); background:white; padding:10px; border-radius:6px; border:1px solid var(--gray-200); display:none; line-height:1.5;"></div>
-        </div>
-    </div>`; // <-- AHORA SÍ CERRAMOS LAS COMILLAS DEL HTML AQUÍ
-
-    abrirModal(`⚙️ ${g.nombre_refinado}`, html); // <-- SOLO LLAMAMOS A ABRIR MODAL UNA VEZ
+    abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
     // Montar tab 1: widget input + pool de tags sugeridos + pool PT
     setTimeout(() => {
@@ -397,7 +366,6 @@ function _grupoHTML(g) {
         .join('');
 
     return `
-    <!-- Renombrar -->
     <div style="margin-bottom:14px;">
         <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:5px;">Nombre del grupo</div>
         <div style="display:flex;gap:6px;">
@@ -409,13 +377,11 @@ function _grupoHTML(g) {
 
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:12px 0;">
 
-    <!-- Aliases asignados -->
     <div style="font-size:0.78em;font-weight:600;color:var(--gray-700);margin-bottom:6px;">
         Aliases en este grupo (${misAliases.length})
     </div>
     <div id="op-alias-lista" style="margin-bottom:12px;">${aliasRows}</div>
 
-    <!-- Asignar alias suelto -->
     ${sueltosOpts ? `
     <div style="display:flex;gap:6px;margin-bottom:8px;">
         <select id="op-alias-suelto" class="op-select" style="flex:1;">
@@ -424,7 +390,6 @@ function _grupoHTML(g) {
         <button class="op-btn op-btn-green" onclick="window._opAsignarAlias('${g.id}')">+ Asignar</button>
     </div>` : `<p style="color:var(--gray-400);font-size:0.78em;margin-bottom:8px;">No hay aliases sueltos disponibles.</p>`}
 
-    <!-- Crear nuevo alias -->
     <div style="display:flex;gap:6px;margin-bottom:8px;">
         <input id="op-alias-nuevo" type="text" class="op-input" placeholder="Nombre del nuevo alias" style="flex:1;">
         <button class="op-btn op-btn-blue" onclick="window._opCrearYAsignarAlias('${g.id}')">Crear y asignar</button>
@@ -433,7 +398,6 @@ function _grupoHTML(g) {
 
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0;">
 
-    <!-- ★ FUSIONAR GRUPOS (absorción permanente) -->
     <div style="margin-bottom:14px;">
         <div style="font-size:0.78em;font-weight:600;color:#8e44ad;margin-bottom:4px;">
             🔀 Fusionar grupos (absorción permanente)
@@ -458,7 +422,6 @@ function _grupoHTML(g) {
 
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:16px 0;">
 
-    <!-- Eliminar grupo -->
     <div>
         <div style="font-size:0.78em;font-weight:600;color:var(--red);margin-bottom:6px;">Zona de peligro</div>
         <button class="op-btn op-btn-red" onclick="window._opEliminarGrupo('${g.id}','${g.nombre_refinado.replace(/'/g,"\\'")}')")>🗑 Eliminar este grupo</button>
@@ -613,9 +576,9 @@ export function exponerGlobalesOP() {
     // Inyectar supabase en bnh-pac para que getEquipacionPJ funcione
     setSupabaseRef(supabase);
 
-window._opTab = i => {
-        // Tabs: 0=Stats, 1=Tags&PT, 2=Grupo, 3=IA
-        [0,1,2,3].forEach(j=>{ // <-- AÑADIDO EL 3 AQUÍ
+    window._opTab = i => {
+        // Tabs: 0=Stats, 1=Tags&PT, 2=Grupo
+        [0,1,2].forEach(j=>{
             const p=document.getElementById(`op-p${j}`);
             const t=document.getElementById(`op-tab-${j}`);
             if(p) p.style.display=j===i?'block':'none';
@@ -625,9 +588,7 @@ window._opTab = i => {
 
     // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.
 
-
-
-window._ejecutarIALore = async (nombre) => {
+    window._ejecutarIALore = async (nombre) => {
         const input = document.getElementById('ia-lore-input');
         const status = document.getElementById('ia-lore-status');
         
@@ -662,31 +623,7 @@ window._ejecutarIALore = async (nombre) => {
         }
     };
 
-    window._ejecutarIAMedalla = async (nombre) => {
-        const tipo = document.getElementById('ia-med-tipo').value;
-        const concepto = document.getElementById('ia-med-concepto').value;
-        const resultDiv = document.getElementById('ia-med-res');
-        const btn = document.getElementById('btn-ia-med');
-
-        if (!concepto.trim()) return;
-
-        try {
-            btn.disabled = true;
-            resultDiv.style.display = 'block';
-            resultDiv.innerHTML = `<span style="color:#8e44ad;">⏳ Generando medalla balanceada...</span>`;
-
-            const sugerencia = await iaSugerirMedalla(nombre, tipo, concepto);
-            
-            // Renderizamos con markup para que se vean los #tags y !medallas! de colores
-            resultDiv.innerHTML = renderMarkup(sugerencia);
-        } catch (e) {
-            resultDiv.innerHTML = `<span style="color:var(--red);">❌ Error: ${e.message}</span>`;
-        } finally {
-            btn.disabled = false;
-        }
-    };
-
-        window._opGuardarStats = async (nombreGrupo) => {
+    window._opGuardarStats = async (nombreGrupo) => {
         const d = id => document.getElementById(id)?.value?.trim() ?? '';
         const pvActRaw = d('op-pv-actual');
 
