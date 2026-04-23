@@ -238,26 +238,38 @@ export async function renameTag(viejoNombre, nuevoNombre) {
 export async function deleteTag(nombre, borrarPuntos = false) {
     const tagNorm = nombre.startsWith('#') ? nombre : '#' + nombre;
     const tagKey  = tagNorm.slice(1);
-    try {
-        const { data: pjs } = await supabase.from('personajes_refinados').select('id, tags');
-        const updates = (pjs||[]).filter(p =>
-            (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tagNorm.toLowerCase())
-        ).map(p => ({
-            id: p.id,
-            tags: p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase())
-        }));
-        for (const u of updates) await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
 
-        // Siempre borrar filas huérfanas con 0 PT (causan que el tag "reaparezca" en el catálogo)
-        await supabase.from('puntos_tag').delete().ilike('tag', tagNorm).eq('cantidad', 0);
+    // 1. Quitar el tag del array de cada personaje
+    const { data: pjs, error: ePjs } = await supabase.from('personajes_refinados').select('id, tags');
+    if (ePjs) return { ok: false, msg: 'Error leyendo personajes: ' + ePjs.message };
 
-        // Solo borrar PT reales (>0) y el historial si el OP lo confirmó explícitamente
-        if (borrarPuntos) {
-            await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
-            await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
-        }
+    const updates = (pjs||[]).filter(p =>
+        (p.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tagNorm.toLowerCase())
+    ).map(p => ({
+        id: p.id,
+        tags: p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase())
+    }));
 
-        await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
-        return { ok: true };
-    } catch(e) { return { ok: false, msg: e.message }; }
+    for (const u of updates) {
+        const { error: eUpd } = await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
+        if (eUpd) return { ok: false, msg: 'Error actualizando personaje: ' + eUpd.message };
+    }
+
+    // 2. Borrar siempre las filas con 0 PT (huérfanas)
+    const { error: eZero } = await supabase.from('puntos_tag').delete().ilike('tag', tagNorm).eq('cantidad', 0);
+    if (eZero) return { ok: false, msg: 'Error borrando PT=0: ' + eZero.message };
+
+    // 3. Si el usuario confirmó, borrar también PT reales e historial
+    if (borrarPuntos) {
+        const { error: ePT } = await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
+        if (ePT) return { ok: false, msg: 'Error borrando PT: ' + ePT.message };
+        const { error: eLog } = await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
+        if (eLog) return { ok: false, msg: 'Error borrando historial: ' + eLog.message };
+    }
+
+    // 4. Borrar del catálogo
+    const { error: eCat } = await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
+    if (eCat) return { ok: false, msg: 'Error borrando del catálogo: ' + eCat.message };
+
+    return { ok: true };
 }
