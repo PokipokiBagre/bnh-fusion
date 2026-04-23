@@ -7,6 +7,7 @@ import { cargarTodo, guardarMedalla, eliminarMedalla } from './medallas-data.js'
 import {
     renderCatalogo, renderGrafo, renderPersonaje,
     renderDetalleMedalla, renderFormMedalla, renderProponerMedalla,
+    renderFormsMultiple,
     _htmlReqRow, _htmlCondRow, toast, mountNewTagAC
 } from './medallas-ui.js';
 import { initMarkup } from '../bnh-markup.js';
@@ -442,6 +443,122 @@ function _exponerGlobales() {
 
     window._medallasNueva  = () => renderFormMedalla(null);
     window._medallasEditar = m => { window._medallasCloseModal(); setTimeout(() => renderFormMedalla(m), 80); };
+
+    // ── Multi-select en catálogo ──────────────────────────────
+    window._medToggleModoSel = () => {
+        medallaState.modoSeleccion = !medallaState.modoSeleccion;
+        if (!medallaState.modoSeleccion) medallaState.seleccionados = [];
+        renderCatalogo();
+    };
+    window._medToggleSel = (id) => {
+        medallaState.seleccionados = medallaState.seleccionados || [];
+        const idx = medallaState.seleccionados.indexOf(id);
+        if (idx >= 0) medallaState.seleccionados.splice(idx, 1);
+        else medallaState.seleccionados.push(id);
+        renderCatalogo();
+    };
+    window._medDeselAll = () => { medallaState.seleccionados = []; renderCatalogo(); };
+    window._medSelAll   = () => {
+        let lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
+        if (medallaState.filtroPropuestas) lista = lista.filter(m => m.propuesta);
+        medallaState.seleccionados = lista.map(m => m.id);
+        renderCatalogo();
+    };
+    window._medEliminarSeleccion = async () => {
+        const ids = medallaState.seleccionados || [];
+        if (!ids.length) return;
+        if (!confirm(`¿Eliminar ${ids.length} medalla${ids.length!==1?'s':''} permanentemente?`)) return;
+        let ok = 0, fail = 0;
+        for (const id of ids) {
+            const r = await eliminarMedalla(id);
+            if (r) ok++; else fail++;
+        }
+        medallaState.seleccionados = [];
+        medallaState.modoSeleccion = false;
+        toast(`🗑️ ${ok} eliminada${ok!==1?'s':''}${fail>0?' ('+fail+' fallaron)':''}`, ok>0?'ok':'error');
+        await cargarTodo(); initMarkup({ grupos, medallas });
+        _renderTab(medallaState.tabActual);
+    };
+
+    // ── Creación / propuesta múltiple (6 formularios) ─────────
+    window._medNuevaMultiple    = () => renderFormsMultiple(false);
+    window._medProponerMultiple = () => renderFormsMultiple(true);
+    window._mfGuardarTodos = async (prefix, N, esPropuesta) => {
+        const btn = document.getElementById('mf-guardar-todos');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando…'; }
+
+        let guardadas = 0, omitidas = 0, errores = [];
+
+        for (let i = 0; i < N; i++) {
+            const fid = `${prefix}${i}`;
+            const nombre = document.getElementById(`mf-nombre-${fid}`)?.value.trim();
+            const msgEl  = document.getElementById(`mf-msg-${fid}`);
+            const badge  = document.getElementById(`mf-badge-${fid}`);
+
+            if (!nombre) { omitidas++; continue; } // formulario vacío
+
+            // Recoger requisitos
+            const reqs = [];
+            document.querySelectorAll(`#mf-reqs-${fid} [id^="mf-rtag-${fid}-"]`).forEach(el => {
+                const c = el.id.replace(`mf-rtag-${fid}-`, '');
+                const tag = el.value.trim();
+                const pts = Number(document.getElementById(`mf-rpts-${fid}-${c}`)?.value || 0);
+                if (tag) reqs.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts });
+            });
+
+            const datos = {
+                nombre,
+                costo_ctl:    Number(document.getElementById(`mf-ctl-${fid}`)?.value || 1),
+                efecto_base:  document.getElementById(`mf-efecto-${fid}`)?.value.trim() || '',
+                tipo:         document.getElementById(`mf-tipo-${fid}`)?.value || 'activa',
+                requisitos_base: reqs,
+                efectos_condicionales: [],
+                propuesta:    esPropuesta,
+                propuesta_por: esPropuesta ? (document.getElementById(`mf-autor-${fid}`)?.value.trim() || '') : '',
+            };
+
+            const res = await guardarMedalla(datos);
+            if (res.ok) {
+                guardadas++;
+                if (msgEl) msgEl.textContent = '';
+                if (badge) { badge.textContent = '✅'; badge.style.display = 'inline-block'; badge.style.background = 'rgba(39,174,96,0.1)'; badge.style.color = 'var(--green-dark)'; badge.style.border = '1px solid var(--green)'; }
+            } else {
+                errores.push(`${nombre}: ${res.msg}`);
+                if (msgEl) msgEl.textContent = '❌ ' + res.msg;
+                if (badge) { badge.textContent = '❌'; badge.style.display = 'inline-block'; badge.style.background = '#fef2f2'; badge.style.color = '#c0392b'; badge.style.border = '1px solid #e74c3c'; }
+            }
+        }
+
+        const resumen = document.getElementById('mf-resumen');
+        if (resumen) {
+            resumen.style.display = 'block';
+            if (errores.length === 0) {
+                resumen.style.background = 'rgba(39,174,96,0.08)';
+                resumen.style.border = '1.5px solid var(--green)';
+                resumen.style.color = 'var(--green-dark)';
+                resumen.textContent = `✅ ${guardadas} medalla${guardadas!==1?'s':''} guardada${guardadas!==1?'s':''}${omitidas>0?' ('+omitidas+' vacías omitidas)':''}.`;
+            } else {
+                resumen.style.background = '#fef2f2';
+                resumen.style.border = '1.5px solid #e74c3c';
+                resumen.style.color = '#c0392b';
+                resumen.textContent = `${guardadas} guardadas, ${errores.length} con error. Revisa los formularios marcados.`;
+            }
+        }
+
+        if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar todas'; }
+
+        if (guardadas > 0) {
+            toast(`✅ ${guardadas} medalla${guardadas!==1?'s':''} guardada${guardadas!==1?'s':''}`, 'ok');
+            await cargarTodo(); initMarkup({ grupos, medallas });
+            // No cerramos el modal para que puedan ver los errores si los hay
+            if (errores.length === 0) {
+                window._medallasCloseModal();
+                _renderTab(medallaState.tabActual);
+            } else {
+                renderCatalogo(); // Actualizar fondo
+            }
+        }
+    };
     
     window._medallasEliminar = async id => {
         if (!confirm('¿Eliminar esta medalla permanentemente?')) return;
