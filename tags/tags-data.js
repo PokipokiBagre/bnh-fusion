@@ -20,7 +20,7 @@ export async function cargarTodo() {
     ] = await Promise.all([
         supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
         supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
-        supabase.from('tags_catalogo').select('nombre, descripcion, baneado, tipo').order('nombre'),
+        supabase.from('tags_catalogo').select('nombre, descripcion, baneado').order('nombre'),
         supabase.from('medallas_catalogo').select('id, nombre, costo_ctl, efecto_desc, tipo, requisitos_base, efectos_condicionales, propuesta').order('nombre'),
         supabase.from('solicitudes_tag').select('*').order('creado_en'),
         supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
