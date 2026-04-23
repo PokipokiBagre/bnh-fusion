@@ -12,22 +12,18 @@ import { renderFusionBadge } from '../bnh-fusion.js';
 import { aplicarDeltas } from '../bnh-pac.js';
 
 // Helper: muestra cadena de hasta 5 deltas con etiquetas de colores (badges)
-// base = valor antes de deltas, total = resultado final
 function _fmtDChain(base, total, deltas) {
     const activos = (deltas || []).filter(d => d && String(d).trim() !== '0');
     if (!activos.length || base === total) return String(total);
     
-    // Función creadora de etiquetas (cuadritos) con colores suaves y modernos
     const makeBadge = (text, bg, color, border) => 
         `<span style="display:inline-flex; align-items:center; justify-content:center; padding:1px 4px; border-radius:4px; font-size:0.65em; font-weight:700; font-family:monospace; background:${bg}; color:${color}; border:1px solid ${border}; line-height:1.2;">${text}</span>`;
 
-    // Etiqueta inicial para mostrar la BASE (gris)
     let badgesHtml = makeBadge(base, '#f1f2f6', '#576574', '#ced6e0'); 
     let acc = base;
 
     for (const d of activos) {
         const s = String(d).trim();
-        // Expresiones regulares que capturan números enteros y decimales
         const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
         const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
         const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
@@ -35,30 +31,24 @@ function _fmtDChain(base, total, deltas) {
 
         if (powM) {
             acc = Math.round(Math.pow(acc, parseFloat(powM[1])));
-            // POTENCIA (^): Fondo rosa pastel, texto magenta oscuro
             badgesHtml += makeBadge(`^${powM[1]}`, '#fce4ec', '#ad1457', '#f48fb1');
         } else if (multM) {
             acc = Math.round(acc * parseFloat(multM[1]));
-            // MULTIPLICACIÓN (x): Fondo violeta claro, texto morado
             badgesHtml += makeBadge(`×${multM[1]}`, '#f3e5f5', '#6a1b9a', '#ce93d8'); 
         } else if (divM) {
             acc = Math.round(acc / parseFloat(divM[1]));
-            // DIVISIÓN (/): Fondo naranja clarito, texto naranja oscuro
             badgesHtml += makeBadge(`÷${divM[1]}`, '#fff3e0', '#ef6c00', '#ffcc80'); 
         } else if (addM) {
             const n = parseFloat(addM[1]);
             acc = Math.round(acc + n);
             if (n >= 0) {
-                // SUMA (+): Fondo azul muy claro, texto azul marino
                 badgesHtml += makeBadge(`+${n}`, '#e3f2fd', '#1565c0', '#90caf9'); 
             } else {
-                // RESTA (-): Fondo rojo claro, texto rojo oscuro
                 badgesHtml += makeBadge(`${n}`, '#ffebee', '#c62828', '#ef9a9a'); 
             }
         }
     }
 
-    // Retorna el total grande seguido de las etiquetas alineadas de forma flexible
     return `${total} <span style="display:inline-flex; align-items:center; gap:3px; margin-left:6px; vertical-align:middle; flex-wrap:wrap; margin-top:-2px;">${badgesHtml}</span>`;
 }
 
@@ -137,7 +127,6 @@ export function renderProgresion() {
             } else if (pts > 0) {
                 canjeHtml = `<div class="thresh-badges">`;
                 
-                // BLOQUEOS POR FUSIÓN
                 const bloq = alterado ? 'disabled style="opacity:0.5;cursor:not-allowed;" title="Bloqueado: PT virtuales de fusión"' : '';
                 const clk = (accion) => alterado ? `onclick="window.toast('No puedes gastar PT virtuales de fusión', 'error')"` : `onclick="${accion}"`;
 
@@ -172,7 +161,6 @@ export function renderProgresion() {
         }).join('');
     }
 
-    // ── Medallas Accesibles (In-place) ──
     let secMedallas = '';
     if (pj) {
         const accMedallas = getMedallasAccesibles(pj);
@@ -235,7 +223,6 @@ export function renderProgresion() {
         </div>`;
     }).join('');
 
-    // --- Stats de Fusión para el Título ---
     let statsTitle = '';
     let badgeFusionHtml = '';
     if (proy) {
@@ -328,7 +315,6 @@ function _resumenPJ(pj, proy) {
     const g = grupos.find(x => x.nombre_refinado === pj);
     if (!g) return '';
 
-    // Si proy no fue pasado, calcularlo
     if (!proy) { const { proyectarPJ: _p } = { proyectarPJ }; proy = _p(pj); }
 
     const ptsMapa = {};
@@ -336,12 +322,10 @@ function _resumenPJ(pj, proy) {
     const total  = Object.values(ptsMapa).reduce((a,b)=>a+b,0);
     const listos = Object.values(ptsMapa).filter(v => v >= 50).length;
 
-    // Stats finales ya calculados (fusion+deltas) vienen del proy
     const pot = proy?.pot ?? (g.pot||0);
     const agi = proy?.agi ?? (g.agi||0);
     const ctl = proy?.ctl ?? (g.ctl||0);
 
-    // Base para la cadena de anotación: en fusión es el raw fusionado, sino el raw propio
     const potBase = proy?.pot_chain_base ?? (g.pot||0);
     const agiBase = proy?.agi_chain_base ?? (g.agi||0);
     const ctlBase = proy?.ctl_chain_base ?? (g.ctl||0);
@@ -355,7 +339,7 @@ function _resumenPJ(pj, proy) {
         if (pac >= 100) return { tier:4, label:'TIER 4', color:'#f39c12' };
         if (pac >= 80)  return { tier:3, label:'TIER 3', color:'#8e44ad' };
         if (pac >= 60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
-        return              { tier:1, label:'TIER 1', color:'#27ae60' };
+        return          { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
 
     const bonoPV = [5,10,15,20][tierData.tier-1] || 5;
@@ -445,7 +429,6 @@ export function renderTagDetalle(tagNombre) {
     const catEntry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     const baneado   = catEntry?.baneado || false;
     const desc      = catEntry?.descripcion || '';
-    const tipo      = catEntry?.tipo || 'extra';
     const medallas  = medallasDe(tag);
     const personajes = grupos.filter(g =>
         (g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
@@ -454,23 +437,11 @@ export function renderTagDetalle(tagNombre) {
     const el = document.getElementById('tag-detalle-modal');
     if (!el) return;
 
-    const tipoColor = { quirk:'#6c3483', atributo:'#1a4a80', extra:'#1e8449' };
-    const tipoBg    = { quirk:'#f5eeff',  atributo:'#ebf5fb',  extra:'#d5f5e3' };
-    const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atributo', extra:'🏷 Extra' };
-
     const adminDescForm = tagsState.esAdmin ? `
         <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;">
             <div style="flex:1;">
                 <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Nombre:</label>
-                <input id="detalle-nombre-inp" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;font-size:0.85em;">
-            </div>
-            <div>
-                <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Tipo:</label>
-                <select id="detalle-tipo-sel" class="inp" style="min-width:140px;padding:5px 8px;font-size:0.82em;">
-                    <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
-                    <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
-                    <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
-                </select>
+                <input id="detalle-nombre-inp" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;font-size:0.85em;" disabled>
             </div>
         </div>
         <div style="display:flex;gap:8px;align-items:flex-start;">
@@ -485,14 +456,8 @@ export function renderTagDetalle(tagNombre) {
             <span style="color:var(--red);font-weight:700;">#Tag</span> ·
             <span style="color:#1a4a80;font-weight:700;">!Medalla!</span>
         </div>` :
-        `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-            <span style="font-size:0.75em;font-weight:700;padding:2px 8px;border-radius:6px;
-                background:${tipoBg[tipo]};color:${tipoColor[tipo]};border:1px solid ${tipoColor[tipo]};">
-                ${tipoLabel[tipo]||tipo}
-            </span>
-        </div>
-        ${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;">${renderMarkup(desc)}</div>`
-               : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`}`;
+        `${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;">${renderMarkup(desc)}</div>`
+                : `<p style="font-size:0.85em;color:var(--gray-400);font-style:italic;">Sin descripción aún.</p>`}`;
 
     const medallaCards = medallas.slice(0, 15).map(m => {
         const reqsEsteTag  = (m.requisitos_base||[]).filter(r =>
@@ -640,7 +605,6 @@ export function renderCatalogo() {
             desc: descDe(tag),
             medallas: medallasDe(tag),
             baneado: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.baneado || false,
-            tipo: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.tipo || 'extra',
         }))
         .filter(e => !e.baneado)
         .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
@@ -650,29 +614,12 @@ export function renderCatalogo() {
         entradas = entradas.filter(e => e.tag.toLowerCase().includes(q) || e.desc.toLowerCase().includes(q));
     }
 
-    const tipoColor = { quirk:'#6c3483', atributo:'var(--blue)', extra:'var(--green-dark)' };
-    const tipoBg    = { quirk:'#f5eeff',  atributo:'var(--blue-pale)', extra:'var(--green-pale)' };
-    const tipoLabel = { quirk:'⚡ Quirk', atributo:'📊 Atrib.', extra:'🏷 Extra' };
-
     const multiToolbar = tagsState.esAdmin ? `
         <div id="cat-multi-toolbar" style="display:none;background:var(--green-pale);border:1.5px solid var(--green);
             border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;
             position:sticky;top:130px;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.10);">
             <span id="cat-multi-count" style="font-weight:700;font-size:0.88em;color:var(--green-dark);">0 seleccionados</span>
             <div style="display:flex;gap:6px;align-items:center;">
-                <span style="font-size:0.78em;color:var(--gray-700);font-weight:600;">Tipo:</span>
-                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
-                    <input type="radio" name="cat-tipo-radio" value="quirk"
-                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('quirk');}"> ⚡ Quirk
-                </label>
-                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
-                    <input type="radio" name="cat-tipo-radio" value="atributo"
-                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('atributo');}"> 📊 Atributo
-                </label>
-                <label style="display:flex;align-items:center;gap:3px;cursor:pointer;font-size:0.82em;user-select:none;">
-                    <input type="radio" name="cat-tipo-radio" value="extra"
-                        onclick="if(this.dataset.prev==='1'){this.checked=false;this.dataset.prev='0';}else{document.querySelectorAll('input[name=cat-tipo-radio]').forEach(r=>{r.dataset.prev='0';});this.dataset.prev='1';window._catTipoRadio('extra');}"> 🏷 Extra
-                </label>
             </div>
             <button class="btn btn-sm" style="background:#6c3483;color:white;border-color:#6c3483;"
                 onclick="window._catCombinarTags()">🔀 Combinar</button>
@@ -680,7 +627,7 @@ export function renderCatalogo() {
             <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
         </div>` : '';
 
-    const cards = entradas.map(({ tag, count, desc, medallas, tipo }) => {
+    const cards = entradas.map(({ tag, count, desc, medallas }) => {
         const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
         const adminBtns = tagsState.esAdmin ? `
             <div class="cat-card-actions" style="display:none;position:absolute;top:6px;right:6px;gap:4px;z-index:2;">
@@ -716,10 +663,6 @@ export function renderCatalogo() {
             <div style="display:flex;align-items:center;gap:5px;margin-bottom:${desc?'5px':'0'};">
                 <span style="font-size:0.7em;color:var(--gray-500);">${count} personaje${count!==1?'s':''}</span>
                 ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
-                <span style="font-size:0.68em;padding:1px 5px;border-radius:4px;font-weight:700;
-                    background:${tipoBg[tipo]||'var(--gray-100)'};color:${tipoColor[tipo]||'var(--gray-500)'};">
-                    ${tipoLabel[tipo]||'🏷 Extra'}
-                </span>
             </div>
             ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${renderMarkup(desc)}</div>` : ''}
         </div>`;
@@ -789,21 +732,11 @@ window._catNuevoTag = () => {
                                width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
                 </div>
                 <div style="padding:18px;display:flex;flex-direction:column;gap:12px;">
-                    <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:180px;">
-                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Nombre del tag *</label>
-                            <input id="nt-nombre" class="inp" placeholder="#NuevoTag" autocomplete="off"
-                                onkeydown="if(event.key==='Enter')document.getElementById('nt-desc').focus()">
-                            <div style="font-size:0.72em;color:var(--gray-400);margin-top:2px;">El # se añade automáticamente.</div>
-                        </div>
-                        <div style="min-width:160px;">
-                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Tipo</label>
-                            <select id="nt-tipo" class="inp" style="max-width:180px;">
-                                <option value="extra">🏷 Extra</option>
-                                <option value="quirk">⚡ Quirk</option>
-                                <option value="atributo">📊 Atributo</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Nombre del tag *</label>
+                        <input id="nt-nombre" class="inp" placeholder="#NuevoTag" autocomplete="off" style="width:100%;"
+                            onkeydown="if(event.key==='Enter')document.getElementById('nt-desc').focus()">
+                        <div style="font-size:0.72em;color:var(--gray-400);margin-top:2px;">El # se añade automáticamente.</div>
                     </div>
                     <div>
                         <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">Descripción</label>
@@ -852,7 +785,6 @@ window._catNuevoTag = () => {
 
 window._catCrearTagEjecutar = async () => {
     const nombreRaw = document.getElementById('nt-nombre')?.value.trim();
-    const tipo      = document.getElementById('nt-tipo')?.value || 'extra';
     const desc      = document.getElementById('nt-desc')?.value.trim() || '';
     const msgEl     = document.getElementById('nt-msg');
 
@@ -865,7 +797,7 @@ window._catCrearTagEjecutar = async () => {
     const { guardarDescripcionTag } = await import('./tags-data.js');
     const { supabase } = await import('../bnh-auth.js');
 
-    const res = await guardarDescripcionTag(tagKey, desc, tipo);
+    const res = await guardarDescripcionTag(tagKey, desc);
     if (!res.ok) { if(msgEl) msgEl.textContent = '❌ ' + res.msg; return; }
 
     const selDivs = document.querySelectorAll('#nt-pj-grid [data-sel="1"]');
@@ -889,7 +821,6 @@ window._catEditarInline = (tagKey) => {
     const tag      = '#' + tagKey;
     const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
     const desc     = catEntry?.descripcion || '';
-    const tipo     = catEntry?.tipo || 'extra';
     const container = document.getElementById('cat-inline-modal');
     if (!container) return;
 
@@ -903,19 +834,9 @@ window._catEditarInline = (tagKey) => {
                         style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
                 </div>
                 <div style="padding:16px;display:flex;flex-direction:column;gap:10px;">
-                   <div style="display:flex;gap:12px;margin-bottom:4px;">
-                        <div style="flex:1;">
-                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Nombre:</label>
-                            <input id="ci-nombre" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;">
-                        </div>
-                        <div>
-                            <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Tipo:</label>
-                            <select id="ci-tipo" class="inp" style="min-width:140px;padding:5px 8px;font-size:0.85em;">
-                                <option value="quirk"    ${tipo==='quirk'   ?'selected':''}>⚡ Quirk</option>
-                                <option value="atributo" ${tipo==='atributo'?'selected':''}>📊 Atributo</option>
-                                <option value="extra"    ${tipo==='extra'   ?'selected':''}>🏷 Extra</option>
-                            </select>
-                        </div>
+                    <div>
+                        <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:4px;">Nombre:</label>
+                        <input id="ci-nombre" class="inp" value="#${_esc(tagKey)}" style="font-weight:bold;color:var(--blue);width:100%;">
                     </div>
                     <div>
                         <label style="font-size:0.78em;font-weight:700;color:var(--gray-600);">Descripción:</label>
@@ -945,7 +866,6 @@ window._catEditarInline = (tagKey) => {
 
 window._catGuardarInline = async (tagKey) => {
     const desc     = document.getElementById('ci-desc')?.value.trim() || '';
-    const tipo     = document.getElementById('ci-tipo')?.value || 'extra';
     const nuevoNom = document.getElementById('ci-nombre')?.value.trim() || '';
     const msgEl    = document.getElementById('ci-msg');
     
@@ -963,7 +883,7 @@ window._catGuardarInline = async (tagKey) => {
         actualKey = nuevoNom.startsWith('#') ? nuevoNom.slice(1) : nuevoNom;
     }
 
-    const res = await guardarDescripcionTag(actualKey, desc, tipo);
+    const res = await guardarDescripcionTag(actualKey, desc);
     
     if (res.ok) {
         document.getElementById('cat-inline-modal').innerHTML = '';
@@ -1003,31 +923,12 @@ window._catCancelMulti = () => {
     if (toolbar) toolbar.style.display = 'none';
     const btn = document.getElementById('btn-cat-multi');
     if (btn) btn.style.display = '';
-    document.querySelectorAll('input[name="cat-tipo-radio"]').forEach(r => r.checked = false);
 };
 
 window._catToggleCheck = (tag, checked) => {
     if (checked) window._catMultiSel.add(tag);
     else         window._catMultiSel.delete(tag);
     _catUpdateCount();
-};
-
-window._catTipoRadio = async (tipo) => {
-    if (!window._catMultiSel.size) {
-        toast('⚠️ Selecciona al menos un tag primero', 'info');
-        return;
-    }
-    const tagsACambiar = [...window._catMultiSel];
-    let ok = 0;
-    for (const tag of tagsACambiar) {
-        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
-        const entry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
-        const { guardarDescripcionTag } = await import('./tags-data.js');
-        const res    = await guardarDescripcionTag(tagKey, entry?.descripcion || '', tipo);
-        if (res.ok) { if (entry) entry.tipo = tipo; ok++; }
-    }
-    toast(`✅ Tipo "${tipo}" aplicado a ${ok} tag${ok!==1?'s':''}`, 'ok');
-    await _recargarCatalogo();
 };
 
 window._catEliminarSeleccionados = async () => {
@@ -1079,18 +980,10 @@ window._catCombinarTags = () => {
                     </div>
                     <div>
                         <label style="font-size:0.82em;font-weight:700;color:var(--gray-700);">Nombre del nuevo tag *</label>
-                        <input id="comb-nombre" class="inp" style="margin-top:4px;"
+                        <input id="comb-nombre" class="inp" style="margin-top:4px;width:100%;"
                             placeholder="#NuevoTag" autocomplete="off"
                             onkeydown="if(event.key==='Enter')window._catEjecutarCombinar()">
                         <div style="font-size:0.72em;color:var(--gray-500);margin-top:3px;">El # se añade automáticamente si no lo escribes.</div>
-                    </div>
-                    <div>
-                        <label style="font-size:0.82em;font-weight:700;color:var(--gray-700);">Tipo del nuevo tag</label>
-                        <select id="comb-tipo" class="inp" style="margin-top:4px;max-width:180px;">
-                            <option value="extra">🏷 Extra</option>
-                            <option value="quirk">⚡ Quirk</option>
-                            <option value="atributo">📊 Atributo</option>
-                        </select>
                     </div>
                     <div style="background:var(--orange-pale);border:1px solid var(--orange);border-radius:var(--radius);padding:10px;font-size:0.82em;color:var(--orange);">
                         ⚠️ Los personajes que tenían cualquiera de los tags originales recibirán el nuevo tag.
@@ -1118,7 +1011,6 @@ window._catEjecutarCombinar = async () => {
     const nombreRaw = document.getElementById('comb-nombre')?.value.trim();
     if (!nombreRaw) { const m=document.getElementById('comb-msg'); if(m) m.textContent='El nombre es obligatorio.'; return; }
     const nuevoTag  = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
-    const tipo      = document.getElementById('comb-tipo')?.value || 'extra';
 
     const msgEl = document.getElementById('comb-msg');
     if (msgEl) msgEl.textContent = '⏳ Procesando…';
@@ -1160,23 +1052,15 @@ window._catEjecutarCombinar = async () => {
             }
         }
 
-        // Crear el nuevo tag en el catálogo PRIMERO (antes de borrar los originales)
-        // El nombre se guarda CON # porque así está la tabla (ver tags_catalogo)
+        // Crear el nuevo tag en el catálogo
         await supabase.from('tags_catalogo').upsert(
-            { nombre: nuevoTag, tipo, descripcion: '' },
+            { nombre: nuevoTag, descripcion: '' },
             { onConflict: 'nombre' }
         );
 
-        // Borrar los originales — el trigger sync_tag_delete se encarga de limpiar
-        // puntos_tag, log_puntos_tag y personajes_refinados automáticamente.
-        // Pero puntos_tag ya fue migrado al nuevo tag arriba, así que lo borramos
-        // ANTES de que el trigger actúe sobre puntos_tag de los originales.
         for (const tagOrigen of tagsOrigen) {
-            // Borrar PT del original (ya fueron sumados al nuevo tag arriba)
             await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
             await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
-            // Borrar del catálogo con el nombre tal cual está guardado (con o sin #)
-            // Intentar con # y sin # para cubrir inconsistencias históricas
             const keyConHash  = tagOrigen.startsWith('#') ? tagOrigen : '#' + tagOrigen;
             const keySinHash  = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
             await supabase.from('tags_catalogo').delete().eq('nombre', keyConHash);
