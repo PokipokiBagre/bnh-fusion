@@ -196,13 +196,13 @@ export function renderCatalogo() {
     // Botones de creación múltiple (solo admin)
     const botonesMulti = medallaState.esAdmin ? `
         <button class="btn btn-green btn-sm" onclick="window._medallasNueva()" title="Crear una medalla nueva">✨ Nueva</button>
-        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir varios formularios en la misma página">✨×N Múltiple</button>` : '';
+        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir varios formularios en la misma página">✨ Múltiple</button>` : '';
 
     const botonesProponerMulti = `
         <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()"
             style="border-color:#e67e22;color:#e67e22;">📝 Proponer</button>
         <button class="btn btn-sm btn-outline" onclick="window._medProponerMultiple()"
-            style="border-color:#e67e22;color:#e67e22;">📝×N Proponer múltiple</button>`;
+            style="border-color:#e67e22;color:#e67e22;">📝 Proponer múltiple</button>`;
 
     // ── Renderizado ──────────────────────────────────────────────
     // Si ya existe la toolbar sticky, solo actualizamos el grid de medallas
@@ -223,7 +223,7 @@ export function renderCatalogo() {
                     ${botonesMulti}
                     ${botonesProponerMulti}
                 </div>
-                ${toolbarMulti ? `<div style="margin-top:8px;">${toolbarMulti}</div>` : ''}
+                ${toolbarMulti ? `<div id="cat-toolbar-multi-wrap" style="margin-top:8px;">${toolbarMulti}</div>` : ''}
             </div>
             <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
                 ${lista.map(m => _renderCard(m, modoSel, selIds)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
@@ -265,11 +265,21 @@ export function renderCatalogo() {
             inp.setSelectionRange(cursorPos, cursorPos);
         }
     }
+
+    // ⚡ Ajustar la barra para que no se esconda bajo el header principal
+    requestAnimationFrame(() => {
+        const header = document.querySelector('.app-header');
+        const stickyBar = document.getElementById('cat-sticky-bar');
+        if (header && stickyBar) {
+            stickyBar.style.top = header.getBoundingClientRect().height + 'px';
+        }
+    });
 }
-    setTimeout(() => { 
-        const el = document.getElementById('med-search'); 
-        if(el && medallaState.busqueda) el.focus(); 
-    }, 10);
+
+setTimeout(() => { 
+    const el = document.getElementById('med-search'); 
+    if(el && medallaState.busqueda) el.focus(); 
+}, 10);
 
 function _renderCard(m, modoSel = false, selIds = []) {
     const tagLabel  = mTags(m).map(t => `<span class="medalla-tag">${t}</span>`).join(' ');
