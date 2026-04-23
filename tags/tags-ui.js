@@ -434,6 +434,10 @@ export function renderTagDetalle(tagNombre) {
         (g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase())
     );
 
+    // Resetear filtros al abrir el modal (por defecto: Activo / Todos)
+    window._detalleFilEst = '#activo';
+    window._detalleFilRol = 'todos';
+
     const el = document.getElementById('tag-detalle-modal');
     if (!el) return;
 
@@ -504,7 +508,10 @@ export function renderTagDetalle(tagNombre) {
                     const img2 = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
                     const safeN = g.nombre_refinado.replace(/'/g,"\\'");
                     const safeT = tag.replace(/'/g,"\\'");
-                    return '<div class="char-thumb" id="assign-'+g.id+'" style="cursor:pointer;opacity:0.65;"'+
+                    const tl2 = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+                    const dRol2 = tl2.includes('#jugador') ? '#jugador' : tl2.includes('#npc') ? '#npc' : '';
+                    const dEst2 = tl2.includes('#activo') ? '#activo' : tl2.includes('#inactivo') ? '#inactivo' : '';
+                    return '<div class="char-thumb" id="assign-'+g.id+'" data-rol="'+dRol2+'" data-est="'+dEst2+'" style="cursor:pointer;opacity:0.65;"'+
                         ' onclick="window._tagsAsignarClick(\''+g.id+'\',\''+safeN+'\',\''+safeT+'\',this)">'+
                         '<img src="'+img2+'" onerror="this.onerror=null;this.src=\''+fb()+'\';"><span>'+g.nombre_refinado+'</span></div>';
                 }).join('')}
@@ -532,18 +539,32 @@ export function renderTagDetalle(tagNombre) {
                         <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:320px;overflow-y:auto;">${medallaCards}</div>
                     </div>` : ''}
                         <div>
-                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">Tienen este tag (${personajes.length})</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:2px;">
+                        <div style="font-size:0.75em;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--gray-500);margin-bottom:8px;">
+                            Tienen este tag (<span id="detalle-tienen-count">${personajes.length}</span>)
+                        </div>
+                        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;">
+                            <button data-detalle-fil-est="#activo"  class="btn btn-sm btn-green"   style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilEst('#activo')">Activo</button>
+                            <button data-detalle-fil-est="#inactivo" class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilEst('#inactivo')">Inactivo</button>
+                            <button data-detalle-fil-est="todos"     class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilEst('todos')">Todos</button>
+                            <span style="width:1px;background:var(--gray-200);margin:0 3px;display:inline-block;"></span>
+                            <button data-detalle-fil-rol="todos"    class="btn btn-sm btn-green"   style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilRol('todos')">Todos</button>
+                            <button data-detalle-fil-rol="#jugador" class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilRol('#jugador')">Jugador</button>
+                            <button data-detalle-fil-rol="#npc"     class="btn btn-sm btn-outline" style="padding:4px 10px;font-size:0.78em;" onclick="window._tagsDetalleFilRol('#npc')">NPC</button>
+                        </div>
+                        <div id="detalle-tienen-grid" style="display:flex;flex-wrap:wrap;gap:8px;max-height:160px;overflow-y:auto;padding:2px;">
                             ${personajes.map(g => {
                                 const img = STORAGE_URL+'/imgpersonajes/'+norm(g.nombre_refinado)+'icon.png';
                                 const safeN = g.nombre_refinado.replace(/'/g,"\\'");
                                 const safeT = tag.replace(/'/g,"\\'");
+                                const tl = (g.tags||[]).map(t => (t.startsWith('#')?t:'#'+t).toLowerCase());
+                                const dRol = tl.includes('#jugador') ? '#jugador' : tl.includes('#npc') ? '#npc' : '';
+                                const dEst = tl.includes('#activo') ? '#activo' : tl.includes('#inactivo') ? '#inactivo' : '';
                                 
                                 const btnQuitar = tagsState.esAdmin 
                                     ? '<b onclick="event.stopPropagation();window._tagsQuitarDesdeDetalle(\''+g.id+'\',\''+safeN+'\',\''+safeT+'\')" style="color:var(--red);margin-left:6px;font-size:1.2em;line-height:0.8;padding:0 2px;" title="Quitar tag">×</b>' 
                                     : '';
                                     
-                                return '<div class="char-thumb" style="cursor:pointer;" onclick="window._tagsIrAFichas(\''+safeT+'\');window._tagsCloseDetalle();">'+
+                                return '<div class="char-thumb" data-rol="'+dRol+'" data-est="'+dEst+'" style="cursor:pointer;" onclick="window._tagsIrAFichas(\''+safeT+'\');window._tagsCloseDetalle();">'+
                                     '<img src="'+img+'" onerror="this.onerror=null;this.src=\''+fb()+'\';">'+
                                     '<span>'+g.nombre_refinado+'</span>'+btnQuitar+'</div>';
                             }).join('') || '<span style="color:var(--gray-400);font-size:0.85em;">Ninguno aún.</span>'}
@@ -564,7 +585,52 @@ export function renderTagDetalle(tagNombre) {
 
     window._tagsModoMultiActivo = false;
     window._tagsModoMultiSel    = new Set();
+
+    // Aplicar el filtro inicial (Activo / Todos) justo después de renderizar
+    setTimeout(() => window._tagsDetalleAplicarFiltros(), 0);
 }
+
+window._tagsDetalleAplicarFiltros = () => {
+    const rol = window._detalleFilRol || 'todos';
+    const est = window._detalleFilEst || 'todos';
+
+    // Filtrar grids
+    ['detalle-tienen-grid', 'sinTag-grid'].forEach(gridId => {
+        const grid = document.getElementById(gridId);
+        if (!grid) return;
+        let visible = 0;
+        grid.querySelectorAll('.char-thumb').forEach(el => {
+            const elRol = el.dataset.rol || '';
+            const elEst = el.dataset.est || '';
+            const rolOk = rol === 'todos' || elRol === rol;
+            const estOk = est === 'todos' || elEst === est;
+            const show  = rolOk && estOk;
+            el.style.display = show ? '' : 'none';
+            if (show && gridId === 'detalle-tienen-grid') visible++;
+        });
+        if (gridId === 'detalle-tienen-grid') {
+            const countEl = document.getElementById('detalle-tienen-count');
+            if (countEl) countEl.textContent = visible;
+        }
+    });
+
+    // Actualizar estilos de botones Estado
+    document.querySelectorAll('[data-detalle-fil-est]').forEach(btn => {
+        const active = btn.dataset.detalleFilEst === (window._detalleFilEst || 'todos');
+        btn.className = 'btn btn-sm ' + (active ? 'btn-green' : 'btn-outline');
+        btn.style.cssText = 'padding:4px 10px;font-size:0.78em;';
+    });
+
+    // Actualizar estilos de botones Rol
+    document.querySelectorAll('[data-detalle-fil-rol]').forEach(btn => {
+        const active = btn.dataset.detalleFilRol === (window._detalleFilRol || 'todos');
+        btn.className = 'btn btn-sm ' + (active ? 'btn-green' : 'btn-outline');
+        btn.style.cssText = 'padding:4px 10px;font-size:0.78em;';
+    });
+};
+
+window._tagsDetalleFilEst = (v) => { window._detalleFilEst = v; window._tagsDetalleAplicarFiltros(); };
+window._tagsDetalleFilRol = (v) => { window._detalleFilRol = v; window._tagsDetalleAplicarFiltros(); };
 
 window._catFiltrarInPlace = (v) => {
     tagsState.busquedaCat = v;
