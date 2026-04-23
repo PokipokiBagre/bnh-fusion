@@ -1034,13 +1034,17 @@ window._catEliminarSeleccionados = async () => {
     const count = window._catMultiSel.size;
     if (!count) { toast('⚠️ Nada seleccionado', 'info'); return; }
     if (!confirm(`¿Eliminar ${count} tag${count!==1?'s':''} seleccionado${count!==1?'s':''}?\nSe quitarán de todos los personajes. Esta acción no se puede deshacer.`)) return;
+    const borrarPuntos = confirm(`¿Borrar también los PT acumulados de estos ${count} tags?\n\nAceptar = borra PT y historial. Cancelar = conserva PT huérfanos.`);
     const { deleteTag } = await import('./tags-data.js');
-    let total = 0;
-    for (const tag of window._catMultiSel) {
-        const res = await deleteTag(tag);
-        if (res.ok) total += res.afectados;
+    const tags = [...window._catMultiSel];
+    toast('⏳ Eliminando…', 'ok');
+    const resultados = await Promise.all(tags.map(tag => deleteTag(tag, borrarPuntos)));
+    const fallidos = resultados.filter(r => !r.ok);
+    if (fallidos.length) {
+        toast(`⚠️ ${count - fallidos.length} eliminados, ${fallidos.length} fallaron`, 'error');
+    } else {
+        toast(`🗑️ ${count} tag${count!==1?'s':''} eliminado${count!==1?'s':''}`, 'ok');
     }
-    toast(`🗑️ ${count} tag${count!==1?'s':''} eliminado${count!==1?'s':''}`, 'ok');
     window._catMultiActivo = false;
     window._catMultiSel    = new Set();
     await _recargarCatalogo();
