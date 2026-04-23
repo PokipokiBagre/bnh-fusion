@@ -47,10 +47,12 @@ export async function cargarInventarioPJ(nombrePJ) {
     setInventarioMedallas((data || []).map(r => r.medalla_id));
 }
 
-export async function guardarDescripcionTag(nombre, descripcion, tipo) {
-    const payload = { nombre, descripcion };
-    if (tipo) payload.tipo = tipo;
-    const { error } = await supabase.from('tags_catalogo').upsert(payload, { onConflict: 'nombre' });
+export async function guardarDescripcionTag(tagSinHash, descripcion) {
+    const nombre = '#' + tagSinHash;
+    const { error } = await supabase.from('tags_catalogo').upsert(
+        { nombre, descripcion },
+        { onConflict: 'nombre' }
+    );
     return error ? { ok: false, msg: error.message } : { ok: true };
 }
 
