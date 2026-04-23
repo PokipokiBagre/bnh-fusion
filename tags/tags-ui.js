@@ -642,7 +642,8 @@ export function renderCatalogo() {
             baneado: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.baneado || false,
             tipo: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.tipo || 'extra',
         }))
-        .filter(e => !e.baneado)
+        // Ocultar tags baneados y tags "fantasma" (0 personajes, sin descripción y sin medallas)
+        .filter(e => !e.baneado && (e.count > 0 || e.desc || e.medallas.length > 0))
         .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
 
     if (tagsState.busquedaCat) {

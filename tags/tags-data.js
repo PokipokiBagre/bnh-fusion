@@ -247,13 +247,16 @@ export async function deleteTag(nombre, borrarPuntos = false) {
             tags: p.tags.filter(t => (t.startsWith('#')?t:'#'+t).toLowerCase() !== tagNorm.toLowerCase())
         }));
         for (const u of updates) await supabase.from('personajes_refinados').update({ tags: u.tags }).eq('id', u.id);
-        
-        // ⚡ CONDICIONAL: Solo borramos los puntos y el historial si el OP dijo que SÍ en el prompt
+
+        // Siempre borrar filas huérfanas con 0 PT (causan que el tag "reaparezca" en el catálogo)
+        await supabase.from('puntos_tag').delete().ilike('tag', tagNorm).eq('cantidad', 0);
+
+        // Solo borrar PT reales (>0) y el historial si el OP lo confirmó explícitamente
         if (borrarPuntos) {
             await supabase.from('puntos_tag').delete().ilike('tag', tagNorm);
             await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
         }
-        
+
         await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
         return { ok: true };
     } catch(e) { return { ok: false, msg: e.message }; }

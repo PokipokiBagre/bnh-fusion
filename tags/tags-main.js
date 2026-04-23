@@ -121,15 +121,32 @@ function _exponerGlobales() {
     };
 
     window._tagsGuardarDescDetalle = async (tagKey) => {
-        const el   = document.getElementById('detalle-desc-inp');
-        const sel  = document.getElementById('detalle-tipo-sel');
-        if (!el) return;
-        const tipo = sel?.value || undefined;
-        const res  = await guardarDescripcionTag(tagKey, el.value.trim(), tipo);
+        const descEl   = document.getElementById('detalle-desc-inp');
+        const tipoSel  = document.getElementById('detalle-tipo-sel');
+        const nombreEl = document.getElementById('detalle-nombre-inp');
+        if (!descEl) return;
+
+        const tipo     = tipoSel?.value || undefined;
+        const desc     = descEl.value.trim();
+        const nuevoNom = nombreEl?.value.trim() || '';
+
+        let actualKey = tagKey;
+
+        // Renombrar si el nombre cambió
+        if (nuevoNom && nuevoNom !== '#' + tagKey && nuevoNom !== tagKey) {
+            const resRename = await renameTag('#' + tagKey, nuevoNom);
+            if (!resRename.ok) {
+                toast('❌ Error al renombrar: ' + resRename.msg, 'error');
+                return;
+            }
+            actualKey = nuevoNom.startsWith('#') ? nuevoNom.slice(1) : nuevoNom;
+        }
+
+        const res = await guardarDescripcionTag(actualKey, desc, tipo);
         if (res.ok) {
-            toast('✅ Descripción guardada', 'ok');
+            toast('✅ Tag actualizado', 'ok');
             await cargarTodo(); await _refreshMarkup();
-            renderTagDetalle('#' + tagKey);
+            renderTagDetalle('#' + actualKey);
             if (tagsState.tabActual === 'catalogo') renderCatalogo();
         } else toast('❌ ' + res.msg, 'error');
     };
