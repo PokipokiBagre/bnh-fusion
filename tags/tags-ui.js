@@ -1160,18 +1160,28 @@ window._catEjecutarCombinar = async () => {
             }
         }
 
-        for (const tagOrigen of tagsOrigen) {
-            await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
-            await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
-            const key = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
-            await supabase.from('tags_catalogo').delete().ilike('nombre', key);
-        }
-
-        const nuevoKey = nuevoTag.startsWith('#') ? nuevoTag.slice(1) : nuevoTag;
+        // Crear el nuevo tag en el catálogo PRIMERO (antes de borrar los originales)
+        // El nombre se guarda CON # porque así está la tabla (ver tags_catalogo)
         await supabase.from('tags_catalogo').upsert(
-            { nombre: nuevoKey, tipo, descripcion: '' },
+            { nombre: nuevoTag, tipo, descripcion: '' },
             { onConflict: 'nombre' }
         );
+
+        // Borrar los originales — el trigger sync_tag_delete se encarga de limpiar
+        // puntos_tag, log_puntos_tag y personajes_refinados automáticamente.
+        // Pero puntos_tag ya fue migrado al nuevo tag arriba, así que lo borramos
+        // ANTES de que el trigger actúe sobre puntos_tag de los originales.
+        for (const tagOrigen of tagsOrigen) {
+            // Borrar PT del original (ya fueron sumados al nuevo tag arriba)
+            await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
+            await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
+            // Borrar del catálogo con el nombre tal cual está guardado (con o sin #)
+            // Intentar con # y sin # para cubrir inconsistencias históricas
+            const keyConHash  = tagOrigen.startsWith('#') ? tagOrigen : '#' + tagOrigen;
+            const keySinHash  = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
+            await supabase.from('tags_catalogo').delete().eq('nombre', keyConHash);
+            await supabase.from('tags_catalogo').delete().eq('nombre', keySinHash);
+        }
 
         document.getElementById('cat-inline-modal').innerHTML = '';
         toast(`✅ Tags combinados en ${nuevoTag}`, 'ok');
