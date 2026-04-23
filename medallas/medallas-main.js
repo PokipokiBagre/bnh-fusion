@@ -458,7 +458,10 @@ function _exponerGlobales() {
         renderCatalogo();
     };
     window._medDeselAll = () => { medallaState.seleccionados = []; renderCatalogo(); };
-    window._medSelAll   = () => {
+    window._medSelAll   = async () => {
+        // ⚡ ARREGLO 3: Importamos el filtro de lógica en tiempo real para que no se estrelle
+        const { filtrarMedallas } = await import('./medallas-logic.js');
+    
         let lista = filtrarMedallas({ busqueda: medallaState.busqueda, tag: medallaState.filtroTag });
         if (medallaState.filtroPropuestas) lista = lista.filter(m => m.propuesta);
         medallaState.seleccionados = lista.map(m => m.id);
