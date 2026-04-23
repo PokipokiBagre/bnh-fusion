@@ -1157,7 +1157,11 @@ export function renderBaneados() {
     }));
 
     const allTags = Object.entries(tagMapa).map(([nombre, count]) => {
-        const cat = catalogoTags.find(c => c.nombre.toLowerCase() === nombre.toLowerCase());
+        // Normalizar: el catalogo puede guardar el nombre con '#' o sin '#'
+        const cat = catalogoTags.find(c => {
+            const cn = c.nombre.startsWith('#') ? c.nombre.slice(1) : c.nombre;
+            return cn.toLowerCase() === nombre.toLowerCase();
+        });
         return { nombre, count, baneado: cat?.baneado||false, desc: cat?.descripcion||'' };
     }).sort((a,b) => (b.baneado?1:0)-(a.baneado?1:0) || b.count-a.count);
 
