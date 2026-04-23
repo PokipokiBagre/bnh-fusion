@@ -148,11 +148,12 @@ export function mountNewTagAC(inputId) {
 }
 
 // ── Tab Catálogo ──────────────────────────────────────────────
+// ── Tab Catálogo ──────────────────────────────────────────────
 export function renderCatalogo() {
     const wrap = document.getElementById('vista-catalogo');
     if (!wrap) return;
 
-    // 1. Guardar si el buscador tenía el foco y la posición del cursor ANTES de redibujar
+    // 1. Guardar foco y cursor
     const activeEl = document.activeElement;
     const prevFocusSearch = activeEl?.id === 'med-search';
     const cursorPos = prevFocusSearch ? activeEl.selectionStart : null;
@@ -166,6 +167,10 @@ export function renderCatalogo() {
         medallas.filter(m => !m.propuesta || medallaState.esAdmin).flatMap(m => mTags(m))
     )].sort();
 
+    const selIds = medallaState.seleccionados || [];
+    const modoSel = medallaState.modoSeleccion || false;
+
+    // ── Bloques de Botones ──
     const btnProp = medallaState.esAdmin
         ? `<button class="btn btn-sm ${medallaState.filtroPropuestas ? 'btn-orange' : 'btn-outline'}"
             onclick="window._medTogglePropuestas()"
@@ -173,91 +178,62 @@ export function renderCatalogo() {
             🟠 Propuestas (${medallas.filter(m=>m.propuesta).length})
            </button>` : '';
 
-    // Multi-select toolbar (solo admin)
-    const selIds = medallaState.seleccionados || [];
-    const modoSel = medallaState.modoSeleccion || false;
+    // Botones de la derecha (Acciones)
+    const botonesAccion = medallaState.esAdmin ? `
+        <button class="btn btn-green btn-sm" onclick="window._medallasNueva()" title="Crear una medalla nueva">✨ Nueva</button>
+        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir varios formularios">✨×N Múltiple</button>
+    ` : `
+        <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()" style="border-color:#e67e22;color:#e67e22;">📝 Proponer</button>
+        <button class="btn btn-sm btn-outline" onclick="window._medProponerMultiple()" style="border-color:#e67e22;color:#e67e22;">📝×N Proponer múltiple</button>
+    `;
 
+    // Toolbar Múltiple (Cajita gris estructurada)
     const toolbarMulti = medallaState.esAdmin ? `
-        <div id="cat-toolbar-multi" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;background:var(--gray-50);padding:8px 12px;border-radius:8px;border:1px solid var(--gray-200);">
             <button class="btn btn-sm ${modoSel ? 'btn-red' : 'btn-outline'}"
                 onclick="window._medToggleModoSel()"
                 style="${modoSel ? 'background:#c0392b;border-color:#c0392b;color:white;' : ''}">
                 ${modoSel ? '✕ Cancelar selección' : '☑ Seleccionar'}
             </button>
             ${modoSel && selIds.length > 0 ? `
-                <span style="font-size:0.82em;color:var(--gray-600);font-weight:600;">${selIds.length} seleccionada${selIds.length!==1?'s':''}</span>
-                <button class="btn btn-sm" style="background:#c0392b;border-color:#c0392b;color:white;"
-                    onclick="window._medEliminarSeleccion()">🗑️ Eliminar selección</button>
+                <span style="font-size:0.85em;color:var(--gray-700);font-weight:700;margin:0 6px;">${selIds.length} seleccionada${selIds.length!==1?'s':''}</span>
+                <button class="btn btn-sm" style="background:#c0392b;border-color:#c0392b;color:white;" onclick="window._medEliminarSeleccion()">🗑️ Eliminar</button>
                 <button class="btn btn-sm btn-outline" onclick="window._medDeselAll()">Deseleccionar todo</button>
                 <button class="btn btn-sm btn-outline" onclick="window._medSelAll()">Seleccionar todo</button>
             ` : ''}
         </div>` : '';
 
-    // Botones de creación múltiple (solo admin)
-    const botonesMulti = medallaState.esAdmin ? `
-        <button class="btn btn-green btn-sm" onclick="window._medallasNueva()" title="Crear una medalla nueva">✨ Nueva</button>
-        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir varios formularios en la misma página">✨ Múltiple</button>` : '';
-
-    const botonesProponerMulti = `
-        <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()"
-            style="border-color:#e67e22;color:#e67e22;">📝 Proponer</button>
-        <button class="btn btn-sm btn-outline" onclick="window._medProponerMultiple()"
-            style="border-color:#e67e22;color:#e67e22;">📝 Proponer múltiple</button>`;
-
-    // ── Renderizado ──────────────────────────────────────────────
-    // Si ya existe la toolbar sticky, solo actualizamos el grid de medallas
-    const existeStickyBar = document.getElementById('cat-sticky-bar');
-    if (!existeStickyBar) {
-        wrap.innerHTML = `
-            <div id="cat-sticky-bar" style="position:sticky;top:0;z-index:50;background:white;border-bottom:2px solid var(--gray-100);padding:10px 0 10px 0;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.07);">
+    // ── Renderizado (Redibujado limpio, sin duplicados) ──
+    wrap.innerHTML = `
+        <div id="cat-sticky-bar" style="position:sticky;top:0;z-index:50;background:white;border-bottom:2px solid var(--gray-200);padding:14px 4px;margin-bottom:20px;box-shadow:0 4px 12px rgba(0,0,0,0.05);display:flex;flex-direction:column;gap:12px;">
+            
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <input class="inp" id="med-search" placeholder="🔍 Buscar medalla, tag, efecto…"
-                        value="${_esc(medallaState.busqueda)}" oninput="window._medBuscar(this.value)"
-                        style="max-width:240px;">
-                    <select class="inp" id="med-filtro-tag" style="max-width:180px;" onchange="window._medFiltroTag(this.value)">
+                    <input class="inp" id="med-search" placeholder="🔍 Buscar medalla, tag…" 
+                        value="${_esc(medallaState.busqueda)}" oninput="window._medBuscar(this.value)" 
+                        style="min-width:220px;">
+                    <select class="inp" id="med-filtro-tag" style="min-width:160px;" onchange="window._medFiltroTag(this.value)">
                         <option value="">Todos los tags</option>
                         ${allTags.map(t=>`<option value="${t}" ${medallaState.filtroTag===t?'selected':''}>${t}</option>`).join('')}
                     </select>
                     ${btnProp}
-                    <span id="cat-count" style="color:var(--gray-500);font-size:0.85em;">${lista.length} medalla${lista.length!==1?'s':''}</span>
-                    ${botonesMulti}
-                    ${botonesProponerMulti}
+                    <span id="cat-count" style="color:var(--gray-500);font-size:0.85em;font-weight:600;margin-left:4px;">${lista.length} medallas</span>
                 </div>
-                ${toolbarMulti ? `<div id="cat-toolbar-multi-wrap" style="margin-top:8px;">${toolbarMulti}</div>` : ''}
+                
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    ${botonesAccion}
+                </div>
             </div>
-            <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
-                ${lista.map(m => _renderCard(m, modoSel, selIds)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
-            </div>`;
-    } else {
-        // Actualizar solo partes dinámicas sin reconstruir todo el DOM
-        const tagSel = document.getElementById('med-filtro-tag');
-        if (tagSel) {
-            tagSel.innerHTML = `<option value="">Todos los tags</option>${allTags.map(t=>`<option value="${t}" ${medallaState.filtroTag===t?'selected':''}>${t}</option>`).join('')}`;
-        }
-        const countEl = document.getElementById('cat-count');
-        if (countEl) countEl.textContent = `${lista.length} medalla${lista.length!==1?'s':''}`;
 
-        // Actualizar toolbar multi-select
-        const barDiv = document.getElementById('cat-sticky-bar');
-        if (barDiv) {
-            let multiDiv = barDiv.querySelector('#cat-toolbar-multi-wrap');
-            if (!multiDiv) {
-                multiDiv = document.createElement('div');
-                multiDiv.id = 'cat-toolbar-multi-wrap';
-                multiDiv.style.marginTop = '8px';
-                barDiv.appendChild(multiDiv);
-            }
-            multiDiv.innerHTML = toolbarMulti;
-        }
+            ${toolbarMulti ? `<div>${toolbarMulti}</div>` : ''}
+        </div>
 
-        const grid = document.getElementById('cat-grid');
-        if (grid) {
-            grid.innerHTML = lista.map(m => _renderCard(m, modoSel, selIds)).join('')
-                || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`;
-        }
-    }
+        <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;padding:0 4px;">
+            ${lista.map(m => _renderCard(m, modoSel, selIds)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
+        </div>
+    `;
 
-    // 2. Restaurar el foco y el cursor EXACTAMENTE donde estaba
+    // 2. Restaurar el foco
     if (prevFocusSearch) {
         const inp = document.getElementById('med-search');
         if (inp) {
@@ -266,7 +242,7 @@ export function renderCatalogo() {
         }
     }
 
-    // ⚡ Ajustar la barra para que no se esconda bajo el header principal
+    // 3. Ajuste de Sticky dinámico
     requestAnimationFrame(() => {
         const header = document.querySelector('.app-header');
         const stickyBar = document.getElementById('cat-sticky-bar');
@@ -276,6 +252,7 @@ export function renderCatalogo() {
     });
 }
 
+// Rescate de foco inicial
 setTimeout(() => { 
     const el = document.getElementById('med-search'); 
     if(el && medallaState.busqueda) el.focus(); 
