@@ -196,13 +196,13 @@ export function renderCatalogo() {
     // Botones de creación múltiple (solo admin)
     const botonesMulti = medallaState.esAdmin ? `
         <button class="btn btn-green btn-sm" onclick="window._medallasNueva()" title="Crear una medalla nueva">✨ Nueva</button>
-        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir 6 formularios en la misma página">✨×6 Múltiple</button>` : '';
+        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir varios formularios en la misma página">✨×N Múltiple</button>` : '';
 
     const botonesProponerMulti = `
         <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()"
             style="border-color:#e67e22;color:#e67e22;">📝 Proponer</button>
         <button class="btn btn-sm btn-outline" onclick="window._medProponerMultiple()"
-            style="border-color:#e67e22;color:#e67e22;">📝×6 Proponer múltiple</button>`;
+            style="border-color:#e67e22;color:#e67e22;">📝×N Proponer múltiple</button>`;
 
     // ── Renderizado ──────────────────────────────────────────────
     // Si ya existe la toolbar sticky, solo actualizamos el grid de medallas
@@ -819,7 +819,7 @@ export function renderPersonaje() {
                         color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡':'🛡'}</span>
                     <span style="flex:1;font-size:0.75em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
                                  color:${puedeFit?'#333':'#aaa'};">${m.nombre}</span>
-                    <span style="font-size:0.68em;color:${puedeFit?'var(--purple)':'#e74c3c'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
+                    <span style="font-size:0.68em;color:${puedeFit?'var(--purple)'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
                 </div>`;
             }).join('')
             : `<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin sugerencias disponibles</div>`;
@@ -1288,12 +1288,18 @@ export function renderFormMedalla(m = null) {
     });
 }
 
-// ── Formularios múltiples (6 a la vez) ────────────────────────
-export function renderFormsMultiple(esPropuesta = false) {
-    const N = 6;
+// ── Formularios múltiples (Dinámico N) ────────────────────────
+export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
+    const N = parseInt(numForms) || 8;
     const prefix = esPropuesta ? 'mp' : 'mm';
-    const titulo = esPropuesta ? '📝×6 Proponer múltiples medallas' : '✨×6 Crear múltiples medallas';
+    const titulo = esPropuesta ? `📝×${N} Proponer múltiples medallas` : `✨×${N} Crear múltiples medallas`;
     const subtitulo = esPropuesta ? 'Cada formulario generará una propuesta independiente para revisión del OP.' : 'Cada formulario generará una medalla independiente al guardar.';
+
+    // Exponemos la función de refrescar dinámicamente
+    window._medReRenderMulti = (propuesta) => {
+        const input = document.getElementById('mf-num-forms');
+        if (input) renderFormsMultiple(propuesta, input.value);
+    };
 
     function _miniForm(i) {
         const fid = `${prefix}${i}`;
@@ -1333,14 +1339,20 @@ export function renderFormsMultiple(esPropuesta = false) {
             <div>
                 <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Requisitos</label>
                 <div id="mf-reqs-${fid}">
-                    <div class="cond-row" id="mf-rrow-${fid}-0">
+                    <div class="cond-row" id="mf-rrow-${fid}-0" style="margin-bottom:4px;">
                         <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;" id="mf-rtag-${fid}-0" autocomplete="off">
-                        <input class="inp" type="number" min="0" placeholder="PT" style="width:70px;font-size:0.82em;" id="mf-rpts-${fid}-0">
+                        <input class="inp" type="number" min="0" placeholder="PT" style="width:60px;font-size:0.82em;" id="mf-rpts-${fid}-0">
                         <button class="btn btn-red btn-sm" onclick="document.getElementById('mf-rrow-${fid}-0').remove()">✕</button>
                     </div>
                 </div>
                 <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:0.75em;"
                     onclick="window._mfAddReq('${fid}')">+ Requisito</button>
+            </div>
+            <div>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Condicionales</label>
+                <div id="mf-conds-${fid}"></div>
+                <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:0.75em;"
+                    onclick="window._mfAddCond('${fid}')">+ Condicional</button>
             </div>
             <div id="mf-msg-${fid}" style="font-size:0.75em;color:var(--red);min-height:14px;"></div>
         </div>`;
@@ -1363,8 +1375,16 @@ export function renderFormsMultiple(esPropuesta = false) {
                         </div>
                     </div>
                     <div style="padding:16px;">
+                        <div style="margin-bottom: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <label style="font-size:0.85em; font-weight:700; color:#555;">Cantidad de formularios:</label>
+                            <input type="number" id="mf-num-forms" value="${N}" min="1" max="50" class="inp" style="width: 70px; font-size: 0.85em; padding: 4px;">
+                            <button class="btn btn-sm btn-outline" onclick="window._medReRenderMulti(${esPropuesta})">Actualizar</button>
+                            <span style="font-size: 0.75em; color: var(--red); font-weight:bold;">(Atención: Actualizar borrará los datos no guardados)</span>
+                        </div>
                         <p style="font-size:0.83em;color:#888;margin:0 0 14px;">${subtitulo} Los formularios vacíos se omiten automáticamente.</p>
+                        
                         <div id="mf-resumen" style="display:none;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:0.85em;font-weight:600;"></div>
+                        
                         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;">
                             ${Array.from({length:N},(_,i)=>_miniForm(i)).join('')}
                         </div>
@@ -1379,11 +1399,15 @@ export function renderFormsMultiple(esPropuesta = false) {
         </div>`;
     el.style.display = 'block';
 
-    // Contadores de requisitos por formulario
+    // Inicializar contadores de requisitos y condicionales
     window._mfReqCounters = {};
+    window._mfCondCounters = {};
+    
     for (let i = 0; i < N; i++) {
         const fid = `${prefix}${i}`;
         window._mfReqCounters[fid] = 0;
+        window._mfCondCounters[fid] = 0;
+        
         // Autocomplete en el primer req-tag
         requestAnimationFrame(() => {
             const inp = document.getElementById(`mf-rtag-${fid}-0`);
@@ -1391,17 +1415,36 @@ export function renderFormsMultiple(esPropuesta = false) {
         });
     }
 
+    // Funciones dinámicas para añadir filas
     window._mfAddReq = (fid) => {
         const c = ++(window._mfReqCounters[fid]);
         const rowId = `mf-rrow-${fid}-${c}`;
         document.getElementById(`mf-reqs-${fid}`)?.insertAdjacentHTML('beforeend', `
-            <div class="cond-row" id="${rowId}">
+            <div class="cond-row" id="${rowId}" style="margin-bottom:4px;">
                 <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;" id="mf-rtag-${fid}-${c}" autocomplete="off">
-                <input class="inp" type="number" min="0" placeholder="PT" style="width:70px;font-size:0.82em;" id="mf-rpts-${fid}-${c}">
+                <input class="inp" type="number" min="0" placeholder="PT" style="width:60px;font-size:0.82em;" id="mf-rpts-${fid}-${c}">
                 <button class="btn btn-red btn-sm" onclick="document.getElementById('${rowId}').remove()">✕</button>
             </div>`);
         requestAnimationFrame(() => {
             const inp = document.getElementById(`mf-rtag-${fid}-${c}`);
+            if (inp) _attachTagAC(inp);
+        });
+    };
+
+    window._mfAddCond = (fid) => {
+        const c = ++(window._mfCondCounters[fid]);
+        const rowId = `mf-crow-${fid}-${c}`;
+        document.getElementById(`mf-conds-${fid}`)?.insertAdjacentHTML('beforeend', `
+            <div class="cond-row" id="${rowId}" style="flex-direction:column;align-items:stretch;margin-bottom:6px;">
+                <div style="display:flex;gap:4px;">
+                    <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;" id="mf-ctag-${fid}-${c}" autocomplete="off">
+                    <input class="inp" type="number" min="0" placeholder="PT" style="width:60px;font-size:0.82em;" id="mf-cpts-${fid}-${c}">
+                    <button class="btn btn-red btn-sm" onclick="document.getElementById('${rowId}').remove()">✕</button>
+                </div>
+                <textarea class="inp" rows="1" placeholder="Efecto..." style="font-size:0.82em;margin-top:4px;" id="mf-cefecto-${fid}-${c}"></textarea>
+            </div>`);
+        requestAnimationFrame(() => {
+            const inp = document.getElementById(`mf-ctag-${fid}-${c}`);
             if (inp) _attachTagAC(inp);
         });
     };
