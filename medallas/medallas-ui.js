@@ -1346,8 +1346,8 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
                 <input class="inp" id="mf-autor-${fid}" placeholder="¿Cómo te llamamos?" style="font-size:0.85em;">
             </div>` : ''}
             <div>
-                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base</label>
-                <textarea class="inp" id="mf-efecto-${fid}" rows="2" placeholder="Describe el efecto…" style="font-size:0.83em;"></textarea>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base <span style="font-weight:400;color:#aaa;">(@ # !)</span></label>
+                <textarea class="inp" id="mf-efecto-${fid}" rows="2" placeholder="Describe el efecto…" style="font-size:0.83em;" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
             </div>
             <div>
                 <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Tipo</label>
@@ -1461,7 +1461,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
                     <input class="inp" type="number" min="0" placeholder="PT" style="width:60px;font-size:0.82em;" id="mf-cpts-${fid}-${c}">
                     <button class="btn btn-red btn-sm" onclick="document.getElementById('${rowId}').remove()">✕</button>
                 </div>
-                <textarea class="inp" rows="1" placeholder="Efecto..." style="font-size:0.82em;margin-top:4px;" id="mf-cefecto-${fid}-${c}"></textarea>
+                <textarea class="inp" rows="1" placeholder="Efecto... (@ # !)" style="font-size:0.82em;margin-top:4px;" id="mf-cefecto-${fid}-${c}" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
             </div>`);
         requestAnimationFrame(() => {
             const inp = document.getElementById(`mf-ctag-${fid}-${c}`);
