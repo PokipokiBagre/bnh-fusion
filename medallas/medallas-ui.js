@@ -173,24 +173,89 @@ export function renderCatalogo() {
             🟠 Propuestas (${medallas.filter(m=>m.propuesta).length})
            </button>` : '';
 
-    wrap.innerHTML = `
-        <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
-            <input class="inp" id="med-search" placeholder="🔍 Buscar medalla, tag, efecto…"
-                value="${_esc(medallaState.busqueda)}" oninput="window._medBuscar(this.value)"
-                style="max-width:280px;">
-            <select class="inp" id="med-filtro-tag" style="max-width:180px;" onchange="window._medFiltroTag(this.value)">
-                <option value="">Todos los tags</option>
-                ${allTags.map(t=>`<option value="${t}" ${medallaState.filtroTag===t?'selected':''}>${t}</option>`).join('')}
-            </select>
-            ${btnProp}
-            <span style="color:var(--gray-500);font-size:0.85em;">${lista.length} medalla${lista.length!==1?'s':''}</span>
-            ${medallaState.esAdmin ? `<button class="btn btn-green btn-sm" onclick="window._medallasNueva()">✨ Nueva</button>` : ''}
-            <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()"
-                style="border-color:#e67e22;color:#e67e22;">📝 Proponer medalla</button>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
-            ${lista.map(m => _renderCard(m)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
-        </div>`;
+    // Multi-select toolbar (solo admin)
+    const selIds = medallaState.seleccionados || [];
+    const modoSel = medallaState.modoSeleccion || false;
+
+    const toolbarMulti = medallaState.esAdmin ? `
+        <div id="cat-toolbar-multi" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-sm ${modoSel ? 'btn-red' : 'btn-outline'}"
+                onclick="window._medToggleModoSel()"
+                style="${modoSel ? 'background:#c0392b;border-color:#c0392b;color:white;' : ''}">
+                ${modoSel ? '✕ Cancelar selección' : '☑ Seleccionar'}
+            </button>
+            ${modoSel && selIds.length > 0 ? `
+                <span style="font-size:0.82em;color:var(--gray-600);font-weight:600;">${selIds.length} seleccionada${selIds.length!==1?'s':''}</span>
+                <button class="btn btn-sm" style="background:#c0392b;border-color:#c0392b;color:white;"
+                    onclick="window._medEliminarSeleccion()">🗑️ Eliminar selección</button>
+                <button class="btn btn-sm btn-outline" onclick="window._medDeselAll()">Deseleccionar todo</button>
+                <button class="btn btn-sm btn-outline" onclick="window._medSelAll()">Seleccionar todo</button>
+            ` : ''}
+        </div>` : '';
+
+    // Botones de creación múltiple (solo admin)
+    const botonesMulti = medallaState.esAdmin ? `
+        <button class="btn btn-green btn-sm" onclick="window._medallasNueva()" title="Crear una medalla nueva">✨ Nueva</button>
+        <button class="btn btn-sm" style="background:#1a7a3a;border-color:#1a7a3a;color:white;" onclick="window._medNuevaMultiple()" title="Abrir 6 formularios en la misma página">✨×6 Múltiple</button>` : '';
+
+    const botonesProponerMulti = `
+        <button class="btn btn-sm btn-outline" onclick="window._medProponerModal()"
+            style="border-color:#e67e22;color:#e67e22;">📝 Proponer</button>
+        <button class="btn btn-sm btn-outline" onclick="window._medProponerMultiple()"
+            style="border-color:#e67e22;color:#e67e22;">📝×6 Proponer múltiple</button>`;
+
+    // ── Renderizado ──────────────────────────────────────────────
+    // Si ya existe la toolbar sticky, solo actualizamos el grid de medallas
+    const existeStickyBar = document.getElementById('cat-sticky-bar');
+    if (!existeStickyBar) {
+        wrap.innerHTML = `
+            <div id="cat-sticky-bar" style="position:sticky;top:0;z-index:50;background:white;border-bottom:2px solid var(--gray-100);padding:10px 0 10px 0;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,0.07);">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <input class="inp" id="med-search" placeholder="🔍 Buscar medalla, tag, efecto…"
+                        value="${_esc(medallaState.busqueda)}" oninput="window._medBuscar(this.value)"
+                        style="max-width:240px;">
+                    <select class="inp" id="med-filtro-tag" style="max-width:180px;" onchange="window._medFiltroTag(this.value)">
+                        <option value="">Todos los tags</option>
+                        ${allTags.map(t=>`<option value="${t}" ${medallaState.filtroTag===t?'selected':''}>${t}</option>`).join('')}
+                    </select>
+                    ${btnProp}
+                    <span id="cat-count" style="color:var(--gray-500);font-size:0.85em;">${lista.length} medalla${lista.length!==1?'s':''}</span>
+                    ${botonesMulti}
+                    ${botonesProponerMulti}
+                </div>
+                ${toolbarMulti ? `<div style="margin-top:8px;">${toolbarMulti}</div>` : ''}
+            </div>
+            <div id="cat-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;">
+                ${lista.map(m => _renderCard(m, modoSel, selIds)).join('') || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`}
+            </div>`;
+    } else {
+        // Actualizar solo partes dinámicas sin reconstruir todo el DOM
+        const tagSel = document.getElementById('med-filtro-tag');
+        if (tagSel) {
+            tagSel.innerHTML = `<option value="">Todos los tags</option>${allTags.map(t=>`<option value="${t}" ${medallaState.filtroTag===t?'selected':''}>${t}</option>`).join('')}`;
+        }
+        const countEl = document.getElementById('cat-count');
+        if (countEl) countEl.textContent = `${lista.length} medalla${lista.length!==1?'s':''}`;
+
+        // Actualizar toolbar multi-select
+        const barDiv = document.getElementById('cat-sticky-bar');
+        if (barDiv) {
+            let multiDiv = barDiv.querySelector('#cat-toolbar-multi-wrap');
+            if (!multiDiv) {
+                multiDiv = document.createElement('div');
+                multiDiv.id = 'cat-toolbar-multi-wrap';
+                multiDiv.style.marginTop = '8px';
+                barDiv.appendChild(multiDiv);
+            }
+            multiDiv.innerHTML = toolbarMulti;
+        }
+
+        const grid = document.getElementById('cat-grid');
+        if (grid) {
+            grid.innerHTML = lista.map(m => _renderCard(m, modoSel, selIds)).join('')
+                || `<div class="empty-state" style="grid-column:1/-1;"><h3>Sin resultados</h3></div>`;
+        }
+    }
 
     // 2. Restaurar el foco y el cursor EXACTAMENTE donde estaba
     if (prevFocusSearch) {
@@ -206,11 +271,12 @@ export function renderCatalogo() {
         if(el && medallaState.busqueda) el.focus(); 
     }, 10);
 
-function _renderCard(m) {
+function _renderCard(m, modoSel = false, selIds = []) {
     const tagLabel  = mTags(m).map(t => `<span class="medalla-tag">${t}</span>`).join(' ');
     const tieneReqs = (m.requisitos_base||[]).length > 0;
     const tieneConds= (m.efectos_condicionales||[]).length > 0;
     const isProp    = m.propuesta;
+    const isSel     = selIds.includes(m.id);
 
     const propBadge = isProp
         ? `<div style="background:#fef3e2;border:1.5px solid #e67e22;border-radius:6px;padding:3px 8px;font-size:0.72em;color:#e67e22;font-weight:700;margin-bottom:6px;">
@@ -221,11 +287,31 @@ function _renderCard(m) {
         ? `<button class="btn btn-green btn-sm" style="margin-top:6px;"
             onclick="event.stopPropagation();window._medAprobar('${m.id}')">✅ Aprobar</button>` : '';
 
+    // Checkbox de selección múltiple (solo en modo selección admin)
+    const selCheck = modoSel && medallaState.esAdmin ? `
+        <div style="position:absolute;top:8px;right:8px;z-index:5;"
+             onclick="event.stopPropagation();window._medToggleSel('${m.id}')">
+            <div style="width:20px;height:20px;border-radius:4px;border:2px solid ${isSel?'var(--green)':'#bbb'};
+                        background:${isSel?'var(--green)':'white'};display:flex;align-items:center;justify-content:center;
+                        cursor:pointer;transition:all 0.15s;">
+                ${isSel ? '<span style="color:white;font-size:13px;line-height:1;">✓</span>' : ''}
+            </div>
+        </div>` : '';
+
+    const cardStyle = isSel
+        ? `border-color:var(--green);background:rgba(39,174,96,0.06);box-shadow:0 0 0 2px var(--green);`
+        : (isProp ? 'border-color:#e67e22;background:#fffbf5;' : '');
+
+    const clickHandler = modoSel
+        ? `onclick="window._medToggleSel('${m.id}')"`
+        : `onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')})"`;
+
     return `
     <div class="medalla-card${isProp ? ' medalla-propuesta' : ''}"
-        style="${isProp ? 'border-color:#e67e22;background:#fffbf5;' : ''}"
-        onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')})">
+        style="position:relative;cursor:pointer;${cardStyle}"
+        ${clickHandler}>
         
+        ${selCheck}
         ${propBadge}
         
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
@@ -1200,6 +1286,125 @@ export function renderFormMedalla(m = null) {
             if (elm && window._initMarkupTA) window._initMarkupTA(elm);
         });
     });
+}
+
+// ── Formularios múltiples (6 a la vez) ────────────────────────
+export function renderFormsMultiple(esPropuesta = false) {
+    const N = 6;
+    const prefix = esPropuesta ? 'mp' : 'mm';
+    const titulo = esPropuesta ? '📝×6 Proponer múltiples medallas' : '✨×6 Crear múltiples medallas';
+    const subtitulo = esPropuesta ? 'Cada formulario generará una propuesta independiente para revisión del OP.' : 'Cada formulario generará una medalla independiente al guardar.';
+
+    function _miniForm(i) {
+        const fid = `${prefix}${i}`;
+        return `
+        <div id="mf-form-${fid}" style="background:white;border:2px solid var(--gray-200);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+                <div style="width:24px;height:24px;border-radius:50%;background:var(--green);color:white;font-size:0.75em;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div>
+                <span style="font-size:0.82em;font-weight:700;color:var(--gray-700);">Medalla ${i+1}</span>
+                <span id="mf-badge-${fid}" style="font-size:0.7em;display:none;padding:2px 7px;border-radius:8px;font-weight:700;"></span>
+            </div>
+            <input type="hidden" id="mf-id-${fid}" value="">
+            <div style="display:grid;grid-template-columns:1fr 80px;gap:8px;">
+                <div>
+                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Nombre *</label>
+                    <input class="inp" id="mf-nombre-${fid}" placeholder="Nombre de la medalla" style="font-size:0.85em;">
+                </div>
+                <div>
+                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">CTL *</label>
+                    <input class="inp" id="mf-ctl-${fid}" type="number" min="1" max="50" value="1" style="font-size:0.85em;">
+                </div>
+            </div>
+            ${esPropuesta ? `<div>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Tu nombre (opcional)</label>
+                <input class="inp" id="mf-autor-${fid}" placeholder="¿Cómo te llamamos?" style="font-size:0.85em;">
+            </div>` : ''}
+            <div>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base</label>
+                <textarea class="inp" id="mf-efecto-${fid}" rows="2" placeholder="Describe el efecto…" style="font-size:0.83em;"></textarea>
+            </div>
+            <div>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Tipo</label>
+                <select class="inp" id="mf-tipo-${fid}" style="font-size:0.83em;max-width:140px;">
+                    <option value="activa">Activa</option>
+                    <option value="pasiva">Pasiva</option>
+                </select>
+            </div>
+            <div>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Requisitos</label>
+                <div id="mf-reqs-${fid}">
+                    <div class="cond-row" id="mf-rrow-${fid}-0">
+                        <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;" id="mf-rtag-${fid}-0" autocomplete="off">
+                        <input class="inp" type="number" min="0" placeholder="PT" style="width:70px;font-size:0.82em;" id="mf-rpts-${fid}-0">
+                        <button class="btn btn-red btn-sm" onclick="document.getElementById('mf-rrow-${fid}-0').remove()">✕</button>
+                    </div>
+                </div>
+                <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:0.75em;"
+                    onclick="window._mfAddReq('${fid}')">+ Requisito</button>
+            </div>
+            <div id="mf-msg-${fid}" style="font-size:0.75em;color:var(--red);min-height:14px;"></div>
+        </div>`;
+    }
+
+    const el = document.getElementById('medalla-modal');
+    if (!el) return;
+
+    el.innerHTML = `
+        <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;overflow-y:auto;padding:20px 8px 40px;">
+            <div style="max-width:1400px;margin:0 auto;">
+                <div style="background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;">
+                    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                        <h3 style="margin:0;">${titulo}</h3>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            <button class="btn btn-green" id="mf-guardar-todos" onclick="window._mfGuardarTodos('${prefix}',${N},${esPropuesta})">
+                                💾 Guardar todas
+                            </button>
+                            <button class="modal-close" onclick="window._medallasCloseModal()">×</button>
+                        </div>
+                    </div>
+                    <div style="padding:16px;">
+                        <p style="font-size:0.83em;color:#888;margin:0 0 14px;">${subtitulo} Los formularios vacíos se omiten automáticamente.</p>
+                        <div id="mf-resumen" style="display:none;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:0.85em;font-weight:600;"></div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px;">
+                            ${Array.from({length:N},(_,i)=>_miniForm(i)).join('')}
+                        </div>
+                        <div style="margin-top:18px;display:flex;justify-content:flex-end;">
+                            <button class="btn btn-green" style="min-width:160px;" onclick="window._mfGuardarTodos('${prefix}',${N},${esPropuesta})">
+                                💾 Guardar todas
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    el.style.display = 'block';
+
+    // Contadores de requisitos por formulario
+    window._mfReqCounters = {};
+    for (let i = 0; i < N; i++) {
+        const fid = `${prefix}${i}`;
+        window._mfReqCounters[fid] = 0;
+        // Autocomplete en el primer req-tag
+        requestAnimationFrame(() => {
+            const inp = document.getElementById(`mf-rtag-${fid}-0`);
+            if (inp) _attachTagAC(inp);
+        });
+    }
+
+    window._mfAddReq = (fid) => {
+        const c = ++(window._mfReqCounters[fid]);
+        const rowId = `mf-rrow-${fid}-${c}`;
+        document.getElementById(`mf-reqs-${fid}`)?.insertAdjacentHTML('beforeend', `
+            <div class="cond-row" id="${rowId}">
+                <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;" id="mf-rtag-${fid}-${c}" autocomplete="off">
+                <input class="inp" type="number" min="0" placeholder="PT" style="width:70px;font-size:0.82em;" id="mf-rpts-${fid}-${c}">
+                <button class="btn btn-red btn-sm" onclick="document.getElementById('${rowId}').remove()">✕</button>
+            </div>`);
+        requestAnimationFrame(() => {
+            const inp = document.getElementById(`mf-rtag-${fid}-${c}`);
+            if (inp) _attachTagAC(inp);
+        });
+    };
 }
 
 export function _htmlReqRow(r = {}, idx) {
