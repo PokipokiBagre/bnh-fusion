@@ -480,7 +480,7 @@ function _exponerGlobales() {
         _renderTab(medallaState.tabActual);
     };
 
-    // ── Creación / propuesta múltiple (6 formularios) ─────────
+    // ── Creación / propuesta múltiple (Dinámico N) ─────────
     window._medNuevaMultiple    = () => renderFormsMultiple(false);
     window._medProponerMultiple = () => renderFormsMultiple(true);
     window._mfGuardarTodos = async (prefix, N, esPropuesta) => {
@@ -506,13 +506,23 @@ function _exponerGlobales() {
                 if (tag) reqs.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts });
             });
 
+            // ⚡ NUEVO: Recoger efectos condicionales
+            const conds = [];
+            document.querySelectorAll(`#mf-conds-${fid} [id^="mf-ctag-${fid}-"]`).forEach(el => {
+                const c = el.id.replace(`mf-ctag-${fid}-`, '');
+                const tag = el.value.trim();
+                const pts = Number(document.getElementById(`mf-cpts-${fid}-${c}`)?.value || 0);
+                const efe = document.getElementById(`mf-cefecto-${fid}-${c}`)?.value.trim() || '';
+                if (tag) conds.push({ tag: tag.startsWith('#') ? tag : '#'+tag, pts_minimos: pts, efecto: efe });
+            });
+
             const datos = {
                 nombre,
                 costo_ctl:    Number(document.getElementById(`mf-ctl-${fid}`)?.value || 1),
                 efecto_base:  document.getElementById(`mf-efecto-${fid}`)?.value.trim() || '',
                 tipo:         document.getElementById(`mf-tipo-${fid}`)?.value || 'activa',
                 requisitos_base: reqs,
-                efectos_condicionales: [],
+                efectos_condicionales: conds, // ⚡ Ahora se guardan correctamente
                 propuesta:    esPropuesta,
                 propuesta_por: esPropuesta ? (document.getElementById(`mf-autor-${fid}`)?.value.trim() || '') : '',
             };
