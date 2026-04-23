@@ -192,10 +192,30 @@ export async function editarSolicitudTresTags(reqId, nuevosCambios) {
 
 // ─────────────────────────────────────────────────────────────────
 export async function guardarBaneoTag(nombre, baneado) {
-    const { data: cat } = await supabase.from('tags_catalogo').select('descripcion').eq('nombre', nombre).maybeSingle();
-    const desc = cat ? cat.descripcion : '';
-    const { error } = await supabase.from('tags_catalogo').upsert({ nombre, baneado, descripcion: desc }, { onConflict: 'nombre' });
-    return error ? { ok: false, msg: error.message } : { ok: true };
+    // Normalizar: el DB puede tener el nombre con '#' o sin '#'
+    const tagKey  = nombre.startsWith('#') ? nombre.slice(1) : nombre;
+    const tagConH = '#' + tagKey;
+
+    // Intentar actualizar la variante sin '#'
+    const { data: u1, error: e1 } = await supabase
+        .from('tags_catalogo').update({ baneado }).eq('nombre', tagKey).select('nombre');
+    if (e1) return { ok: false, msg: e1.message };
+
+    // También actualizar la variante con '#' si existe
+    const { data: u2, error: e2 } = await supabase
+        .from('tags_catalogo').update({ baneado }).eq('nombre', tagConH).select('nombre');
+    if (e2) return { ok: false, msg: e2.message };
+
+    // Si ninguna variante existía, insertar un registro nuevo (sin '#')
+    const huboActualizacion = (u1 && u1.length > 0) || (u2 && u2.length > 0);
+    if (!huboActualizacion) {
+        const { error: eIns } = await supabase
+            .from('tags_catalogo')
+            .insert({ nombre: tagKey, baneado, descripcion: '' });
+        if (eIns) return { ok: false, msg: eIns.message };
+    }
+
+    return { ok: true };
 }
 
 export async function renameTag(viejoNombre, nuevoNombre) {
