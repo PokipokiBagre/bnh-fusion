@@ -112,7 +112,7 @@ export function renderProgresion() {
     } else {
         barrasHtml = tagsConPts.map(({ tag, pts, ptsReales, alterado }) => {
             const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
-            const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+            const catEntry = catalogoTags.find(t => (t.nombre.startsWith('#') ? t.nombre.slice(1) : t.nombre).toLowerCase() === tagKey.toLowerCase());
             const baneado = catEntry?.baneado;
             const pct   = Math.min((pts / UMBRAL_MAX) * 100, 100);
             
@@ -426,7 +426,7 @@ function _cercaDeCanje() {
 export function renderTagDetalle(tagNombre) {
     const tag    = tagNombre.startsWith('#') ? tagNombre : '#' + tagNombre;
     const tagKey = tag.slice(1);
-    const catEntry  = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    const catEntry  = catalogoTags.find(t => (t.nombre.startsWith('#') ? t.nombre.slice(1) : t.nombre).toLowerCase() === tagKey.toLowerCase());
     const baneado   = catEntry?.baneado || false;
     const desc      = catEntry?.descripcion || '';
     const medallas  = medallasDe(tag);
@@ -885,7 +885,7 @@ window._catCrearTagEjecutar = async () => {
 
 window._catEditarInline = (tagKey) => {
     const tag      = '#' + tagKey;
-    const catEntry = catalogoTags.find(t => t.nombre.toLowerCase() === tagKey.toLowerCase());
+    const catEntry = catalogoTags.find(t => (t.nombre.startsWith('#') ? t.nombre.slice(1) : t.nombre).toLowerCase() === tagKey.toLowerCase());
     const desc     = catEntry?.descripcion || '';
     const container = document.getElementById('cat-inline-modal');
     if (!container) return;
