@@ -48,9 +48,7 @@ export async function cargarInventarioPJ(nombrePJ) {
 }
 
 export async function guardarDescripcionTag(nombre, descripcion, tipo) {
-    // Normalizar: el catálogo NUNCA guarda el # en el nombre
-    const nombreKey = nombre.startsWith('#') ? nombre.slice(1) : nombre;
-    const payload = { nombre: nombreKey, descripcion };
+    const payload = { nombre, descripcion };
     if (tipo) payload.tipo = tipo;
     const { error } = await supabase.from('tags_catalogo').upsert(payload, { onConflict: 'nombre' });
     return error ? { ok: false, msg: error.message } : { ok: true };
@@ -259,7 +257,9 @@ export async function deleteTag(nombre, borrarPuntos = false) {
             await supabase.from('log_puntos_tag').delete().ilike('tag', tagNorm);
         }
 
-        await supabase.from('tags_catalogo').delete().ilike('nombre', tagKey);
+        // Borrar del catálogo — con # y sin # para cubrir inconsistencias históricas
+        await supabase.from('tags_catalogo').delete().eq('nombre', tagNorm);  // con #, ej: #Ocular
+        await supabase.from('tags_catalogo').delete().eq('nombre', tagKey);   // sin #, ej: Ocular
         return { ok: true };
     } catch(e) { return { ok: false, msg: e.message }; }
 }
