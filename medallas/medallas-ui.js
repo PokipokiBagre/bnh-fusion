@@ -819,7 +819,7 @@ export function renderPersonaje() {
                         color:${m.tipo==='activa'?'#1a4a80':'#6c3483'};border:1px solid ${m.tipo==='activa'?'#1a4a80':'#6c3483'};">${m.tipo==='activa'?'⚡':'🛡'}</span>
                     <span style="flex:1;font-size:0.75em;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
                                  color:${puedeFit?'#333':'#aaa'};">${m.nombre}</span>
-                    <span style="font-size:0.68em;color:${puedeFit?'var(--purple)'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
+                    <span style="font-size:0.68em;color:${puedeFit ? 'var(--purple)' : '#e74c3c'};font-weight:700;white-space:nowrap;">${m.costo_ctl} CTL</span>
                 </div>`;
             }).join('')
             : `<div style="font-size:0.75em;color:#bbb;text-align:center;padding:8px 0;">Sin sugerencias disponibles</div>`;
