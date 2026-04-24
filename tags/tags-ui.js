@@ -739,7 +739,7 @@ export function renderCatalogo() {
                 ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
             </div>
             ${desc
-                ? `<div style="font-size:0.75em;color:var(--gray-700);line-height:1.5;overflow:hidden;max-height:4.5em;border-top:1px solid var(--gray-100);padding-top:5px;margin-top:2px;">${renderMarkup(desc)}</div>`
+                ? `<div style="font-size:0.75em;color:var(--gray-700);line-height:1.5;border-top:1px solid var(--gray-100);padding-top:5px;margin-top:2px;">${renderMarkup(desc)}</div>`
                 : `<div style="font-size:0.72em;color:var(--gray-400);font-style:italic;">Sin descripción.</div>`
             }
         </div>`;

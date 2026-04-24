@@ -245,7 +245,11 @@ window._tagsAI = {
             const tagKey = tag.slice(1);
             const count  = tagMapa[tag] || 0;
             const desc   = _descActual(tagKey);
-            return `- ${tag} (${count} PJ${count !== 1 ? 's' : ''})${desc ? `\n  Descripcion actual: "${desc}"` : ''}`;
+            const pjsConTag = grupos
+                .filter(g => (g.tags||[]).some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()))
+                .map(g => g.nombre_refinado)
+                .join(', ');
+            return `- ${tag} (${count} PJ${count !== 1 ? 's' : ''})${pjsConTag ? `\n  Personajes: ${pjsConTag}` : ''}${desc ? `\n  Descripcion actual: "${desc}"` : ''}`;
         }).join('\n');
 
         const prompt = `Genera UNA descripcion para cada tag del sistema RPG listado abajo.
