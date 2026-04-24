@@ -10,6 +10,7 @@ import {
 } from './tags-data.js';
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
+import { initTagsAI } from './tags-ai.js';
 
 async function _refreshMarkup() {
     const state = await import('./tags-state.js');
@@ -61,6 +62,10 @@ window.onload = async () => {
     }
 
     if (typeof _exponerGlobales === 'function') _exponerGlobales();
+
+    // Inicializar el módulo de IA (solo visible para admins — el botón
+    // se inyecta automáticamente cada vez que se renderiza el catálogo)
+    if (tagsState.esAdmin) initTagsAI();
 };
 
 function renderTab(tab) {
