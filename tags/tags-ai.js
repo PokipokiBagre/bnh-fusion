@@ -8,19 +8,14 @@ import { supabase } from '../bnh-auth.js';
 
 // ── Reglas de markup ────────────────────────────────────────────────────────
 const MARKUP_RULES = `
-SISTEMA DE MARCADO — REGLAS ABSOLUTAS:
-
-PERSONAJES -> @Nombre@ con arrobas.
-  CRITICO: copia el nombre EXACTAMENTE como lo escribio el OP, sin traducir, sin añadir palabras, sin guiones bajos extras.
-  Si el OP escribio "Kevan" -> @Kevan@. Si escribio "Fufu" -> @Fufu@. Si escribio "All Tight" -> @All Tight@. Si escribio "Doña Manitas" -> @Doña Manitas@.
-  PROHIBIDO inventar apodos, descripciones o sufijos. NUNCA: @Kevan_El_Bailarin@, @Fufu_El_Inmaduro@.
-  Los nombres de personajes pueden tener espacios, tildes y caracteres especiales — conservalos tal cual.
-
-TAGS -> #NombreExacto sin espacios, guion bajo para separar palabras.
-  Correcto: #Powercore, #Eldritch_Proyection. Incorrecto: Powercore, #Quirk_Powercore.
-
-MEDALLAS -> !Nombre de Medalla! con signos de exclamacion simples.
-  Pueden tener espacios, tildes y caracteres especiales. Correcto: !Fuerza Bruta!, !Algaravia!. Incorrecto: ¡Golpe Orbital!
+SISTEMA DE MARCADO — REGLAS ABSOLUTAS para las descripciones:
+- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas, guion bajo entre palabras).
+- Tags/Quirks: SIEMPRE #NombreExacto (hashtag, sin espacios, guion bajo para separar palabras).
+  Correctos: #Powercore, #Algaravia, #Eldritch_Proyection
+  Incorrectos: #Quirk_Powercore, Powercore, quirk Powercore
+- Medallas/Tecnicas: SIEMPRE !Nombre de Medalla! (signos de exclamacion simples, NO exclamacion invertida).
+  Correcto: !Golpe Orbital!   Incorrecto: ¡Golpe Orbital!
+- El Quirk de un personaje ES un #Tag. Si el Quirk es "Powercore" -> #Powercore. NUNCA "Quirk #Powercore".
 `.trim();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -253,7 +248,7 @@ window._tagsAI = {
             return `- ${tag} (${count} PJ${count !== 1 ? 's' : ''})${desc ? `\n  Descripcion actual: "${desc}"` : ''}`;
         }).join('\n');
 
-        const prompt = `Genera UNA descripcion corta (1-2 oraciones) para cada tag del sistema RPG listado abajo.
+        const prompt = `Genera UNA descripcion para cada tag del sistema RPG listado abajo.
 
 REGLAS DE FORMATO:
 ${MARKUP_RULES}
@@ -263,9 +258,11 @@ INSTRUCCIONES:
 - Formato exacto: { "#NombreTag": "descripcion", ... }
 - Claves = nombres exactos de los tags tal como aparecen abajo (con #).
 - Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol escrita por alguien que conoce el universo. No es un manual tecnico; puede ser vago, sugerente o incluso un poco ironico si el tag lo pide.
-- Largo ideal: 1 oracion generosa o 2 cortas. Nada de listas ni bullet points.
-- Si hay descripcion actual, puedes reescribirla con mejor tono sin cambiar el significado.
+- LONGITUD — regla estricta en dos casos:
+    · Si la descripcion NO menciona ningun personaje con @arrobas@: maximo UNA oracion corta y directa. Sin subordinadas largas, sin listas. Ejemplos de lo que se busca: "Implica afinidad con maquinaria y tecnologia, creacion y mejora de dispositivos." / "Caracteriza a quienes compensan la falta de intelecto con suerte inverosimil y poderes ilogicos que funcionan."
+    · Si la descripcion SI menciona uno o mas personajes con @arrobas@: puedes extenderte hasta DOS oraciones para incluir al personaje y su relacion con el tag. No mas.
 - NOMBRES DE PERSONAJE: si el OP menciona un nombre en el contexto, usalo EXACTAMENTE como fue escrito, solo envuelto en @arrobas@. No añadas nada al nombre.
+- Si hay descripcion actual, puedes reescribirla respetando estas reglas de longitud.
 
 ${promptExtra ? `CONTEXTO DEL OP (extrae nombres de personajes tal cual y marcalos con @arrobas@, sin modificarlos):\n${promptExtra}\n` : ''}
 
@@ -280,7 +277,7 @@ ${tagsInfo}`;
             // ── Usamos supabase.functions.invoke para evitar problemas de CORS.
             // El cliente de Supabase ya incluye los headers correctos (apikey,
             // Authorization) y usa el mismo origen que el resto del proyecto.
-            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
+            const { data, error } = await supabase.functions.invoke('gemini-proxy', {
                 body: { prompt, contextoAdicional },
             });
 
