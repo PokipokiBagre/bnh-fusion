@@ -273,7 +273,7 @@ ${tagsInfo}`;
             // ── Usamos supabase.functions.invoke para evitar problemas de CORS.
             // El cliente de Supabase ya incluye los headers correctos (apikey,
             // Authorization) y usa el mismo origen que el resto del proyecto.
-            const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
                 body: { prompt, contextoAdicional },
             });
 
