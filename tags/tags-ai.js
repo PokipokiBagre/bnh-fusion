@@ -269,7 +269,23 @@ ${promptExtra ? `CONTEXTO DEL OP (extrae nombres de personajes tal cual y marcal
 TAGS A DESCRIBIR:
 ${tagsInfo}`;
 
-        const contextoAdicional = `BNH-FUSION RPG. Tags: ${[..._selectedTags].join(', ')}`;
+        // Construir lista completa de tags del sistema (igual que "Copiar lista")
+        // para que la IA pueda referenciar tags existentes en sus descripciones
+        const todosLosTags = Object.entries(tagMapa)
+            .filter(([tag]) => {
+                const entry = catalogoTags.find(c =>
+                    ('#' + (c.nombre.startsWith('#') ? c.nombre.slice(1) : c.nombre)).toLowerCase() === tag.toLowerCase()
+                );
+                return !entry?.baneado;
+            })
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([tag, count]) => `${tag} (${count})`)
+            .join(', ');
+
+        const contextoAdicional = `BNH-FUSION RPG.
+
+CATALOGO COMPLETO DE TAGS DEL SISTEMA (puedes referenciar cualquiera de estos en tus descripciones usando #NombreTag):
+${todosLosTags}`;
 
         try {
             if (status) status.textContent = 'Esperando respuesta de Gemini...';
@@ -277,7 +293,7 @@ ${tagsInfo}`;
             // ── Usamos supabase.functions.invoke para evitar problemas de CORS.
             // El cliente de Supabase ya incluye los headers correctos (apikey,
             // Authorization) y usa el mismo origen que el resto del proyecto.
-            const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
                 body: { prompt, contextoAdicional },
             });
 
