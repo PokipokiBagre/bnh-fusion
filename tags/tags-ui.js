@@ -442,6 +442,7 @@ export function renderTagDetalle(tagNombre) {
     if (!el) return;
 
     const adminDescForm = tagsState.esAdmin ? `
+        ${desc ? `<div style="font-size:0.9em;color:var(--gray-700);line-height:1.6;padding:10px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius);margin-bottom:10px;">${renderMarkup(desc)}</div>` : ''}
         <div style="display:flex;gap:12px;margin-bottom:8px;align-items:center;">
             <div style="flex:1;">
                 <label style="font-size:0.75em;font-weight:700;color:var(--gray-500);display:block;margin-bottom:4px;">Nombre:</label>
@@ -730,7 +731,7 @@ export function renderCatalogo() {
                 <span style="font-size:0.7em;color:var(--gray-500);">${count} personaje${count!==1?'s':''}</span>
                 ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
             </div>
-            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${renderMarkup(desc)}</div>` : ''}
+            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.5;max-height:2.8em;overflow:hidden;">${renderMarkup(desc)}</div>` : ''}
         </div>`;
     }).join('');
 
