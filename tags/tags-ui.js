@@ -667,12 +667,19 @@ export function renderCatalogo() {
     });
 
     let entradas = Object.entries(tagMapa)
-        .map(([tag, info]) => ({
-            tag, count: info.count,
-            desc: descDe(tag),
-            medallas: medallasDe(tag),
-            baneado: catalogoTags.find(t => ('#'+t.nombre).toLowerCase()===tag.toLowerCase())?.baneado || false,
-        }))
+        .map(([tag, info]) => {
+            const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+            const catEntry = catalogoTags.find(t => {
+                const n = t.nombre.startsWith('#') ? t.nombre.slice(1) : t.nombre;
+                return n.toLowerCase() === tagKey.toLowerCase();
+            });
+            return {
+                tag, count: info.count,
+                desc: catEntry?.descripcion || '',
+                medallas: medallasDe(tag),
+                baneado: catEntry?.baneado || false,
+            };
+        })
         .filter(e => !e.baneado)
         .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
 
@@ -711,7 +718,7 @@ export function renderCatalogo() {
             </div>` : '';
 
         return `
-        <div data-cat-card="${_esc(tag)}" data-cat-desc="${_esc(descDe(tag))}"
+        <div data-cat-card="${_esc(tag)}" data-cat-desc="${_esc(desc)}"
             onclick="if(window._catMultiActivo){var cb=this.querySelector('input[type=checkbox]');if(cb){cb.checked=!cb.checked;window._catToggleCheck(cb.dataset.tag,cb.checked);}}else{window._tagsVerDetalle('${tag.replace(/'/g,"\\'")}')}"
             style="background:white;border:1.5px solid var(--gray-200);border-radius:var(--radius);
                    padding:12px;cursor:pointer;transition:border-color 0.15s,transform 0.15s;position:relative;"
