@@ -726,12 +726,15 @@ export function renderCatalogo() {
                 ${tagsState.esAdmin ? `var a=this.querySelector('.cat-card-actions');if(a&&!window._catMultiActivo)a.style.display='none';` : ''}
             ">
             ${adminBtns}
-            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:2px;">${tag}</div>
-            <div style="display:flex;align-items:center;gap:5px;margin-bottom:${desc?'5px':'0'};">
+            <div style="font-weight:700;color:var(--blue);font-size:0.88em;margin-bottom:4px;">${tag}</div>
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:${desc?'6px':'0'};">
                 <span style="font-size:0.7em;color:var(--gray-500);">${count} personaje${count!==1?'s':''}</span>
                 ${medallas.length ? `<span style="font-size:0.7em;">· 🏅${medallas.length}</span>` : ''}
             </div>
-            ${desc ? `<div style="font-size:0.76em;color:var(--gray-700);line-height:1.5;max-height:2.8em;overflow:hidden;">${renderMarkup(desc)}</div>` : ''}
+            ${desc
+                ? `<div style="font-size:0.75em;color:var(--gray-700);line-height:1.5;overflow:hidden;max-height:4.5em;border-top:1px solid var(--gray-100);padding-top:5px;margin-top:2px;">${renderMarkup(desc)}</div>`
+                : `<div style="font-size:0.72em;color:var(--gray-400);font-style:italic;">Sin descripción.</div>`
+            }
         </div>`;
     }).join('');
 
