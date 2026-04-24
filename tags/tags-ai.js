@@ -9,7 +9,7 @@ import { supabase } from '../bnh-auth.js';
 // ── Reglas de markup ────────────────────────────────────────────────────────
 const MARKUP_RULES = `
 SISTEMA DE MARCADO — REGLAS ABSOLUTAS para las descripciones:
-- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas, guion bajo entre palabras).
+- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas). CRITICO: si el OP menciona algun personaje por nombre en el contexto (ej: "Fufu", "All Might", "Jobberina"), DEBES marcarlo con @Nombre@ usando guion bajo si tiene espacios. Ejemplo: "Fufu" -> @Fufu@, "All Might" -> @All_Might@.
 - Tags/Quirks: SIEMPRE #NombreExacto (hashtag, sin espacios, guion bajo para separar palabras).
   Correctos: #Powercore, #Algaravia, #Eldritch_Proyection
   Incorrectos: #Quirk_Powercore, Powercore, quirk Powercore
@@ -257,10 +257,11 @@ INSTRUCCIONES:
 - Devuelve SOLO un objeto JSON valido, sin texto adicional ni bloques markdown.
 - Formato exacto: { "#NombreTag": "descripcion", ... }
 - Claves = nombres exactos de los tags tal como aparecen abajo (con #).
-- Descripciones en espanol, concisas, usando el sistema de marcado.
-- Si hay descripcion actual, puedes mejorarla.
+- Descripciones en espanol, con un tono narrativo y fluido, como si fueran entradas de un manual de rol. Evita sonar tecnico o frio; prefiere frases naturales y evocadoras.
+- Si el OP menciona personajes por nombre en el contexto adicional, SIEMPRE marcalos con @Nombre@ en la descripcion.
+- Si hay descripcion actual, puedes mejorarla manteniendo el mismo tono narrativo.
 
-${promptExtra ? `CONTEXTO DEL ADMINISTRADOR:\n${promptExtra}\n` : ''}
+${promptExtra ? `CONTEXTO DEL ADMINISTRADOR (IMPORTANTE: extrae nombres de personajes de aqui y marcalos con @Nombre@):\n${promptExtra}\n` : ''}
 
 TAGS A DESCRIBIR:
 ${tagsInfo}`;
