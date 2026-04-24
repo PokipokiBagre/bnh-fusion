@@ -8,14 +8,19 @@ import { supabase } from '../bnh-auth.js';
 
 // ── Reglas de markup ────────────────────────────────────────────────────────
 const MARKUP_RULES = `
-SISTEMA DE MARCADO — REGLAS ABSOLUTAS para las descripciones:
-- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas). CRITICO: si el OP menciona algun personaje por nombre en el contexto (ej: "Fufu", "All Might", "Jobberina"), DEBES marcarlo con @Nombre@ usando guion bajo si tiene espacios. Ejemplo: "Fufu" -> @Fufu@, "All Might" -> @All_Might@.
-- Tags/Quirks: SIEMPRE #NombreExacto (hashtag, sin espacios, guion bajo para separar palabras).
-  Correctos: #Powercore, #Algaravia, #Eldritch_Proyection
-  Incorrectos: #Quirk_Powercore, Powercore, quirk Powercore
-- Medallas/Tecnicas: SIEMPRE !Nombre de Medalla! (signos de exclamacion simples, NO exclamacion invertida).
-  Correcto: !Golpe Orbital!   Incorrecto: ¡Golpe Orbital!
-- El Quirk de un personaje ES un #Tag. Si el Quirk es "Powercore" -> #Powercore. NUNCA "Quirk #Powercore".
+SISTEMA DE MARCADO — REGLAS ABSOLUTAS:
+
+PERSONAJES -> @Nombre@ con arrobas.
+  CRITICO: copia el nombre EXACTAMENTE como lo escribio el OP, sin traducir, sin añadir palabras, sin guiones bajos extras.
+  Si el OP escribio "Kevan" -> @Kevan@. Si escribio "Fufu" -> @Fufu@. Si escribio "All Tight" -> @All Tight@. Si escribio "Doña Manitas" -> @Doña Manitas@.
+  PROHIBIDO inventar apodos, descripciones o sufijos. NUNCA: @Kevan_El_Bailarin@, @Fufu_El_Inmaduro@.
+  Los nombres de personajes pueden tener espacios, tildes y caracteres especiales — conservalos tal cual.
+
+TAGS -> #NombreExacto sin espacios, guion bajo para separar palabras.
+  Correcto: #Powercore, #Eldritch_Proyection. Incorrecto: Powercore, #Quirk_Powercore.
+
+MEDALLAS -> !Nombre de Medalla! con signos de exclamacion simples.
+  Pueden tener espacios, tildes y caracteres especiales. Correcto: !Fuerza Bruta!, !Algaravia!. Incorrecto: ¡Golpe Orbital!
 `.trim();
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -257,11 +262,12 @@ INSTRUCCIONES:
 - Devuelve SOLO un objeto JSON valido, sin texto adicional ni bloques markdown.
 - Formato exacto: { "#NombreTag": "descripcion", ... }
 - Claves = nombres exactos de los tags tal como aparecen abajo (con #).
-- Descripciones en espanol, con un tono narrativo y fluido, como si fueran entradas de un manual de rol. Evita sonar tecnico o frio; prefiere frases naturales y evocadoras.
-- Si el OP menciona personajes por nombre en el contexto adicional, SIEMPRE marcalos con @Nombre@ en la descripcion.
-- Si hay descripcion actual, puedes mejorarla manteniendo el mismo tono narrativo.
+- Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol escrita por alguien que conoce el universo. No es un manual tecnico; puede ser vago, sugerente o incluso un poco ironico si el tag lo pide.
+- Largo ideal: 1 oracion generosa o 2 cortas. Nada de listas ni bullet points.
+- Si hay descripcion actual, puedes reescribirla con mejor tono sin cambiar el significado.
+- NOMBRES DE PERSONAJE: si el OP menciona un nombre en el contexto, usalo EXACTAMENTE como fue escrito, solo envuelto en @arrobas@. No añadas nada al nombre.
 
-${promptExtra ? `CONTEXTO DEL ADMINISTRADOR (IMPORTANTE: extrae nombres de personajes de aqui y marcalos con @Nombre@):\n${promptExtra}\n` : ''}
+${promptExtra ? `CONTEXTO DEL OP (extrae nombres de personajes tal cual y marcalos con @arrobas@, sin modificarlos):\n${promptExtra}\n` : ''}
 
 TAGS A DESCRIBIR:
 ${tagsInfo}`;
