@@ -261,12 +261,19 @@ INSTRUCCIONES:
 - Devuelve SOLO un objeto JSON valido, sin texto adicional ni bloques markdown.
 - Formato exacto: { "#NombreTag": "descripcion", ... }
 - Claves = nombres exactos de los tags tal como aparecen abajo (con #).
-- Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol escrita por alguien que conoce el universo. No es un manual tecnico; puede ser vago, sugerente o incluso un poco ironico si el tag lo pide.
-- LONGITUD — regla estricta en dos casos:
-    · Si la descripcion NO menciona ningun personaje con @arrobas@: maximo UNA oracion corta y directa. Sin subordinadas largas, sin listas. Ejemplos de lo que se busca: "Implica afinidad con maquinaria y tecnologia, creacion y mejora de dispositivos." / "Caracteriza a quienes compensan la falta de intelecto con suerte inverosimil y poderes ilogicos que funcionan."
-    · Si la descripcion SI menciona uno o mas personajes con @arrobas@: puedes extenderte hasta DOS oraciones para incluir al personaje y su relacion con el tag. No mas.
-- NOMBRES DE PERSONAJE: si el OP menciona un nombre en el contexto, usalo EXACTAMENTE como fue escrito, solo envuelto en @arrobas@. No añadas nada al nombre.
-- Si hay descripcion actual, puedes reescribirla respetando estas reglas de longitud.
+- Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol escrita por alguien que conoce el universo. No es un manual tecnico; puede ser vago, sugerente o incluso un poco ironico si el tag lo pide. 
+- LONGITUD — regla estricta en dos casos:     
+· Si la descripcion NO menciona ningun personaje con @arrobas@: maximo UNA oracion corta y directa. Sin subordinadas largas, sin listas. Ejemplos de lo que se busca: "Implica afinidad con maquinaria y tecnologia, creacion y mejora de dispositivos." / "Caracteriza a quienes compensan la falta de intelecto con suerte inverosimil y poderes ilogicos que funcionan."     
+· Si la descripcion SI menciona uno o mas personajes con @arrobas@: puedes extenderte hasta DOS oraciones para incluir al personaje y su relacion con el tag. No mas. 
+- NOMBRES DE PERSONAJE: si el OP menciona un nombre en el contexto, usalo EXACTAMENTE como fue escrito, solo envuelto en @arrobas@. No añadas nada al nombre. - Si hay descripcion actual, puedes reescribirla respetando estas reglas de longitud. 
+- POSICION DE TAGS REFERENCIADOS (#OtroTag) — regla de variedad obligatoria:     
+· NO coloques siempre el #Tag al final de la oracion. Eso suena formulaico.     
+· Variedad de estructuras permitidas (usa distintas para distintos tags del mismo lote):         
+· Al inicio: "#Eldritch y #Conceptual moldean a quienes..."         
+· En el medio: "Habilidades que desafian la comprension, a veces rozando lo #Eldritch, sin patron claro."         
+· Varios seguidos: "...con rasgos #Bestial, #Anatomico y #Mutacion entrelazados."         
+· Al final (solo ocasionalmente, no como regla): "...un poder que escapa a la logica #Catastrofico."     
+· Si el OP pide añadir o quitar tags de descripciones, distribuyelos de forma IRREGULAR a lo largo del lote, no siempre en la misma posicion.
 
 ${promptExtra ? `CONTEXTO DEL OP (extrae nombres de personajes tal cual y marcalos con @arrobas@, sin modificarlos):\n${promptExtra}\n` : ''}
 
