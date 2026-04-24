@@ -1,70 +1,20 @@
 // ============================================================
 // tags/tags-ai.js
 // ============================================================
-// Integración de IA para generar descripciones de tags en lote.
-// Se engancha al catálogo añadiendo un botón "🤖 IA" en la toolbar
-// y expone window._tagsAI como punto de entrada.
-//
-// Dependencias:
-//   - tags-state.js  → catalogoTags, grupos, tagsState
-//   - tags-data.js   → guardarDescripcionTag, cargarTodo
-//   - tags-ui.js     → renderCatalogo, toast
-//   - bnh-auth.js    → supabase (cliente ya inicializado)
-// ============================================================
-
 import { catalogoTags, grupos, tagsState } from './tags-state.js';
 import { guardarDescripcionTag, cargarTodo } from './tags-data.js';
 import { renderCatalogo, toast } from './tags-ui.js';
 import { supabase } from '../bnh-auth.js';
 
-// ── Derivar URL y anon-key desde el cliente Supabase ya inicializado ────────
-// El cliente JS de Supabase guarda internamente la URL y la key.
-// Probamos varias rutas para cubrir v1 y v2 de @supabase/supabase-js.
-function _resolverConfig() {
-    // v2 – propiedades directas (lo más común en proyectos actuales)
-    if (supabase?.supabaseUrl) {
-        return {
-            url: supabase.supabaseUrl.replace(/\/$/, ''),
-            key: supabase.supabaseKey || supabase.key || '',
-        };
-    }
-    // v2 alternativo
-    if (supabase?.url) {
-        return {
-            url: supabase.url.replace(/\/$/, ''),
-            key: supabase.key || supabase.anonKey || '',
-        };
-    }
-    // Fallback: extraer desde headers internos del cliente REST
-    try {
-        const headers = supabase?.rest?.headers || supabase?.realtime?.params || {};
-        const key     = headers['apikey'] || headers['Authorization']?.replace('Bearer ', '') || '';
-        const restUrl = supabase?.rest?.url || '';
-        if (restUrl) {
-            const base = restUrl
-                .replace(/\/(rest|realtime|auth|storage|functions)(\/.*)?$/, '')
-                .replace(/\/$/, '');
-            return { url: base, key };
-        }
-    } catch (_) { /* ignorar */ }
-
-    console.error('[tags-ai] No se pudo obtener la URL de Supabase. Revisa bnh-auth.js.');
-    return { url: '', key: '' };
-}
-
-const _sbConfig   = _resolverConfig();
-const EDGE_FN_URL = _sbConfig.url ? `${_sbConfig.url}/functions/v1/gemini-proxy` : '';
-const ANON_KEY    = _sbConfig.key;
-
 // ── Reglas de markup ────────────────────────────────────────────────────────
 const MARKUP_RULES = `
 SISTEMA DE MARCADO — REGLAS ABSOLUTAS para las descripciones:
-- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas, guión bajo entre palabras).
-- Tags/Quirks: SIEMPRE #NombreExacto (hashtag, sin espacios, guión bajo para separar palabras).
-  Ejemplos CORRECTOS: #Powercore, #Algaravía, #Eldritch_Proyection
-  Ejemplos INCORRECTOS: #Quirk_Powercore, Powercore, quirk Powercore
-- Medallas/Técnicas: SIEMPRE !Nombre de Medalla! (signos de exclamación simples, NO ¡!).
-  Ejemplo CORRECTO: !Golpe Orbital!   Ejemplo INCORRECTO: ¡Golpe Orbital!
+- Personajes: SIEMPRE @Nombre_Del_Personaje@ (con arrobas, guion bajo entre palabras).
+- Tags/Quirks: SIEMPRE #NombreExacto (hashtag, sin espacios, guion bajo para separar palabras).
+  Correctos: #Powercore, #Algaravia, #Eldritch_Proyection
+  Incorrectos: #Quirk_Powercore, Powercore, quirk Powercore
+- Medallas/Tecnicas: SIEMPRE !Nombre de Medalla! (signos de exclamacion simples, NO exclamacion invertida).
+  Correcto: !Golpe Orbital!   Incorrecto: ¡Golpe Orbital!
 - El Quirk de un personaje ES un #Tag. Si el Quirk es "Powercore" -> #Powercore. NUNCA "Quirk #Powercore".
 `.trim();
 
@@ -146,23 +96,21 @@ function _renderPanel() {
                 display:flex;justify-content:space-between;align-items:center;
             ">
                 <div>
-                    <div style="font-family:'Cinzel',serif;font-size:1.1em;font-weight:700;">&#129302; IA &#8212; Generador de Descripciones</div>
+                    <div style="font-family:'Cinzel',serif;font-size:1.1em;font-weight:700;">IA &#8212; Generador de Descripciones</div>
                     <div style="font-size:0.75em;color:rgba(255,255,255,0.6);margin-top:2px;">
                         Selecciona tags, escribe contexto y genera descripciones en lote.
                     </div>
                 </div>
                 <button onclick="window._tagsAI.close()" style="
                     background:rgba(255,255,255,0.15);border:none;color:white;
-                    border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1.1em;line-height:1;">x</button>
+                    border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1.1em;line-height:1;">&#x2715;</button>
             </div>
 
             <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
 
-                <!-- Buscador interno -->
                 <input id="ai-tag-search" class="inp" placeholder="Filtrar tags..."
                     oninput="window._tagsAI.filtrar(this.value)" style="font-size:0.85em;">
 
-                <!-- Lista de tags -->
                 <div style="border:1.5px solid var(--gray-200);border-radius:var(--radius,8px);max-height:260px;overflow-y:auto;">
                     <div style="
                         display:flex;align-items:center;justify-content:space-between;
@@ -182,17 +130,15 @@ function _renderPanel() {
                     <div id="ai-tags-list">${tagRows}</div>
                 </div>
 
-                <!-- Prompt extra -->
                 <div>
                     <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:5px;">
                         Contexto adicional / instrucciones para la IA
                     </label>
                     <textarea id="ai-prompt-extra" class="inp" rows="3" style="
                         font-family:monospace;font-size:0.84em;resize:vertical;width:100%;
-                    " placeholder="Ej: #Marzanna es un Quirk de congelacion. #Tightlandia es el parque de @All_Tight@. Se conciso."></textarea>
+                    " placeholder="Ej: #Marzanna es un Quirk de congelacion. #Tightlandia es el parque de @All_Tight@."></textarea>
                 </div>
 
-                <!-- Acciones -->
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                     <button id="ai-gen-btn" class="btn btn-green" onclick="window._tagsAI.generar()" style="min-width:180px;">
                         Generar descripciones
@@ -201,7 +147,6 @@ function _renderPanel() {
                     <span id="ai-status" style="font-size:0.8em;color:var(--gray-500);"></span>
                 </div>
 
-                <!-- Resultados -->
                 <div id="ai-results-area" style="display:none;flex-direction:column;gap:10px;"></div>
 
             </div>
@@ -270,8 +215,7 @@ window._tagsAI = {
         document.querySelectorAll('#ai-tags-list .ai-tag-chk').forEach(chk => {
             const row = chk.closest('.ai-tag-row');
             if (row && row.style.display === 'none') return;
-            const tagKey    = chk.dataset.key || '';
-            const tieneDesc = !!_descActual(tagKey);
+            const tieneDesc = !!_descActual(chk.dataset.key || '');
             chk.checked     = !tieneDesc;
             const tag = chk.dataset.tag;
             if (!tag) return;
@@ -284,11 +228,6 @@ window._tagsAI = {
     async generar() {
         if (_selectedTags.size === 0) {
             toast('Selecciona al menos un tag.', 'error');
-            return;
-        }
-
-        if (!EDGE_FN_URL) {
-            toast('No se pudo determinar la URL de la Edge Function. Revisa la consola.', 'error');
             return;
         }
 
@@ -331,39 +270,25 @@ ${tagsInfo}`;
         try {
             if (status) status.textContent = 'Esperando respuesta de Gemini...';
 
-            const response = await fetch(EDGE_FN_URL, {
-                method:  'POST',
-                headers: {
-                    'Content-Type':  'application/json',
-                    'Authorization': `Bearer ${ANON_KEY}`,
-                    'apikey':        ANON_KEY,
-                },
-                body: JSON.stringify({ prompt, contextoAdicional }),
+            // ── Usamos supabase.functions.invoke para evitar problemas de CORS.
+            // El cliente de Supabase ya incluye los headers correctos (apikey,
+            // Authorization) y usa el mismo origen que el resto del proyecto.
+            const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+                body: { prompt, contextoAdicional },
             });
 
-            // Detectar HTML antes de parsear (indica 404, CORS o despliegue fallido)
-            const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                const body = await response.text();
-                throw new Error(
-                    `HTTP ${response.status}. La Edge Function devolvio "${contentType}" en lugar de JSON.\n` +
-                    `Verifica que "gemini-proxy" este desplegada en Supabase.\n` +
-                    `Inicio de la respuesta: ${body.slice(0, 150)}`
-                );
-            }
-
-            const data = await response.json();
-
-            if (data.error) throw new Error(data.error);
+            if (error) throw new Error(error.message || JSON.stringify(error));
+            if (!data)           throw new Error('La funcion no devolvio datos.');
+            if (data.error)      throw new Error(data.error);
             if (!data.resultado) throw new Error('Campo "resultado" vacio en la respuesta.');
 
-            // Limpiar posibles bloques markdown y parsear
+            // Limpiar posibles bloques markdown y parsear el JSON
             let parsed;
             try {
                 const clean = data.resultado
                     .replace(/^```json\s*/i, '')
-                    .replace(/^```\s*/,     '')
-                    .replace(/\s*```$/,     '')
+                    .replace(/^```\s*/,      '')
+                    .replace(/\s*```$/,      '')
                     .trim();
                 parsed = JSON.parse(clean);
             } catch (_) {
@@ -372,7 +297,7 @@ ${tagsInfo}`;
 
             if (status) status.textContent = `${Object.keys(parsed).length} descripciones generadas`;
 
-            const tagsKeys   = Object.keys(parsed);
+            const tagsKeys    = Object.keys(parsed);
             const resultCards = tagsKeys.map(tag => {
                 const tagKey    = tag.startsWith('#') ? tag.slice(1) : tag;
                 const safeKey   = _esc(tagKey);
@@ -391,7 +316,7 @@ ${tagsInfo}`;
                                 style="padding:4px 10px;font-size:0.78em;">Guardar</button>
                             <button class="btn btn-sm btn-outline"
                                 onclick="document.getElementById('ai-res-card-${safeKey}').style.opacity='0.35'"
-                                style="padding:4px 10px;font-size:0.78em;" title="Ignorar">X</button>
+                                style="padding:4px 10px;font-size:0.78em;" title="Ignorar">&#x2715;</button>
                         </div>
                     </div>
                     ${descAntes ? `
@@ -404,9 +329,6 @@ ${tagsInfo}`;
                 </div>`;
             }).join('');
 
-            // Pasar las claves como JSON string seguro para el onclick
-            const tagsKeysJson = JSON.stringify(tagsKeys);
-
             if (resultsArea) {
                 resultsArea.style.display = 'flex';
                 resultsArea.innerHTML = `
@@ -418,7 +340,6 @@ ${tagsInfo}`;
                     </div>
                     <div style="display:flex;flex-direction:column;gap:8px;">${resultCards}</div>`;
 
-                // Asignar el handler por JS para evitar problemas de escape en el onclick HTML
                 document.getElementById('ai-guardar-todos-btn')
                     .addEventListener('click', () => window._tagsAI.guardarTodos(tagsKeys));
             }
@@ -426,23 +347,12 @@ ${tagsInfo}`;
         } catch (err) {
             if (status) status.textContent = '';
             const errMsg = err.message || String(err);
-
             if (resultsArea) {
                 resultsArea.style.display = 'flex';
                 resultsArea.innerHTML = `
                     <div style="background:#fdecea;border:1.5px solid #e74c3c;border-radius:8px;padding:14px;font-size:0.82em;color:#c0392b;">
                         <b>Error al conectar con la IA:</b><br>
                         <pre style="margin:8px 0 0;white-space:pre-wrap;font-family:monospace;font-size:0.9em;">${_esc(errMsg)}</pre>
-                        <details style="margin-top:10px;">
-                            <summary style="cursor:pointer;font-weight:600;">Diagnostico</summary>
-                            <ul style="margin:6px 0 0 16px;line-height:1.9;font-size:0.95em;">
-                                <li>URL detectada: <code>${_esc(EDGE_FN_URL || '(vacia)')}</code></li>
-                                <li>Anon key: <code>${ANON_KEY ? 'OK — ' + ANON_KEY.slice(0, 14) + '...' : 'NO DETECTADA'}</code></li>
-                                <li>Verifica que la funcion <code>gemini-proxy</code> este desplegada en Supabase.</li>
-                                <li>Si la URL esta vacia, expone <code>supabaseUrl</code> y <code>supabaseKey</code>
-                                    en el objeto exportado por <code>bnh-auth.js</code>.</li>
-                            </ul>
-                        </details>
                     </div>`;
             }
             console.error('[tags-ai]', err);
