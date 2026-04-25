@@ -95,14 +95,13 @@ export function renderMarkup(texto) {
             const efecto = tok.efecto;
             const esAlto = rango.includes('+');
             const esBajo = rango.endsWith('-') || /^\d{1,2}-$/.test(rango);
-            const bg     = esAlto ? '#1a3d25' : esBajo ? '#4a1010' : '#3d3000';
-            const bgChip = esAlto ? '#1e6b35' : esBajo ? '#7b1a1a' : '#6b5200';
-            const color  = esAlto ? '#7ef09a'  : esBajo ? '#f09a9a'  : '#f0d97a';
-            const chipHtml = `<span style="display:inline-flex;align-items:center;gap:3px;background:${bgChip};color:${color};font-weight:800;font-size:0.82em;padding:1px 8px;border-radius:10px;font-family:monospace;white-space:nowrap;">🎲 ${escTxt(rango)}</span>`;
+            const chipBg     = esAlto ? 'var(--green-pale)'  : esBajo ? 'var(--red-pale)'   : 'var(--orange-pale)';
+            const chipColor  = esAlto ? 'var(--green-dark)'  : esBajo ? 'var(--red)'         : 'var(--orange)';
+            const chipBorder = esAlto ? 'var(--green-light)' : esBajo ? 'var(--red)'         : 'var(--orange)';
+            const chipHtml = `<span style="display:inline-flex;align-items:center;gap:3px;background:${chipBg};color:${chipColor};border:1.5px solid ${chipBorder};font-weight:800;font-size:0.78em;padding:1px 7px;border-radius:8px;font-family:monospace;white-space:nowrap;vertical-align:middle;">🎲 ${escTxt(rango)}</span>`;
             if (!efecto) return chipHtml;
-            // El efecto puede tener sub-markup (@, #, !) — lo procesamos recursivamente
             const efectoHtml = renderMarkup(efecto);
-            return `<span style="display:inline-flex;align-items:baseline;gap:6px;background:${bg};border:1px solid ${bgChip};padding:3px 10px;border-radius:8px;margin:1px 0;flex-wrap:wrap;">${chipHtml}<span style="color:#e8e8e8;font-size:0.88em;line-height:1.5;">${efectoHtml}</span></span>`;
+            return `<span style="display:inline-flex;align-items:baseline;gap:5px;flex-wrap:wrap;vertical-align:middle;">${chipHtml}<span style="font-size:0.85em;color:var(--gray-700);line-height:1.5;">${efectoHtml}</span></span>`;
         }
         return '';
     }).join('');
