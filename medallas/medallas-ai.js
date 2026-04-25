@@ -39,6 +39,12 @@ MARKUP:
   #Tag → solo tags de la lista provista. NUNCA inventar tags.
   !NombreMedalla! → nombre exacto de una medalla existente. NUNCA !Activa!, !Pasiva!, !Definitiva!
   @Nombre_Personaje@ → SOLO para apuntar a un personaje específico. Para "aliados" o "rival" usa lenguaje natural.
+  %rango: efecto% → Factor dado d100. Encapsula un resultado condicional por tirada.
+    Ejemplos: %90+: Hace 3 PVs de daño adicional y aumenta 5 PT al tag #Fuerza_Bruta.%
+              %20-: Autoquita 10 PVs al usuario.%
+              %50-89: Sin efecto adicional.%
+    Úsalo cuando el efecto tenga componente de azar. El rango puede ser: N+ (≥N), N- (≤N), N-M (entre N y M).
+    El efecto dentro del bloque puede contener @Persona@, #Tag, !Medalla! normalmente.
 `.trim();
 
 // ── Helpers de datos ─────────────────────────────────────────

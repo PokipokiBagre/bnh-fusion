@@ -1172,8 +1172,8 @@ export function renderProponerMedalla() {
                     </div>
 
                     <div>
-                        <label class="form-label">Efecto base <span style="font-size:0.75em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla!)</span></label>
-                        <textarea class="inp" id="prop-efecto" rows="3" placeholder="Describe el efecto… @Personaje@ #Tag !Medalla!"
+                        <label class="form-label">Efecto base <span style="font-size:0.75em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla! %90+: efecto%)</span></label>
+                        <textarea class="inp" id="prop-efecto" rows="3" placeholder="Describe el efecto… %90+: daño adicional.% %20-: autoquita 10 PVs.%"
                             onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
                     </div>
 
@@ -1264,8 +1264,8 @@ export function renderFormMedalla(m = null) {
                         </div>
                     </div>
                     <div>
-                        <label class="form-label">Efecto base <span style="font-size:0.75em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla! — Tab para autocompletar)</span></label>
-                        <textarea class="inp" id="fm-efecto" rows="3" placeholder="Describe el efecto principal… @Personaje@ #Tag !Medalla!"
+                        <label class="form-label">Efecto base <span style="font-size:0.75em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla! %90+: efecto% — Tab para autocompletar)</span></label>
+                        <textarea class="inp" id="fm-efecto" rows="3" placeholder="Describe el efecto principal… %90+: daño adicional.% %20-: autoquita 10 PVs.%"
                             onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${_esc(m?.efecto_desc||'')}</textarea>
                     </div>
                     <div>
@@ -1345,7 +1345,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
             </div>
 
             <div>
-                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base <span style="font-weight:400;color:#aaa;">(@ # !)</span></label>
+                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base <span style="font-weight:400;color:#aaa;">(@ # ! %dado%)</span></label>
                 <textarea class="inp" id="mf-efecto-${fid}" rows="2" placeholder="Describe el efecto…" style="font-size:0.83em;" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
             </div>
             <div>
@@ -1462,7 +1462,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                     <input class="inp" type="number" min="0" placeholder="PT" style="width:60px;font-size:0.82em;" id="mf-cpts-${fid}-${c}">
                     <button class="btn btn-red btn-sm" onclick="document.getElementById('${rowId}').remove()">✕</button>
                 </div>
-                <textarea class="inp" rows="1" placeholder="Efecto... (@ # !)" style="font-size:0.82em;margin-top:4px;" id="mf-cefecto-${fid}-${c}" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
+                <textarea class="inp" rows="1" placeholder="Efecto… @Personaje@ #Tag !Medalla! %90+: efecto%" style="font-size:0.82em;margin-top:4px;" id="mf-cefecto-${fid}-${c}" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
             </div>`);
         requestAnimationFrame(() => {
             const inp = document.getElementById(`mf-ctag-${fid}-${c}`);
@@ -1492,7 +1492,7 @@ export function _htmlCondRow(c = {}, idx) {
                 value="${c.pts_minimos||0}" id="cond-pts-${idx}">
             <button class="btn btn-red btn-sm" onclick="document.getElementById('cond-row-${idx}').remove()">✕</button>
         </div>
-        <textarea class="inp" rows="2" placeholder="Efecto si se cumple la condición… (@Personaje@ #Tag !Medalla!)"
+        <textarea class="inp" rows="2" placeholder="Efecto si se cumple la condición… (@Personaje@ #Tag !Medalla! %90+: efecto%)"
             id="cond-efecto-${idx}" style="margin-top:6px;"
             onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${_esc(c.efecto||'')}</textarea>
     </div>`;
