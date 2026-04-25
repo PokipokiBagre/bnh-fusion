@@ -11,56 +11,33 @@ const _esc = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
 const GUIA_MEDALLAS = `
 ENGINE DE MEDALLAS — BNH-FUSION v5.0
 
-RECURSOS MANIPULABLES (lo que puede alterar una medalla):
+RECURSOS MANIPULABLES:
   POT / AGI / CTL — Stats del personaje o del rival
   PV              — Puntos de vida
   Cambios/t       — Acciones por turno
-  #Tag [PT]       — Reducir a 0, restar, duplicar o escalar desde los PT de un tag
-  !Medalla!       — Desequipar o bloquear re-equipamiento de una medalla específica
+  #Tag [PT]       — Reducir, escalar o duplicar desde los PT de un tag
+  !NombreMedalla! — Desequipar o bloquear re-equipamiento de una medalla ESPECÍFICA
 
-TIPOS Y CTL (orientativo; puede exceder si el efecto lo justifica):
+TIPOS Y CTL:
   PASIVA     — Constante o disparada automáticamente. CTL típico: 1–7.
   ACTIVA     — Requiere acción del jugador. CTL típico: 3–12.
-  DEFINITIVA — Rompe la lógica del combate o ejecuta estado especial. CTL típico: 8–16.
+  DEFINITIVA — Rompe la lógica del combate. CTL típico: 8–16.
 
-PT REQUISITOS (escala orientativa):
-  20 PT  → Básico
-  40 PT  → Moderado
-  80 PT  → Avanzado
-  160 PT → Maestro
-  (Puede usar valores intermedios o superiores: 30, 50, 100, 150...)
+ESCALA DE STATS (calibra el impacto real):
+  Tier 1: POT ~13, AGI ~13, CTL ~14. Tier 2: suma ~60. Tier 3: suma ~80. Tier 4: suma ~100.
+  -1 stat = irrelevante. -3 = duele en tier 1. -8 = severo. Calibra acorde.
 
-REGLAS DE NOMENCLATURA:
-  - Nombres simples, directos y evocadores: "Engullir", "Zona muerta", "Colapso"
-  - PROHIBIDO: nombres verbosos como "Aclimatación temporal de la Agonía"
-  - PROHIBIDO: nombres técnicos como "Disminuir la oxitocina corporal"
-  - Máximo 4 palabras. El nombre sugiere, no explica.
+PT REQUISITOS: 20=básico, 40=moderado, 80=avanzado, 160=maestro.
 
-REGLAS DE EFECTOS (crítico):
-  - El efecto describe SOLO la mecánica. Cero contexto, cero narrativa, cero justificación.
-  - Para describir cambios de stats usa siempre lenguaje natural directo:
-      Aumenta/Disminuye +N / -N    → cambio fijo   (ej: "Aumenta POT +8 durante 2 turnos.")
-      Eleva/Reduce ^X              → potencia       (ej: "Eleva AGI ^1.5.")
-      Multiplica/Divide xN         → multiplicación (ej: "Multiplica CTL x2.")
-      Escala con PT                → (ej: "Disminuye PV rival -(PT de #Tag / 10).")
-  - NUNCA uses "Delta X = Y" ni notación técnica de fórmulas.
-  - CORRECTO: "Invalida !Óbito! del rival. Disminuye CTL rival -3."
-  - CORRECTO: "Aumenta POT +8 durante 2 turnos. Si POT > 25: Disminuye PV rival -10."
-  - INCORRECTO: "Delta POT = +8 durante 2 turnos. Delta PV rival = -10."
-  - Para efectos por turno: "Inicio de turno: Aumenta AGI +2."
-  - Para escala con PT: "Disminuye PV rival -(PT de #Tag / 10)."
+EFECTOS — usa lenguaje natural directo:
+  "Aumenta POT +8." / "Disminuye CTL rival -3." / "Eleva AGI ^1.5." / "Multiplica CTL x2."
+  "Disminuye PV rival -(PT de #Tag / 10)." / "Inicio de turno: Aumenta AGI +2."
+  NUNCA: "Delta X = Y" ni notación técnica.
 
-MARKUP OBLIGATORIO:
-  @Nombre_Personaje@ — Personas específicas (guion_bajo entre palabras)
-  #NombreTag         — Tags exactos del catálogo (solo los de la lista provista)
-  !Nombre Medalla!   — Medallas referenciadas por su NOMBRE EXACTO (exclamación simple, NUNCA ¡invertida!)
-  PROHIBIDO: !Activa!, !Pasiva!, !Definitiva! — Estos son TIPOS, no nombres de medalla. Jamás se marcan con !!.
-  CORRECTO: !Golpe Orbital!, !Zona Muerta!, !Colapso!
-  INCORRECTO: !Activa!, ¡Pasiva!, !medalla Activa!
-
-EFECTOS CONDICIONALES (Casilla Dorada — solo si aportan valor estratégico real):
-  Formato: "SI #Tag >= X PT: [efecto adicional]"
-  No inventar; solo si el concepto lo pide o el tag lo sugiere.
+MARKUP:
+  #Tag → solo tags de la lista provista. NUNCA inventar tags.
+  !NombreMedalla! → nombre exacto de una medalla existente. NUNCA !Activa!, !Pasiva!, !Definitiva!
+  @Nombre_Personaje@ → personaje específico.
 `.trim();
 
 // ── 5 medallas aleatorias del catálogo como ejemplos ────────
@@ -530,48 +507,62 @@ FORMATO DE RESPUESTA:
         const nombres    = _getNombres();
         const tagsDisp   = _getTagsDisponibles();
 
+        // Pre-asignar estructura de variedad para cada medalla (shuffle real)
+        const _BASE_SLOTS = [
+            {tipo:'pasiva',     num_reqs:1, tiene_cond:false},
+            {tipo:'activa',     num_reqs:1, tiene_cond:false},
+            {tipo:'activa',     num_reqs:2, tiene_cond:true },
+            {tipo:'definitiva', num_reqs:1, tiene_cond:false},
+        ];
+        // Fisher-Yates shuffle de los slots base
+        const _shuffled = [..._BASE_SLOTS].sort(() => Math.random() - 0.5);
+        // Si N > 4, repetir y re-mezclar
+        const slots = Array.from({length: N}, (_, i) => ({..._shuffled[i % 4]}));
+
+        const slotDesc = slots.map((s, i) => {
+            const condStr = s.tiene_cond
+                ? `"efectos_condicionales": [{"tag": "#TagDeLaLista", "pts_minimos": N, "efecto": "..."}]`
+                : `"efectos_condicionales": []`;
+            const reqsEx = Array.from({length: s.num_reqs}, () => `{"tag": "#TagDeLaLista", "pts_minimos": N}`).join(', ');
+            return `  Medalla ${i+1}: tipo="${s.tipo}", exactamente ${s.num_reqs} requisito(s), condicional=${s.tiene_cond}
+    → "requisitos_base": [${reqsEx}]
+    → ${condStr}`;
+        }).join('\n\n');
+
         const prompt = `
 ${GUIA_MEDALLAS}
 
 ────────────────────────────────────────────
-EJEMPLOS REALES DEL CATÁLOGO (referencia de estilo, escala y profundidad):
-${ejemplos}
+TAGS DISPONIBLES — SOLO usa tags de esta lista exacta:
+${tagsDisp}
+NUNCA uses un tag que no esté aquí. Si el concepto menciona uno que no existe, usa el más parecido.
 
 ────────────────────────────────────────────
 NOMBRES YA EXISTENTES — NO repetir ninguno:
 ${nombres}
 
 ────────────────────────────────────────────
-TAGS DISPONIBLES EN EL CATÁLOGO — SOLO puedes usar tags de esta lista:
-${tagsDisp}
-Si el concepto menciona un tag que no existe aquí, usa el más cercano. NUNCA inventes tags nuevos.
+EJEMPLOS DE ESTILO (solo referencia):
+${ejemplos}
 
 ────────────────────────────────────────────
-CONCEPTO DEL CREADOR (aplica a todas las medallas):
-${concepto || '(sin concepto — crea un set temáticamente coherente)'}
+CONCEPTO DEL CREADOR:
+${concepto || '(sin concepto — crea algo coherente con los tags)'}
 
 ────────────────────────────────────────────
-INSTRUCCIONES FINALES:
-1. Crea exactamente ${N} medallas distintas que formen un SET temáticamente coherente.
-2. Cada medalla debe tener nombre único, rol diferente (activa/pasiva, apoyo/daño, etc.).
-3. No repitas mecánicas: si una sube POT, otra usa PV, otra invalida medallas, etc.
-4. Nombres simples, evocadores, máximo 4 palabras. Sin nombres técnicos ni verbosos.
-5. efecto_base es SOLO mecánica. Sin narrativa ni justificaciones.
-6. TAGS: usa SOLO los tags de la lista provista. NUNCA inventes tags que no estén ahí.
-7. CONDICIONALES: el campo "tag" en efectos_condicionales es OBLIGATORIO y debe ser un tag de la lista. Si no puedes asignar un tag válido, deja "efectos_condicionales": [].
-8. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
+ESTRUCTURA FIJA — Debes respetar esto exactamente para cada medalla:
 
-FORMATO DE RESPUESTA (array de ${N} elementos):
-[
-  {
-    "nombre": "Nombre Simple",
-    "costo_ctl": 5,
-    "efecto_base": "Descripción mecánica directa.",
-    "tipo": "activa",
-    "requisitos_base": [{"tag": "#Tag", "pts_minimos": 40}],
-    "efectos_condicionales": []
-  }
-]
+${slotDesc}
+
+────────────────────────────────────────────
+NOMBRES — LEE ESTO CON ATENCIÓN:
+- Cada medalla necesita un nombre DISTINTO en estilo: una puede ser de 1 palabra ("Chantaje"), otra de 2 ("Legado Oculto"), otra de 1 palabra diferente ("Censura"). NO uses el mismo patrón (adjetivo+sustantivo) para todas.
+- Palabras directas: sustantivos crudos, verbos, conceptos. Evita el patrón "X Y" donde X es adjetivo y Y es sustantivo para más de 1 nombre del set.
+- Prohibido: "Susurro Silente", "Velo de Mentiras", "Carga de Culpa" — demasiado compuestos y líricos.
+- Permitido: "Susurro", "Chantaje", "Traición", "Mentira", "Revelación", "Colapso", "Herida"
+
+Responde ÚNICAMENTE con un array JSON de ${N} objetos. Sin markdown, sin texto extra.
+Formato por objeto: {"nombre":"...","costo_ctl":N,"efecto_base":"...","tipo":"...","requisitos_base":[...],"efectos_condicionales":[...]}
 `.trim();
 
         const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Set de ${N} medallas temáticas.`;
