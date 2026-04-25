@@ -22,6 +22,11 @@ TIPOS Y CTL (orientativo; puede exceder si el efecto lo justifica):
   ACTIVA     — Requiere acción del jugador. CTL típico: 3–12.
   DEFINITIVA — Rompe la lógica del combate o ejecuta estado especial. CTL típico: 8–16.
 
+ESCALA DE STATS (calibra el impacto del efecto según esto):
+  Tier 1: POT ~13, AGI ~13, CTL ~14 (suma ~40)
+  Tier 2: suma ~60 | Tier 3: suma ~80 | Tier 4: suma ~100
+  -1 stat → insignificante. -3 → duele en tier 1. -8 → severo. Calibra acorde.
+
 PT REQUISITOS (escala orientativa):
   20 PT  → Básico
   40 PT  → Moderado
@@ -30,7 +35,8 @@ PT REQUISITOS (escala orientativa):
   (Puede usar valores intermedios o superiores: 30, 50, 100, 150...)
 
 REGLAS DE NOMENCLATURA:
-  - Nombres simples, directos y evocadores: "Engullir", "Zona muerta", "Colapso"
+  - Mezcla nombres de 1 palabra ("Chantaje", "Derrumbe") con nombres de 2 ("Legado Oculto").
+  - PROHIBIDO: patrones repetitivos como Adjetivo+Sustantivo para todos los nombres del set.
   - PROHIBIDO: nombres verbosos como "Aclimatación temporal de la Agonía"
   - PROHIBIDO: nombres técnicos como "Disminuir la oxitocina corporal"
   - Máximo 4 palabras. El nombre sugiere, no explica.
@@ -54,9 +60,10 @@ MARKUP OBLIGATORIO:
   #NombreTag         — Tags exactos del catálogo
   !Nombre Medalla!   — Medallas referenciadas (exclamación simple, NUNCA ¡invertida!)
 
-EFECTOS CONDICIONALES (Casilla Dorada — solo si aportan valor estratégico real):
+EFECTOS CONDICIONALES (excepción, no regla):
   Formato: "SI #Tag >= X PT: [efecto adicional]"
-  No inventar; solo si el concepto lo pide o el tag lo sugiere.
+  Solo para medallas donde realmente aporta valor estratégico. La mayoría no los necesita.
+  El tag del condicional DEBE ser uno de los tags mencionados en el concepto del creador.
 `.trim();
 
 // ── 5 medallas aleatorias del catálogo como ejemplos ────────
@@ -522,6 +529,14 @@ FORMATO DE RESPUESTA:
 ${GUIA_MEDALLAS}
 
 ────────────────────────────────────────────
+ESCALA DE STATS DE REFERENCIA (para calibrar efectos reales):
+  Tier 1 (base):   POT ~13, AGI ~13, CTL ~14 (suma ~40)
+  Tier 2 (medio):  suma de stats ~60
+  Tier 3 (alto):   suma de stats ~80
+  Tier 4 (élite):  suma de stats ~100
+  IMPLICACIÓN: -1 AGI es irrelevante para cualquier tier. -3 CTL sí duele en tier 1. -8 POT es severo. Calibra el impacto según esto.
+
+────────────────────────────────────────────
 EJEMPLOS REALES DEL CATÁLOGO (referencia de estilo, escala y profundidad):
 ${ejemplos}
 
@@ -538,10 +553,12 @@ INSTRUCCIONES FINALES:
 1. Crea exactamente ${N} medallas distintas que formen un SET temáticamente coherente.
 2. Cada medalla debe tener nombre único, rol diferente (activa/pasiva, apoyo/daño, etc.).
 3. No repitas mecánicas: si una sube POT, otra usa PV, otra invalida medallas, etc.
-4. Nombres simples, evocadores, máximo 4 palabras. Sin nombres técnicos ni verbosos.
+4. NOMBRES — VARIEDAD OBLIGATORIA: mezcla nombres simples (1 palabra: "Chantaje", "Derrumbe") con compuestos (2 palabras: "Legado Oculto"). En un set de 4, no más de 2 nombres deben ser compuestos. Prioriza palabras únicas y directas. NUNCA uses el mismo patrón adjetivo+sustantivo para todos.
 5. efecto_base es SOLO mecánica. Sin narrativa ni justificaciones.
-6. Usa los tags que menciona el concepto; si no especifica, inventa tags coherentes.
-7. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
+6. TAGS — USA SOLO los tags mencionados en el concepto del creador. Si el creador no especificó tags suficientes, usa variaciones del tag principal (ej: si dice #Secreto, puedes usar #Secreto como único tag en todos). NUNCA inventes tags que no aparezcan en el concepto.
+7. REQUISITOS — VARIEDAD OBLIGATORIA: en un set de ${N}, mezcla medallas con 0, 1 o 2 requisitos. No todas deben tener el mismo número. Una medalla sin requisitos (0 reqs) es completamente válida.
+8. CONDICIONALES — RAREZA OBLIGATORIA: en un set de ${N}, máximo 1 o 2 medallas deben tener efectos_condicionales. Las demás deben tener el array vacío []. No es un bonus, es una excepción para medallas que realmente lo necesiten.
+9. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
 
 FORMATO DE RESPUESTA (array de ${N} elementos):
 [
