@@ -1373,7 +1373,6 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                 <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:0.75em;"
                     onclick="window._mfAddCond('${fid}')">+ Condicional</button>
             </div>
-            ${renderBloqueIA(fid, 'window._iaGenerarMini')}
             <div id="mf-msg-${fid}" style="font-size:0.75em;color:var(--red);min-height:14px;"></div>
         </div>`;
     }
