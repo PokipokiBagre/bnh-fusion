@@ -13,6 +13,7 @@ import {
 import { initMarkup } from '../bnh-markup.js';
 import { setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { initTags } from '../bnh-tags.js';
+import './medallas-ai.js';
 
 window.onload = async () => {
     const fav = document.getElementById('dynamic-favicon');
