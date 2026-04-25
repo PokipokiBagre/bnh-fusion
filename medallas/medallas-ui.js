@@ -1169,11 +1169,6 @@ export function renderProponerMedalla() {
                     </div>
 
                     <div>
-                        <label class="form-label">Tu nombre (opcional)</label>
-                        <input class="inp" id="prop-autor" placeholder="¿Cómo te llamamos?">
-                    </div>
-
-                    <div>
                         <label class="form-label">Efecto base <span style="font-size:0.75em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla!)</span></label>
                         <textarea class="inp" id="prop-efecto" rows="3" placeholder="Describe el efecto… @Personaje@ #Tag !Medalla!"
                             onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
@@ -1309,8 +1304,8 @@ export function renderFormMedalla(m = null) {
 }
 
 // ── Formularios múltiples (Dinámico N) ────────────────────────
-export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
-    const N = parseInt(numForms) || 8;
+export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
+    const N = parseInt(numForms) || 4;
     const prefix = esPropuesta ? 'mp' : 'mm';
     const titulo = esPropuesta ? `📝×${N} Proponer múltiples medallas` : `✨×${N} Crear múltiples medallas`;
     const subtitulo = esPropuesta ? 'Cada formulario generará una propuesta independiente para revisión del OP.' : 'Cada formulario generará una medalla independiente al guardar.';
@@ -1341,10 +1336,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
                     <input class="inp" id="mf-ctl-${fid}" type="number" min="1" max="50" value="1" style="font-size:0.85em;">
                 </div>
             </div>
-            ${esPropuesta ? `<div>
-                <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Tu nombre (opcional)</label>
-                <input class="inp" id="mf-autor-${fid}" placeholder="¿Cómo te llamamos?" style="font-size:0.85em;">
-            </div>` : ''}
+
             <div>
                 <label style="font-size:0.72em;font-weight:700;color:var(--gray-600);display:block;margin-bottom:3px;">Efecto base <span style="font-weight:400;color:#aaa;">(@ # !)</span></label>
                 <textarea class="inp" id="mf-efecto-${fid}" rows="2" placeholder="Describe el efecto…" style="font-size:0.83em;" onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)"></textarea>
@@ -1385,7 +1377,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 8) {
         <div style="position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:500;overflow-y:auto;padding:20px 8px 40px;">
             <div style="max-width:1400px;margin:0 auto;">
                 <div style="background:white;border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);overflow:hidden;">
-                    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+                    <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;${esPropuesta ? 'background:#e67e22;color:white;' : ''}">
                         <h3 style="margin:0;">${titulo}</h3>
                         <div style="display:flex;gap:8px;align-items:center;">
                             <button class="btn btn-green" id="mf-guardar-todos" onclick="window._mfGuardarTodos('${prefix}',${N},${esPropuesta})">
