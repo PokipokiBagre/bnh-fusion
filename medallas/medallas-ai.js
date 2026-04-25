@@ -78,6 +78,13 @@ function _getNombres() {
     return (medallas || []).map(m => m.nombre).filter(Boolean).join(', ');
 }
 
+// ── Lista de medallas reales para que la IA pueda referenciarlas con !nombre! ───────────
+function _getMedallasRef() {
+    const pool = (medallas || []).filter(m => m.nombre);
+    if (!pool.length) return '(catálogo vacío)';
+    return pool.map(m => `!${m.nombre}!`).join(', ');
+}
+
 // ── Leer tags ya cargados en el formulario ───────────────────
 function _leerTagsForm(tipo, fid) {
     let selector = '';
@@ -506,6 +513,7 @@ FORMATO DE RESPUESTA:
         const ejemplos   = _get5Ejemplos();
         const nombres    = _getNombres();
         const tagsDisp   = _getTagsDisponibles();
+        const medallasRef = _getMedallasRef();
 
         // Pre-asignar estructura de variedad para cada medalla (shuffle real)
         const _BASE_SLOTS = [
@@ -536,6 +544,11 @@ ${GUIA_MEDALLAS}
 TAGS DISPONIBLES — SOLO usa tags de esta lista exacta:
 ${tagsDisp}
 NUNCA uses un tag que no esté aquí. Si el concepto menciona uno que no existe, usa el más parecido.
+
+────────────────────────────────────────────
+MEDALLAS DEL CATÁLOGO — Únicas que puedes referenciar con !nombre!:
+${medallasRef}
+Si no necesitas referenciar ninguna medalla específica, simplemente no uses !nombre!.
 
 ────────────────────────────────────────────
 NOMBRES YA EXISTENTES — NO repetir ninguno:
