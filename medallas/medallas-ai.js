@@ -3,6 +3,7 @@
 // ============================================================
 import { supabase } from '../bnh-auth.js';
 import { medallas } from './medallas-state.js';
+import { TAGS_CANONICOS } from '../bnh-tags.js';
 
 const _esc = s => String(s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 
@@ -22,11 +23,6 @@ TIPOS Y CTL (orientativo; puede exceder si el efecto lo justifica):
   ACTIVA     — Requiere acción del jugador. CTL típico: 3–12.
   DEFINITIVA — Rompe la lógica del combate o ejecuta estado especial. CTL típico: 8–16.
 
-ESCALA DE STATS (calibra el impacto del efecto según esto):
-  Tier 1: POT ~13, AGI ~13, CTL ~14 (suma ~40)
-  Tier 2: suma ~60 | Tier 3: suma ~80 | Tier 4: suma ~100
-  -1 stat → insignificante. -3 → duele en tier 1. -8 → severo. Calibra acorde.
-
 PT REQUISITOS (escala orientativa):
   20 PT  → Básico
   40 PT  → Moderado
@@ -35,8 +31,7 @@ PT REQUISITOS (escala orientativa):
   (Puede usar valores intermedios o superiores: 30, 50, 100, 150...)
 
 REGLAS DE NOMENCLATURA:
-  - Mezcla nombres de 1 palabra ("Chantaje", "Derrumbe") con nombres de 2 ("Legado Oculto").
-  - PROHIBIDO: patrones repetitivos como Adjetivo+Sustantivo para todos los nombres del set.
+  - Nombres simples, directos y evocadores: "Engullir", "Zona muerta", "Colapso"
   - PROHIBIDO: nombres verbosos como "Aclimatación temporal de la Agonía"
   - PROHIBIDO: nombres técnicos como "Disminuir la oxitocina corporal"
   - Máximo 4 palabras. El nombre sugiere, no explica.
@@ -57,13 +52,15 @@ REGLAS DE EFECTOS (crítico):
 
 MARKUP OBLIGATORIO:
   @Nombre_Personaje@ — Personas específicas (guion_bajo entre palabras)
-  #NombreTag         — Tags exactos del catálogo
-  !Nombre Medalla!   — Medallas referenciadas (exclamación simple, NUNCA ¡invertida!)
+  #NombreTag         — Tags exactos del catálogo (solo los de la lista provista)
+  !Nombre Medalla!   — Medallas referenciadas por su NOMBRE EXACTO (exclamación simple, NUNCA ¡invertida!)
+  PROHIBIDO: !Activa!, !Pasiva!, !Definitiva! — Estos son TIPOS, no nombres de medalla. Jamás se marcan con !!.
+  CORRECTO: !Golpe Orbital!, !Zona Muerta!, !Colapso!
+  INCORRECTO: !Activa!, ¡Pasiva!, !medalla Activa!
 
-EFECTOS CONDICIONALES (excepción, no regla):
+EFECTOS CONDICIONALES (Casilla Dorada — solo si aportan valor estratégico real):
   Formato: "SI #Tag >= X PT: [efecto adicional]"
-  Solo para medallas donde realmente aporta valor estratégico. La mayoría no los necesita.
-  El tag del condicional DEBE ser uno de los tags mencionados en el concepto del creador.
+  No inventar; solo si el concepto lo pide o el tag lo sugiere.
 `.trim();
 
 // ── 5 medallas aleatorias del catálogo como ejemplos ────────
@@ -92,7 +89,14 @@ function _get5Ejemplos() {
     }).join('\n\n---\n\n');
 }
 
-// ── Lista de nombres existentes (para no repetir) ────────────
+// ── Lista de tags disponibles en el catálogo ─────────────────
+function _getTagsDisponibles() {
+    const tags = (TAGS_CANONICOS || []).filter(Boolean);
+    if (!tags.length) return '(catálogo de tags vacío)';
+    return tags.join(', ');
+}
+
+
 function _getNombres() {
     return (medallas || []).map(m => m.nombre).filter(Boolean).join(', ');
 }
@@ -522,19 +526,12 @@ FORMATO DE RESPUESTA:
         if (status) status.textContent = 'Conectando…';
         if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
 
-        const ejemplos = _get5Ejemplos();
-        const nombres  = _getNombres();
+        const ejemplos   = _get5Ejemplos();
+        const nombres    = _getNombres();
+        const tagsDisp   = _getTagsDisponibles();
 
         const prompt = `
 ${GUIA_MEDALLAS}
-
-────────────────────────────────────────────
-ESCALA DE STATS DE REFERENCIA (para calibrar efectos reales):
-  Tier 1 (base):   POT ~13, AGI ~13, CTL ~14 (suma ~40)
-  Tier 2 (medio):  suma de stats ~60
-  Tier 3 (alto):   suma de stats ~80
-  Tier 4 (élite):  suma de stats ~100
-  IMPLICACIÓN: -1 AGI es irrelevante para cualquier tier. -3 CTL sí duele en tier 1. -8 POT es severo. Calibra el impacto según esto.
 
 ────────────────────────────────────────────
 EJEMPLOS REALES DEL CATÁLOGO (referencia de estilo, escala y profundidad):
@@ -545,6 +542,11 @@ NOMBRES YA EXISTENTES — NO repetir ninguno:
 ${nombres}
 
 ────────────────────────────────────────────
+TAGS DISPONIBLES EN EL CATÁLOGO — SOLO puedes usar tags de esta lista:
+${tagsDisp}
+Si el concepto menciona un tag que no existe aquí, usa el más cercano. NUNCA inventes tags nuevos.
+
+────────────────────────────────────────────
 CONCEPTO DEL CREADOR (aplica a todas las medallas):
 ${concepto || '(sin concepto — crea un set temáticamente coherente)'}
 
@@ -553,12 +555,11 @@ INSTRUCCIONES FINALES:
 1. Crea exactamente ${N} medallas distintas que formen un SET temáticamente coherente.
 2. Cada medalla debe tener nombre único, rol diferente (activa/pasiva, apoyo/daño, etc.).
 3. No repitas mecánicas: si una sube POT, otra usa PV, otra invalida medallas, etc.
-4. NOMBRES — VARIEDAD OBLIGATORIA: mezcla nombres simples (1 palabra: "Chantaje", "Derrumbe") con compuestos (2 palabras: "Legado Oculto"). En un set de 4, no más de 2 nombres deben ser compuestos. Prioriza palabras únicas y directas. NUNCA uses el mismo patrón adjetivo+sustantivo para todos.
+4. Nombres simples, evocadores, máximo 4 palabras. Sin nombres técnicos ni verbosos.
 5. efecto_base es SOLO mecánica. Sin narrativa ni justificaciones.
-6. TAGS — USA SOLO los tags mencionados en el concepto del creador. Si el creador no especificó tags suficientes, usa variaciones del tag principal (ej: si dice #Secreto, puedes usar #Secreto como único tag en todos). NUNCA inventes tags que no aparezcan en el concepto.
-7. REQUISITOS — VARIEDAD OBLIGATORIA: en un set de ${N}, mezcla medallas con 0, 1 o 2 requisitos. No todas deben tener el mismo número. Una medalla sin requisitos (0 reqs) es completamente válida.
-8. CONDICIONALES — RAREZA OBLIGATORIA: en un set de ${N}, máximo 1 o 2 medallas deben tener efectos_condicionales. Las demás deben tener el array vacío []. No es un bonus, es una excepción para medallas que realmente lo necesiten.
-9. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
+6. TAGS: usa SOLO los tags de la lista provista. NUNCA inventes tags que no estén ahí.
+7. CONDICIONALES: el campo "tag" en efectos_condicionales es OBLIGATORIO y debe ser un tag de la lista. Si no puedes asignar un tag válido, deja "efectos_condicionales": [].
+8. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
 
 FORMATO DE RESPUESTA (array de ${N} elementos):
 [
@@ -621,7 +622,7 @@ FORMATO DE RESPUESTA (array de ${N} elementos):
     aplicarMulti() {
         if (!Array.isArray(_iaResult)) return;
         const prefix = document.getElementById('ai-multi-prefix')?.value || 'mm';
-        _iaResult.forEach((data, i) => _llenarForm(`${prefix}${i}`, 'mini', data));
+        _iaResult.forEach((data, i) => _llenarForm('mini', `${prefix}${i}`, data));
         window._medallaIA.cerrar();
     }
 };
@@ -637,10 +638,10 @@ function _renderPreviewMulti(container, arr, prefix) {
                 border:1px solid rgba(52,152,219,0.3);padding:1px 7px;border-radius:8px;font-weight:700;">
                 ${_esc(r.tag)} ≥${r.pts_minimos} PT</span>`
         ).join(' ');
-        const conds = (data.efectos_condicionales || []).map(ec =>
+        const conds = (data.efectos_condicionales || []).filter(ec => ec.tag && ec.efecto).map(ec =>
             `<div style="font-size:0.72em;padding:4px 8px;background:rgba(243,156,18,0.07);
                 border:1px solid rgba(243,156,18,0.3);border-radius:5px;margin-top:3px;">
-                <b style="color:#e67e22;">⚡ SI ${_esc(ec.tag)} ≥${ec.pts_minimos} PT:</b>
+                <b style="color:#e67e22;">⚡ SI ${_esc(ec.tag)} ≥${ec.pts_minimos ?? 0} PT:</b>
                 <span style="color:#555;"> ${_esc(ec.efecto)}</span>
              </div>`
         ).join('');
