@@ -45,10 +45,25 @@ export function renderMarkup(texto) {
             if (mS) { tokens.push({ tipo: 'medalla', valor: mS[1].trim() }); i += 1 + mS[1].length; continue; }
         }
 
+        // Factor dado: %rango: descripción del efecto%
+        // Ejemplos: %90+: Hace 3 PVs de daño.% | %20-: Autoquita 10 PVs.% | %50-89: Efecto neutro.%
+        if (ch === '%') {
+            const rest = t.slice(i + 1);
+            const mBloque = rest.match(/^(\d{1,3}(?:[+-]|\s*-\s*\d{1,3})?)\s*:\s*([\s\S]*?)%/);
+            if (mBloque) {
+                tokens.push({ tipo: 'dado', rango: mBloque[1].trim(), efecto: mBloque[2].trim() });
+                i += 1 + mBloque[0].length;
+                continue;
+            }
+            // Fallback: %rango% sin efecto (solo badge)
+            const mSimple = rest.match(/^(\d{1,3}(?:[+-]|\s*-\s*\d{1,3})?)%/);
+            if (mSimple) { tokens.push({ tipo: 'dado', rango: mSimple[1].trim(), efecto: '' }); i += 1 + mSimple[0].length; continue; }
+        }
+
         if (ch === '\n') { tokens.push({ tipo: 'br' }); i++; continue; }
 
         let j = i + 1;
-        while (j < t.length && t[j] !== '@' && t[j] !== '#' && t[j] !== '!' && t[j] !== '\n') j++;
+        while (j < t.length && t[j] !== '@' && t[j] !== '#' && t[j] !== '!' && t[j] !== '%' && t[j] !== '\n') j++;
         tokens.push({ tipo: 'texto', valor: t.slice(i, j) });
         i = j;
     }
@@ -74,6 +89,20 @@ export function renderMarkup(texto) {
             return `<a href="#" onclick="event.preventDefault();event.stopPropagation();window._markupIrAMedalla('${m.replace(/'/g,"\\'")}');return false;"
                 style="color:#1a4a80;font-weight:600;text-decoration:none;cursor:pointer;"
                 title="Ver medalla ${escTxt(m)}">${escTxt(m)}</a>`;
+        }
+        if (tok.tipo === 'dado') {
+            const rango = tok.rango;
+            const efecto = tok.efecto;
+            const esAlto = rango.includes('+');
+            const esBajo = rango.endsWith('-') || /^\d{1,2}-$/.test(rango);
+            const bg     = esAlto ? '#1a3d25' : esBajo ? '#4a1010' : '#3d3000';
+            const bgChip = esAlto ? '#1e6b35' : esBajo ? '#7b1a1a' : '#6b5200';
+            const color  = esAlto ? '#7ef09a'  : esBajo ? '#f09a9a'  : '#f0d97a';
+            const chipHtml = `<span style="display:inline-flex;align-items:center;gap:3px;background:${bgChip};color:${color};font-weight:800;font-size:0.82em;padding:1px 8px;border-radius:10px;font-family:monospace;white-space:nowrap;">🎲 ${escTxt(rango)}</span>`;
+            if (!efecto) return chipHtml;
+            // El efecto puede tener sub-markup (@, #, !) — lo procesamos recursivamente
+            const efectoHtml = renderMarkup(efecto);
+            return `<span style="display:inline-flex;align-items:baseline;gap:6px;background:${bg};border:1px solid ${bgChip};padding:3px 10px;border-radius:8px;margin:1px 0;flex-wrap:wrap;">${chipHtml}<span style="color:#e8e8e8;font-size:0.88em;line-height:1.5;">${efectoHtml}</span></span>`;
         }
         return '';
     }).join('');
@@ -136,6 +165,11 @@ export function initMarkupTextarea(textarea) {
             return [...set].filter(t => t.toLowerCase().includes(q)).sort().slice(0, 8);
         }
         if (sym === '!') return _medallas.map(m => m.nombre).filter(n => n.toLowerCase().includes(q)).slice(0, 8);
+        if (sym === '%') {
+            // Rangos de dado d100 más usados
+            const rangos = ['90+', '80+', '70+', '60+', '50+', '20-', '30-', '40-', '50-69', '40-69', '30-59'];
+            return q ? rangos.filter(r => r.startsWith(q)) : rangos;
+        }
         return [];
     }
 
@@ -151,7 +185,7 @@ export function initMarkupTextarea(textarea) {
             sug.style.bottom = 'auto';
         }
         sug.style.display = 'block';
-        const col = _sym==='@' ? '#1e8449' : _sym==='#' ? '#c0392b' : '#1a4a80';
+        const col = _sym==='@' ? '#1e8449' : _sym==='#' ? '#c0392b' : _sym==='%' ? '#5a3e00' : '#1a4a80';
         sug.innerHTML = _items.map((it, i) => `
             <div data-i="${i}" style="padding:7px 12px;cursor:pointer;background:${i===_sel?'#d5f5e3':'white'};color:${i===_sel?'#145a32':col};font-weight:${i===_sel?700:500};border-bottom:1px solid #f1f3f4;">
                 <span style="opacity:.4;">${_sym}</span>${it}
@@ -165,7 +199,8 @@ export function initMarkupTextarea(textarea) {
         const symPos = _start - 1;        
         const textBefore = v.slice(0, symPos); 
         const textAfter  = v.slice(cur);       
-        const insertion = _sym === '#' ? `#${item} ` : `${_sym}${item}${_sym} `;
+        // Para dado: inserta %rango:  y deja el cursor después de los dos puntos para escribir el efecto
+        const insertion = _sym === '#' ? `#${item} ` : _sym === '%' ? `%${item}: ` : `${_sym}${item}${_sym} `;
         textarea.value = textBefore + insertion + textAfter;
         const pos = textBefore.length + insertion.length;
         textarea.setSelectionRange(pos, pos);
@@ -182,9 +217,9 @@ export function initMarkupTextarea(textarea) {
         let found = false;
         for (let i = cur - 1; i >= 0; i--) {
             const c = v[i];
-            if (c==='@' || c==='#' || c==='!') { _sym = c; _start = i + 1; _items = getCandidatos(c, v.slice(i+1, cur)); _sel = 0; found = true; break; }
+            if (c==='@' || c==='#' || c==='!' || c==='%') { _sym = c; _start = i + 1; _items = getCandidatos(c, v.slice(i+1, cur)); _sel = 0; found = true; break; }
             if (c==='\n') break;
-            if (c===' ' && _sym !== '!' && _sym !== '@') break;
+            if (c===' ' && _sym !== '!' && _sym !== '@' && _sym !== '%') break;
         }
         if (!found) close(); else render();
     });
