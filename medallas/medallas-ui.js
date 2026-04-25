@@ -1152,7 +1152,12 @@ export function renderProponerMedalla() {
             <div style="background:white;border-radius:var(--radius-lg);max-width:700px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;border:2px solid #e67e22;">
                 <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
                     <h3 style="margin:0;font-family:'Cinzel',serif;">📝 Proponer Medalla</h3>
-                    <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button onclick="window._medallaIA.abrir('prop','prop')"
+                            style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.5);color:white;
+                                   padding:4px 12px;border-radius:8px;cursor:pointer;font-size:0.82em;font-weight:700;">✨ IA</button>
+                        <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
+                    </div>
                 </div>
                 <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
                     <p style="font-size:0.85em;color:#888;margin:0;">Tu propuesta será revisada por el OP antes de publicarse.</p>
@@ -1243,7 +1248,11 @@ export function renderFormMedalla(m = null) {
             <div style="background:white;border-radius:var(--radius-lg);max-width:700px;width:100%;box-shadow:var(--shadow-lg);overflow:hidden;">
                 <div class="modal-header">
                     <h3>${isEdit ? '✏️ Editar' : '✨ Nueva'} Medalla</h3>
-                    <button class="modal-close" onclick="window._medallasCloseModal()">×</button>
+                    <div style="display:flex;gap:8px;align-items:center;">
+                        <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;font-weight:700;"
+                            onclick="window._medallaIA.abrir('admin','admin')">✨ IA</button>
+                        <button class="modal-close" onclick="window._medallasCloseModal()">×</button>
+                    </div>
                 </div>
                 <div class="modal-body">
                     <input type="hidden" id="fm-id" value="${m?.id||''}">
@@ -1380,6 +1389,8 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;${esPropuesta ? 'background:#e67e22;color:white;' : ''}">
                         <h3 style="margin:0;">${titulo}</h3>
                         <div style="display:flex;gap:8px;align-items:center;">
+                            <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;font-weight:700;"
+                                onclick="window._medallaIA.abrirMulti('${prefix}',${N})">✨ IA ×${N}</button>
                             <button class="btn btn-green" id="mf-guardar-todos" onclick="window._mfGuardarTodos('${prefix}',${N},${esPropuesta})">
                                 💾 Guardar todas
                             </button>
