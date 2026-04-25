@@ -37,12 +37,17 @@ REGLAS DE NOMENCLATURA:
 
 REGLAS DE EFECTOS (crítico):
   - El efecto describe SOLO la mecánica. Cero contexto, cero narrativa, cero justificación.
-  - CORRECTO: "Invalida !Óbito! del rival. Delta CTL rival = -3."
-  - CORRECTO: "Delta POT = +8 durante 2 turnos. Si POT > 25: Delta PV rival = -10."
-  - INCORRECTO: "Gracias a su dominio del vacío, el personaje invalida !Óbito!..."
-  - Usa "Delta X = Y" para cambios de stats.
-  - Para efectos por turno: "Inicio de turno: Delta AGI = +2."
-  - Para escala con PT: "Delta PV rival = -(PT de #Tag / 10)."
+  - Para describir cambios de stats usa siempre lenguaje natural directo:
+      Aumenta/Disminuye +N / -N    → cambio fijo   (ej: "Aumenta POT +8 durante 2 turnos.")
+      Eleva/Reduce ^X              → potencia       (ej: "Eleva AGI ^1.5.")
+      Multiplica/Divide xN         → multiplicación (ej: "Multiplica CTL x2.")
+      Escala con PT                → (ej: "Disminuye PV rival -(PT de #Tag / 10).")
+  - NUNCA uses "Delta X = Y" ni notación técnica de fórmulas.
+  - CORRECTO: "Invalida !Óbito! del rival. Disminuye CTL rival -3."
+  - CORRECTO: "Aumenta POT +8 durante 2 turnos. Si POT > 25: Disminuye PV rival -10."
+  - INCORRECTO: "Delta POT = +8 durante 2 turnos. Delta PV rival = -10."
+  - Para efectos por turno: "Inicio de turno: Aumenta AGI +2."
+  - Para escala con PT: "Disminuye PV rival -(PT de #Tag / 10)."
 
 MARKUP OBLIGATORIO:
   @Nombre_Personaje@ — Personas específicas (guion_bajo entre palabras)
@@ -488,5 +493,239 @@ FORMATO DE RESPUESTA:
         if (!_iaResult || !_iaTipo) return;
         _llenarForm(_iaTipo, _iaFid, _iaResult);
         window._medallaIA.cerrar();
+    },
+
+    // ── Modo MULTI: genera N medallas de una vez ──────────────
+    abrirMulti(prefix, N) {
+        _iaTipo   = 'multi';
+        _iaFid    = prefix;
+        _iaResult = null;
+        _renderPanelMulti(prefix, N);
+    },
+
+    async generarMulti() {
+        const concepto  = document.getElementById('ai-medalla-concepto')?.value.trim() || '';
+        const N         = parseInt(document.getElementById('ai-multi-n')?.value || '4');
+        const prefix    = document.getElementById('ai-multi-prefix')?.value || 'mm';
+        const btn       = document.getElementById('ai-medalla-gen-btn');
+        const status    = document.getElementById('ai-medalla-status');
+        const resultDiv = document.getElementById('ai-medalla-result');
+
+        if (btn) { btn.disabled = true; btn.textContent = 'Generando…'; }
+        if (status) status.textContent = 'Conectando…';
+        if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
+
+        const ejemplos = _get5Ejemplos();
+        const nombres  = _getNombres();
+
+        const prompt = `
+${GUIA_MEDALLAS}
+
+────────────────────────────────────────────
+EJEMPLOS REALES DEL CATÁLOGO (referencia de estilo, escala y profundidad):
+${ejemplos}
+
+────────────────────────────────────────────
+NOMBRES YA EXISTENTES — NO repetir ninguno:
+${nombres}
+
+────────────────────────────────────────────
+CONCEPTO DEL CREADOR (aplica a todas las medallas):
+${concepto || '(sin concepto — crea un set temáticamente coherente)'}
+
+────────────────────────────────────────────
+INSTRUCCIONES FINALES:
+1. Crea exactamente ${N} medallas distintas que formen un SET temáticamente coherente.
+2. Cada medalla debe tener nombre único, rol diferente (activa/pasiva, apoyo/daño, etc.).
+3. No repitas mecánicas: si una sube POT, otra usa PV, otra invalida medallas, etc.
+4. Nombres simples, evocadores, máximo 4 palabras. Sin nombres técnicos ni verbosos.
+5. efecto_base es SOLO mecánica. Sin narrativa ni justificaciones.
+6. Usa los tags que menciona el concepto; si no especifica, inventa tags coherentes.
+7. Responde ÚNICAMENTE con un array JSON válido de ${N} objetos. Sin markdown, sin texto extra.
+
+FORMATO DE RESPUESTA (array de ${N} elementos):
+[
+  {
+    "nombre": "Nombre Simple",
+    "costo_ctl": 5,
+    "efecto_base": "Descripción mecánica directa.",
+    "tipo": "activa",
+    "requisitos_base": [{"tag": "#Tag", "pts_minimos": 40}],
+    "efectos_condicionales": []
+  }
+]
+`.trim();
+
+        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Set de ${N} medallas temáticas.`;
+
+        try {
+            if (status) status.textContent = 'Esperando a la IA…';
+
+            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
+                body: { prompt, contextoAdicional: contexto }
+            });
+
+            if (error) throw new Error(error.message || JSON.stringify(error));
+            if (!data)           throw new Error('Sin datos de respuesta.');
+            if (data.error)      throw new Error(data.error);
+            if (!data.resultado) throw new Error('Respuesta vacía de la IA.');
+
+            const raw = data.resultado
+                .replace(/^```json\s*/i, '')
+                .replace(/^```\s*/,      '')
+                .replace(/\s*```$/,      '')
+                .trim();
+
+            const arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) throw new Error('La IA no devolvió un array de medallas.');
+
+            _iaResult = arr;
+
+            if (status) status.textContent = `✓ ${arr.length} medallas generadas`;
+            _renderPreviewMulti(resultDiv, arr, prefix);
+
+        } catch (err) {
+            if (status) status.textContent = '';
+            if (resultDiv) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                <div style="background:#fdecea;border:1.5px solid #e74c3c;border-radius:8px;
+                    padding:12px;font-size:0.82em;color:#c0392b;">
+                    <b>Error al conectar con la IA:</b><br>
+                    <code style="font-size:0.9em;white-space:pre-wrap;">${_esc(err.message)}</code>
+                </div>`;
+            }
+            console.error('[medallas-ai multi]', err);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '✨ Generar set'; }
+        }
+    },
+
+    aplicarMulti() {
+        if (!Array.isArray(_iaResult)) return;
+        const prefix = document.getElementById('ai-multi-prefix')?.value || 'mm';
+        _iaResult.forEach((data, i) => _llenarForm(`${prefix}${i}`, 'mini', data));
+        window._medallaIA.cerrar();
     }
 };
+
+// ── Preview múltiple ──────────────────────────────────────────
+function _renderPreviewMulti(container, arr, prefix) {
+    if (!container) return;
+    const tipoColor = t => t === 'pasiva' ? '#27ae60' : t === 'definitiva' ? '#8e44ad' : '#2980b9';
+
+    const cards = arr.map((data, i) => {
+        const reqs = (data.requisitos_base || []).map(r =>
+            `<span style="font-size:0.7em;background:rgba(52,152,219,0.1);color:#2980b9;
+                border:1px solid rgba(52,152,219,0.3);padding:1px 7px;border-radius:8px;font-weight:700;">
+                ${_esc(r.tag)} ≥${r.pts_minimos} PT</span>`
+        ).join(' ');
+        const conds = (data.efectos_condicionales || []).map(ec =>
+            `<div style="font-size:0.72em;padding:4px 8px;background:rgba(243,156,18,0.07);
+                border:1px solid rgba(243,156,18,0.3);border-radius:5px;margin-top:3px;">
+                <b style="color:#e67e22;">⚡ SI ${_esc(ec.tag)} ≥${ec.pts_minimos} PT:</b>
+                <span style="color:#555;"> ${_esc(ec.efecto)}</span>
+             </div>`
+        ).join('');
+
+        return `
+        <div style="border:1.5px solid #6c3483;border-radius:9px;overflow:hidden;min-width:0;">
+            <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
+                padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
+                <div style="font-family:'Cinzel',serif;font-size:0.85em;font-weight:700;">${_esc(data.nombre)}</div>
+                <div style="display:flex;gap:5px;align-items:center;">
+                    <span style="font-size:0.65em;font-weight:700;background:rgba(255,255,255,0.15);
+                        padding:1px 6px;border-radius:8px;text-transform:uppercase;">${_esc(data.tipo||'activa')}</span>
+                    <span style="font-size:0.85em;font-weight:800;">${data.costo_ctl} CTL</span>
+                </div>
+            </div>
+            <div style="padding:10px 12px;background:#faf8ff;display:flex;flex-direction:column;gap:6px;font-size:0.82em;">
+                <div style="color:#333;line-height:1.5;">${_esc(data.efecto_base)}</div>
+                ${reqs ? `<div style="display:flex;flex-wrap:wrap;gap:3px;">${reqs}</div>` : ''}
+                ${conds}
+            </div>
+        </div>`;
+    }).join('');
+
+    container.style.display = 'block';
+    container.innerHTML = `
+    <div style="border:2px solid #6c3483;border-radius:10px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
+            padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
+            <div style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;">✨ Set generado — ${arr.length} medallas</div>
+        </div>
+        <div style="padding:12px;background:#faf8ff;display:flex;flex-direction:column;gap:8px;">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
+                ${cards}
+            </div>
+            <div style="border-top:1px solid #e0d8f0;padding-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <button class="btn" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);
+                    color:white;border-color:#6c3483;flex:1;min-width:160px;"
+                    onclick="window._medallaIA.aplicarMulti()">✅ Aplicar a los formularios</button>
+                <button class="btn btn-outline" style="font-size:0.82em;"
+                    onclick="window._medallaIA.generarMulti()">🔄 Regenerar set</button>
+            </div>
+        </div>
+    </div>`;
+}
+
+// ── Panel IA para modo multi ──────────────────────────────────
+function _renderPanelMulti(prefix, N) {
+    let root = document.getElementById('medalla-ai-root');
+    if (!root) {
+        root = document.createElement('div');
+        root.id = 'medalla-ai-root';
+        document.body.appendChild(root);
+    }
+
+    root.innerHTML = `
+    <div id="medalla-ai-backdrop" style="
+        position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1200;
+        display:flex;align-items:flex-start;justify-content:center;
+        padding:30px 16px 60px;overflow-y:auto;
+    " onclick="if(event.target===this)window._medallaIA.cerrar()">
+        <div style="background:white;border-radius:14px;width:100%;max-width:620px;
+            box-shadow:0 16px 60px rgba(0,0,0,0.4);overflow:hidden;">
+
+            <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
+                padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
+                <div>
+                    <div style="font-family:'Cinzel',serif;font-size:1.05em;font-weight:700;">✨ IA — Generar set de medallas</div>
+                    <div style="font-size:0.72em;color:rgba(255,255,255,0.55);margin-top:2px;">Genera ${N} medallas temáticamente coherentes de una sola vez</div>
+                </div>
+                <button onclick="window._medallaIA.cerrar()" style="
+                    background:rgba(255,255,255,0.15);border:none;color:white;
+                    border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
+            </div>
+
+            <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+                <input type="hidden" id="ai-multi-prefix" value="${prefix}">
+                <input type="hidden" id="ai-multi-n" value="${N}">
+
+                <div>
+                    <label style="font-size:0.78em;font-weight:700;color:#444;display:block;margin-bottom:5px;">
+                        Concepto o tema para el set de ${N} medallas
+                    </label>
+                    <textarea id="ai-medalla-concepto" class="inp" rows="4"
+                        placeholder="Ej: un set de medallas de velocidad — una pasiva que aumente AGI, una activa que use PV para multiplicar la velocidad, una definitiva que invalide todas las medallas lentas del rival..."
+                        style="resize:vertical;font-size:0.85em;"></textarea>
+                    <div style="font-size:0.71em;color:#aaa;margin-top:3px;">
+                        Describe el tema, los roles o los efectos que quieres. Menciona tags (#así), medallas a invalidar (!así!) o personajes (@así@).
+                        La IA diseñará ${N} medallas distintas que se complementen entre sí.
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <button id="ai-medalla-gen-btn" class="btn"
+                        style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
+                            border-color:#6c3483;min-width:150px;font-weight:700;"
+                        onclick="window._medallaIA.generarMulti()">✨ Generar set</button>
+                    <button class="btn btn-outline" onclick="window._medallaIA.cerrar()">Cancelar</button>
+                    <span id="ai-medalla-status" style="font-size:0.78em;color:#888;"></span>
+                </div>
+
+                <div id="ai-medalla-result" style="display:none;"></div>
+            </div>
+        </div>
+    </div>`;
+}
