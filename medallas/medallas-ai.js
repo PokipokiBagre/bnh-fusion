@@ -187,7 +187,9 @@ function _llenarMiniForm(fid, data) {
 
     const condsDiv = document.getElementById(`mf-conds-${fid}`);
     if (condsDiv) {
-        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+        // Filtrar condicionales sin tag (la IA a veces los deja vacíos)
+        const condsValidas = (data.efectos_condicionales || []).filter(ec => ec.tag && ec.tag.trim());
+        condsDiv.innerHTML = condsValidas.map((ec, i) => `
             <div class="cond-row" id="mf-crow-${fid}-${i}"
                 style="flex-direction:column;align-items:stretch;margin-bottom:6px;">
                 <div style="display:flex;gap:4px;">
@@ -202,7 +204,7 @@ function _llenarMiniForm(fid, data) {
                     style="font-size:0.82em;margin-top:4px;">${_esc(ec.efecto || '')}</textarea>
             </div>`).join('');
         if (window._mfCondCounters)
-            window._mfCondCounters[fid] = (data.efectos_condicionales?.length || 1) - 1;
+            window._mfCondCounters[fid] = (condsValidas.length || 1) - 1;
     }
 }
 
@@ -230,7 +232,8 @@ function _llenarFormAdmin(data) {
 
     const condsDiv = document.getElementById('fm-conds');
     if (condsDiv) {
-        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+        const condsValidas = (data.efectos_condicionales || []).filter(ec => ec.tag && ec.tag.trim());
+        condsDiv.innerHTML = condsValidas.map((ec, i) => `
             <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
                 <div style="display:flex;gap:8px;">
                     <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
@@ -243,7 +246,7 @@ function _llenarFormAdmin(data) {
                 <textarea class="inp" rows="2" id="cond-efecto-${i}"
                     style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
             </div>`).join('');
-        window._fm_condCount = data.efectos_condicionales?.length || 0;
+        window._fm_condCount = condsValidas.length || 0;
     }
 }
 
@@ -271,7 +274,8 @@ function _llenarFormProp(data) {
 
     const condsDiv = document.getElementById('prop-conds');
     if (condsDiv) {
-        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+        const condsValidas = (data.efectos_condicionales || []).filter(ec => ec.tag && ec.tag.trim());
+        condsDiv.innerHTML = condsValidas.map((ec, i) => `
             <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
                 <div style="display:flex;gap:8px;">
                     <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
@@ -284,7 +288,7 @@ function _llenarFormProp(data) {
                 <textarea class="inp" rows="2" id="cond-efecto-${i}"
                     style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
             </div>`).join('');
-        window._propCondCount = (data.efectos_condicionales?.length || 1) - 1;
+        window._propCondCount = (condsValidas.length || 1) - 1;
     }
 }
 
@@ -388,14 +392,18 @@ INSTRUCCIONES FINALES:
 4. Ajusta costo_ctl al tipo y potencia real.
 5. Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra.
 
+REGLAS CRÍTICAS DE CAMPOS — NUNCA las ignores:
+- "pts_minimos" en requisitos_base: NUNCA 0 salvo tag de mera presencia. Usa 20, 40, 80 o 160 según profundidad.
+- "efectos_condicionales": si incluyes alguno, DEBE tener "tag" real (de la lista), "pts_minimos" > 0, y "efecto" con mecánica. NUNCA tag vacío.
+
 FORMATO:
 {
   "nombre": "...",
   "costo_ctl": 5,
-  "efecto_base": "...",
+  "efecto_base": "Descripción mecánica directa.",
   "tipo": "activa",
-  "requisitos_base": [{"tag": "#Tag", "pts_minimos": 40}],
-  "efectos_condicionales": []
+  "requisitos_base": [{"tag": "#TagReal", "pts_minimos": 40}],
+  "efectos_condicionales": [{"tag": "#TagReal", "pts_minimos": 60, "efecto": "Descripción del efecto condicional."}]
 }
 `.trim();
 }
@@ -457,7 +465,14 @@ INSTRUCCIONES FINALES:
 2. Si está vacío, genera contenido nuevo coherente con el tema/instrucción.
 3. Los formularios del set deben complementarse temáticamente pero ser mecánicamente distintos.
 4. Responde ÚNICAMENTE con un array JSON de ${N} objetos. Sin markdown ni texto extra.
-5. Cada objeto: {"nombre":"...","costo_ctl":N,"efecto_base":"...","tipo":"...","requisitos_base":[...],"efectos_condicionales":[...]}
+
+REGLAS CRÍTICAS DE CAMPOS — NUNCA las ignores:
+- "pts_minimos" en requisitos_base: OBLIGATORIO, NUNCA 0 salvo que el tag sea meramente de presencia. Usa 20 (básico), 40 (moderado), 80 (avanzado), 160 (maestro). Calibra según el peso del efecto.
+- "efectos_condicionales": cada objeto DEBE tener "tag" (un #Tag real de la lista), "pts_minimos" (número > 0), y "efecto" (descripción mecánica). NUNCA dejes "tag" vacío ni "pts_minimos" en 0.
+- Si un slot exige cond=true, el array efectos_condicionales NUNCA puede estar vacío ni tener objetos sin tag.
+
+FORMATO EXACTO por objeto (respeta los tipos de valor):
+{"nombre":"Nombre","costo_ctl":5,"efecto_base":"Descripción mecánica.","tipo":"activa","requisitos_base":[{"tag":"#TagReal","pts_minimos":40}],"efectos_condicionales":[{"tag":"#TagReal","pts_minimos":60,"efecto":"Descripción mecánica del efecto condicional."}]}
 `.trim();
 }
 
