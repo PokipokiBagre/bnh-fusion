@@ -5,6 +5,7 @@ import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 import { initBloques, updateBloques, clearBloques } from './bloques.js';
 import { renderFusionBadge } from '../bnh-fusion.js';
+import { renderBloqueIA, renderBarraIAGlobal } from './medallas-ai.js';
 
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -1153,9 +1154,6 @@ export function renderProponerMedalla() {
                 <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
                     <h3 style="margin:0;font-family:'Cinzel',serif;">📝 Proponer Medalla</h3>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <button onclick="window._medallaIA.abrir('prop','prop')"
-                            style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.5);color:white;
-                                   padding:4px 12px;border-radius:8px;cursor:pointer;font-size:0.82em;font-weight:700;">✨ IA</button>
                         <button onclick="window._medallasCloseModal()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
                     </div>
                 </div>
@@ -1202,6 +1200,7 @@ export function renderProponerMedalla() {
                         <div id="prop-conds"></div>
                         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="window._propAddCond()">+ Añadir efecto condicional</button>
                     </div>
+                    ${renderBloqueIA('prop-fm', 'window._iaGenerarProp')}
                     <div style="display:flex;gap:10px;margin-top:4px;">
                         <button class="btn btn-sm" style="background:#e67e22;border-color:#e67e22;color:white;"
                             onclick="window._medEnviarPropuesta()">📝 Enviar propuesta</button>
@@ -1249,8 +1248,6 @@ export function renderFormMedalla(m = null) {
                 <div class="modal-header">
                     <h3>${isEdit ? '✏️ Editar' : '✨ Nueva'} Medalla</h3>
                     <div style="display:flex;gap:8px;align-items:center;">
-                        <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;font-weight:700;"
-                            onclick="window._medallaIA.abrir('admin','admin')">✨ IA</button>
                         <button class="modal-close" onclick="window._medallasCloseModal()">×</button>
                     </div>
                 </div>
@@ -1289,6 +1286,7 @@ export function renderFormMedalla(m = null) {
                         <div id="fm-conds">${conds.map((c, i) => _htmlCondRow(c, i)).join('')}</div>
                         <button class="btn btn-outline btn-sm" style="margin-top:6px;" onclick="window._medAddCond()">+ Añadir efecto condicional</button>
                     </div>
+                    ${renderBloqueIA('admin-fm', 'window._iaGenerarAdmin')}
                     <div style="display:flex;gap:10px;margin-top:4px;">
                         <button class="btn btn-green" onclick="window._medGuardar()">💾 Guardar Medalla</button>
                         <button class="btn btn-outline" onclick="window._medallasCloseModal()">Cancelar</button>
@@ -1375,6 +1373,7 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                 <button class="btn btn-outline btn-sm" style="margin-top:4px;font-size:0.75em;"
                     onclick="window._mfAddCond('${fid}')">+ Condicional</button>
             </div>
+            ${renderBloqueIA(fid, 'window._iaGenerarMini')}
             <div id="mf-msg-${fid}" style="font-size:0.75em;color:var(--red);min-height:14px;"></div>
         </div>`;
     }
@@ -1389,8 +1388,6 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                     <div class="modal-header" style="display:flex;align-items:center;justify-content:space-between;gap:10px;${esPropuesta ? 'background:#e67e22;color:white;' : ''}">
                         <h3 style="margin:0;">${titulo}</h3>
                         <div style="display:flex;gap:8px;align-items:center;">
-                            <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;font-weight:700;"
-                                onclick="window._medallaIA.abrirMulti('${prefix}',${N})">✨ IA ×${N}</button>
                             <button class="btn btn-green" id="mf-guardar-todos" onclick="window._mfGuardarTodos('${prefix}',${N},${esPropuesta})">
                                 💾 Guardar todas
                             </button>
@@ -1405,6 +1402,8 @@ export function renderFormsMultiple(esPropuesta = false, numForms = 4) {
                             <span style="font-size: 0.75em; color: var(--red); font-weight:bold;">(Atención: Actualizar borrará los datos no guardados)</span>
                         </div>
                         <p style="font-size:0.83em;color:#888;margin:0 0 14px;">${subtitulo} Los formularios vacíos se omiten automáticamente.</p>
+                        
+                        ${renderBarraIAGlobal(prefix, N)}
                         
                         <div id="mf-resumen" style="display:none;padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:0.85em;font-weight:600;"></div>
                         

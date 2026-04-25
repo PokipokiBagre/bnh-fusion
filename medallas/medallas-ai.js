@@ -1,5 +1,6 @@
 // ============================================================
-// medallas/medallas-ai.js — IA Generadora de Medallas
+// medallas/medallas-ai.js — IA integrada en formularios
+// v2.0: IA inline por formulario, edición contextual, estructura irregular real
 // ============================================================
 import { supabase } from '../bnh-auth.js';
 import { medallas } from './medallas-state.js';
@@ -37,717 +38,633 @@ EFECTOS — usa lenguaje natural directo:
 MARKUP:
   #Tag → solo tags de la lista provista. NUNCA inventar tags.
   !NombreMedalla! → nombre exacto de una medalla existente. NUNCA !Activa!, !Pasiva!, !Definitiva!
-  @Nombre_Personaje@ → SOLO para apuntar a un personaje por su nombre específico. Si te refieres a personajes en general o aliados/rivales, usa lenguaje natural sin el símbolo @.
+  @Nombre_Personaje@ → SOLO para apuntar a un personaje específico. Para "aliados" o "rival" usa lenguaje natural.
 `.trim();
 
-// ── 5 medallas aleatorias del catálogo como ejemplos ────────
+// ── Helpers de datos ─────────────────────────────────────────
+
 function _get5Ejemplos() {
     const pool = (medallas || []).filter(m => !m.propuesta && m.nombre && m.efecto_desc);
     if (!pool.length) return '(catálogo vacío, sin ejemplos disponibles)';
-
     const sample = [...pool].sort(() => Math.random() - 0.5).slice(0, 5);
     return sample.map(m => {
-        const tags = (m.requisitos_base || []).map(r =>
-            (r.tag.startsWith('#') ? r.tag : '#' + r.tag)
-        ).join(', ');
-        const reqs = (m.requisitos_base || [])
-            .map(r => `    ${r.tag.startsWith('#') ? r.tag : '#' + r.tag}: min. ${r.pts_minimos} PT`)
-            .join('\n');
-        const conds = (m.efectos_condicionales || [])
-            .map(ec => `    SI ${ec.tag} >= ${ec.pts_minimos} PT: ${ec.efecto}`)
-            .join('\n');
+        const reqs  = (m.requisitos_base || []).map(r => `    ${r.tag.startsWith('#') ? r.tag : '#' + r.tag}: min. ${r.pts_minimos} PT`).join('\n');
+        const conds = (m.efectos_condicionales || []).map(ec => `    SI ${ec.tag} >= ${ec.pts_minimos} PT: ${ec.efecto}`).join('\n');
         return [
             `[${m.nombre}] | ${m.costo_ctl} CTL | Tipo: ${m.tipo || 'activa'}`,
-            `  Tags: ${tags || '(sin tags)'}`,
             `  [EFECTO] ${m.efecto_desc}`,
-            reqs ? `  [REQUISITOS]\n${reqs}` : '',
+            reqs  ? `  [REQUISITOS]\n${reqs}` : '',
             conds ? `  [CONDICIONALES]\n${conds}` : '',
         ].filter(Boolean).join('\n');
     }).join('\n\n---\n\n');
 }
 
-// ── Lista de tags disponibles en el catálogo ─────────────────
 function _getTagsDisponibles() {
     const tags = (TAGS_CANONICOS || []).filter(Boolean);
-    if (!tags.length) return '(catálogo de tags vacío)';
-    return tags.join(', ');
+    return tags.length ? tags.join(', ') : '(catálogo de tags vacío)';
 }
-
 
 function _getNombres() {
     return (medallas || []).map(m => m.nombre).filter(Boolean).join(', ');
 }
 
-// ── Lista de medallas reales para que la IA pueda referenciarlas con !nombre! ───────────
 function _getMedallasRef() {
     const pool = (medallas || []).filter(m => m.nombre);
-    if (!pool.length) return '(catálogo vacío)';
-    return pool.map(m => `!${m.nombre}!`).join(', ');
+    return pool.length ? pool.map(m => `!${m.nombre}!`).join(', ') : '(catálogo vacío)';
 }
 
-// ── Leer tags ya cargados en el formulario ───────────────────
-function _leerTagsForm(tipo, fid) {
-    let selector = '';
-    if (tipo === 'mini')  selector = `#mf-reqs-${fid} input[placeholder="#Tag"]`;
-    if (tipo === 'prop')  selector = '#prop-reqs [id^="req-tag-"]';
-    if (tipo === 'admin') selector = '#fm-reqs [id^="req-tag-"]';
-    if (!selector) return [];
-    return [...document.querySelectorAll(selector)]
-        .map(el => el.value.trim())
-        .filter(t => t.startsWith('#'));
+// ── Leer estado ACTUAL de un mini-form ───────────────────────
+function _leerMiniForm(fid) {
+    const get = id => document.getElementById(id);
+
+    const nombre  = get(`mf-nombre-${fid}`)?.value.trim() || '';
+    const ctl     = get(`mf-ctl-${fid}`)?.value || '1';
+    const efecto  = get(`mf-efecto-${fid}`)?.value.trim() || '';
+    const tipo    = get(`mf-tipo-${fid}`)?.value || 'activa';
+
+    // Reqs: todos los rows presentes en el DOM
+    const reqsDiv = get(`mf-reqs-${fid}`);
+    const reqs = [];
+    if (reqsDiv) {
+        reqsDiv.querySelectorAll('[id^="mf-rrow-"]').forEach(row => {
+            const tag = row.querySelector('[placeholder="#Tag"]')?.value.trim() || '';
+            const pts = parseInt(row.querySelector('[type="number"]')?.value || '0') || 0;
+            if (tag) reqs.push({ tag, pts_minimos: pts });
+        });
+    }
+
+    // Conds
+    const condsDiv = get(`mf-conds-${fid}`);
+    const conds = [];
+    if (condsDiv) {
+        condsDiv.querySelectorAll('[id^="mf-crow-"]').forEach(row => {
+            const tag    = row.querySelector('[placeholder="#Tag"]')?.value.trim() || '';
+            const pts    = parseInt(row.querySelector('[type="number"]')?.value || '0') || 0;
+            const efCond = row.querySelector('textarea')?.value.trim() || '';
+            if (tag || efCond) conds.push({ tag, pts_minimos: pts, efecto: efCond });
+        });
+    }
+
+    return { nombre, costo_ctl: parseInt(ctl) || 1, efecto_base: efecto, tipo, requisitos_base: reqs, efectos_condicionales: conds };
 }
 
-// ── Llenar formulario con el resultado de la IA ──────────────
-function _llenarForm(tipo, fid, data) {
-    const set = (id, val) => {
-        const el = document.getElementById(id);
-        if (el) el.value = (val ?? '');
-    };
+// Leer form admin (fm-*)
+function _leerFormAdmin() {
+    const get = id => document.getElementById(id);
+    const nombre = get('fm-nombre')?.value.trim() || '';
+    const ctl    = parseInt(get('fm-ctl')?.value || '1') || 1;
+    const efecto = get('fm-efecto')?.value.trim() || '';
+    const tipo   = get('fm-tipo')?.value || 'activa';
 
-    // ── Mini-form (múltiple) ──
-    if (tipo === 'mini') {
-        set(`mf-nombre-${fid}`, data.nombre);
-        set(`mf-ctl-${fid}`, data.costo_ctl);
-        set(`mf-efecto-${fid}`, data.efecto_base);
-        const tipoEl = document.getElementById(`mf-tipo-${fid}`);
-        if (tipoEl && data.tipo) tipoEl.value = data.tipo;
+    const reqs = [];
+    document.querySelectorAll('#fm-reqs [id^="req-row-"]').forEach(row => {
+        const tag = row.querySelector('[id^="req-tag-"]')?.value.trim() || '';
+        const pts = parseInt(row.querySelector('[id^="req-pts-"]')?.value || '0') || 0;
+        if (tag) reqs.push({ tag, pts_minimos: pts });
+    });
 
-        const reqsDiv = document.getElementById(`mf-reqs-${fid}`);
-        if (reqsDiv && data.requisitos_base?.length) {
-            reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
-                <div class="cond-row" id="mf-rrow-${fid}-${i}" style="margin-bottom:4px;">
+    const conds = [];
+    document.querySelectorAll('#fm-conds [id^="cond-row-"]').forEach(row => {
+        const tag    = row.querySelector('[id^="cond-tag-"]')?.value.trim() || '';
+        const pts    = parseInt(row.querySelector('[id^="cond-pts-"]')?.value || '0') || 0;
+        const efCond = row.querySelector('textarea')?.value.trim() || '';
+        if (tag || efCond) conds.push({ tag, pts_minimos: pts, efecto: efCond });
+    });
+
+    return { nombre, costo_ctl: ctl, efecto_base: efecto, tipo, requisitos_base: reqs, efectos_condicionales: conds };
+}
+
+// Leer form propuesta (prop-*)
+function _leerFormProp() {
+    const get = id => document.getElementById(id);
+    const nombre = get('prop-nombre')?.value.trim() || '';
+    const ctl    = parseInt(get('prop-ctl')?.value || '1') || 1;
+    const efecto = get('prop-efecto')?.value.trim() || '';
+    const tipo   = get('prop-tipo')?.value || 'activa';
+
+    const reqs = [];
+    document.querySelectorAll('#prop-reqs [id^="req-row-"]').forEach(row => {
+        const tag = row.querySelector('[id^="req-tag-"]')?.value.trim() || '';
+        const pts = parseInt(row.querySelector('[id^="req-pts-"]')?.value || '0') || 0;
+        if (tag) reqs.push({ tag, pts_minimos: pts });
+    });
+
+    const conds = [];
+    document.querySelectorAll('#prop-conds [id^="cond-row-"]').forEach(row => {
+        const tag    = row.querySelector('[id^="cond-tag-"]')?.value.trim() || '';
+        const pts    = parseInt(row.querySelector('[id^="cond-pts-"]')?.value || '0') || 0;
+        const efCond = row.querySelector('textarea')?.value.trim() || '';
+        if (tag || efCond) conds.push({ tag, pts_minimos: pts, efecto: efCond });
+    });
+
+    return { nombre, costo_ctl: ctl, efecto_base: efecto, tipo, requisitos_base: reqs, efectos_condicionales: conds };
+}
+
+// ── Volcar datos en formularios ───────────────────────────────
+
+function _llenarMiniForm(fid, data) {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = (val ?? ''); };
+
+    set(`mf-nombre-${fid}`, data.nombre);
+    set(`mf-ctl-${fid}`, data.costo_ctl);
+    set(`mf-efecto-${fid}`, data.efecto_base);
+    const tipoEl = document.getElementById(`mf-tipo-${fid}`);
+    if (tipoEl && data.tipo) tipoEl.value = data.tipo;
+
+    const reqsDiv = document.getElementById(`mf-reqs-${fid}`);
+    if (reqsDiv && data.requisitos_base?.length) {
+        reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
+            <div class="cond-row" id="mf-rrow-${fid}-${i}" style="margin-bottom:4px;">
+                <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;"
+                    id="mf-rtag-${fid}-${i}" value="${_esc(r.tag || '')}" autocomplete="off">
+                <input class="inp" type="number" min="0" placeholder="PT"
+                    style="width:60px;font-size:0.82em;" id="mf-rpts-${fid}-${i}" value="${r.pts_minimos || 0}">
+                <button class="btn btn-red btn-sm"
+                    onclick="document.getElementById('mf-rrow-${fid}-${i}').remove()">✕</button>
+            </div>`).join('');
+        if (window._mfReqCounters) window._mfReqCounters[fid] = data.requisitos_base.length - 1;
+    }
+
+    const condsDiv = document.getElementById(`mf-conds-${fid}`);
+    if (condsDiv) {
+        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+            <div class="cond-row" id="mf-crow-${fid}-${i}"
+                style="flex-direction:column;align-items:stretch;margin-bottom:6px;">
+                <div style="display:flex;gap:4px;">
                     <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;"
-                        id="mf-rtag-${fid}-${i}" value="${_esc(r.tag || '')}" autocomplete="off">
+                        id="mf-ctag-${fid}-${i}" value="${_esc(ec.tag || '')}" autocomplete="off">
                     <input class="inp" type="number" min="0" placeholder="PT"
-                        style="width:60px;font-size:0.82em;" id="mf-rpts-${fid}-${i}" value="${r.pts_minimos || 0}">
+                        style="width:60px;font-size:0.82em;" id="mf-cpts-${fid}-${i}" value="${ec.pts_minimos || 0}">
                     <button class="btn btn-red btn-sm"
-                        onclick="document.getElementById('mf-rrow-${fid}-${i}').remove()">✕</button>
-                </div>`).join('');
-            if (window._mfReqCounters) window._mfReqCounters[fid] = data.requisitos_base.length - 1;
-        }
+                        onclick="document.getElementById('mf-crow-${fid}-${i}').remove()">✕</button>
+                </div>
+                <textarea class="inp" rows="1" id="mf-cefecto-${fid}-${i}"
+                    style="font-size:0.82em;margin-top:4px;">${_esc(ec.efecto || '')}</textarea>
+            </div>`).join('');
+        if (window._mfCondCounters)
+            window._mfCondCounters[fid] = (data.efectos_condicionales?.length || 1) - 1;
+    }
+}
 
-        const condsDiv = document.getElementById(`mf-conds-${fid}`);
-        if (condsDiv) {
-            condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
-                <div class="cond-row" id="mf-crow-${fid}-${i}"
-                    style="flex-direction:column;align-items:stretch;margin-bottom:6px;">
-                    <div style="display:flex;gap:4px;">
-                        <input class="inp" placeholder="#Tag" style="flex:1;font-size:0.82em;"
-                            id="mf-ctag-${fid}-${i}" value="${_esc(ec.tag || '')}" autocomplete="off">
-                        <input class="inp" type="number" min="0" placeholder="PT"
-                            style="width:60px;font-size:0.82em;" id="mf-cpts-${fid}-${i}" value="${ec.pts_minimos || 0}">
-                        <button class="btn btn-red btn-sm"
-                            onclick="document.getElementById('mf-crow-${fid}-${i}').remove()">✕</button>
-                    </div>
-                    <textarea class="inp" rows="1" id="mf-cefecto-${fid}-${i}"
-                        style="font-size:0.82em;margin-top:4px;">${_esc(ec.efecto || '')}</textarea>
-                </div>`).join('');
-            if (window._mfCondCounters)
-                window._mfCondCounters[fid] = (data.efectos_condicionales?.length || 1) - 1;
-        }
+function _llenarFormAdmin(data) {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = (val ?? ''); };
+    set('fm-nombre', data.nombre);
+    set('fm-ctl', data.costo_ctl);
+    set('fm-efecto', data.efecto_base);
+    const tipoEl = document.getElementById('fm-tipo');
+    if (tipoEl && data.tipo) tipoEl.value = data.tipo;
+
+    const reqsDiv = document.getElementById('fm-reqs');
+    if (reqsDiv && data.requisitos_base?.length) {
+        reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
+            <div class="cond-row" id="req-row-${i}">
+                <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
+                    value="${_esc(r.tag || '')}" id="req-tag-${i}" autocomplete="off">
+                <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
+                    value="${r.pts_minimos || 0}" id="req-pts-${i}">
+                <button class="btn btn-red btn-sm"
+                    onclick="document.getElementById('req-row-${i}').remove()">✕</button>
+            </div>`).join('');
+        window._fm_reqCount = data.requisitos_base.length;
     }
 
-    // ── Formulario de propuesta simple ──
-    if (tipo === 'prop') {
-        set('prop-nombre', data.nombre);
-        set('prop-ctl', data.costo_ctl);
-        set('prop-efecto', data.efecto_base);
-        const tipoEl = document.getElementById('prop-tipo');
-        if (tipoEl && data.tipo) tipoEl.value = data.tipo;
-
-        const reqsDiv = document.getElementById('prop-reqs');
-        if (reqsDiv && data.requisitos_base?.length) {
-            reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
-                <div class="cond-row" id="req-row-${i}">
+    const condsDiv = document.getElementById('fm-conds');
+    if (condsDiv) {
+        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+            <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
+                <div style="display:flex;gap:8px;">
                     <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
-                        value="${_esc(r.tag || '')}" id="req-tag-${i}" autocomplete="off">
+                        value="${_esc(ec.tag || '')}" id="cond-tag-${i}" autocomplete="off">
                     <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
-                        value="${r.pts_minimos || 0}" id="req-pts-${i}">
+                        value="${ec.pts_minimos || 0}" id="cond-pts-${i}">
                     <button class="btn btn-red btn-sm"
-                        onclick="document.getElementById('req-row-${i}').remove()">✕</button>
-                </div>`).join('');
-            window._propReqCount = data.requisitos_base.length - 1;
-        }
+                        onclick="document.getElementById('cond-row-${i}').remove()">✕</button>
+                </div>
+                <textarea class="inp" rows="2" id="cond-efecto-${i}"
+                    style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
+            </div>`).join('');
+        window._fm_condCount = data.efectos_condicionales?.length || 0;
+    }
+}
 
-        const condsDiv = document.getElementById('prop-conds');
-        if (condsDiv) {
-            condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
-                <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
-                    <div style="display:flex;gap:8px;">
-                        <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
-                            value="${_esc(ec.tag || '')}" id="cond-tag-${i}" autocomplete="off">
-                        <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
-                            value="${ec.pts_minimos || 0}" id="cond-pts-${i}">
-                        <button class="btn btn-red btn-sm"
-                            onclick="document.getElementById('cond-row-${i}').remove()">✕</button>
-                    </div>
-                    <textarea class="inp" rows="2" id="cond-efecto-${i}"
-                        style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
-                </div>`).join('');
-            window._propCondCount = (data.efectos_condicionales?.length || 1) - 1;
-        }
+function _llenarFormProp(data) {
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = (val ?? ''); };
+    set('prop-nombre', data.nombre);
+    set('prop-ctl', data.costo_ctl);
+    set('prop-efecto', data.efecto_base);
+    const tipoEl = document.getElementById('prop-tipo');
+    if (tipoEl && data.tipo) tipoEl.value = data.tipo;
+
+    const reqsDiv = document.getElementById('prop-reqs');
+    if (reqsDiv && data.requisitos_base?.length) {
+        reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
+            <div class="cond-row" id="req-row-${i}">
+                <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
+                    value="${_esc(r.tag || '')}" id="req-tag-${i}" autocomplete="off">
+                <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
+                    value="${r.pts_minimos || 0}" id="req-pts-${i}">
+                <button class="btn btn-red btn-sm"
+                    onclick="document.getElementById('req-row-${i}').remove()">✕</button>
+            </div>`).join('');
+        window._propReqCount = data.requisitos_base.length - 1;
     }
 
-    // ── Formulario admin (crear/editar) ──
-    if (tipo === 'admin') {
-        set('fm-nombre', data.nombre);
-        set('fm-ctl', data.costo_ctl);
-        set('fm-efecto', data.efecto_base);
-        const tipoEl = document.getElementById('fm-tipo');
-        if (tipoEl && data.tipo) tipoEl.value = data.tipo;
-
-        const reqsDiv = document.getElementById('fm-reqs');
-        if (reqsDiv && data.requisitos_base?.length) {
-            reqsDiv.innerHTML = data.requisitos_base.map((r, i) => `
-                <div class="cond-row" id="req-row-${i}">
+    const condsDiv = document.getElementById('prop-conds');
+    if (condsDiv) {
+        condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
+            <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
+                <div style="display:flex;gap:8px;">
                     <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
-                        value="${_esc(r.tag || '')}" id="req-tag-${i}" autocomplete="off">
+                        value="${_esc(ec.tag || '')}" id="cond-tag-${i}" autocomplete="off">
                     <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
-                        value="${r.pts_minimos || 0}" id="req-pts-${i}">
+                        value="${ec.pts_minimos || 0}" id="cond-pts-${i}">
                     <button class="btn btn-red btn-sm"
-                        onclick="document.getElementById('req-row-${i}').remove()">✕</button>
-                </div>`).join('');
-            window._fm_reqCount = data.requisitos_base.length;
-        }
-
-        const condsDiv = document.getElementById('fm-conds');
-        if (condsDiv) {
-            condsDiv.innerHTML = (data.efectos_condicionales || []).map((ec, i) => `
-                <div class="cond-row" style="flex-direction:column;align-items:stretch;" id="cond-row-${i}">
-                    <div style="display:flex;gap:8px;">
-                        <input class="inp" placeholder="#Tag — escribe # para sugerencias" style="flex:1;"
-                            value="${_esc(ec.tag || '')}" id="cond-tag-${i}" autocomplete="off">
-                        <input class="inp" type="number" min="0" placeholder="PT mín." style="width:90px;"
-                            value="${ec.pts_minimos || 0}" id="cond-pts-${i}">
-                        <button class="btn btn-red btn-sm"
-                            onclick="document.getElementById('cond-row-${i}').remove()">✕</button>
-                    </div>
-                    <textarea class="inp" rows="2" id="cond-efecto-${i}"
-                        style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
-                </div>`).join('');
-            window._fm_condCount = data.efectos_condicionales?.length || 0;
-        }
+                        onclick="document.getElementById('cond-row-${i}').remove()">✕</button>
+                </div>
+                <textarea class="inp" rows="2" id="cond-efecto-${i}"
+                    style="margin-top:6px;">${_esc(ec.efecto || '')}</textarea>
+            </div>`).join('');
+        window._propCondCount = (data.efectos_condicionales?.length || 1) - 1;
     }
 }
 
-// ── Preview de la medalla generada ───────────────────────────
-function _renderPreview(container, data) {
-    if (!container) return;
-
-    const tipoColor = data.tipo === 'pasiva' ? '#27ae60' : data.tipo === 'definitiva' ? '#8e44ad' : '#2980b9';
-    const reqs = (data.requisitos_base || []).map(r =>
-        `<span style="font-size:0.72em;background:rgba(52,152,219,0.1);color:#2980b9;
-            border:1px solid rgba(52,152,219,0.3);padding:2px 8px;border-radius:8px;font-weight:700;">
-            ${_esc(r.tag)} ≥${r.pts_minimos} PT</span>`
-    ).join(' ');
-    const conds = (data.efectos_condicionales || []).map(ec =>
-        `<div style="font-size:0.75em;padding:6px 10px;background:rgba(243,156,18,0.07);
-            border:1px solid rgba(243,156,18,0.3);border-radius:6px;margin-top:4px;">
-            <b style="color:#e67e22;">⚡ SI ${_esc(ec.tag)} ≥${ec.pts_minimos} PT:</b>
-            <span style="color:#555;"> ${_esc(ec.efecto)}</span>
-         </div>`
-    ).join('');
-
-    container.style.display = 'block';
-    container.innerHTML = `
-    <div style="border:2px solid #6c3483;border-radius:10px;overflow:hidden;">
-        <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-            padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-family:'Cinzel',serif;font-size:0.95em;font-weight:700;">${_esc(data.nombre)}</div>
-            <div style="display:flex;gap:6px;align-items:center;">
-                <span style="font-size:0.7em;font-weight:700;background:rgba(255,255,255,0.15);
-                    padding:2px 8px;border-radius:10px;text-transform:uppercase;">${_esc(data.tipo || 'activa')}</span>
-                <span style="font-size:0.9em;font-weight:800;">${data.costo_ctl} CTL</span>
-            </div>
-        </div>
-        <div style="padding:12px 14px;background:#faf8ff;display:flex;flex-direction:column;gap:8px;">
-            <div style="font-size:0.84em;color:#333;line-height:1.6;">${_esc(data.efecto_base)}</div>
-            ${reqs ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${reqs}</div>` : ''}
-            ${conds}
-            <div style="border-top:1px solid #e0d8f0;padding-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button class="btn" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);
-                    color:white;border-color:#6c3483;flex:1;min-width:140px;"
-                    onclick="window._medallaIA.aplicar()">✅ Aplicar al formulario</button>
-                <button class="btn btn-outline" style="font-size:0.82em;"
-                    onclick="window._medallaIA.generar()">🔄 Regenerar</button>
-            </div>
-        </div>
-    </div>`;
+// ── Estructura irregular para generación múltiple ────────────
+// La IA siempre genera la medalla completa.
+// El PROGRAMA decide aquí qué reqs/conds conservar en cada slot,
+// para que la irregularidad sea consistente y no dependa del azar de la IA.
+function _generarEstructuraSlots(N) {
+    // Pool de estructuras base, variadas
+    const base = [
+        { tipo: 'pasiva',     num_reqs: 1, tiene_cond: false },
+        { tipo: 'activa',     num_reqs: 1, tiene_cond: false },
+        { tipo: 'activa',     num_reqs: 1, tiene_cond: true  },
+        { tipo: 'activa',     num_reqs: 2, tiene_cond: false },
+        { tipo: 'activa',     num_reqs: 2, tiene_cond: true  },
+        { tipo: 'pasiva',     num_reqs: 1, tiene_cond: true  },
+        { tipo: 'definitiva', num_reqs: 1, tiene_cond: false },
+        { tipo: 'definitiva', num_reqs: 2, tiene_cond: true  },
+    ];
+    // Fisher-Yates shuffle y expandir a N sin repetir el mismo patrón consecutivo
+    const shuffled = [...base].sort(() => Math.random() - 0.5);
+    return Array.from({ length: N }, (_, i) => ({ ...shuffled[i % shuffled.length] }));
 }
 
-// ── Render del panel principal ────────────────────────────────
-function _renderPanel(tipo, fid, tagsActuales) {
-    let root = document.getElementById('medalla-ai-root');
-    if (!root) {
-        root = document.createElement('div');
-        root.id = 'medalla-ai-root';
-        document.body.appendChild(root);
-    }
-
-    const subtitulo = tipo === 'mini'
-        ? `Medalla ${fid.replace(/^m[mp]/, '#')}` // mm0 → #0
-        : tipo === 'prop' ? 'Propuesta de medalla' : 'Formulario admin';
-
-    const tagsChips = tagsActuales.length
-        ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">
-            ${tagsActuales.map(t =>
-                `<span style="background:rgba(52,152,219,0.1);border:1px solid rgba(52,152,219,0.35);
-                    color:#2980b9;padding:3px 10px;border-radius:10px;font-size:0.78em;font-weight:700;">${_esc(t)}</span>`
-            ).join('')}
-           </div>`
-        : `<p style="font-size:0.78em;color:#aaa;margin:0;font-style:italic;">
-            Sin tags en el formulario. Descríbelos en el concepto.</p>`;
-
-    root.innerHTML = `
-    <div id="medalla-ai-backdrop" style="
-        position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1200;
-        display:flex;align-items:flex-start;justify-content:center;
-        padding:30px 16px 60px;overflow-y:auto;
-    " onclick="if(event.target===this)window._medallaIA.cerrar()">
-        <div style="background:white;border-radius:14px;width:100%;max-width:580px;
-            box-shadow:0 16px 60px rgba(0,0,0,0.4);overflow:hidden;">
-
-            <!-- Header -->
-            <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-                padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <div style="font-family:'Cinzel',serif;font-size:1.05em;font-weight:700;">✨ IA — Generar Medalla</div>
-                    <div style="font-size:0.72em;color:rgba(255,255,255,0.55);margin-top:2px;">${subtitulo}</div>
-                </div>
-                <button onclick="window._medallaIA.cerrar()" style="
-                    background:rgba(255,255,255,0.15);border:none;color:white;
-                    border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
-            </div>
-
-            <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
-
-                <!-- Tags base del formulario -->
-                <div>
-                    <div style="font-size:0.75em;font-weight:700;color:#666;
-                        text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">
-                        Tags del formulario (requisitos base)
-                    </div>
-                    ${tagsChips}
-                </div>
-
-                <!-- Concepto -->
-                <div>
-                    <label style="font-size:0.78em;font-weight:700;color:#444;display:block;margin-bottom:5px;">
-                        Concepto o idea para la medalla
-                    </label>
-                    <textarea id="ai-medalla-concepto" class="inp" rows="3"
-                        placeholder="Ej: una medalla que drene POT del rival y lo transfiera, que invalide !Estrella de Carne!, que escale con los PT de #Trauma, que aplique un estado de Luto..."
-                        style="resize:vertical;font-size:0.85em;"></textarea>
-                    <div style="font-size:0.71em;color:#aaa;margin-top:3px;">
-                        Menciona efectos, condiciones, medallas a invalidar (!así!), personajes (@así@) o tags adicionales (#así).
-                    </div>
-                </div>
-
-                <!-- Botones -->
-                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                    <button id="ai-medalla-gen-btn" class="btn"
-                        style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-                            border-color:#6c3483;min-width:150px;font-weight:700;"
-                        onclick="window._medallaIA.generar()">✨ Generar</button>
-                    <button class="btn btn-outline" onclick="window._medallaIA.cerrar()">Cancelar</button>
-                    <span id="ai-medalla-status" style="font-size:0.78em;color:#888;"></span>
-                </div>
-
-                <!-- Resultado -->
-                <div id="ai-medalla-result" style="display:none;"></div>
-
-            </div>
-        </div>
-    </div>`;
+// Recortar el resultado de la IA según la estructura del slot
+function _aplicarEstructura(data, slot) {
+    const out = { ...data };
+    // Recortar reqs al número indicado
+    const reqs = (out.requisitos_base || []).slice(0, slot.num_reqs);
+    // Si la IA no generó suficientes, mantener los que haya
+    out.requisitos_base = reqs.length ? reqs : (out.requisitos_base || []);
+    // Limpiar/mantener condicionales
+    out.efectos_condicionales = slot.tiene_cond ? (out.efectos_condicionales || []) : [];
+    // Respetar el tipo del slot
+    out.tipo = slot.tipo;
+    return out;
 }
 
-// ── Estado interno ────────────────────────────────────────────
-let _iaTipo   = null;
-let _iaFid    = null;
-let _iaResult = null;
+// ── Llamada a Supabase edge function ─────────────────────────
+async function _invocarIA(prompt, contexto) {
+    const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
+        body: { prompt, contextoAdicional: contexto }
+    });
+    if (error) throw new Error(error.message || JSON.stringify(error));
+    if (!data)           throw new Error('Sin datos de respuesta.');
+    if (data.error)      throw new Error(data.error);
+    if (!data.resultado) throw new Error('Respuesta vacía de la IA.');
 
-// ── API pública (window._medallaIA) ──────────────────────────
-window._medallaIA = {
+    const raw = data.resultado
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/,      '')
+        .replace(/\s*```$/,      '')
+        .trim();
+    return raw;
+}
 
-    abrir(fid, tipo) {
-        _iaTipo   = tipo;
-        _iaFid    = fid;
-        _iaResult = null;
-        const tags = _leerTagsForm(tipo, fid);
-        _renderPanel(tipo, fid, tags);
-    },
+// ── Prompt para medalla individual ───────────────────────────
+function _buildPromptSingle(instruccion, estadoActual) {
+    const tieneContenido = estadoActual.nombre || estadoActual.efecto_base || estadoActual.requisitos_base?.length;
+    const estadoStr = tieneContenido
+        ? `ESTADO ACTUAL DEL FORMULARIO (puedes modificar solo lo que el usuario pida, o todo si la instrucción lo requiere):
+nombre: ${estadoActual.nombre || '(vacío)'}
+costo_ctl: ${estadoActual.costo_ctl}
+efecto_base: ${estadoActual.efecto_base || '(vacío)'}
+tipo: ${estadoActual.tipo}
+requisitos_base: ${JSON.stringify(estadoActual.requisitos_base || [])}
+efectos_condicionales: ${JSON.stringify(estadoActual.efectos_condicionales || [])}`
+        : 'FORMULARIO VACÍO — genera una medalla nueva desde cero.';
 
-    cerrar() {
-        const root = document.getElementById('medalla-ai-root');
-        if (root) root.innerHTML = '';
-        _iaResult = null;
-    },
-
-    async generar() {
-        const concepto   = document.getElementById('ai-medalla-concepto')?.value.trim() || '';
-        const btn        = document.getElementById('ai-medalla-gen-btn');
-        const status     = document.getElementById('ai-medalla-status');
-        const resultDiv  = document.getElementById('ai-medalla-result');
-
-        if (btn) { btn.disabled = true; btn.textContent = 'Generando...'; }
-        if (status) status.textContent = 'Conectando…';
-        if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
-        _iaResult = null;
-
-        // Re-leer tags del form en el momento de generar
-        const tags    = _leerTagsForm(_iaTipo, _iaFid);
-        const tagsStr = tags.length ? tags.join(', ') : '(sin tags explícitos — infiere desde el concepto)';
-
-        const ejemplos = _get5Ejemplos();
-        const nombres  = _getNombres();
-
-        const prompt = `
+    return `
 ${GUIA_MEDALLAS}
 
 ────────────────────────────────────────────
-EJEMPLOS REALES DEL CATÁLOGO (referencia de estilo, escala y profundidad):
-${ejemplos}
+TAGS DISPONIBLES — SOLO usa tags de esta lista:
+${_getTagsDisponibles()}
 
 ────────────────────────────────────────────
-NOMBRES YA EXISTENTES — NO repetir ninguno:
-${nombres}
+MEDALLAS DEL CATÁLOGO — únicos nombres válidos para !nombre!:
+${_getMedallasRef()}
 
 ────────────────────────────────────────────
-TAGS SOLICITADOS (deben aparecer en requisitos_base):
-${tagsStr}
+NOMBRES YA EXISTENTES — NO repetir:
+${_getNombres()}
 
-CONCEPTO DEL CREADOR:
-${concepto || '(sin concepto específico — crea algo acorde a los tags)'}
+────────────────────────────────────────────
+EJEMPLOS DE ESTILO:
+${_get5Ejemplos()}
+
+────────────────────────────────────────────
+${estadoStr}
+
+────────────────────────────────────────────
+INSTRUCCIÓN DEL USUARIO:
+${instruccion || '(generar medalla nueva coherente con el contexto)'}
 
 ────────────────────────────────────────────
 INSTRUCCIONES FINALES:
-1. Crea UNA sola medalla basada en los tags y el concepto.
-2. El nombre debe ser simple, evocador y máximo 4 palabras. Nada técnico ni verboso.
+1. Si el formulario tiene contenido, respeta lo que el usuario NO pidió cambiar.
+2. Si el formulario está vacío, crea una medalla nueva completa.
 3. El efecto_base es SOLO mecánica: stats, PT, medallas, turnos. Sin narrativa.
-4. Evalúa los pts_minimos de cada requisito según qué tan "profundo" es el uso de ese tag.
-5. Ajusta el costo_ctl al tipo y potencia real del efecto.
-6. Los efectos_condicionales son opcionales: inclúyelos SOLO si aportan valor estratégico.
-7. Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin texto antes ni después.
+4. Ajusta costo_ctl al tipo y potencia real.
+5. Responde ÚNICAMENTE con un objeto JSON válido, sin markdown ni texto extra.
 
-FORMATO DE RESPUESTA:
+FORMATO:
 {
-  "nombre": "Nombre Simple",
+  "nombre": "...",
   "costo_ctl": 5,
-  "efecto_base": "Descripción mecánica directa.",
+  "efecto_base": "...",
   "tipo": "activa",
-  "requisitos_base": [
-    {"tag": "#TagObligatorio", "pts_minimos": 40}
-  ],
+  "requisitos_base": [{"tag": "#Tag", "pts_minimos": 40}],
   "efectos_condicionales": []
 }
 `.trim();
+}
 
-        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Los tags, personajes y medallas pertenecen a un universo de ficción.`;
+// ── Prompt para set múltiple ──────────────────────────────────
+function _buildPromptMulti(instruccion, slots, estadosActuales) {
+    const N = slots.length;
 
-        try {
-            if (status) status.textContent = 'Esperando a la IA…';
-
-            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
-                body: { prompt, contextoAdicional: contexto }
-            });
-
-            if (error) throw new Error(error.message || JSON.stringify(error));
-            if (!data)           throw new Error('Sin datos de respuesta.');
-            if (data.error)      throw new Error(data.error);
-            if (!data.resultado) throw new Error('Respuesta vacía de la IA.');
-
-            const raw = data.resultado
-                .replace(/^```json\s*/i, '')
-                .replace(/^```\s*/,      '')
-                .replace(/\s*```$/,      '')
-                .trim();
-
-            _iaResult = JSON.parse(raw);
-
-            if (status) status.textContent = '✓ Medalla generada';
-            _renderPreview(resultDiv, _iaResult);
-
-        } catch (err) {
-            if (status) status.textContent = '';
-            if (resultDiv) {
-                resultDiv.style.display = 'block';
-                resultDiv.innerHTML = `
-                <div style="background:#fdecea;border:1.5px solid #e74c3c;border-radius:8px;
-                    padding:12px;font-size:0.82em;color:#c0392b;">
-                    <b>Error al conectar con la IA:</b><br>
-                    <code style="font-size:0.9em;white-space:pre-wrap;">${_esc(err.message)}</code>
-                </div>`;
-            }
-            console.error('[medallas-ai]', err);
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '✨ Generar'; }
+    // Serializar estado actual de cada formulario
+    const estadosStr = estadosActuales.map((est, i) => {
+        const slot = slots[i];
+        const tieneContenido = est.nombre || est.efecto_base || est.requisitos_base?.length;
+        if (tieneContenido) {
+            return `  Medalla ${i+1} (tipo obligatorio: "${slot.tipo}", reqs: ${slot.num_reqs}, cond: ${slot.tiene_cond}):
+    ESTADO ACTUAL → nombre: "${est.nombre}", efecto: "${est.efecto_base}", tipo: "${est.tipo}"
+    reqs: ${JSON.stringify(est.requisitos_base)}, conds: ${JSON.stringify(est.efectos_condicionales)}`;
         }
-    },
+        return `  Medalla ${i+1}: VACÍA (tipo obligatorio: "${slot.tipo}", exactamente ${slot.num_reqs} req(s), cond: ${slot.tiene_cond})`;
+    }).join('\n\n');
 
-    aplicar() {
-        if (!_iaResult || !_iaTipo) return;
-        _llenarForm(_iaTipo, _iaFid, _iaResult);
-        window._medallaIA.cerrar();
-    },
-
-    // ── Modo MULTI: genera N medallas de una vez ──────────────
-    abrirMulti(prefix, N) {
-        _iaTipo   = 'multi';
-        _iaFid    = prefix;
-        _iaResult = null;
-        _renderPanelMulti(prefix, N);
-    },
-
-    async generarMulti() {
-        const concepto  = document.getElementById('ai-medalla-concepto')?.value.trim() || '';
-        const N         = parseInt(document.getElementById('ai-multi-n')?.value || '4');
-        const prefix    = document.getElementById('ai-multi-prefix')?.value || 'mm';
-        const btn       = document.getElementById('ai-medalla-gen-btn');
-        const status    = document.getElementById('ai-medalla-status');
-        const resultDiv = document.getElementById('ai-medalla-result');
-
-        if (btn) { btn.disabled = true; btn.textContent = 'Generando…'; }
-        if (status) status.textContent = 'Conectando…';
-        if (resultDiv) { resultDiv.style.display = 'none'; resultDiv.innerHTML = ''; }
-
-        const ejemplos   = _get5Ejemplos();
-        const nombres    = _getNombres();
-        const tagsDisp   = _getTagsDisponibles();
-        const medallasRef = _getMedallasRef();
-
-        // Pre-asignar estructura de variedad para cada medalla (shuffle real)
-        const _BASE_SLOTS = [
-            {tipo:'pasiva',     num_reqs:1, tiene_cond:false},
-            {tipo:'activa',     num_reqs:1, tiene_cond:false},
-            {tipo:'activa',     num_reqs:2, tiene_cond:true },
-            {tipo:'definitiva', num_reqs:1, tiene_cond:false},
-        ];
-        // Fisher-Yates shuffle de los slots base
-        const _shuffled = [..._BASE_SLOTS].sort(() => Math.random() - 0.5);
-        // Si N > 4, repetir y re-mezclar
-        const slots = Array.from({length: N}, (_, i) => ({..._shuffled[i % 4]}));
-
-        const slotDesc = slots.map((s, i) => {
-            const condStr = s.tiene_cond
-                ? `"efectos_condicionales": [{"tag": "#TagDeLaLista", "pts_minimos": N, "efecto": "..."}]`
-                : `"efectos_condicionales": []`;
-            const reqsEx = Array.from({length: s.num_reqs}, () => `{"tag": "#TagDeLaLista", "pts_minimos": N}`).join(', ');
-            return `  Medalla ${i+1}: tipo="${s.tipo}", exactamente ${s.num_reqs} requisito(s), condicional=${s.tiene_cond}
-    → "requisitos_base": [${reqsEx}]
-    → ${condStr}`;
-        }).join('\n\n');
-
-        const prompt = `
+    return `
 ${GUIA_MEDALLAS}
 
 ────────────────────────────────────────────
 TAGS DISPONIBLES — SOLO usa tags de esta lista exacta:
-${tagsDisp}
-NUNCA uses un tag que no esté aquí. Si el concepto menciona uno que no existe, usa el más parecido.
+${_getTagsDisponibles()}
+NUNCA uses un tag que no esté aquí.
 
 ────────────────────────────────────────────
-MEDALLAS DEL CATÁLOGO — Únicas que puedes referenciar con !nombre!:
-${medallasRef}
-Si no necesitas referenciar ninguna medalla específica, simplemente no uses !nombre!.
+MEDALLAS DEL CATÁLOGO — únicos nombres válidos para !nombre!:
+${_getMedallasRef()}
 
 ────────────────────────────────────────────
 NOMBRES YA EXISTENTES — NO repetir ninguno:
-${nombres}
+${_getNombres()}
 
 ────────────────────────────────────────────
-EJEMPLOS DE ESTILO (solo referencia):
-${ejemplos}
+EJEMPLOS DE ESTILO:
+${_get5Ejemplos()}
 
 ────────────────────────────────────────────
-CONCEPTO DEL CREADOR:
-${concepto || '(sin concepto — crea algo coherente con los tags)'}
+ESTADO ACTUAL DE LOS ${N} FORMULARIOS:
+${estadosStr}
 
 ────────────────────────────────────────────
-ESTRUCTURA FIJA — Debes respetar esto exactamente para cada medalla:
-
-${slotDesc}
+INSTRUCCIÓN DEL USUARIO:
+${instruccion || '(generar set coherente, temáticamente relacionado)'}
 
 ────────────────────────────────────────────
-NOMBRES — LEE ESTO CON ATENCIÓN:
-- Cada medalla necesita un nombre DISTINTO en estilo: una puede ser de 1 palabra ("Chantaje"), otra de 2 ("Legado Oculto"), otra de 1 palabra diferente ("Censura"). NO uses el mismo patrón (adjetivo+sustantivo) para todas.
-- Palabras directas: sustantivos crudos, verbos, conceptos. Evita el patrón "X Y" donde X es adjetivo y Y es sustantivo para más de 1 nombre del set.
-- Prohibido: "Susurro Silente", "Velo de Mentiras", "Carga de Culpa" — demasiado compuestos y líricos.
-- Permitido: "Susurro", "Chantaje", "Traición", "Mentira", "Revelación", "Colapso", "Herida"
+REGLAS DE ESTRUCTURA — OBLIGATORIAS:
+${slots.map((s, i) => `  Medalla ${i+1}: tipo="${s.tipo}", exactamente ${s.num_reqs} requisito(s), efectos_condicionales=${s.tiene_cond ? 'al menos 1' : 'array vacío []'}`).join('\n')}
 
-Responde ÚNICAMENTE con un array JSON de ${N} objetos. Sin markdown, sin texto extra.
-Formato por objeto: {"nombre":"...","costo_ctl":N,"efecto_base":"...","tipo":"...","requisitos_base":[...],"efectos_condicionales":[...]}
+REGLAS DE NOMBRES:
+- Cada medalla DISTINTO nombre. Mezcla 1 y 2 palabras. Evita patrón "Adjetivo+Sustantivo" repetido.
+- Sustantivos crudos, verbos, conceptos directos.
+
+INSTRUCCIONES FINALES:
+1. Si un formulario tiene contenido, aplica solo lo que la instrucción del usuario pida; mantén lo demás.
+2. Si está vacío, genera contenido nuevo coherente con el tema/instrucción.
+3. Los formularios del set deben complementarse temáticamente pero ser mecánicamente distintos.
+4. Responde ÚNICAMENTE con un array JSON de ${N} objetos. Sin markdown ni texto extra.
+5. Cada objeto: {"nombre":"...","costo_ctl":N,"efecto_base":"...","tipo":"...","requisitos_base":[...],"efectos_condicionales":[...]}
 `.trim();
+}
 
-        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Set de ${N} medallas temáticas.`;
+// ── HTML del bloque IA inline ─────────────────────────────────
+// Se inserta dentro del mini-form o del form admin/prop.
+// iaId: id único para este bloque (evita colisiones entre múltiples mini-forms)
 
-        try {
-            if (status) status.textContent = 'Esperando a la IA…';
+export function renderBloqueIA(iaId, onGenerar) {
+    return `
+<div id="ia-bloque-${iaId}" style="background:#f5f0ff;border:1.5px solid #9b59b6;border-radius:8px;padding:10px 12px;margin-top:4px;">
+    <div style="font-size:0.7em;font-weight:800;color:#6c3483;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">✨ Asistente IA</div>
+    <div style="display:flex;gap:6px;align-items:flex-start;">
+        <textarea id="ia-input-${iaId}" rows="2" 
+            style="flex:1;padding:5px 8px;border:1px solid #c8a8e9;border-radius:6px;font-size:0.8em;resize:vertical;font-family:inherit;background:white;"
+            placeholder="Ej: cambia el nombre a 'Trauma Latente', quita vida en lugar de dar protección, añade un requisito #Combate…"></textarea>
+        <button id="ia-btn-${iaId}"
+            style="background:linear-gradient(135deg,#4a235a,#8e44ad);color:white;border:none;border-radius:6px;padding:6px 12px;font-size:0.78em;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;"
+            onclick="(${onGenerar})('${iaId}')">✨ IA</button>
+    </div>
+    <div id="ia-status-${iaId}" style="font-size:0.73em;color:#888;margin-top:4px;min-height:14px;"></div>
+</div>`;
+}
 
-            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
-                body: { prompt, contextoAdicional: contexto }
-            });
+// ── Lógica de generación individual (mini-form) ───────────────
 
-            if (error) throw new Error(error.message || JSON.stringify(error));
-            if (!data)           throw new Error('Sin datos de respuesta.');
-            if (data.error)      throw new Error(data.error);
-            if (!data.resultado) throw new Error('Respuesta vacía de la IA.');
+window._iaGenerarMini = async function(iaId) {
+    // iaId === fid para mini-forms
+    const fid = iaId;
+    const inputEl  = document.getElementById(`ia-input-${iaId}`);
+    const btnEl    = document.getElementById(`ia-btn-${iaId}`);
+    const statusEl = document.getElementById(`ia-status-${iaId}`);
 
-            const raw = data.resultado
-                .replace(/^```json\s*/i, '')
-                .replace(/^```\s*/,      '')
-                .replace(/\s*```$/,      '')
-                .trim();
+    const instruccion = inputEl?.value.trim() || '';
 
-            const arr = JSON.parse(raw);
-            if (!Array.isArray(arr)) throw new Error('La IA no devolvió un array de medallas.');
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳…'; }
+    if (statusEl) { statusEl.textContent = 'Esperando a la IA…'; statusEl.style.color = '#8e44ad'; }
 
-            _iaResult = arr;
+    try {
+        const estadoActual = _leerMiniForm(fid);
+        const prompt = _buildPromptSingle(instruccion, estadoActual);
+        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Edición individual de medalla.`;
 
-            if (status) status.textContent = `✓ ${arr.length} medallas generadas`;
-            _renderPreviewMulti(resultDiv, arr, prefix);
+        const raw = await _invocarIA(prompt, contexto);
+        const result = JSON.parse(raw);
 
-        } catch (err) {
-            if (status) status.textContent = '';
-            if (resultDiv) {
-                resultDiv.style.display = 'block';
-                resultDiv.innerHTML = `
-                <div style="background:#fdecea;border:1.5px solid #e74c3c;border-radius:8px;
-                    padding:12px;font-size:0.82em;color:#c0392b;">
-                    <b>Error al conectar con la IA:</b><br>
-                    <code style="font-size:0.9em;white-space:pre-wrap;">${_esc(err.message)}</code>
-                </div>`;
-            }
-            console.error('[medallas-ai multi]', err);
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '✨ Generar set'; }
-        }
-    },
+        _llenarMiniForm(fid, result);
 
-    aplicarMulti() {
-        if (!Array.isArray(_iaResult)) return;
-        const prefix = document.getElementById('ai-multi-prefix')?.value || 'mm';
-        _iaResult.forEach((data, i) => _llenarForm('mini', `${prefix}${i}`, data));
-        window._medallaIA.cerrar();
+        if (statusEl) { statusEl.textContent = '✅ Aplicado'; statusEl.style.color = '#27ae60'; }
+        if (inputEl) inputEl.value = '';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+
+    } catch (err) {
+        console.error('[medallas-ai mini]', err);
+        if (statusEl) { statusEl.textContent = '❌ ' + (err.message || 'Error'); statusEl.style.color = '#e74c3c'; }
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ IA'; }
     }
 };
 
-// ── Preview múltiple ──────────────────────────────────────────
-function _renderPreviewMulti(container, arr, prefix) {
-    if (!container) return;
-    const tipoColor = t => t === 'pasiva' ? '#27ae60' : t === 'definitiva' ? '#8e44ad' : '#2980b9';
+// ── Lógica de generación para form admin ─────────────────────
 
-    const cards = arr.map((data, i) => {
-        const reqs = (data.requisitos_base || []).map(r =>
-            `<span style="font-size:0.7em;background:rgba(52,152,219,0.1);color:#2980b9;
-                border:1px solid rgba(52,152,219,0.3);padding:1px 7px;border-radius:8px;font-weight:700;">
-                ${_esc(r.tag)} ≥${r.pts_minimos} PT</span>`
-        ).join(' ');
-        const conds = (data.efectos_condicionales || []).filter(ec => ec.tag && ec.efecto).map(ec =>
-            `<div style="font-size:0.72em;padding:4px 8px;background:rgba(243,156,18,0.07);
-                border:1px solid rgba(243,156,18,0.3);border-radius:5px;margin-top:3px;">
-                <b style="color:#e67e22;">⚡ SI ${_esc(ec.tag)} ≥${ec.pts_minimos ?? 0} PT:</b>
-                <span style="color:#555;"> ${_esc(ec.efecto)}</span>
-             </div>`
-        ).join('');
+window._iaGenerarAdmin = async function(iaId) {
+    const inputEl  = document.getElementById(`ia-input-${iaId}`);
+    const btnEl    = document.getElementById(`ia-btn-${iaId}`);
+    const statusEl = document.getElementById(`ia-status-${iaId}`);
 
-        return `
-        <div style="border:1.5px solid #6c3483;border-radius:9px;overflow:hidden;min-width:0;">
-            <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-                padding:8px 12px;display:flex;justify-content:space-between;align-items:center;">
-                <div style="font-family:'Cinzel',serif;font-size:0.85em;font-weight:700;">${_esc(data.nombre)}</div>
-                <div style="display:flex;gap:5px;align-items:center;">
-                    <span style="font-size:0.65em;font-weight:700;background:rgba(255,255,255,0.15);
-                        padding:1px 6px;border-radius:8px;text-transform:uppercase;">${_esc(data.tipo||'activa')}</span>
-                    <span style="font-size:0.85em;font-weight:800;">${data.costo_ctl} CTL</span>
-                </div>
-            </div>
-            <div style="padding:10px 12px;background:#faf8ff;display:flex;flex-direction:column;gap:6px;font-size:0.82em;">
-                <div style="color:#333;line-height:1.5;">${_esc(data.efecto_base)}</div>
-                ${reqs ? `<div style="display:flex;flex-wrap:wrap;gap:3px;">${reqs}</div>` : ''}
-                ${conds}
-            </div>
-        </div>`;
-    }).join('');
+    const instruccion = inputEl?.value.trim() || '';
 
-    container.style.display = 'block';
-    container.innerHTML = `
-    <div style="border:2px solid #6c3483;border-radius:10px;overflow:hidden;">
-        <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-            padding:10px 14px;display:flex;justify-content:space-between;align-items:center;">
-            <div style="font-family:'Cinzel',serif;font-size:0.9em;font-weight:700;">✨ Set generado — ${arr.length} medallas</div>
-        </div>
-        <div style="padding:12px;background:#faf8ff;display:flex;flex-direction:column;gap:8px;">
-            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">
-                ${cards}
-            </div>
-            <div style="border-top:1px solid #e0d8f0;padding-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                <button class="btn" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);
-                    color:white;border-color:#6c3483;flex:1;min-width:160px;"
-                    onclick="window._medallaIA.aplicarMulti()">✅ Aplicar a los formularios</button>
-                <button class="btn btn-outline" style="font-size:0.82em;"
-                    onclick="window._medallaIA.generarMulti()">🔄 Regenerar set</button>
-            </div>
-        </div>
-    </div>`;
-}
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳…'; }
+    if (statusEl) { statusEl.textContent = 'Esperando a la IA…'; statusEl.style.color = '#8e44ad'; }
 
-// ── Panel IA para modo multi ──────────────────────────────────
-function _renderPanelMulti(prefix, N) {
-    let root = document.getElementById('medalla-ai-root');
-    if (!root) {
-        root = document.createElement('div');
-        root.id = 'medalla-ai-root';
-        document.body.appendChild(root);
+    try {
+        const estadoActual = _leerFormAdmin();
+        const prompt = _buildPromptSingle(instruccion, estadoActual);
+        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Edición de medalla.`;
+
+        const raw = await _invocarIA(prompt, contexto);
+        const result = JSON.parse(raw);
+
+        _llenarFormAdmin(result);
+
+        if (statusEl) { statusEl.textContent = '✅ Aplicado'; statusEl.style.color = '#27ae60'; }
+        if (inputEl) inputEl.value = '';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+
+    } catch (err) {
+        console.error('[medallas-ai admin]', err);
+        if (statusEl) { statusEl.textContent = '❌ ' + (err.message || 'Error'); statusEl.style.color = '#e74c3c'; }
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ IA'; }
     }
+};
 
-    root.innerHTML = `
-    <div id="medalla-ai-backdrop" style="
-        position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1200;
-        display:flex;align-items:flex-start;justify-content:center;
-        padding:30px 16px 60px;overflow-y:auto;
-    " onclick="if(event.target===this)window._medallaIA.cerrar()">
-        <div style="background:white;border-radius:14px;width:100%;max-width:620px;
-            box-shadow:0 16px 60px rgba(0,0,0,0.4);overflow:hidden;">
+// ── Lógica de generación para form propuesta ─────────────────
 
-            <div style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-                padding:16px 20px;display:flex;justify-content:space-between;align-items:center;">
-                <div>
-                    <div style="font-family:'Cinzel',serif;font-size:1.05em;font-weight:700;">✨ IA — Generar set de medallas</div>
-                    <div style="font-size:0.72em;color:rgba(255,255,255,0.55);margin-top:2px;">Genera ${N} medallas temáticamente coherentes de una sola vez</div>
-                </div>
-                <button onclick="window._medallaIA.cerrar()" style="
-                    background:rgba(255,255,255,0.15);border:none;color:white;
-                    border-radius:50%;width:30px;height:30px;cursor:pointer;font-size:1.1em;line-height:1;">×</button>
-            </div>
+window._iaGenerarProp = async function(iaId) {
+    const inputEl  = document.getElementById(`ia-input-${iaId}`);
+    const btnEl    = document.getElementById(`ia-btn-${iaId}`);
+    const statusEl = document.getElementById(`ia-status-${iaId}`);
 
-            <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
-                <input type="hidden" id="ai-multi-prefix" value="${prefix}">
-                <input type="hidden" id="ai-multi-n" value="${N}">
+    const instruccion = inputEl?.value.trim() || '';
 
-                <div>
-                    <label style="font-size:0.78em;font-weight:700;color:#444;display:block;margin-bottom:5px;">
-                        Concepto o tema para el set de ${N} medallas
-                    </label>
-                    <textarea id="ai-medalla-concepto" class="inp" rows="4"
-                        placeholder="Ej: un set de medallas de velocidad — una pasiva que aumente AGI, una activa que use PV para multiplicar la velocidad, una definitiva que invalide todas las medallas lentas del rival..."
-                        style="resize:vertical;font-size:0.85em;"></textarea>
-                    <div style="font-size:0.71em;color:#aaa;margin-top:3px;">
-                        Describe el tema, los roles o los efectos que quieres. Menciona tags (#así), medallas a invalidar (!así!) o personajes (@así@).
-                        La IA diseñará ${N} medallas distintas que se complementen entre sí.
-                    </div>
-                </div>
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳…'; }
+    if (statusEl) { statusEl.textContent = 'Esperando a la IA…'; statusEl.style.color = '#8e44ad'; }
 
-                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                    <button id="ai-medalla-gen-btn" class="btn"
-                        style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;
-                            border-color:#6c3483;min-width:150px;font-weight:700;"
-                        onclick="window._medallaIA.generarMulti()">✨ Generar set</button>
-                    <button class="btn btn-outline" onclick="window._medallaIA.cerrar()">Cancelar</button>
-                    <span id="ai-medalla-status" style="font-size:0.78em;color:#888;"></span>
-                </div>
+    try {
+        const estadoActual = _leerFormProp();
+        const prompt = _buildPromptSingle(instruccion, estadoActual);
+        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Propuesta de medalla.`;
 
-                <div id="ai-medalla-result" style="display:none;"></div>
-            </div>
-        </div>
-    </div>`;
+        const raw = await _invocarIA(prompt, contexto);
+        const result = JSON.parse(raw);
+
+        _llenarFormProp(result);
+
+        if (statusEl) { statusEl.textContent = '✅ Aplicado'; statusEl.style.color = '#27ae60'; }
+        if (inputEl) inputEl.value = '';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+
+    } catch (err) {
+        console.error('[medallas-ai prop]', err);
+        if (statusEl) { statusEl.textContent = '❌ ' + (err.message || 'Error'); statusEl.style.color = '#e74c3c'; }
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = '✨ IA'; }
+    }
+};
+
+// ── Generación múltiple (barra de control global) ─────────────
+// Genera TODOS los formularios visibles de una vez con una sola instrucción.
+
+window._iaGenerarTodos = async function(prefix, N) {
+    const inputEl  = document.getElementById('ia-global-input');
+    const btnEl    = document.getElementById('ia-global-btn');
+    const statusEl = document.getElementById('ia-global-status');
+
+    const instruccion = inputEl?.value.trim() || '';
+
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '⏳ Generando…'; }
+    if (statusEl) { statusEl.textContent = `Generando ${N} medallas…`; statusEl.style.color = '#8e44ad'; }
+
+    try {
+        // Leer estado actual de todos los formularios
+        const estadosActuales = Array.from({ length: N }, (_, i) => _leerMiniForm(`${prefix}${i}`));
+
+        // Generar slots con estructura irregular (el programa decide, no la IA)
+        const slots = _generarEstructuraSlots(N);
+
+        const prompt  = _buildPromptMulti(instruccion, slots, estadosActuales);
+        const contexto = `BNH-FUSION v5.0 — RPG de superhéroes. Set de ${N} medallas.`;
+
+        const raw = await _invocarIA(prompt, contexto);
+        const arr = JSON.parse(raw);
+        if (!Array.isArray(arr)) throw new Error('La IA no devolvió un array de medallas.');
+
+        // Aplicar estructura irregular del programa sobre cada resultado de la IA
+        arr.forEach((data, i) => {
+            if (i >= N) return;
+            const fid = `${prefix}${i}`;
+            const conEstructura = _aplicarEstructura(data, slots[i]);
+            _llenarMiniForm(fid, conEstructura);
+        });
+
+        if (statusEl) { statusEl.textContent = `✅ ${arr.length} medallas generadas`; statusEl.style.color = '#27ae60'; }
+        if (inputEl) inputEl.value = '';
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 4000);
+
+    } catch (err) {
+        console.error('[medallas-ai global]', err);
+        if (statusEl) { statusEl.textContent = '❌ ' + (err.message || 'Error'); statusEl.style.color = '#e74c3c'; }
+    } finally {
+        if (btnEl) { btnEl.disabled = false; btnEl.textContent = `✨ IA ×${N}`; }
+    }
+};
+
+// ── HTML de la barra IA global (para renderFormsMultiple) ─────
+export function renderBarraIAGlobal(prefix, N) {
+    return `
+<div style="background:#f5f0ff;border:1.5px solid #9b59b6;border-radius:10px;padding:12px 16px;margin-bottom:14px;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+        <span style="font-size:0.78em;font-weight:800;color:#6c3483;text-transform:uppercase;letter-spacing:.5px;">✨ IA Global — ${N} medallas</span>
+        <span style="font-size:0.72em;color:#9b59b6;">· edita o genera todos los formularios a la vez</span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:flex-start;">
+        <textarea id="ia-global-input" rows="2"
+            style="flex:1;padding:6px 10px;border:1px solid #c8a8e9;border-radius:6px;font-size:0.82em;resize:vertical;font-family:inherit;background:white;"
+            placeholder="Ej: crea un set de medallas de fuego temáticas entre sí, o: a la primera cámbiale el nombre a 'Llama', a la segunda añade un requisito #Fuego…"></textarea>
+        <button id="ia-global-btn"
+            style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border:none;border-radius:8px;padding:8px 16px;font-size:0.82em;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0;"
+            onclick="window._iaGenerarTodos('${prefix}',${N})">✨ IA ×${N}</button>
+    </div>
+    <div id="ia-global-status" style="font-size:0.73em;color:#888;margin-top:4px;min-height:14px;"></div>
+</div>`;
 }
+
+// ── Compatibilidad: window._medallaIA (ya no abre modal, aplica inline) ──
+// Se mantiene por si algo en medallas-ui.js aún lo llama.
+window._medallaIA = {
+    abrir(fid, tipo) {
+        // No-op: la IA ahora está inline. Ignorar llamada.
+        console.info('[medallas-ai] _medallaIA.abrir ignorado — IA ya es inline.');
+    },
+    cerrar() {},
+    generar() {},
+    aplicar() {},
+    abrirMulti(prefix, N) {
+        console.info('[medallas-ai] _medallaIA.abrirMulti ignorado — usar barra IA global inline.');
+    },
+    generarMulti() {},
+    aplicarMulti() {}
+};
