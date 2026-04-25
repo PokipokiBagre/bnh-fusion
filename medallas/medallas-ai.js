@@ -37,7 +37,7 @@ EFECTOS — usa lenguaje natural directo:
 MARKUP:
   #Tag → solo tags de la lista provista. NUNCA inventar tags.
   !NombreMedalla! → nombre exacto de una medalla existente. NUNCA !Activa!, !Pasiva!, !Definitiva!
-  @Nombre_Personaje@ → personaje específico.
+  @Nombre_Personaje@ → SOLO para apuntar a un personaje por su nombre específico. Si te refieres a personajes en general o aliados/rivales, usa lenguaje natural sin el símbolo @.
 `.trim();
 
 // ── 5 medallas aleatorias del catálogo como ejemplos ────────
