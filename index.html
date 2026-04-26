@@ -135,6 +135,18 @@
         </div>
     </div>
 
+    <div class="card" id="card-op-chat" style="display:none;" onclick="location.href='op/index.html'">
+        <div class="card-img-wrap">
+            <img class="card-img" id="card-img-op-chat" src="" alt="OP Chat">
+            <span class="card-badge badge-admin" style="background:#6c3483;">⚡ OP</span>
+        </div>
+        <div class="card-body">
+            <div class="card-name">OP Chat</div>
+            <div class="card-desc">Chat privado entre operadores con galería de imágenes, markup de personajes y conversaciones organizadas.</div>
+            <div class="card-arrow">ABRIR →</div>
+        </div>
+    </div>
+
 </div>
 
 <footer>BNH · SISTEMA DE ROL</footer>
@@ -171,7 +183,11 @@ function setImg(id, n) {
 await bnhAuth.init();
 const badge = document.getElementById('bnh-session-badge');
 if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
-if (bnhAuth.esAdmin()) document.getElementById('card-panel-dev').style.display = 'flex';
+if (bnhAuth.esAdmin()) {
+    document.getElementById('card-panel-dev').style.display = 'flex';
+    document.getElementById('card-op-chat').style.display = 'flex';
+}
+setImg('card-img-op-chat', 'op-chat.png');
 
 const favicon = document.getElementById('dynamic-favicon');
 if (favicon) favicon.href = imgUrl('icon.png');
