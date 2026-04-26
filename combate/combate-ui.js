@@ -439,7 +439,7 @@ export function renderSlotDetalle(eq, idx) {
             <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
                 <div id="med-info-content-${eq}-${idx}"></div>
             </div>
-            <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
+            <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
                 ${medallasAcc.map(m=>{
                     const eq2 = medallasEquip.has(String(m.id));
                     // Verificar requisitos base para mostrar estado visual
@@ -451,7 +451,7 @@ export function renderSlotDetalle(eq, idx) {
                         return {tag:r.tag, pts:pts2, min:r.pts_minimos||0, ok:cumpleTag&&cumplePts};
                     });
                     return `
-                <div style="display:flex;align-items:flex-start;gap:8px;padding:9px;border-radius:8px;
+                <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;
                     border:1.5px solid ${eq2?col:'#dee2e6'};background:${eq2?pale:'white'};
                     transition:.12s;">
                     <!-- Checkbox (toggle equip) -->
@@ -709,24 +709,20 @@ ${condActivos.map(ec => `
 </div>` : ''}`;
 }
 
-// ── Panel info de medalla — toggle + ambos paneles ────────────
+// ── Panel info de medalla — toggle ───────────────────────────
 export function renderMedInfoPanel(eq, idx, medallaId) {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
     const m = window._combateGetMedalla?.(medallaId);
     if (!m) return;
 
-    const col  = eq === 'A' ? '#1a4a80' : '#a93226';
-    const pale = eq === 'A' ? '#ebf5fb' : '#fdedec';
-    const mid  = String(m.id);
+    const mid = String(m.id);
 
     // Toggle: misma medalla ya abierta → cerrar
     if (slot._medallaInfoAbierta === mid) {
         slot._medallaInfoAbierta = null;
-        ['top','bottom'].forEach(pos => {
-            const el = document.getElementById(`med-info-${pos}-${eq}-${idx}`);
-            if (el) el.style.display = 'none';
-        });
+        const panel = document.getElementById(`med-info-${eq}-${idx}`);
+        if (panel) panel.style.display = 'none';
         return;
     }
     slot._medallaInfoAbierta = mid;
@@ -734,20 +730,17 @@ export function renderMedInfoPanel(eq, idx, medallaId) {
     const closeFn = `window._combateCerrarInfoMed('${eq}',${idx})`;
     const html = _buildMedHTML(m, slot, eq, idx, closeFn);
 
-    const topEl = document.getElementById(`med-info-top-${eq}-${idx}`);
-    if (topEl) { topEl.innerHTML = html; topEl.style.display = 'block'; }
-
-    const botEl = document.getElementById(`med-info-bottom-${eq}-${idx}`);
-    if (botEl) { botEl.innerHTML = html; botEl.style.display = 'block'; }
+    const contentEl = document.getElementById(`med-info-content-${eq}-${idx}`);
+    const panelEl   = document.getElementById(`med-info-${eq}-${idx}`);
+    if (contentEl) contentEl.innerHTML = html;
+    if (panelEl)   { panelEl.style.display = 'block'; panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
 }
 
 window._combateCerrarInfoMed = (eq, idx) => {
     const slot = combateState[`equipo${eq}`]?.[idx];
     if (slot) slot._medallaInfoAbierta = null;
-    ['top','bottom'].forEach(pos => {
-        const el = document.getElementById(`med-info-${pos}-${eq}-${idx}`);
-        if (el) el.style.display = 'none';
-    });
+    const panel = document.getElementById(`med-info-${eq}-${idx}`);
+    if (panel) panel.style.display = 'none';
 };
 
 
