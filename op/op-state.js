@@ -9,15 +9,16 @@ export const FOLDER = 'op-chat';
 
 export const opState = {
     perfil:          null,      // { id, nombre, avatar_path }
+    perfiles:        {},        // { [id]: { id, nombre, avatar_path } } — todos los OPs
     conversaciones:  [],
-    convActual:      null,      // id de conversación activa
-    mensajes:        [],        // mensajes de la conv activa
-    imagenesGaleria: {},        // { op_id: [imagen, ...] }
-    tab:             'chat',    // 'chat' | 'ajustes' | 'galeria'
-    realtimeSub:     null,      // suscripción realtime
+    convActual:      null,
+    mensajes:        [],
+    imagenesGaleria: {},
+    tab:             'chat',
+    realtimeSub:     null,
     loadingMsgs:     false,
-    grupos:          [],        // para autocomplete markup
-    medallas:        [],
+    grupos:          [],        // para autocomplete markup @Personaje@
+    medallas:        [],        // para autocomplete markup !Medalla!
 };
 
 export function avatarUrl(path) {
