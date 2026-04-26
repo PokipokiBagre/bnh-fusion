@@ -47,7 +47,16 @@ function _renderImgGrid(imagen_path, msgId) {
     return `<div style="${gridStyle}" data-all-urls='${allUrlsJson}'>${items}</div>`;
 }
 
-// ── Sidebar: lista de conversaciones ─────────────────────────
+// ── Render video inline ───────────────────────────────────────
+function _renderVideo(video_path) {
+    if (!video_path) return '';
+    const url = imageUrl(video_path);
+    return `<video src="${esc(url)}" controls preload="metadata"
+        style="max-width:300px;width:100%;border-radius:8px;display:block;background:#000;margin-top:2px;"
+        playsinline></video>`;
+}
+
+
 export function renderConvList() {
     const wrap = $('op-conv-list');
     if (!wrap) return;
@@ -140,6 +149,7 @@ export function renderMensajes() {
     <div class="op-msg-bubble">
         ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
         ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
+        ${msg.video_path  ? _renderVideo(msg.video_path) : ''}
         ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
         <div class="op-msg-meta">
             <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
@@ -187,6 +197,7 @@ ${!propio ? avatarHtml : ''}
 <div class="op-msg-bubble">
     ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
     ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
+    ${msg.video_path  ? _renderVideo(msg.video_path) : ''}
     ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
     <div class="op-msg-meta">
         <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
@@ -203,36 +214,77 @@ ${propio ? avatarHtml : ''}`;
 export function renderGaleria() {
     const wrap = $('op-galeria-grid');
     if (!wrap) return;
-    const allImgs = Object.values(opState.imagenesGaleria).flat();
+    const allItems = Object.values(opState.imagenesGaleria).flat();
 
-    if (!allImgs.length) {
+    if (!allItems.length) {
         wrap.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:0.85em;grid-column:1/-1;text-align:center;padding:30px;">
-            Sin imágenes guardadas</div>`;
+            Sin imágenes ni videos guardados</div>`;
         return;
     }
 
-    // Agrupar por op_nombre
-    const grupos = {};
-    allImgs.forEach(img => {
-        if (!grupos[img.op_nombre]) grupos[img.op_nombre] = [];
-        grupos[img.op_nombre].push(img);
+    const imgs = allItems.filter(i => i.tipo !== 'video');
+    const vids = allItems.filter(i => i.tipo === 'video');
+
+    // Agrupar imágenes por op_nombre
+    const gruposImg = {};
+    imgs.forEach(img => {
+        if (!gruposImg[img.op_nombre]) gruposImg[img.op_nombre] = [];
+        gruposImg[img.op_nombre].push(img);
+    });
+    const gruposVid = {};
+    vids.forEach(v => {
+        if (!gruposVid[v.op_nombre]) gruposVid[v.op_nombre] = [];
+        gruposVid[v.op_nombre].push(v);
     });
 
-    wrap.innerHTML = Object.entries(grupos).map(([opNombre, imgs]) => `
+    const renderItem = (item, esVideo) => esVideo ? `
+        <div class="op-galeria-item" title="${esc(item.nombre)}">
+            <div style="position:relative;background:#000;border-radius:6px;overflow:hidden;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;">
+                <video src="${esc(item.url)}" preload="metadata"
+                    style="width:100%;height:100%;object-fit:cover;display:block;" muted></video>
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                    background:rgba(0,0,0,0.3);pointer-events:none;">
+                    <span style="font-size:2em;">▶</span>
+                </div>
+            </div>
+            <div class="op-galeria-item-name">${esc(item.nombre)}</div>
+            <div class="op-galeria-item-actions">
+                <button onclick="window._opEnviarDesdeGaleria(${item.id})" title="Enviar al chat">💬</button>
+                <button onclick="window._opEliminarImgGaleria(${item.id},'${esc(item.path)}')" title="Eliminar">🗑</button>
+            </div>
+        </div>` : `
+        <div class="op-galeria-item" title="${esc(item.nombre)}">
+            <img src="${esc(item.url)}" alt="${esc(item.nombre)}" onclick="window._opVerImagen('${esc(item.url)}')">
+            <div class="op-galeria-item-name">${esc(item.nombre)}</div>
+            <div class="op-galeria-item-actions">
+                <button onclick="window._opEnviarDesdeGaleria(${item.id})" title="Enviar al chat">💬</button>
+                <button onclick="window._opEliminarImgGaleria(${item.id},'${esc(item.path)}')" title="Eliminar">🗑</button>
+            </div>
+        </div>`;
+
+    let html = '';
+
+    if (Object.keys(gruposImg).length) {
+        html += `<div style="grid-column:1/-1;font-size:0.8em;font-weight:700;color:rgba(255,255,255,0.4);
+            text-transform:uppercase;letter-spacing:1px;padding:4px 0 8px;">🖼 Imágenes</div>`;
+        html += Object.entries(gruposImg).map(([opNombre, items]) => `
 <div class="op-galeria-grupo">
     <div class="op-galeria-titulo">📁 ${esc(opNombre)}</div>
-    <div class="op-galeria-items">
-        ${imgs.map(img => `
-        <div class="op-galeria-item" title="${esc(img.nombre)}">
-            <img src="${esc(img.url)}" alt="${esc(img.nombre)}" onclick="window._opVerImagen('${esc(img.url)}')">
-            <div class="op-galeria-item-name">${esc(img.nombre)}</div>
-            <div class="op-galeria-item-actions">
-                <button onclick="window._opEnviarDesdeGaleria(${img.id})" title="Enviar al chat">💬</button>
-                <button onclick="window._opEliminarImgGaleria(${img.id},'${esc(img.path)}')" title="Eliminar">🗑</button>
-            </div>
-        </div>`).join('')}
-    </div>
+    <div class="op-galeria-items">${items.map(i => renderItem(i, false)).join('')}</div>
 </div>`).join('');
+    }
+
+    if (Object.keys(gruposVid).length) {
+        html += `<div style="grid-column:1/-1;font-size:0.8em;font-weight:700;color:rgba(255,255,255,0.4);
+            text-transform:uppercase;letter-spacing:1px;padding:12px 0 8px;">🎬 Videos</div>`;
+        html += Object.entries(gruposVid).map(([opNombre, items]) => `
+<div class="op-galeria-grupo">
+    <div class="op-galeria-titulo">📁 ${esc(opNombre)}</div>
+    <div class="op-galeria-items">${items.map(i => renderItem(i, true)).join('')}</div>
+</div>`).join('');
+    }
+
+    wrap.innerHTML = html;
 }
 
 // ── Ajustes ───────────────────────────────────────────────────
