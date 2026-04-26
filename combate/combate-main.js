@@ -302,6 +302,8 @@ window._combateDadoNavKey = (event, eq, idx, medallaIdx) => {
 };
 
 
+// ── Dado ──────────────────────────────────────────────────────
+window._combateSetDado = (eq, idx, medallaId, valor) => {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
     const n = parseInt(valor);
