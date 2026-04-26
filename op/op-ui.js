@@ -25,12 +25,12 @@ function _renderImgGrid(imagen_path, msgId) {
         return `<img src="${esc(urls[0])}" class="op-msg-img"
             onclick="window._opVerImagen('${esc(urls[0])}')" alt="imagen">`;
     }
-    // Grid: mostrar máx 4 celdas. Si hay más de 4, la celda 4 muestra +(n-3)
-    const MAX_VISIBLE = 4;
+    // Grid: mostrar máx 10 celdas. Si hay más de 10, la celda 10 muestra +(n-9)
+    const MAX_VISIBLE = 10;
     const showOverlay = urls.length > MAX_VISIBLE;
     const visible = showOverlay ? urls.slice(0, MAX_VISIBLE) : urls;
-    const ocultas = urls.length - 3; // cuántas quedan sin ver (las 3 primeras son completas)
-    const cols = visible.length <= 2 ? visible.length : 2;
+    const ocultas = urls.length - 9;
+    const cols = visible.length <= 2 ? visible.length : visible.length <= 6 ? 3 : 4;
     const gridStyle = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:3px;border-radius:8px;overflow:hidden;max-width:300px;`;
     const items = visible.map((url, i) => {
         const isOverlay = showOverlay && i === MAX_VISIBLE - 1;
@@ -42,7 +42,8 @@ function _renderImgGrid(imagen_path, msgId) {
                 color:white;font-size:1.4em;font-weight:700;">+${ocultas}</div>` : ''}
         </div>`;
     }).join('');
-    return `<div style="${gridStyle}">${items}</div>`;
+    // data-all-urls guarda TODAS las URLs para el carrusel del lightbox
+    return `<div style="${gridStyle}" data-all-urls="${esc(JSON.stringify(urls))}">${items}</div>`;
 }
 
 // ── Sidebar: lista de conversaciones ─────────────────────────
@@ -340,14 +341,12 @@ export function showLightboxCarousel(urls, startIdx = 0) {
 
 // Exponer globalmente para los onclick del grid
 window._opVerGaleriaMensaje = (msgId, idx) => {
-    // Buscar las URLs del mensaje desde el DOM de la imagen ya renderizada
-    const msgEl = document.querySelector(`.op-msg[data-id="${msgId}"]`);
-    if (!msgEl) return;
-    const imgs = Array.from(msgEl.querySelectorAll('img[src]'))
-        .filter(img => !img.closest('.op-msg-autor') && img.style.width !== '36px')
-        .map(img => img.src);
-    if (!imgs.length) return;
-    showLightboxCarousel(imgs, idx);
+    const gridEl = document.querySelector(`.op-msg[data-id="${msgId}"] [data-all-urls]`);
+    if (!gridEl) return;
+    try {
+        const urls = JSON.parse(gridEl.dataset.allUrls);
+        showLightboxCarousel(urls, idx);
+    } catch(_) {}
 };
 
 // ── Lightbox simple (imagen única) ───────────────────────────
