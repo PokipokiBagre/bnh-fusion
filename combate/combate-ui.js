@@ -405,21 +405,21 @@ export function renderSlotDetalle(eq, idx) {
                 onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>
         </div>` : ''}
     </div>
-    ${combateState.esAdmin ? `<div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
-        <input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"
-            oninput="window._combateFiltrarCatTags('${eq}',${idx},this.value)">
-        <div id="cat-tags-lista-${eq}-${idx}" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">
-            ${catalogoTagsArr.map(t => {
-                const tN = (t.startsWith('#')?t:'#'+t).toLowerCase();
-                const tiene = tagsActivos.has(tN);
-                return \`<span data-tag="\${esc(t)}"
-                    style="cursor:pointer;padding:2px 8px;border-radius:8px;font-size:0.73em;font-weight:700;
-                    background:\${tiene?col:'#f1f3f4'};color:\${tiene?'white':'#495057'};
-                    border:1.5px solid \${tiene?col:'#dee2e6'};"
-                    onclick="window._combateToggleTag('\${eq}',\${idx},'\${esc(t)}')">\${esc(t)}</span>\`;
-            }).join('')}
-        </div>
-    </div>` : ''}
+    ${combateState.esAdmin ? '<div id="catalogo-tags-'+eq+'-'+idx+'" style="display:none;margin-bottom:10px;border:1.5px solid '+col+';border-radius:8px;padding:8px;background:#fafafa;">'
+        + '<input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"'
+        + ' oninput="window._combateFiltrarCatTags(\''+eq+'\','+idx+',this.value)">'
+        + '<div id="cat-tags-lista-'+eq+'-'+idx+'" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">'
+        + catalogoTagsArr.map(t => {
+            const tN = (t.startsWith('#')?t:'#'+t).toLowerCase();
+            const tiene = tagsActivos.has(tN);
+            return '<span data-tag="'+esc(t)+'"'
+                +' style="cursor:pointer;padding:2px 8px;border-radius:8px;font-size:0.73em;font-weight:700;'
+                +'background:'+(tiene?col:'#f1f3f4')+';color:'+(tiene?'white':'#495057')+';'
+                +'border:1.5px solid '+(tiene?col:'#dee2e6')+';"'
+                +' onclick="window._combateToggleTag(\''+eq+'\','+idx+',\''+esc(t)+'\')">'+esc(t)+'</span>';
+          }).join('')
+        + '</div></div>'
+      : ''}
     <div style="display:flex;flex-direction:column;gap:3px;max-height:380px;overflow-y:auto;">
         ${(() => {
             const ptsCompleto = { ...(slot.pts || {}) };
