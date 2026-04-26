@@ -139,7 +139,7 @@ window.onload = async () => {
         const p = window._opGetPerfil();
         if (p) {
             const { avatarUrl: _av } = await import('./op-state.js');
-            pill.innerHTML = \`<img src="\${_av(p.avatar_path)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);" onerror="this.src=currentConfig.storageUrl+'/imginterfaz/no_encontrado.png'"><span style="font-size:0.75em;font-weight:700;color:#922b21;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">\${p.nombre}</span>\`;
+           pill.innerHTML = `<img src="${_av(p.avatar_path)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);" onerror="this.src=currentConfig.storageUrl+'/imginterfaz/no_encontrado.png'"><span style="font-size:0.75em;font-weight:700;color:#922b21;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</span>`;
         }
     }
 };
