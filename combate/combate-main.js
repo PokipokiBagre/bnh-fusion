@@ -216,19 +216,7 @@ window._combateRecalcDeltas = (eq, idx) => {
     });
 };
 
-// ── Delta rápido en PV Máx — modifica delta_pv_1 sumando ─────
-window._combateDeltaPVMax = (eq, idx, delta) => {
-    const slot = combateState[`equipo${eq}`][idx];
-    if (!slot) return;
-    const actual = parseFloat(slot._d.delta_pv_1) || 0;
-    slot._d.delta_pv_1 = String(actual + delta);
-    recalcSlot(slot);
-    refrescarEquipo(eq);
-    refrescarCuadro();
-    renderSlotDetalle(eq, idx);
-};
-
-
+// ── PV actual manual ──────────────────────────────────────────
 window._combatePVActualChange = (eq, idx, valor) => {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
@@ -321,6 +309,11 @@ window._combateSetDado = (eq, idx, medallaId, valor) => {
     const n = parseInt(valor);
     if (!isNaN(n) && n >= 1 && n <= 100) slot.dados[medallaId] = n;
     else delete slot.dados[medallaId];
+    // Si hay un panel de info abierto para esta medalla, actualizarlo reactivamente
+    if (slot._medallaInfoAbierta === String(medallaId)) {
+        slot._medallaInfoAbierta = null; // reset para que el toggle no cierre
+        renderMedInfoPanel(eq, idx, medallaId);
+    }
 };
 
 // ── Toggle medalla ─────────────────────────────────────────────
