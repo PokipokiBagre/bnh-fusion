@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OP Chat — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../styleop.css">
+</head>
+<body>
+
+<div id="op-root">
+
+    <!-- ── Sidebar ─────────────────────────────────── -->
+    <aside id="op-sidebar">
+        <div class="op-sidebar-header">
+            <div class="op-brand">⚡ OP</div>
+            <div id="bnh-session-badge"></div>
+        </div>
+
+        <!-- Tabs de navegación -->
+        <nav class="op-nav">
+            <button id="op-tab-chat"    class="op-nav-btn active" onclick="window._opTab('chat')">
+                <span class="op-nav-icon">💬</span><span>Chat</span>
+            </button>
+            <button id="op-tab-galeria" class="op-nav-btn" onclick="window._opTab('galeria')">
+                <span class="op-nav-icon">🖼</span><span>Galería</span>
+            </button>
+            <button id="op-tab-ajustes" class="op-nav-btn" onclick="window._opTab('ajustes')">
+                <span class="op-nav-icon">⚙</span><span>Ajustes</span>
+            </button>
+        </nav>
+
+        <!-- Lista de conversaciones (visible en tab chat) -->
+        <div id="op-conv-sidebar" class="op-conv-sidebar">
+            <div class="op-conv-header">
+                <span class="op-conv-header-title">Conversaciones</span>
+                <button class="op-icon-btn" onclick="window._opNuevaConv()" title="Nueva">+</button>
+            </div>
+            <div id="op-conv-list" class="op-conv-list"></div>
+        </div>
+    </aside>
+
+    <!-- ── Main ────────────────────────────────────── -->
+    <main id="op-main">
+
+        <!-- ══ PANEL: CHAT ══════════════════════════ -->
+        <div id="op-panel-chat" class="op-panel" style="display:flex;flex-direction:column;">
+            <div class="op-panel-topbar">
+                <a href="../index.html" class="op-back">◀ BNH</a>
+                <span id="op-chat-titulo" class="op-panel-title">General</span>
+            </div>
+            <div id="op-messages-list" class="op-messages-list"></div>
+
+            <!-- Input area -->
+            <div class="op-input-area">
+                <div id="op-input-wrap" class="op-input-wrap">
+                    <div style="position:relative;">
+                        <div id="op-img-selector" style="display:none;"></div>
+                    </div>
+                    <div class="op-input-row">
+                        <button class="op-attach-btn" onclick="window._opMostrarGaleria()" title="Galería">🖼</button>
+                        <button class="op-attach-btn" onclick="window._opFileInput()" title="Subir imagen">📎</button>
+                        <input type="file" id="op-file-input" accept="image/*" style="display:none"
+                            onchange="window._opOnFileInput(this)">
+                        <textarea id="op-msg-input" class="op-msg-input"
+                            placeholder="Escribe… @Personaje@ #Tag  ·  Enter para enviar"
+                            rows="1"
+                            oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+                        <button class="op-send-btn" onclick="window._opEnviar()">▶</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ══ PANEL: GALERÍA ═══════════════════════ -->
+        <div id="op-panel-galeria" class="op-panel" style="display:none;flex-direction:column;">
+            <div class="op-panel-topbar">
+                <a href="../index.html" class="op-back">◀ BNH</a>
+                <span class="op-panel-title">Galería OP</span>
+                <button class="op-btn op-btn-primary" onclick="window._opSubirAGaleria()">+ Subir imagen</button>
+            </div>
+            <div id="op-galeria-grid" class="op-galeria-grid"></div>
+        </div>
+
+        <!-- ══ PANEL: AJUSTES ══════════════════════ -->
+        <div id="op-panel-ajustes" class="op-panel" style="display:none;flex-direction:column;align-items:center;padding:40px 24px;">
+            <div id="op-ajustes-content" style="width:100%;max-width:480px;"></div>
+        </div>
+
+    </main>
+
+</div>
+
+<div id="op-toast" class="op-toast"></div>
+
+<script type="module">
+import { bnhAuth } from '../bnh-auth.js';
+import { initOP }  from './op-main.js';
+
+window.onload = async () => {
+    await bnhAuth.init();
+    const badge = document.getElementById('bnh-session-badge');
+    if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
+
+    if (!bnhAuth.esAdmin()) {
+        document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
+            height:100vh;background:#0d1117;color:rgba(255,255,255,0.5);font-family:sans-serif;font-size:1.1em;">
+            🔒 Acceso restringido a OPs</div>`;
+        return;
+    }
+
+    window._opOnFileInput = (input) => {
+        const file = input.files[0];
+        if (!file) return;
+        // Preview inline
+        document.getElementById('op-file-preview')?.remove();
+        const prev = document.createElement('div');
+        prev.id = 'op-file-preview';
+        prev.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 10px;
+            background:rgba(108,52,131,0.2);border-radius:8px;margin-bottom:4px;`;
+        const url = URL.createObjectURL(file);
+        prev.innerHTML = `<img src="${url}" style="height:48px;border-radius:6px;object-fit:cover;">
+            <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${file.name}</span>
+            <button onclick="document.getElementById('op-file-input').value='';this.closest('#op-file-preview').remove()"
+                style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.1em;">✕</button>`;
+        document.getElementById('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
+    };
+
+    await initOP();
+};
+</script>
+</body>
+</html>
