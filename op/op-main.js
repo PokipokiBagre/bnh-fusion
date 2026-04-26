@@ -459,7 +459,6 @@ function _exponerGlobales() {
             if (msgEl) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Error al guardar.'; }
         }
     };
-}
 
 function _renderPerfilPill() {
     const pill = document.getElementById('op-perfil-pill');
