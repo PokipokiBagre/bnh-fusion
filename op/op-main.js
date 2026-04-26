@@ -23,6 +23,23 @@ const renderMsgMarkupGlobal = renderMsgMarkup;
 let _pendingImgId  = null;
 let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
 
+// Definir _opFileInput globalmente de inmediato (antes de initOP)
+// para que el botón del HTML pueda llamarla aunque initOP no haya terminado.
+window._opFileInput = () => {
+    const input = document.createElement('input');
+    input.type     = 'file';
+    input.multiple = true;
+    input.accept   = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
+    input.style.display = 'none';
+    input.onchange = () => {
+        const files = Array.from(input.files || []);
+        if (files.length) _agregarArchivosPendientes(files, 'file');
+        input.remove();
+    };
+    document.body.appendChild(input);
+    input.click();
+};
+
 // ── Init ──────────────────────────────────────────────────────
 export async function initOP() {
     const user = (await supabase.auth.getUser()).data.user;
@@ -822,30 +839,13 @@ function _exponerGlobales() {
         input.click();
     };
 
-    // Crear un input dinámico nuevo cada vez para garantizar que accept y multiple
-    // se apliquen correctamente (Chrome ignora cambios en input reutilizado).
-    window._opFileInput = () => {
-        const input = document.createElement('input');
-        input.type     = 'file';
-        input.multiple = true;
-        input.accept   = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
-        input.style.display = 'none';
-        input.onchange = () => {
-            const files = Array.from(input.files || []);
-            if (files.length) _agregarArchivosPendientes(files, 'file');
-            input.remove();
-        };
-        document.body.appendChild(input);
-        input.click();
-    };
-
     // Handler legacy para el <input> estático del HTML (paste, etc.)
-    window._opOnFileInput = (input) => {
-        const files = Array.from(input.files || []);
+    window._opOnFileInput = (inputEl) => {
+        const files = Array.from(inputEl.files || []);
         if (!files.length) return;
         _agregarArchivosPendientes(files, 'file');
-        input.value = '';
-        $('op-file-preview')?.remove();
+        inputEl.value = '';
+        document.getElementById('op-file-preview')?.remove();
     };
 
     window._opPreviewAvatar = input => {

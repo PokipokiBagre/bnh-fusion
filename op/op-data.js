@@ -4,6 +4,19 @@
 import { supabase } from '../bnh-auth.js';
 import { opState, BUCKET, FOLDER } from './op-state.js';
 
+// Cache de columnas disponibles en op_mensajes (se detecta al primer insert)
+// Evita el loop de fallback en cada mensaje
+const _colsOk = { video_path: null, audio_path: null, tipo: null };
+
+async function _probarColumna(col) {
+    if (_colsOk[col] !== null) return _colsOk[col];
+    // Intentar un select de esa columna — si falla con 42703, no existe
+    const { error } = await supabase.from('op_mensajes')
+        .select(col).limit(1);
+    _colsOk[col] = !error || error.code !== '42703';
+    return _colsOk[col];
+}
+
 // ── Perfil ────────────────────────────────────────────────────
 export async function cargarPerfil(userId) {
     const { data } = await supabase.from('op_perfiles')
@@ -55,7 +68,7 @@ export async function cargarMensajes(convId, limit = 60) {
 }
 
 // Soporta: texto, imágenes (una o múltiples), video, audio, link embed
-export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths, videoPath, audioPath, linkUrl }) {
+export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths, videoPath, audioPath }) {
     let pathValue = null;
     if (imagenPaths && imagenPaths.length > 1) {
         pathValue = JSON.stringify(imagenPaths);
@@ -65,10 +78,8 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         pathValue = imagenPath;
     }
 
-    const hasMedia = !!(pathValue || videoPath || audioPath || linkUrl);
     const tipo = videoPath  ? (contenido ? 'mixto' : 'video')
                : audioPath  ? (contenido ? 'mixto' : 'audio')
-               : linkUrl    ? (contenido ? 'mixto' : 'link')
                : contenido && pathValue ? 'mixto'
                : pathValue  ? 'imagen'
                : 'texto';
@@ -84,23 +95,35 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
     };
     if (videoPath)  payload.video_path  = videoPath;
     if (audioPath)  payload.audio_path  = audioPath;
-    if (linkUrl)    payload.link_url    = linkUrl;
 
-    // Insert progresivo: si falla por columna inexistente (42703) va quitando
-    // campos nuevos hasta llegar al payload mínimo que siempre funciona.
-    // Orden de intentos: completo → sin link_url → sin audio_path → sin video_path → sin tipo
-    const intentos = [
-        payload,
-        (({ link_url, ...r }) => r)(payload),
-        (({ link_url, audio_path, ...r }) => r)(payload),
-        (({ link_url, audio_path, video_path, ...r }) => r)(payload),
-        (({ link_url, audio_path, video_path, tipo, ...r }) => r)(payload),
-    ];
-    let data = null, error = null;
-    for (const intento of intentos) {
-        ({ data, error } = await supabase.from('op_mensajes').insert(intento).select('*').single());
-        if (!error || error.code !== '42703') break;
+    // Construir payload final según columnas que realmente existen
+    // _probarColumna() cachea el resultado para no repetir el select
+    const [tieneVideo, tieneAudio, tieneTipo] = await Promise.all([
+        _probarColumna('video_path'),
+        _probarColumna('audio_path'),
+        _probarColumna('tipo'),
+    ]);
+
+    const payloadFinal = {
+        conversacion_id: payload.conversacion_id,
+        autor_id:        payload.autor_id,
+        autor_nombre:    payload.autor_nombre,
+        contenido:       payload.contenido,
+        imagen_path:     payload.imagen_path,
+    };
+    if (tieneTipo)   payloadFinal.tipo       = payload.tipo;
+    if (tieneVideo && payload.video_path) payloadFinal.video_path = payload.video_path;
+    if (tieneAudio && payload.audio_path) payloadFinal.audio_path = payload.audio_path;
+
+    // Si video/audio no tienen columna, preservar el path en contenido para no perderlo
+    if (!tieneVideo && payload.video_path) {
+        payloadFinal.contenido = [payloadFinal.contenido, '📹 ' + payload.video_path].filter(Boolean).join('\n');
     }
+    if (!tieneAudio && payload.audio_path) {
+        payloadFinal.contenido = [payloadFinal.contenido, '🎵 ' + payload.audio_path].filter(Boolean).join('\n');
+    }
+
+    const { data, error } = await supabase.from('op_mensajes').insert(payloadFinal).select('*').single();
     return error ? null : data;
 }
 
