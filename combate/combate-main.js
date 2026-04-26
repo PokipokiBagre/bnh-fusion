@@ -98,6 +98,26 @@ window.onload = async () => {
     document.getElementById('pantalla-carga')?.style?.setProperty('display','none');
     document.getElementById('interfaz-combate')?.classList?.remove('oculto');
     renderCombate();
+
+    // ── Fix markup links: bnh-markup.js genera rutas relativas como fichas/index.html
+    // Desde /combate/ eso resuelve a /combate/fichas/ en vez de /fichas/
+    // Interceptamos y corregimos con la ruta absoluta correcta.
+    document.addEventListener('click', e => {
+        const a = e.target.closest('a[href]');
+        if (!a) return;
+        const href = a.getAttribute('href');
+        if (!href || href.startsWith('http') || href.startsWith('#') || href.startsWith('/')) return;
+        // Detectar rutas relativas que apuntan a secciones del proyecto
+        const secciones = ['fichas/', 'tags/', 'medallas/', 'combate/'];
+        const apuntaASección = secciones.some(s => href.startsWith(s) || href.includes('/' + s));
+        if (!apuntaASección) return;
+        e.preventDefault();
+        // Construir URL absoluta desde la raíz del proyecto
+        const root = window.location.origin + window.location.pathname.split('/').slice(0, -2).join('/') + '/';
+        // Quitar los ../ iniciales del href y resolver desde la raíz
+        const hrefClean = href.replace(/^(\.\.\/)+/, '');
+        window.open(root + hrefClean, '_blank');
+    }, true);
 };
 
 // ── Pool: seleccionar destino (A o B) ─────────────────────────
