@@ -491,9 +491,23 @@ window._combateGuardarStatsSlot = async (eq, idx) => {
         [1,2,3,4,5].forEach(n => {
             payload[`delta_${c}_${n}`] = d[`delta_${c}_${n}`] || '0';
         });
+        // Guardar nota de cada campo si existe
+        if (d[`delta_${c}_nota`] !== undefined) {
+            payload[`delta_${c}_nota`] = d[`delta_${c}_nota`] || '';
+        }
     });
     const res = await guardarStatsGrupo(slot.nombre, payload);
     toast(res.ok ? '✅ Stats guardados' : '❌ ' + res.msg, res.ok ? 'ok' : 'error');
+};
+
+// ── Nota de texto para cada stat ──────────────────────────────
+window._combateSetNota = (eq, idx, key, valor) => {
+    const slot = combateState[`equipo${eq}`]?.[idx];
+    if (!slot) return;
+    if (!slot._notas) slot._notas = {};
+    slot._notas[`delta_${key}_nota`] = valor;
+    // También persist en _d para que se guarde con Guardar en BD
+    slot._d[`delta_${key}_nota`] = valor;
 };
 
 // ── Registro ──────────────────────────────────────────────────

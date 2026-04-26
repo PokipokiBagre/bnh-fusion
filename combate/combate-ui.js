@@ -219,20 +219,41 @@ function _renderSlotCard(eq, idx, slot, col) {
     </div>
 
     <div style="display:flex;gap:2px;padding:6px 8px;">
-        ${[['POT',slot.pot,'#7d3c00'],['AGI',slot.agi,'#1a4a80'],['CTL',slot.ctl,'#4a235a'],['C/T',slot.cambios,'#1e8449']
-          ].map(([l,v,c]) => `
+        ${(() => {
+            // Badges de delta para cada stat
+            const _badges = (deltas) => deltas.filter(d=>d&&d!=='0').map(d=>{
+                const s=String(d).trim();
+                const isNeg = s.startsWith('-') || (s.startsWith('/') && !s.startsWith('/0'));
+                return '<span style="display:inline-block;padding:0 3px;border-radius:3px;font-size:0.6em;font-weight:700;margin:0 1px;background:'+(isNeg?'#fdecea':'#e3f2fd')+';color:'+(isNeg?'#c0392b':'#1565c0')+';border:1px solid '+(isNeg?'#ef9a9a':'#90caf9')+';">'+s+'</span>';
+            }).join('');
+            const potDeltas = [1,2,3,4,5].map(n=>slot._d['delta_pot_'+n]||'0');
+            const agiDeltas = [1,2,3,4,5].map(n=>slot._d['delta_agi_'+n]||'0');
+            const ctlDeltas = [1,2,3,4,5].map(n=>slot._d['delta_ctl_'+n]||'0');
+            const ctlUsadoDeltas = [1,2,3,4,5].map(n=>slot._d['delta_ctl_usado_'+n]||'0');
+            return [
+                ['POT',slot.pot,'#7d3c00',_badges(potDeltas)],
+                ['AGI',slot.agi,'#1a4a80',_badges(agiDeltas)],
+                ['CTL',slot.ctl,'#4a235a',_badges(ctlDeltas)],
+                ['C/T',slot.cambios,'#1e8449','']
+            ].map(([l,v,c,bdg]) => `
         <div style="flex:1;background:#f8f9fa;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;">
             <div style="font-weight:800;color:${c};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div>
+            ${bdg ? `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:1px;margin-top:1px;">${bdg}</div>` : ''}
             <div style="color:#adb5bd;font-size:0.8em;">${l}</div>
-        </div>`).join('')}
-        <div style="flex:1.2;background:#e8f4fd;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #b3d7f5;">
-            <div style="font-weight:800;color:#1a4a80;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pvMax}</div>
-            <div style="color:#5b9bd5;font-size:0.8em;">PVMax</div>
+        </div>`).join('') + `
+        <div style="flex:1.5;background:#e9f7ef;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #a9dfbf;">
+            <div style="font-weight:800;color:${pvColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pv} / ${slot.pvMax}</div>
+            <div style="color:#1e8449;font-size:0.8em;">PV</div>
         </div>
-        <div style="flex:1.4;background:#e9f7ef;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #a9dfbf;">
-            <div style="font-weight:800;color:${pvColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pv}/${slot.pvMax}</div>
-            <div style="color:#1e8449;font-size:0.8em;">PVAct</div>
-        </div>
+        <div style="flex:1.4;border:1px solid #c39bd3;border-radius:6px;overflow:hidden;text-align:center;min-width:0;font-size:0.72em;">
+            <div style="background:${ctlUsado>slot.ctl?'#fde8e8':'#c8f5dc'};padding:2px 2px 1px;font-weight:800;color:${ctlUsado>slot.ctl?'#c0392b':'#1a6b3a'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${ctlUsado}${_badges(ctlUsadoDeltas)}
+            </div>
+            <div style="background:#f0fff4;padding:1px 2px 2px;font-weight:800;color:#4a235a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${slot.ctl}${_badges(ctlDeltas)}
+            </div>
+        </div>`;
+        })()}
     </div>
 
     ${slot.medallas.length ? `
@@ -295,13 +316,15 @@ export function renderSlotDetalle(eq, idx) {
     // ── Bloque stat con deltas ────────────────────────────────
     const _statBlock = (key, lbl, baseVal, isAuto=false, accentColor=col, bg='#f8f9fa', border='#e9ecef', extraHTML='') => {
         const deltas = [1,2,3,4,5].map(n => d[`delta_${key}_${n}`]||'0');
+        const notaKey = `delta_${key}_nota`;
+        const notaVal = slot._notas?.[notaKey] || d[notaKey] || '';
         const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv', ctl_usado:'ctlUsado' }[key] || key;
         const result = key === 'ctl_usado'
             ? (slot.ctlUsado ?? 0) + ' / ' + slot.ctl
             : (slot[resultKey] ?? '?');
         return `
 <div style="background:${bg};border-radius:8px;padding:7px 10px;border:1.5px solid ${border};">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap;">
         <span style="font-weight:800;color:${accentColor};font-size:0.82em;min-width:58px;">${lbl}</span>
         ${isAuto
             ? `<span style="background:#e9ecef;border-radius:4px;padding:2px 8px;font-size:0.78em;color:#666;">Auto</span>`
@@ -309,7 +332,13 @@ export function renderSlotDetalle(eq, idx) {
                 style="width:60px;border:1.5px solid ${border};border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:${accentColor};"
                 id="cb-${eq}-${idx}-${key}-base" oninput="window._combateRecalcDeltas('${eq}',${idx})">`
         }
-        <span id="cb-${eq}-${idx}-${key}-result" style="font-size:0.75em;color:#888;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
+        <span id="cb-${eq}-${idx}-${key}-result" style="font-size:0.75em;color:#888;flex:1;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
+        <textarea placeholder="Nota / Origen…" rows="1"
+            style="width:130px;min-width:80px;max-width:280px;resize:horizontal;border:1px solid #ddd;
+                border-radius:4px;padding:2px 5px;font-size:0.7em;color:#555;background:#fffdf0;
+                vertical-align:middle;line-height:1.3;overflow:hidden;"
+            id="cb-${eq}-${idx}-${key}-nota"
+            oninput="window._combateSetNota('${eq}',${idx},'${key}',this.value)">${notaVal}</textarea>
     </div>
     <div style="display:flex;gap:3px;">
         ${[1,2,3,4,5].map(n=>`
@@ -592,11 +621,20 @@ export function renderCuadroResumen() {
     El cuadro resumen aparecerá cuando haya al menos un personaje.
 </div>`;
 
+    const _deltaBadgesTxt = (slot, key) => {
+        const activos = [1,2,3,4,5].map(n=>slot._d?.['delta_'+key+'_'+n]||'0').filter(d=>d&&d!=='0');
+        if (!activos.length) return '';
+        return ' ' + activos.map(d=>{
+            const s=String(d).trim();
+            const neg=s.startsWith('-')||s.startsWith('/');
+            return `<span style="display:inline-block;padding:0 2px;border-radius:3px;font-size:0.65em;font-weight:700;background:${neg?'#fdecea':'#e3f2fd'};color:${neg?'#c0392b':'#1565c0'};border:1px solid ${neg?'#ef9a9a':'#90caf9'};">${s}</span>`;
+        }).join('');
+    };
     const stats = [
         {lbl:'PVs',      fmt:s=>`${s.pv}/${s.pvMax}`},
-        {lbl:'POT',      fmt:s=>String(s.pot)},
-        {lbl:'AGI',      fmt:s=>String(s.agi)},
-        {lbl:'CTL',      fmt:s=>String(s.ctl)},
+        {lbl:'POT',      fmt:s=>String(s.pot)+_deltaBadgesTxt(s,'pot')},
+        {lbl:'AGI',      fmt:s=>String(s.agi)+_deltaBadgesTxt(s,'agi')},
+        {lbl:'CTL',      fmt:s=>String(s.ctlUsado??calcCTLUsado(s.medallas))+'/'+String(s.ctl)+_deltaBadgesTxt(s,'ctl')},
         {lbl:'C/T',      fmt:s=>String(s.cambios)},
         {lbl:'PT Total', fmt:s=>String(calcPTTotal(s.pts))},
         {lbl:'Medallas', fmt:s=>String(s.medallas?.length||0)},
