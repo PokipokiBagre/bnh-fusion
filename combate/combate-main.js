@@ -382,6 +382,7 @@ window._combateToggleMedalla = (eq, idx, medallaId, checked) => {
         slot.medallas = slot.medallas.filter(m => String(m.id) !== String(medallaId));
         delete slot.dados[medallaId];
     }
+    recalcSlot(slot); // ← recalcula ctlUsado para que la tarjeta lo refleje
     refrescarEquipo(eq);
     refrescarCuadro();
     renderSlotDetalle(eq, idx);
@@ -427,7 +428,28 @@ window._combateDeltaPT = (eq, idx, tag, delta) => {
     slot.pts[k] = Math.max(0, antes + delta);
     _pushRegistro(slot.nombre, { etiqueta: `${delta>0?'+':''}${delta}PT ${k}` });
     refrescarRegistro();
-    renderSlotDetalle(eq, idx);
+    // Solo actualizar el número inline para no mover los botones
+    const safeId = `cb-pt-val-${eq}-${idx}-${k.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
+    const spanEl = document.getElementById(safeId);
+    if (spanEl) spanEl.textContent = slot.pts[k];
+    else renderSlotDetalle(eq, idx); // fallback si no existe el span
+};
+
+// ── Guardar PTs en BD ──────────────────────────────────────────
+window._combateGuardarPTs = async (eq, idx) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    const { supabase } = await import('../bnh-auth.js');
+    let errores = 0;
+    for (const [tag, cantidad] of Object.entries(slot.pts || {})) {
+        const k = tag.startsWith('#') ? tag : '#' + tag;
+        const { error } = await supabase.from('puntos_tag').upsert(
+            { personaje_nombre: slot.nombre, tag: k, cantidad },
+            { onConflict: 'personaje_nombre,tag' }
+        );
+        if (error) errores++;
+    }
+    toast(errores === 0 ? '✅ PTs guardados en BD' : `⚠️ ${errores} error(es) al guardar`, errores === 0 ? 'ok' : 'error');
 };
 
 // ── Guardar stats en BD ───────────────────────────────────────

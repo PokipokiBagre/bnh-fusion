@@ -394,10 +394,17 @@ export function renderSlotDetalle(eq, idx) {
     // ══ TAB: TAGS Y PT ══════════════════════════════════════
     const tabTags = `
 <div>
-    ${combateState.esAdmin ? `
-    <div style="margin-bottom:8px;">
-        <button style="font-size:0.78em;padding:4px 12px;background:${col};color:white;border:none;border-radius:6px;cursor:pointer;"
-            onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;">
+        <span style="font-size:0.72em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.5px;">Tags y PT</span>
+        <div style="display:flex;gap:4px;">
+            ${combateState.esAdmin ? `
+            <button style="font-size:0.72em;padding:3px 10px;background:#27ae60;color:white;
+                border:none;border-radius:6px;cursor:pointer;"
+                onclick="window._combateGuardarPTs('${eq}',${idx})">💾 Guardar PTs</button>
+            <button style="font-size:0.72em;padding:3px 10px;background:${col};color:white;
+                border:none;border-radius:6px;cursor:pointer;"
+                onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>` : ''}
+        </div>
     </div>
     <div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
         <input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"
@@ -420,25 +427,32 @@ export function renderSlotDetalle(eq, idx) {
             tagsActivos.forEach(tN => {
                 const tD = tN.startsWith('#') ? tN : '#' + tN;
                 const key = Object.keys(ptsCompleto).find(k => (k.startsWith('#')?k:'#'+k).toLowerCase() === tN);
-                if (!key) ptsCompleto[tD] = 0;
+                if (!key) {
+                    // Buscar capitalización original en slot.tags
+                    const tagOriginal = (slot.tags || []).find(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === tN);
+                    ptsCompleto[tagOriginal ? (tagOriginal.startsWith('#')?tagOriginal:'#'+tagOriginal) : tD] = 0;
+                }
             });
             return Object.entries(ptsCompleto).sort((a,b) => b[1]-a[1]).map(([tag,pts]) => {
                 const tD = tag.startsWith('#')?tag:'#'+tag;
                 const enT = tagsActivos.has(tD.toLowerCase());
+                const safeId = `cb-pt-val-${eq}-${idx}-${tD.replace(/[^a-zA-Z0-9_-]/g,'_')}`;
                 return `
         <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;
             background:${enT?pale:'#f8f9fa'};border:1px solid ${enT?col+'44':'#dee2e6'};">
             <span style="flex:1;font-size:0.78em;font-weight:700;color:${enT?col:'#888'};">${esc(tD)}</span>
-            <span style="font-size:0.82em;font-weight:800;min-width:28px;text-align:right;">${pts}</span>
+            <span id="${safeId}" style="font-size:0.82em;font-weight:800;min-width:28px;text-align:right;">${pts}</span>
             ${combateState.esAdmin?`<div style="display:flex;gap:2px;flex-wrap:nowrap;">
                 ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
                     `<button style="font-size:0.58em;padding:1px 3px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
                         border-radius:3px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
                         onclick="window._combateDeltaPT('${eq}',${idx},'${esc(tD)}',${dv})">${dv>0?'+':''}${dv}</button>`
                 ).join('')}
-            </div>`:''}</div>`;
+            </div>`:''}
+        </div>`;
             }).join('') || '<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin PT registrados</div>';
         })()}
+    </div>
     </div>
 </div>`;
 
