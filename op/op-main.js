@@ -164,17 +164,17 @@ function _initVisibilityReconnect() {
         const awayMs = Date.now() - _lastVisible;
 
         try {
-            // 1. Siempre verificar que la sesión de Supabase siga activa
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) {
-                // Sesión expiró — recargar la página
+            // 1. Verificar sesión — usar getUser() que no necesita lock de storage
+            //    getSession() puede causar AbortError si se llama concurrentemente
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
                 window.location.reload();
                 return;
             }
 
             // 2. Restaurar perfil si se perdió
-            if (!opState.perfil && session.user) {
-                opState.perfil = await cargarPerfil(session.user.id);
+            if (!opState.perfil) {
+                opState.perfil = await cargarPerfil(user.id);
             }
 
             // 3. Sin conv activa no hay nada más que hacer
@@ -211,13 +211,8 @@ function _initVisibilityReconnect() {
         }
     });
 
-    // También reconectar en focus de la ventana (además de visibilitychange)
-    window.addEventListener('focus', async () => {
-        if (!opState.convActual || !opState.perfil) return;
-        // Verificar sesión activa
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) window.location.reload();
-    });
+    // Nota: NO agregar listener 'focus' — compite con visibilitychange
+    // por el lock de auth de Supabase y causa AbortError.
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
