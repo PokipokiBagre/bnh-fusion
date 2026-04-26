@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <script src="../bnh-guard.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combate — BNH</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="../combatestyle.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<header class="app-header">
+    <div class="header-top">
+        <a href="../index.html" class="header-logo">◀ <span>BNH</span>&nbsp;Combate</a>
+        <div id="bnh-session-badge"></div>
+    </div>
+</header>
+
+<main class="app-main">
+    <div id="pantalla-carga" style="text-align:center;padding:60px 20px;">
+        <div class="spinner" style="width:32px;height:32px;margin:0 auto 16px;"></div>
+        <p>Preparando arena…</p>
+    </div>
+
+    <div id="interfaz-combate" class="oculto">
+        <div id="vista-combate"></div>
+    </div>
+</main>
+
+<div id="toast-msg"></div>
+<script type="module" src="combate-main.js"></script>
+</body>
+</html>
