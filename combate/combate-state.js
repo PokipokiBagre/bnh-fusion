@@ -49,21 +49,25 @@ export function setCatalogoTagsArr(d)  { catalogoTagsArr  = d; }
 export function crearSlot(pj, medEquipadas) {
     const pts = { ...(todosLosPTs[pj.nombre_refinado || pj.nombre] || {}) };
 
+    // gOriginal es el raw de BD (sin proyección). Si el PJ viene proyectado lo usamos;
+    // si no (PJ sin fusión), el propio pj tiene los valores raw.
+    const raw = pj.gOriginal || pj;
+
     // Delta defaults: copiar los deltas reales del PJ de la BD
     const _d = {};
     const campos = ['pot','agi','ctl','pv','cambios','ctl_usado','pv_actual'];
     campos.forEach(c => {
         [1,2,3,4,5].forEach(n => {
-            _d[`delta_${c}_${n}`] = pj[`delta_${c}_${n}`] || '0';
+            _d[`delta_${c}_${n}`] = raw[`delta_${c}_${n}`] || '0';
         });
     });
 
     return {
         nombre:   pj.nombre_refinado || pj.nombre,
-        // Stats base de la BD (sin modificar)
-        potBase:  pj.pot || 0,
-        agiBase:  pj.agi || 0,
-        ctlBase:  pj.ctl || 0,
+        // Stats base RAW de la BD (sin deltas ni proyección de fusión)
+        potBase:  raw.pot || 0,
+        agiBase:  raw.agi || 0,
+        ctlBase:  raw.ctl || 0,
         // Stats calculados por deltas (se actualizan con recalcSlot)
         pot:      pj.pot_total   || pj.pot || 0,
         agi:      pj.agi_total   || pj.agi || 0,
@@ -72,7 +76,7 @@ export function crearSlot(pj, medEquipadas) {
         cambios:  pj.cambios_total || 0,
         pv:       pj.pv_actual_total !== undefined ? pj.pv_actual_total : (pj.pv_total || 0),
         // PV actual manual (null = usar pvMax)
-        _pvActualManual: pj.pv_actual !== null && pj.pv_actual !== undefined ? pj.pv_actual : null,
+        _pvActualManual: raw.pv_actual !== null && raw.pv_actual !== undefined ? raw.pv_actual : null,
         // Tags y PTs
         tags:     [...(pj.tags || [])],
         pts,
@@ -82,7 +86,9 @@ export function crearSlot(pj, medEquipadas) {
         dados: {},
         // Mapa de deltas (editable en combate)
         _d,
-        // Referencia al PJ original
-        _pj: pj,
+        // Referencia al raw de BD (para recalcSlot y guardar)
+        _pj: raw,
+        // Referencia al PJ proyectado completo (por si se necesita)
+        _pjProyectado: pj,
     };
 }
