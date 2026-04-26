@@ -6,7 +6,6 @@ import { opState, STORAGE_URL } from './op-state.js';
 import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
-    cargarPerfil,
     cargarMensajes, enviarMensaje, eliminarMensaje,
     cargarImagenesGaleria, subirImagenGaleria, subirVideoGaleria, eliminarImagenGaleria,
     subirAvatarOP, suscribirMensajes, diagnosticarDB
