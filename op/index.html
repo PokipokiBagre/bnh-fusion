@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OP Chat — BNH</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="../styleop.css">
     
     <link rel="stylesheet" href="../styleop.css">
 </head>
@@ -102,8 +103,10 @@ import { initOP }  from './op-main.js';
 
 window.onload = async () => {
     await bnhAuth.init();
-    const badge = document.getElementById('bnh-session-badge');
-    if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
+    // Favicon
+    const fav = document.getElementById('dynamic-favicon');
+    const { currentConfig } = await import('../bnh-auth.js');
+    if (fav) fav.href = currentConfig.storageUrl + '/imginterfaz/icon.png';
 
     if (!bnhAuth.esAdmin()) {
         document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;
@@ -130,6 +133,15 @@ window.onload = async () => {
     };
 
     await initOP();
+    // Render profile pill in sidebar
+    const pill = document.getElementById('op-perfil-pill');
+    if (pill && window._opGetPerfil) {
+        const p = window._opGetPerfil();
+        if (p) {
+            const { avatarUrl: _av } = await import('./op-state.js');
+            pill.innerHTML = \`<img src="\${_av(p.avatar_path)}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);" onerror="this.src=currentConfig.storageUrl+'/imginterfaz/no_encontrado.png'"><span style="font-size:0.75em;font-weight:700;color:#922b21;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">\${p.nombre}</span>\`;
+        }
+    }
 };
 </script>
 </body>

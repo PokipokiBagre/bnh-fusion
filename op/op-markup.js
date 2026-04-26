@@ -5,7 +5,7 @@ import { opState, STORAGE_URL } from './op-state.js';
 
 const BASE = window.location.origin + window.location.pathname.split('/').slice(0, -2).join('/') + '/';
 
-// Renderiza texto con markup: @Personaje@ → link, #Tag → color, !Medalla!
+// Renderiza texto con markup — SIN saltos de línea en los estilos inline
 export function renderMsgMarkup(texto) {
     if (!texto) return '';
     let html = texto
@@ -15,58 +15,52 @@ export function renderMsgMarkup(texto) {
     // @Personaje@ → link a ficha
     html = html.replace(/@([^@\n]+?)@/g, (_, nombre) => {
         const url = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
-        return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;
-            background:#f5eeff;padding:1px 6px;border-radius:4px;text-decoration:none;
-            border:1px solid #c39bd3;">@${nombre}@</a>`;
+        return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;background:#f5eeff;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid #c39bd3;">@${nombre}@</a>`;
     });
 
     // #Tag → badge azul
-    html = html.replace(/#([^\s#<]+)/g, (_, tag) => {
+    html = html.replace(/#([^\s#<&]+)/g, (_, tag) => {
         const url = `${BASE}tags/index.html?tag=%23${encodeURIComponent(tag)}`;
-        return `<a href="${url}" target="_blank" style="color:#1a4a80;font-weight:700;
-            background:#ebf5fb;padding:1px 6px;border-radius:4px;text-decoration:none;
-            border:1px solid #aecde8;">#${tag}</a>`;
+        return `<a href="${url}" target="_blank" style="color:#1a4a80;font-weight:700;background:#ebf5fb;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid #aecde8;">#${tag}</a>`;
     });
 
-    // !Medalla! → badge morado
+    // !Medalla! → badge rojo/morado
     html = html.replace(/!([^!\n]+?)!/g, (_, nombre) => {
-        return `<span style="color:#6c3483;font-weight:700;background:#f5eeff;
-            padding:1px 6px;border-radius:4px;border:1px solid #c39bd3;">⚔ ${nombre}</span>`;
+        return `<span style="color:#c0392b;font-weight:700;background:#fdecea;padding:1px 6px;border-radius:4px;border:1px solid rgba(192,57,43,0.3);">⚔ ${nombre}</span>`;
     });
 
     return html;
 }
 
-// ── Autocomplete @PJ@ ─────────────────────────────────────────
+// ── Autocomplete ──────────────────────────────────────────────
 let _acDropdown = null;
 let _acInput    = null;
-let _acCallback = null;
+let _acSelected = 0;
 
-export function mountMarkupAC(textarea, onInsert) {
-    _acInput    = textarea;
-    _acCallback = onInsert;
-
+export function mountMarkupAC(textarea) {
+    _acInput = textarea;
     textarea.addEventListener('input', _onInput);
     textarea.addEventListener('keydown', _onKey);
-    document.addEventListener('click', _closeAC, true);
+    document.addEventListener('mousedown', e => {
+        if (_acDropdown && !_acDropdown.contains(e.target)) _closeAC();
+    }, true);
 }
 
 function _onInput(e) {
-    const ta   = e.target;
-    const val  = ta.value;
-    const pos  = ta.selectionStart;
-    // Buscar @ más cercano antes del cursor
+    const ta  = e.target;
+    const val = ta.value;
+    const pos = ta.selectionStart;
     const before = val.slice(0, pos);
     const match  = before.match(/@([^@\n]*)$/);
     if (!match) { _closeAC(); return; }
 
     const query = match[1].toLowerCase();
-    const grupos = opState.grupos || [];
-    const hits = grupos
+    const hits  = (opState.grupos || [])
         .filter(g => (g.nombre_refinado||'').toLowerCase().includes(query))
         .slice(0, 8);
 
     if (!hits.length) { _closeAC(); return; }
+    _acSelected = 0;
     _showAC(ta, hits, match[0], pos);
 }
 
@@ -74,15 +68,14 @@ function _showAC(ta, hits, triggerStr, pos) {
     _closeAC();
     const dd = document.createElement('div');
     dd.id = 'op-ac-dropdown';
-    dd.style.cssText = `position:fixed;z-index:99999;background:#1a1a2e;border:2px solid #6c3483;
-        border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.5);overflow:hidden;min-width:200px;`;
+    dd.style.cssText = 'position:fixed;z-index:99999;background:white;border:1.5px solid #c0392b;border-radius:10px;box-shadow:0 -4px 20px rgba(0,0,0,0.15);overflow:hidden;min-width:220px;';
 
     hits.forEach((g, i) => {
         const nombre = g.nombre_refinado;
         const item = document.createElement('div');
-        item.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px 12px;
-            cursor:pointer;color:#e2d9f3;font-size:0.85em;font-weight:600;transition:0.1s;`;
-        item.dataset.i = i;
+        item.className = 'op-ac-item';
+        item.dataset.idx = i;
+        item.style.cssText = 'display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;color:#212529;font-size:0.85em;font-weight:600;transition:0.1s;';
 
         const img = document.createElement('img');
         img.src = `${STORAGE_URL}/imgpersonajes/${_norm(nombre)}icon.png`;
@@ -91,21 +84,48 @@ function _showAC(ta, hits, triggerStr, pos) {
 
         item.appendChild(img);
         item.appendChild(document.createTextNode(nombre));
-        item.addEventListener('mouseenter', () => item.style.background = 'rgba(108,52,131,0.4)');
-        item.addEventListener('mouseleave', () => item.style.background = '');
-        item.addEventListener('mousedown', ev => {
-            ev.preventDefault();
-            _insertAC(nombre, triggerStr, pos);
-        });
+        item.addEventListener('mouseenter', () => { _acSelected = i; _highlightAC(); });
+        item.addEventListener('mousedown', ev => { ev.preventDefault(); _insertAC(nombre, triggerStr, pos); });
         dd.appendChild(item);
     });
 
-    // Posicionar junto al cursor
+    // Posicionar ARRIBA del textarea
     const rect = ta.getBoundingClientRect();
-    dd.style.left = rect.left + 'px';
-    dd.style.top  = (rect.bottom + 4) + 'px';
     document.body.appendChild(dd);
+    const ddH = dd.offsetHeight;
+    dd.style.left = rect.left + 'px';
+    dd.style.top  = (rect.top - ddH - 6) + 'px';
+    dd.style.width = Math.max(rect.width, 220) + 'px';
+
     _acDropdown = dd;
+    _highlightAC();
+}
+
+function _highlightAC() {
+    if (!_acDropdown) return;
+    _acDropdown.querySelectorAll('.op-ac-item').forEach((el, i) => {
+        el.style.background = i === _acSelected ? '#fdecea' : '';
+        el.style.color      = i === _acSelected ? '#c0392b' : '#212529';
+    });
+}
+
+function _onKey(e) {
+    if (!_acDropdown) return;
+    const items = _acDropdown.querySelectorAll('.op-ac-item');
+    if (e.key === 'ArrowDown') { e.preventDefault(); _acSelected = Math.min(_acSelected+1, items.length-1); _highlightAC(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); _acSelected = Math.max(_acSelected-1, 0); _highlightAC(); }
+    else if (e.key === 'Tab' || e.key === 'Enter') {
+        const sel = items[_acSelected];
+        if (sel) {
+            e.preventDefault();
+            const val = _acInput.value;
+            const pos = _acInput.selectionStart;
+            const before = val.slice(0, pos);
+            const match  = before.match(/@([^@\n]*)$/);
+            if (match) _insertAC(sel.textContent.trim(), match[0], pos);
+        }
+    }
+    else if (e.key === 'Escape') { _closeAC(); e.preventDefault(); }
 }
 
 function _insertAC(nombre, triggerStr, pos) {
@@ -117,12 +137,6 @@ function _insertAC(nombre, triggerStr, pos) {
     _acInput.selectionStart = _acInput.selectionEnd = start + ins.length;
     _acInput.focus();
     _closeAC();
-    if (_acCallback) _acCallback();
-}
-
-function _onKey(e) {
-    if (!_acDropdown) return;
-    if (e.key === 'Escape') { _closeAC(); e.preventDefault(); }
 }
 
 function _closeAC() {

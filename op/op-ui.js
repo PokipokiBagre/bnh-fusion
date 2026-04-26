@@ -13,7 +13,7 @@ export function renderConvList() {
     if (!wrap) return;
     const convs = opState.conversaciones;
     if (!convs.length) {
-        wrap.innerHTML = `<div style="padding:20px;color:rgba(255,255,255,0.3);font-size:0.82em;text-align:center;">Sin conversaciones</div>`;
+        wrap.innerHTML = `<div style="padding:20px;color:var(--gray-500,#adb5bd);font-size:0.82em;text-align:center;padding:20px;">Sin conversaciones</div>`;
         return;
     }
     wrap.innerHTML = convs.map(c => {
@@ -37,7 +37,7 @@ export function renderMensajes() {
 
     if (!msgs.length) {
         wrap.innerHTML = `<div style="display:flex;flex:1;align-items:center;justify-content:center;
-            color:rgba(255,255,255,0.2);font-size:0.9em;">Sin mensajes aún</div>`;
+            color:var(--gray-500,#adb5bd);font-size:0.9em;">Sin mensajes aún</div>`;
         return;
     }
 

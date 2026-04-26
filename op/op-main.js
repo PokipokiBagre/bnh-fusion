@@ -2,7 +2,7 @@
 // op/op-main.js — Controlador principal del OP Chat
 // ============================================================
 import { bnhAuth, supabase } from '../bnh-auth.js';
-import { opState } from './op-state.js';
+import { opState, STORAGE_URL } from './op-state.js';
 import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
@@ -23,6 +23,7 @@ let _pendingImgId = null; // imagen de galería seleccionada para enviar
 export async function initOP() {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return;
+    window._STORAGE_URL = STORAGE_URL;
 
     // Cargar perfil (crear si no existe)
     let perfil = await cargarPerfil(user.id);
@@ -31,6 +32,9 @@ export async function initOP() {
         perfil = { id: user.id, nombre: 'OP', avatar_path: null };
     }
     opState.perfil = perfil;
+
+    // Mostrar avatar + nombre en el sidebar header
+    _renderPerfilPill();
 
     // Cargar PJs para autocomplete
     const { data: grupos } = await supabase.from('personajes_refinados')
@@ -113,7 +117,7 @@ function _renderTab(tab) {
 function _mountInput() {
     const ta = $('op-msg-input');
     if (!ta) return;
-    mountMarkupAC(ta, () => {});
+    mountMarkupAC(ta);
     ta.addEventListener('keydown', e => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -197,6 +201,7 @@ function _exponerGlobales() {
     window._opTab        = t => _renderTab(t);
     window._opSelConv    = async id => { await _selConv(id); renderConvList(); };
     window._opEnviar     = _enviar;
+    window._opGetPerfil  = () => opState.perfil;
 
     window._opNuevaConv  = async () => {
         const titulo = prompt('Nombre de la conversación:');
@@ -334,7 +339,31 @@ function _exponerGlobales() {
     };
 }
 
-function toast(msg, tipo='ok') {
+function _renderPerfilPill() {
+    const pill = document.getElementById('op-perfil-pill');
+    if (!pill || !opState.perfil) return;
+    const { avatarUrl } = opState;
+    const p = opState.perfil;
+    const av = p.avatar_path
+        ? `${opState.STORAGE_URL || ''}/${p.avatar_path}`
+        : (document.querySelector('[id^=dynamic-favicon]')?.href || '');
+    pill.innerHTML = `
+        <img src="${p.avatar_path ? (window._STORAGE_URL||'') + '/' + p.avatar_path : ''}"
+            id="op-pill-avatar"
+            style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);background:#f8f9fa;"
+            onerror="this.style.display='none'">
+        <span style="font-size:0.75em;font-weight:700;color:#922b21;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</span>`;
+    // Set real avatar URL
+    const img = pill.querySelector('#op-pill-avatar');
+    if (img && p.avatar_path) {
+        import('./op-state.js').then(({ avatarUrl: av }) => { img.src = av(p.avatar_path); });
+    }
+}
+
+// Keep reference for index.html
+window._opRenderPerfilPill = _renderPerfilPill;
+
+
     const el = document.getElementById('op-toast');
     if (!el) return;
     el.textContent = msg;
