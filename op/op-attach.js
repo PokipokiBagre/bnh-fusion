@@ -8,8 +8,19 @@ import { subirImagenGaleria, subirVideoGaleria } from './op-data.js';
 
 // ── Tipos de archivo ──────────────────────────────────────────
 export const isImage = f => f.type.startsWith('image/');
-export const isVideo = f => f.type.startsWith('video/');
-export const isAudio = f => f.type.startsWith('audio/') || /\.(mp3|ogg|wav|flac|aac|m4a|opus)$/i.test(f.name);
+
+// isAudio primero para que .m4a / audio/x-m4a no sea capturado por isVideo
+const AUDIO_EXTS = /\.(mp3|ogg|wav|flac|aac|m4a|opus|weba|wma)$/i;
+const AUDIO_MIME = /^audio\//;
+export const isAudio = f =>
+    AUDIO_MIME.test(f.type) ||
+    AUDIO_EXTS.test(f.name) ||
+    // Algunos browsers reportan m4a como video/mp4 — detectar por extensión
+    (f.type === 'video/mp4' && /\.m4a$/i.test(f.name));
+
+// isVideo solo si NO es audio
+export const isVideo = f =>
+    f.type.startsWith('video/') && !isAudio(f);
 
 // ── Subir audio a Supabase Storage ───────────────────────────
 export async function subirAudio(file, opId, opNombre) {
