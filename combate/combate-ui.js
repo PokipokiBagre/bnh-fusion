@@ -1023,15 +1023,17 @@ export async function generarImagenCuadro() {
                 ctx.textAlign = 'center';
                 ctx.fillText(val, vcx + COL_W/2, y + ROW_H/2 + 4);
             } else {
-                // Value on top, badges row below
+                // Value on top half, badges immediately below
                 ctx.fillStyle = '#1e293b';
                 ctx.font = `700 11px 'Inter',sans-serif`;
                 ctx.textAlign = 'center';
-                ctx.fillText(val, vcx + COL_W/2, y + 11);
+                const valY = y + ROW_H/2 - 6;
+                ctx.fillText(val, vcx + COL_W/2, valY);
 
-                // Draw badges centered in lower half
+                // Draw badges centered just below value
+                const badgeY = y + ROW_H/2 + 8;
+                ctx.font = `700 8px 'Inter',sans-serif`;
                 const totalW = deltas.reduce((acc, d) => {
-                    ctx.font = `700 8px 'Inter',sans-serif`;
                     return acc + ctx.measureText(String(d).trim()).width + 8 + 3;
                 }, -3);
                 let bx = vcx + COL_W/2 - totalW/2;
@@ -1040,8 +1042,8 @@ export async function generarImagenCuadro() {
                     const tw = ctx.measureText(String(d).trim()).width;
                     const bw = tw + 8;
                     bx += bw/2;
-                    bx += _drawBadge(ctx, d, bx, y + ROW_H - 10);
-                    bx -= bw/2; // already advanced by _drawBadge return
+                    const adv = _drawBadge(ctx, d, bx, badgeY);
+                    bx += bw/2 + (adv - bw);
                 });
             }
             vcx += COL_W;

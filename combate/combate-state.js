@@ -60,6 +60,8 @@ export function crearSlot(pj, medEquipadas) {
         [1,2,3,4,5].forEach(n => {
             _d[`delta_${c}_${n}`] = raw[`delta_${c}_${n}`] || '0';
         });
+        // Cargar nota desde la columna nota_X de la BD
+        _d[`delta_${c}_nota`] = raw[`nota_${c}`] || '';
     });
 
     return {

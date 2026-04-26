@@ -512,10 +512,8 @@ window._combateGuardarStatsSlot = async (eq, idx) => {
         [1,2,3,4,5].forEach(n => {
             payload[`delta_${c}_${n}`] = d[`delta_${c}_${n}`] || '0';
         });
-        // Guardar nota de cada campo si existe
-        if (d[`delta_${c}_nota`] !== undefined) {
-            payload[`delta_${c}_nota`] = d[`delta_${c}_nota`] || '';
-        }
+        // Guardar nota en la columna nota_X (nombre real en BD)
+        payload[`nota_${c}`] = d[`delta_${c}_nota`] || '';
     });
     const res = await guardarStatsGrupo(slot.nombre, payload);
     toast(res.ok ? '✅ Stats guardados' : '❌ ' + res.msg, res.ok ? 'ok' : 'error');
