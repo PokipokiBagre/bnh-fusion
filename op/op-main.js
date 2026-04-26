@@ -22,6 +22,8 @@ const $ = id => document.getElementById(id);
 const renderMsgMarkupGlobal = renderMsgMarkup;
 let _pendingImgId  = null;
 let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
+// Exponer para acceso desde onclick inline del preview
+Object.defineProperty(window, '_pendingImgId', { get: () => _pendingImgId, set: v => { _pendingImgId = v; } });
 
 // Definir _opFileInput globalmente de inmediato (antes de initOP)
 // para que el botón del HTML pueda llamarla aunque initOP no haya terminado.
@@ -739,25 +741,36 @@ function _exponerGlobales() {
     window._opVerImagen = url => showLightbox(url);
 
     window._opSeleccionarImg = id => {
-        _pendingImgId = id;
-        const allImgs = Object.values(opState.imagenesGaleria).flat();
-        const img = allImgs.find(i => i.id === id);
-        if (!img) return;
-        $('op-img-selector').style.display = 'none';
+        const allItems = Object.values(opState.imagenesGaleria).flat();
+        const item = allItems.find(i => i.id === id);
+        if (!item) return;
+
+        const esVideo = item.tipo === 'video';
+        // Guardar referencia con tipo para que _enviar lo enrute correctamente
+        _pendingImgId = esVideo ? { id, tipo: 'video', path: item.path } : id;
+
+        document.getElementById('op-img-selector-dropdown')?.remove();
         document.getElementById('op-img-preview')?.remove();
+
         const prev = document.createElement('div');
         prev.id = 'op-img-preview';
         prev.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 10px;
-            background:rgba(108,52,131,0.2);border-radius:8px;margin-bottom:4px;`;
-        prev.innerHTML = `<img src="${img.url}" style="height:48px;border-radius:6px;object-fit:cover;">
-            <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${img.nombre}</span>
-            <button onclick="_pendingImgId=null;this.closest('#op-img-preview').remove()"
-                style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;">✕</button>`;
+            background:${esVideo ? 'rgba(192,57,43,0.15)' : 'rgba(108,52,131,0.2)'};
+            border-radius:8px;margin-bottom:4px;`;
+
+        const thumb = esVideo
+            ? `<span style="font-size:1.6em;flex-shrink:0;">🎬</span>`
+            : `<img src="${item.url}" style="height:48px;border-radius:6px;object-fit:cover;flex-shrink:0;">`;
+
+        prev.innerHTML = `${thumb}
+            <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${item.nombre}</span>
+            <button onclick="window._pendingImgId=null;document.getElementById('op-img-preview')?.remove()"
+                style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.1em;">✕</button>`;
         $('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
+        $('op-msg-input')?.focus();
     };
 
     window._opEnviarDesdeGaleria = id => {
-        _pendingImgId = id;
         _renderTab('chat');
         window._opSeleccionarImg(id);
     };
@@ -798,18 +811,35 @@ function _exponerGlobales() {
 
             const grid = document.createElement('div');
             grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;';
-            allImgs.forEach(img => {
+            allImgs.forEach(item => {
+                const esVideo = item.tipo === 'video';
                 const cell = document.createElement('div');
-                cell.style.cssText = `cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;transition:0.15s;`;
-                cell.onmouseover = () => cell.style.borderColor = '#6c3483';
+                cell.style.cssText = `cursor:pointer;border-radius:8px;overflow:hidden;
+                    border:2px solid transparent;transition:0.15s;position:relative;`;
+                cell.onmouseover = () => cell.style.borderColor = esVideo ? '#c0392b' : '#6c3483';
                 cell.onmouseout  = () => cell.style.borderColor = 'transparent';
-                cell.title = img.nombre;
-                cell.innerHTML = `<img src="${img.url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
-                    <div style="font-size:0.6em;color:rgba(255,255,255,0.6);padding:2px 4px;
-                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0d1117;">
-                        ${img.nombre}
-                    </div>`;
-                cell.onclick = () => { window._opSeleccionarImg(img.id); dd.remove(); };
+                cell.title = item.nombre;
+
+                if (esVideo) {
+                    cell.innerHTML = `
+                        <div style="width:100%;aspect-ratio:1;background:#1a0a0a;display:flex;
+                            flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+                            <span style="font-size:1.6em;">🎬</span>
+                            <span style="font-size:0.5em;color:rgba(192,57,43,0.9);font-weight:700;">VIDEO</span>
+                        </div>
+                        <div style="font-size:0.6em;color:rgba(255,255,255,0.6);padding:2px 4px;
+                            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0d1117;">
+                            ${item.nombre}
+                        </div>`;
+                } else {
+                    cell.innerHTML = `
+                        <img src="${item.url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+                        <div style="font-size:0.6em;color:rgba(255,255,255,0.6);padding:2px 4px;
+                            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0d1117;">
+                            ${item.nombre}
+                        </div>`;
+                }
+                cell.onclick = () => { window._opSeleccionarImg(item.id); dd.remove(); };
                 grid.appendChild(cell);
             });
             dd.appendChild(grid);
