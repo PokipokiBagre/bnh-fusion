@@ -359,4 +359,3 @@ window._opVerGaleriaMensaje = (msgId, idx) => {
     }
     lb.innerHTML = `<img src="${esc(url)}" style="max-width:90vw;max-height:90vh;
         border-radius:8px;box-shadow:0 0 60px rgba(108,52,131,0.5);">`;
-}
