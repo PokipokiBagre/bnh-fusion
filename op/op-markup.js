@@ -23,8 +23,24 @@ export function renderMsgMarkup(texto) {
         // @Personaje@
         if (/^@[^@]+@$/.test(p)) {
             const nombre = p.slice(1, -1);
-            const url = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
-            return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;background:#f5eeff;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid #c39bd3;">@${esc(nombre)}@</a>`;
+            const url    = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
+            // Build normalized image path same way as autocomplete
+            const norm   = str => str.toString().trim().toLowerCase()
+                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+                .replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+                .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+            const imgSrc = `${STORAGE_URL}/imgpersonajes/${norm(nombre)}icon.png`;
+            const noImg  = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+            return `<a href="${url}" target="_blank"
+                style="display:inline-flex;align-items:center;gap:4px;color:#6c3483;font-weight:700;
+                       background:#f5eeff;padding:2px 7px 2px 3px;border-radius:20px;
+                       text-decoration:none;border:1px solid #c39bd3;vertical-align:middle;line-height:1.4;">
+                <img src="${esc(imgSrc)}" alt=""
+                    style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;"
+                    onerror="this.src='${esc(noImg)}'">
+                ${esc(nombre)}
+            </a>`;
         }
 
         // #Tag

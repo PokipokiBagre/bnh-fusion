@@ -64,6 +64,7 @@ export async function initOP() {
     _renderTab('chat');
     _exponerGlobales();
     _mountInput();
+    _initVisibilityReconnect();
 }
 
 // ── Conversaciones ────────────────────────────────────────────
@@ -112,6 +113,50 @@ async function _selConv(id) {
     const conv = opState.conversaciones.find(c => c.id === id);
     const el = $('op-chat-titulo');
     if (el && conv) el.textContent = conv.titulo;
+}
+
+// ── Reconexión automática al volver a la pestaña ──────────────
+// Los navegadores throttlean websockets en pestañas inactivas.
+// Al recuperar visibilidad: recargar mensajes nuevos y re-suscribir.
+function _initVisibilityReconnect() {
+    let _lastVisible = Date.now();
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            _lastVisible = Date.now();
+            return;
+        }
+        // Volvió a ser visible
+        const awayMs = Date.now() - _lastVisible;
+        if (awayMs < 5000 || !opState.convActual) return; // menos de 5s → no hace falta
+
+        // Re-suscribir canal (el websocket puede estar muerto)
+        if (opState.realtimeSub) {
+            try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
+            opState.realtimeSub = null;
+        }
+
+        // Cargar mensajes nuevos que llegaron mientras estaba fuera
+        const mensajesNuevos = await cargarMensajes(opState.convActual, 60);
+        const idsActuales = new Set(opState.mensajes.map(m => m.id));
+        const nuevos = mensajesNuevos.filter(m => !idsActuales.has(m.id));
+        nuevos.forEach(m => {
+            opState.mensajes.push(m);
+            if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
+        });
+
+        // Re-suscribir
+        opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
+            if (msg.autor_id !== opState.perfil?.id) {
+                if (!opState.perfiles[msg.autor_id]) {
+                    supabase.from('op_perfiles').select('id, nombre, avatar_path')
+                        .eq('id', msg.autor_id).maybeSingle()
+                        .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
+                }
+                appendMensaje(msg);
+            }
+        });
+    });
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
