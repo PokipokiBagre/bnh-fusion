@@ -142,7 +142,8 @@ export function renderMensajes() {
         ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
         ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
         <div class="op-msg-meta">
-            <span class="op-msg-hora">${hora}</span>
+            <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
+            ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
             <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
         </div>
     </div>
@@ -188,7 +189,8 @@ ${!propio ? avatarHtml : ''}
     ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
     ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
     <div class="op-msg-meta">
-        <span class="op-msg-hora">${hora}</span>
+        <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
+        ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
         <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
     </div>
 </div>
@@ -238,9 +240,25 @@ export function renderAjustes() {
     const wrap = $('op-ajustes-content');
     if (!wrap) return;
     const p = opState.perfil;
+
+    // Catálogo de perfiles
+    const todosPerfiles = Object.values(opState.perfiles || {});
+
     wrap.innerHTML = `
-<div class="op-ajustes-card">
-    <h3 class="op-ajustes-title">⚙ Perfil OP</h3>
+<div class="op-ajustes-card" style="margin-bottom:20px;">
+    <h3 class="op-ajustes-title">👤 Perfil activo</h3>
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 0;">
+        <img src="${avatarUrl(p?.avatar_path)}"
+            style="width:56px;height:56px;border-radius:50%;object-fit:cover;border:3px solid #6c3483;flex-shrink:0;">
+        <div>
+            <div style="font-weight:700;font-size:1.05em;color:#6c3483;">${esc(p?.nombre||'Sin nombre')}</div>
+            <div style="font-size:0.72em;color:rgba(255,255,255,0.4);margin-top:2px;">Sesión activa</div>
+        </div>
+    </div>
+</div>
+
+<div class="op-ajustes-card" style="margin-bottom:20px;">
+    <h3 class="op-ajustes-title">⚙ Editar perfil actual</h3>
 
     <div class="op-field-group">
         <label class="op-label">Nombre visible en el chat</label>
@@ -267,6 +285,44 @@ export function renderAjustes() {
         💾 Guardar cambios
     </button>
     <div id="op-ajustes-msg" style="margin-top:8px;font-size:0.82em;"></div>
+</div>
+
+<div class="op-ajustes-card">
+    <h3 class="op-ajustes-title">📋 Catálogo de perfiles OP</h3>
+    <div id="op-perfiles-catalogo" style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+        ${todosPerfiles.length ? todosPerfiles.map(prof => {
+            const esActivo = prof.id === p?.id;
+            return `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;
+            background:${esActivo ? 'rgba(108,52,131,0.15)' : 'rgba(255,255,255,0.04)'};
+            border-radius:10px;border:1.5px solid ${esActivo ? '#6c3483' : 'rgba(255,255,255,0.08)'};">
+            <img src="${avatarUrl(prof.avatar_path)}"
+                style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
+                border:2px solid ${esActivo ? '#6c3483' : 'rgba(255,255,255,0.15)'};">
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;font-size:0.88em;color:${esActivo ? '#c39bd3' : 'rgba(255,255,255,0.8)'};
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    ${esc(prof.nombre)}${esActivo ? ' <span style="font-size:0.75em;color:#6c3483;">(tú)</span>' : ''}
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+                <button onclick="window._opRenombrarPerfil('${prof.id}','${esc(prof.nombre)}')"
+                    style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
+                    color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    title="Editar nombre">✏ Nombre</button>
+                ${!esActivo ? `
+                <button onclick="window._opSeleccionarPerfil('${prof.id}')"
+                    style="background:rgba(108,52,131,0.2);border:1px solid #6c3483;
+                    color:#c39bd3;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    title="Usar este perfil">▶ Usar</button>
+                <button onclick="window._opEliminarPerfil('${prof.id}','${esc(prof.nombre)}')"
+                    style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);
+                    color:#e74c3c;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    title="Eliminar perfil">🗑</button>` : ''}
+            </div>
+        </div>`;
+        }).join('') : `<div style="color:rgba(255,255,255,0.3);font-size:0.82em;text-align:center;padding:16px;">Sin perfiles cargados</div>`}
+    </div>
 </div>`;
 }
 

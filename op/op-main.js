@@ -14,9 +14,11 @@ import {
     renderConvList, renderMensajes, appendMensaje,
     renderGaleria, renderAjustes, renderSelectorImagenes, showLightbox
 } from './op-ui.js';
-import { mountMarkupAC } from './op-markup.js';
+import { mountMarkupAC, renderMsgMarkup } from './op-markup.js';
 
 const $ = id => document.getElementById(id);
+// Exponer renderMsgMarkup globalmente para los handlers inline de edición
+const renderMsgMarkupGlobal = renderMsgMarkup;
 let _pendingImgId  = null;
 let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
 
@@ -540,6 +542,101 @@ function _exponerGlobales() {
         opState.mensajes = opState.mensajes.filter(m => m.id !== id);
         const el = document.querySelector(`.op-msg[data-id="${id}"]`);
         if (el) el.remove();
+    };
+
+    window._opEditarMsg = id => {
+        const msg = opState.mensajes.find(m => m.id === id);
+        if (!msg || !msg.contenido) return;
+
+        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
+        if (!msgEl) return;
+        const textoEl = msgEl.querySelector('.op-msg-texto');
+        if (!textoEl) return;
+
+        // Reemplazar el texto por un textarea inline
+        const original = msg.contenido;
+        textoEl.innerHTML = `
+            <textarea id="op-edit-ta-${id}" style="width:100%;min-height:60px;background:rgba(255,255,255,0.1);
+                border:1.5px solid #6c3483;border-radius:6px;color:inherit;font:inherit;
+                padding:6px 8px;resize:vertical;box-sizing:border-box;">${original}</textarea>
+            <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">
+                <button onclick="window._opCancelarEdicion(${id},'${original.replace(/'/g,"\\'")}')"
+                    style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);
+                    color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8em;">
+                    Cancelar</button>
+                <button onclick="window._opGuardarEdicion(${id})"
+                    style="background:#6c3483;border:none;color:white;border-radius:6px;
+                    padding:4px 10px;cursor:pointer;font-size:0.8em;font-weight:700;">
+                    💾 Guardar</button>
+            </div>`;
+        document.getElementById(`op-edit-ta-${id}`)?.focus();
+    };
+
+    window._opCancelarEdicion = (id, original) => {
+        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
+        if (!msgEl) return;
+        const textoEl = msgEl.querySelector('.op-msg-texto');
+        if (textoEl) textoEl.innerHTML = renderMsgMarkupGlobal(original);
+    };
+
+    window._opGuardarEdicion = async id => {
+        const ta = document.getElementById(`op-edit-ta-${id}`);
+        if (!ta) return;
+        const nuevoContenido = ta.value.trim();
+        if (!nuevoContenido) return;
+
+        const { error } = await supabase.from('op_mensajes')
+            .update({ contenido: nuevoContenido, editado_en: new Date().toISOString() })
+            .eq('id', id);
+        if (error) { toast('❌ Error al guardar edición', 'error'); return; }
+
+        // Actualizar state
+        const msg = opState.mensajes.find(m => m.id === id);
+        if (msg) { msg.contenido = nuevoContenido; msg.editado_en = new Date().toISOString(); }
+
+        // Actualizar DOM
+        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
+        if (!msgEl) return;
+        const textoEl = msgEl.querySelector('.op-msg-texto');
+        if (textoEl) textoEl.innerHTML = renderMsgMarkupGlobal(nuevoContenido);
+        // Marcar como editado en la hora
+        const horaEl = msgEl.querySelector('.op-msg-hora');
+        if (horaEl && !horaEl.querySelector('.op-editado-badge')) {
+            horaEl.insertAdjacentHTML('beforeend', ' <span class="op-editado-badge" style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>');
+        }
+    };
+
+    // ── Catálogo de perfiles ──────────────────────────────────
+    window._opRenombrarPerfil = async (id, nombreActual) => {
+        const nuevo = prompt('Nuevo nombre para este perfil:', nombreActual);
+        if (!nuevo?.trim() || nuevo.trim() === nombreActual) return;
+        const { error } = await supabase.from('op_perfiles')
+            .update({ nombre: nuevo.trim(), actualizado_en: new Date().toISOString() })
+            .eq('id', id);
+        if (error) { toast('❌ Error al renombrar', 'error'); return; }
+        if (opState.perfiles[id]) opState.perfiles[id].nombre = nuevo.trim();
+        if (opState.perfil?.id === id) opState.perfil.nombre = nuevo.trim();
+        renderAjustes();
+        toast('✅ Nombre actualizado', 'ok');
+    };
+
+    window._opSeleccionarPerfil = async (id) => {
+        const perfil = opState.perfiles[id];
+        if (!perfil) return;
+        opState.perfil = { ...perfil };
+        renderAjustes();
+        renderMensajes();
+        _renderPerfilPill();
+        toast(`✅ Perfil activo: ${perfil.nombre}`, 'ok');
+    };
+
+    window._opEliminarPerfil = async (id, nombre) => {
+        if (!confirm(`¿Eliminar el perfil "${nombre}"? Esto no elimina sus mensajes.`)) return;
+        const { error } = await supabase.from('op_perfiles').delete().eq('id', id);
+        if (error) { toast('❌ Error al eliminar perfil', 'error'); return; }
+        delete opState.perfiles[id];
+        renderAjustes();
+        toast('🗑 Perfil eliminado', 'ok');
     };
 
     window._opVerImagen = url => showLightbox(url);
