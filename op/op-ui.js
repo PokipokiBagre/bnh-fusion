@@ -88,18 +88,17 @@ export function renderMensajes() {
         ultimoAutorId = msg.autor_id;
         ultimaHora    = fecha;
 
-        // Avatar placeholder (espacio) para mensajes agrupados propios
-        const avatarHtml = propio ? '' : (mismoGrupo
+        const avatarHtml = mismoGrupo
             ? `<div style="width:36px;flex-shrink:0;"></div>`
             : `<img src="${esc(avSrc)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;
                 flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;"
-                onerror="this.style.visibility='hidden'">`);
+                onerror="this.style.visibility='hidden'">`;
 
         html += `
 <div class="op-msg ${propio?'propio':'ajeno'}" data-id="${msg.id}">
-    ${avatarHtml}
+    ${!propio ? avatarHtml : ''}
     <div class="op-msg-bubble">
-        ${!propio && !mismoGrupo ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
+        ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
         ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
             onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
         ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
@@ -108,6 +107,7 @@ export function renderMensajes() {
             <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
         </div>
     </div>
+    ${propio ? avatarHtml : ''}
 </div>`;
     });
 
@@ -133,19 +133,19 @@ export function appendMensaje(msg) {
     const perfil = opState.perfiles?.[msg.autor_id];
     const avSrc  = perfil?.avatar_path ? `${STORAGE_URL}/${perfil.avatar_path}` : '';
 
-    const avatarHtml = propio ? '' : (mismoGrupo
+    const avatarHtml = mismoGrupo
         ? `<div style="width:36px;flex-shrink:0;"></div>`
         : `<img src="${esc(avSrc)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;
             flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;"
-            onerror="this.style.visibility='hidden'">`);
+            onerror="this.style.visibility='hidden'">`;
 
     const div = document.createElement('div');
     div.className = `op-msg ${propio?'propio':'ajeno'}`;
     div.dataset.id = msg.id;
     div.innerHTML = `
-${avatarHtml}
+${!propio ? avatarHtml : ''}
 <div class="op-msg-bubble">
-    ${!propio && !mismoGrupo ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
+    ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
     ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
         onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
     ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
@@ -153,7 +153,8 @@ ${avatarHtml}
         <span class="op-msg-hora">${hora}</span>
         <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
     </div>
-</div>`;
+</div>
+${propio ? avatarHtml : ''}`;
     wrap.appendChild(div);
     wrap.scrollTop = wrap.scrollHeight;
 }

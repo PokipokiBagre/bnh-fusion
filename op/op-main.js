@@ -53,7 +53,7 @@ export async function initOP() {
 
     // Cargar medallas para autocomplete !Medalla!
     const { data: medallas } = await supabase
-        .from('medallas')
+        .from('medallas_catalogo')
         .select('nombre')
         .order('nombre');
     opState.medallas = medallas || [];
@@ -316,10 +316,10 @@ function _exponerGlobales() {
             if (id === opState.convActual) { opState.mensajes = []; renderMensajes(); }
         }));
 
-        // Delete (not for first conv)
-        if (id !== opState.conversaciones[opState.conversaciones.length - 1]?.id || opState.conversaciones.length > 1) {
+        // Delete
+        if (opState.conversaciones.length > 1) {
             menu.appendChild(item('🗑', 'Eliminar conversación', async () => {
-                if (!confirm('¿Eliminar esta conversación?')) return;
+                if (!confirm(`¿Eliminar "${conv.titulo}"?`)) return;
                 await eliminarConversacion(id);
                 opState.conversaciones = opState.conversaciones.filter(c => c.id !== id);
                 if (id === opState.convActual) {
@@ -363,6 +363,9 @@ function _exponerGlobales() {
         const prev = _getConvMeta(id);
         localStorage.setItem(`op_conv_meta_${id}`, JSON.stringify({ ...prev, ...patch }));
     }
+
+    window._opEliminarMsg = async id => {
+        await eliminarMensaje(id);
         opState.mensajes = opState.mensajes.filter(m => m.id !== id);
         const el = document.querySelector(`.op-msg[data-id="${id}"]`);
         if (el) el.remove();
@@ -459,6 +462,7 @@ function _exponerGlobales() {
             if (msgEl) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Error al guardar.'; }
         }
     };
+}
 
 function _renderPerfilPill() {
     const pill = document.getElementById('op-perfil-pill');
