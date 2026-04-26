@@ -213,6 +213,9 @@ window._combateRecalcDeltas = (eq, idx) => {
 
     const get = id => document.getElementById(id)?.value?.trim() || '0';
 
+    // Snapshot antes para detectar cambios
+    const antes = { pot: slot.pot, agi: slot.agi, ctl: slot.ctl, pvMax: slot.pvMax, cambios: slot.cambios, pv: slot.pv, ctlUsado: slot.ctlUsado ?? 0 };
+
     const campos = ['pot','agi','ctl','pv','cambios','ctl_usado','pv_actual'];
     campos.forEach(c => {
         [1,2,3,4,5].forEach(n => {
@@ -230,6 +233,23 @@ window._combateRecalcDeltas = (eq, idx) => {
     recalcSlot(slot);
     refrescarEquipo(eq);
     refrescarCuadro();
+
+    // Registrar cambios con debounce (600ms) para no spamear al escribir
+    clearTimeout(slot._recalcRegistroTimer);
+    slot._recalcRegistroTimer = setTimeout(() => {
+        const despues = { pot: slot.pot, agi: slot.agi, ctl: slot.ctl, pvMax: slot.pvMax, pv: slot.pv, ctlUsado: slot.ctlUsado ?? 0 };
+        const etiquetas = [];
+        if (despues.pot    !== antes.pot)     etiquetas.push(`POT(${antes.pot}→${despues.pot})`);
+        if (despues.agi    !== antes.agi)     etiquetas.push(`AGI(${antes.agi}→${despues.agi})`);
+        if (despues.ctl    !== antes.ctl)     etiquetas.push(`CTL(${antes.ctl}→${despues.ctl})`);
+        if (despues.pvMax  !== antes.pvMax)   etiquetas.push(`PVMax(${antes.pvMax}→${despues.pvMax})`);
+        if (despues.pv     !== antes.pv)      etiquetas.push(`PV(${antes.pv}→${despues.pv})`);
+        if (despues.ctlUsado !== antes.ctlUsado) etiquetas.push(`CTLUsd(${antes.ctlUsado}→${despues.ctlUsado})`);
+        if (etiquetas.length) {
+            _pushRegistro(slot.nombre, { etiqueta: etiquetas.join(' ') });
+            refrescarRegistro();
+        }
+    }, 600);
 
     // Actualizar displays de resultado sin re-renderizar todo el detalle para no perder foco
     const statMap = { pot:'pot', agi:'agi', ctl:'ctl', pv:'pvMax', cambios:'cambios', pv_actual:'pv', ctl_usado:'ctlUsado' };
