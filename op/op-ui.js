@@ -147,6 +147,35 @@ function _renderLinkGenerico(url) {
 }
 
 
+// ── Render contenido con detección de links (fallback para msgs viejos) ──────
+// Si el mensaje no tiene link_url guardado pero el contenido tiene una URL,
+// la extrae, renderiza el embed, y muestra el texto SIN la URL suelta.
+function _renderContenidoConLinks(msg) {
+    const texto = msg.contenido;
+    if (!texto) return '';
+
+    // Si ya tiene link_url guardado, solo renderizar el texto tal cual
+    if (msg.link_url) {
+        return `<div class="op-msg-texto">${renderMsgMarkup(texto)}</div>`;
+    }
+
+    // Detectar URLs en el contenido
+    const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+    const links = [...texto.matchAll(URL_RE)].map(m => m[0]);
+    if (!links.length) {
+        return `<div class="op-msg-texto">${renderMsgMarkup(texto)}</div>`;
+    }
+
+    const primerLink = links[0];
+    // Texto sin la URL para no mostrarla dos veces
+    const textoSinLink = texto.replace(primerLink, '').trim();
+
+    return `
+        ${_renderLink(primerLink)}
+        ${textoSinLink ? `<div class="op-msg-texto" style="margin-top:4px;">${renderMsgMarkup(textoSinLink)}</div>` : ''}
+    `;
+}
+
 export function renderConvList() {
     const wrap = $('op-conv-list');
     if (!wrap) return;
@@ -242,7 +271,7 @@ export function renderMensajes() {
         ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
         ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
         ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
-        ${msg.contenido   ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
+        ${_renderContenidoConLinks(msg)}
         <div class="op-msg-meta">
             <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
             ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
@@ -292,7 +321,7 @@ ${!propio ? avatarHtml : ''}
     ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
     ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
     ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
-    ${msg.contenido   ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
+    ${_renderContenidoConLinks(msg)}
     <div class="op-msg-meta">
         <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
         ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
