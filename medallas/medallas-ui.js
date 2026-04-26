@@ -755,14 +755,20 @@ export function renderPersonaje() {
                             ${_fmtDChain(proy.agi_chain_base, agi, [1,2,3,4,5].map(n=>gEq?.['delta_agi_'+n]), proy.esFusion ? '⚡ ' : '')}
                         </div>
                     </div>
-                    <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
-                        <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">CTL</div>
-                        <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
-                            ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl)}
+                    <div style="border:1px solid #27ae60;border-radius:6px;overflow:hidden;text-align:center;display:flex;flex-direction:column;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
+                        <!-- Zona superior: CTL USADO -->
+                        <div style="background:${ctlExcedido?'#fde8e8':'#c8f5dc'};padding:5px 2px 3px;display:flex;flex-direction:column;align-items:center;border-bottom:1px solid #27ae6055;">
+                            <div style="font-size:0.55em;color:${ctlExcedido?'#c0392b':'#1a6b3a'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">🛡 usado</div>
+                            <div style="font-size:0.95em;font-weight:800;color:${ctlExcedido?'#c0392b':colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
+                                ${_fmtDChain(ctlUsadoBase, ctlUsado, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_usado_'+n]))}
+                            </div>
                         </div>
-                        <div style="font-size:0.75em;font-weight:700;color:${colorCtlTxt};margin-top:4px;width:100%;">
-                            ${_fmtDChain(ctlUsadoBase, ctlUsado, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_usado_'+n]), '🛡 ')}
-                            <div style="font-size:0.85em;color:#aaa;text-align:center;">usado / ${ctl}</div>
+                        <!-- Zona inferior: CTL TOTAL -->
+                        <div style="background:#f0fff4;padding:4px 2px 5px;display:flex;flex-direction:column;align-items:center;">
+                            <div style="font-size:0.55em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">CTL total</div>
+                            <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
+                                ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl)}
+                            </div>
                         </div>
                     </div>
                 </div>
