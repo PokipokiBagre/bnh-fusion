@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cinzel:wght@700&display=swap');
+
+:root {
+    --green:        #1e8449; --green-light: #27ae60; --green-pale: #d5f5e3; --green-dark: #145a32;
+    --red:          #c0392b; --red-pale:    #fdecea;
+    --orange:       #d68910; --orange-pale: #fef9e7;
+    --blue:         #1a4a80; --blue-pale:   #ebf5fb; --blue-dark:  #154360;
+    --purple:       #6c3483; --purple-pale: #f5eeff;
+    --white:        #ffffff;
+    --gray-100:     #f8f9fa; --gray-200: #e9ecef; --gray-300: #dee2e6;
+    --gray-500:     #adb5bd; --gray-700: #495057; --gray-900: #212529;
+    --shadow-sm:    0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md:    0 4px 12px rgba(0,0,0,0.10);
+    --shadow-lg:    0 8px 24px rgba(0,0,0,0.14);
+    --radius:       8px; --radius-lg: 12px;
+    /* Combate específico */
+    --eq-a:         #1a4a80;
+    --eq-a-pale:    #dbeafe;
+    --eq-a-dark:    #154360;
+    --eq-b:         #a93226;
+    --eq-b-pale:    #fde8e8;
+    --eq-b-dark:    #7b241c;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    font-family: 'Inter', sans-serif;
+    background: var(--gray-100);
+    color: var(--gray-900);
+    line-height: 1.5;
+    min-height: 100vh;
+}
+
+/* ── Header ── */
+.app-header {
+    background: var(--white);
+    border-bottom: 3px solid var(--gray-900);
+    padding: 0 24px;
+    position: sticky; top: 0; z-index: 100;
+    box-shadow: var(--shadow-sm);
+}
+.header-top {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    padding: 12px 0; gap: 16px;
+}
+.header-logo {
+    font-family: 'Cinzel', serif;
+    font-size: 1.3em; color: var(--gray-900);
+    text-decoration: none; font-weight: bold;
+}
+.header-logo span { color: var(--red); }
+
+/* ── Main ── */
+.app-main { max-width: 1400px; margin: 0 auto; padding: 20px 16px; }
+
+/* ── Buttons ── */
+.btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 16px; border-radius: var(--radius);
+    border: 1.5px solid transparent;
+    font-family: inherit; font-size: 0.85em; font-weight: 600;
+    cursor: pointer; transition: 0.15s; text-decoration: none;
+}
+.btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-green   { background: var(--green); color: white; border-color: var(--green); }
+.btn-red     { background: var(--red);   color: white; border-color: var(--red); }
+.btn-outline { background: white; color: var(--gray-700); border-color: var(--gray-300); }
+.btn-sm      { padding: 4px 10px; font-size: 0.78em; }
+
+/* ── Input ── */
+.inp {
+    width: 100%; padding: 8px 12px;
+    border: 1.5px solid var(--gray-300); border-radius: var(--radius);
+    font-family: inherit; font-size: 0.88em; outline: none;
+    background: var(--white); color: var(--gray-900);
+    transition: border-color 0.2s;
+}
+.inp:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-pale); }
+textarea.inp { resize: vertical; min-height: 60px; }
+
+/* ── Equipos grid ── */
+#combate-equipos-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+@media (max-width: 900px) {
+    #combate-equipos-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Equipo contenedor ── */
+.equipo-wrap {
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+}
+
+/* ── Slot card ── */
+.slot-card {
+    background: white;
+    border-radius: 10px;
+    border: 2px solid var(--gray-200);
+    transition: border-color .15s, box-shadow .15s;
+    cursor: pointer;
+    overflow: hidden;
+}
+.slot-card:hover { box-shadow: var(--shadow-md); }
+.slot-card.activo-A { border-color: var(--eq-a); box-shadow: 0 0 0 3px rgba(26,74,128,0.2); }
+.slot-card.activo-B { border-color: var(--eq-b); box-shadow: 0 0 0 3px rgba(169,50,38,0.2); }
+
+/* ── Barra de PV ── */
+.pv-bar-wrap { flex: 1; height: 5px; background: var(--gray-200); border-radius: 3px; overflow: hidden; }
+.pv-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
+/* ── Badge de medalla ── */
+.medalla-badge {
+    font-size: 0.68em; background: var(--purple-pale);
+    color: var(--purple); border: 1px solid #c8a8e9;
+    padding: 1px 6px; border-radius: 6px; font-weight: 700;
+    white-space: nowrap;
+}
+
+/* ── Stat mini ── */
+.stat-mini {
+    background: var(--gray-100); border-radius: 6px;
+    padding: 3px 4px; text-align: center;
+}
+.stat-mini .v { font-weight: 800; font-size: 0.88em; }
+.stat-mini .l { font-size: 0.65em; color: var(--gray-500); }
+
+/* ── Dado input ── */
+.dado-input {
+    width: 52px; padding: 2px 4px;
+    border: 1.5px solid var(--gray-300); border-radius: 5px;
+    font-size: 0.75em; text-align: center; font-weight: 700;
+    background: white;
+}
+.dado-input:focus { border-color: var(--orange); outline: none; }
+
+/* ── Slot detalle ── */
+#combate-slot-detalle {
+    animation: fadeSlide .2s ease;
+}
+@keyframes fadeSlide {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Delta buttons ── */
+.delta-btn {
+    font-size: 0.58em; padding: 1px 3px;
+    border: 1px solid var(--gray-300); border-radius: 3px;
+    cursor: pointer; line-height: 1.4; font-weight: 700;
+    transition: .1s;
+}
+.delta-btn:hover { transform: scale(1.1); }
+.delta-pos { background: var(--green-pale); color: var(--green-dark); border-color: var(--green-light); }
+.delta-neg { background: var(--red-pale); color: var(--red); border-color: #f5b7b1; }
+
+/* ── Tag pill en detalle ── */
+.tag-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px; border-radius: 6px; border: 1px solid var(--gray-200);
+}
+.tag-row.activo { background: var(--blue-pale); border-color: rgba(26,74,128,0.3); }
+.tag-row.activo-b { background: var(--eq-b-pale); border-color: rgba(169,50,38,0.3); }
+
+/* ── Registro ── */
+#combate-registro-txt {
+    font-family: 'Inter', monospace;
+    font-size: 0.82em; line-height: 1.7;
+    white-space: pre-wrap; word-break: break-word;
+}
+
+/* ── Tabla resumen ── */
+#combate-tabla-resumen {
+    border-collapse: collapse;
+    width: 100%; min-width: 400px;
+}
+#combate-tabla-resumen th,
+#combate-tabla-resumen td {
+    padding: 5px 10px;
+    border: 1px solid var(--gray-200);
+    font-size: 0.82em;
+}
+#combate-tabla-resumen th { font-weight: 800; }
+
+/* ── Spinner ── */
+.spinner {
+    display: inline-block; width: 20px; height: 20px;
+    border: 2px solid var(--gray-300);
+    border-top-color: var(--gray-900);
+    border-radius: 50%; animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ── */
+#toast-msg {
+    display: none; position: fixed; bottom: 20px; right: 20px;
+    z-index: 9999; padding: 10px 20px; border-radius: var(--radius);
+    font-size: 0.88em; font-weight: 600; box-shadow: var(--shadow-md);
+}
+.toast-ok    { background: var(--green);    color: white; display: block !important; }
+.toast-error { background: var(--red);      color: white; display: block !important; }
+.toast-info  { background: var(--gray-700); color: white; display: block !important; }
+
+/* ── Misc ── */
+.oculto { display: none !important; }
+.card {
+    background: var(--white);
+    border: 1.5px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: 16px 18px;
+    box-shadow: var(--shadow-sm);
+}
+.card-title {
+    font-size: 0.75em; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 1px;
+    color: var(--gray-700); margin-bottom: 12px;
+    padding-bottom: 8px; border-bottom: 2px solid var(--gray-200);
+}
+
+@media (max-width: 600px) {
+    .app-main { padding: 12px 8px; }
+}
