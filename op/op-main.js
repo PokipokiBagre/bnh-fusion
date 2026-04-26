@@ -309,18 +309,12 @@ async function _enviar() {
         $('op-file-preview')?.remove();
     }
 
-    // Imagen o video desde galería (solo uno a la vez)
-    // BUG FIX: _pendingImgId puede ser un objeto { id, tipo, path } cuando es video
+    // Imagen desde galería (solo una a la vez)
     if (_pendingImgId !== null) {
-        const isVideoRef = typeof _pendingImgId === 'object' && _pendingImgId?.tipo === 'video';
-        if (isVideoRef) {
-            await _enviarUnMensaje(contenido || null, null, null, _pendingImgId.path);
-            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
-        } else {
-            const allImgs = Object.values(opState.imagenesGaleria).flat();
-            const img = allImgs.find(i => i.id === _pendingImgId);
-            if (img) await _enviarUnMensaje(contenido || null, img.path);
-            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
+        const allImgs = Object.values(opState.imagenesGaleria).flat();
+        const img = allImgs.find(i => i.id === _pendingImgId);
+        if (img) {
+            await _enviarUnMensaje(null, img.path);
         }
         _pendingImgId = null;
         $('op-img-preview')?.remove();
@@ -341,8 +335,14 @@ async function _enviar() {
         if (imgFiles.length) {
             const paths = [];
             for (const entry of imgFiles) {
+                // BUG FIX: extensión desde file.type cuando el nombre no la trae (ej: paste de GIF)
+                const extFromType = entry.file.type.split('/')[1]?.replace('jpeg','jpg') || 'png';
+                const extFromName = entry.file.name.includes('.')
+                    ? entry.file.name.split('.').pop().toLowerCase()
+                    : null;
+                const ext = extFromName || extFromType;
                 const safeName = entry.source === 'paste'
-                    ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
+                    ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`
                     : entry.file.name.replace(/\.[^.]+$/, '');
                 const res = await subirImagenGaleria(
                     entry.file, opState.perfil.id, opState.perfil.nombre, safeName
@@ -356,7 +356,14 @@ async function _enviar() {
 
         // Videos → un mensaje separado por cada video
         for (const entry of vidFiles) {
-            const safeName = entry.file.name.replace(/\.[^.]+$/, '');
+            // BUG FIX: extensión desde file.type cuando el nombre no la trae
+            const extFromType = entry.file.type.split('/')[1] || 'mp4';
+            const extFromName = entry.file.name.includes('.')
+                ? entry.file.name.split('.').pop().toLowerCase()
+                : null;
+            const ext = extFromName || extFromType;
+            const baseName = entry.file.name.replace(/\.[^.]+$/, '') || `video_${Date.now()}`;
+            const safeName = `${baseName}.${ext}`;
             const res = await subirVideoGaleria(
                 entry.file, opState.perfil.id, opState.perfil.nombre, safeName
             );
@@ -583,30 +590,55 @@ function _exponerGlobales() {
         const textoEl = msgEl.querySelector('.op-msg-texto');
         if (!textoEl) return;
 
-        // Reemplazar el texto por un textarea inline
+        // Guardar el original en un atributo data para no depender de escape en onclick inline
         const original = msg.contenido;
-        textoEl.innerHTML = `
-            <textarea id="op-edit-ta-${id}" style="width:100%;min-height:60px;background:rgba(255,255,255,0.1);
-                border:1.5px solid #6c3483;border-radius:6px;color:inherit;font:inherit;
-                padding:6px 8px;resize:vertical;box-sizing:border-box;">${original}</textarea>
-            <div style="display:flex;gap:6px;margin-top:6px;justify-content:flex-end;">
-                <button onclick="window._opCancelarEdicion(${id},'${original.replace(/'/g,"\\'")}')"
-                    style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);
-                    color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8em;">
-                    Cancelar</button>
-                <button onclick="window._opGuardarEdicion(${id})"
-                    style="background:#6c3483;border:none;color:white;border-radius:6px;
-                    padding:4px 10px;cursor:pointer;font-size:0.8em;font-weight:700;">
-                    💾 Guardar</button>
-            </div>`;
-        document.getElementById(`op-edit-ta-${id}`)?.focus();
+        textoEl.dataset.originalTexto = original;
+
+        // Crear textarea y botones via DOM (sin onclick inline) para evitar bugs con
+        // comillas, saltos de línea y caracteres especiales en el texto original
+        textoEl.innerHTML = '';
+
+        const ta = document.createElement('textarea');
+        ta.id = `op-edit-ta-${id}`;
+        ta.value = original;
+        ta.style.cssText = 'width:100%;min-height:60px;background:rgba(255,255,255,0.1);' +
+            'border:1.5px solid #6c3483;border-radius:6px;color:inherit;font:inherit;' +
+            'padding:6px 8px;resize:vertical;box-sizing:border-box;';
+        textoEl.appendChild(ta);
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;justify-content:flex-end;';
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.style.cssText = 'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);' +
+            'color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8em;';
+        btnCancelar.addEventListener('click', () => {
+            textoEl.innerHTML = renderMsgMarkupGlobal(original);
+        });
+
+        const btnGuardar = document.createElement('button');
+        btnGuardar.textContent = '💾 Guardar';
+        btnGuardar.style.cssText = 'background:#6c3483;border:none;color:white;border-radius:6px;' +
+            'padding:4px 10px;cursor:pointer;font-size:0.8em;font-weight:700;';
+        btnGuardar.addEventListener('click', () => window._opGuardarEdicion(id));
+
+        btnRow.appendChild(btnCancelar);
+        btnRow.appendChild(btnGuardar);
+        textoEl.appendChild(btnRow);
+
+        ta.focus();
     };
 
-    window._opCancelarEdicion = (id, original) => {
+    // _opCancelarEdicion mantenido por compatibilidad, pero ya no se usa en el flujo nuevo
+    window._opCancelarEdicion = (id) => {
         const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
         if (!msgEl) return;
         const textoEl = msgEl.querySelector('.op-msg-texto');
-        if (textoEl) textoEl.innerHTML = renderMsgMarkupGlobal(original);
+        if (!textoEl) return;
+        const original = textoEl.dataset.originalTexto
+            ?? opState.mensajes.find(m => m.id === id)?.contenido ?? '';
+        textoEl.innerHTML = renderMsgMarkupGlobal(original);
     };
 
     window._opGuardarEdicion = async id => {
@@ -689,39 +721,10 @@ function _exponerGlobales() {
         $('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
     };
 
-    // BUG FIX: los videos de galería se enviaban como imagen (imagenPath).
-    // Ahora se detecta el tipo y se enruta correctamente via videoPath.
-    // BUG FIX: handler para seleccionar un video de galería como pendiente
-    window._opSeleccionarVideo = id => {
-        const allItems = Object.values(opState.imagenesGaleria).flat();
-        const item = allItems.find(i => i.id === id);
-        if (!item) return;
-        // Reutilizamos _pendingImgId pero con un flag de tipo video
-        _pendingImgId = { id, tipo: 'video', path: item.path, url: item.url, nombre: item.nombre };
-        document.getElementById('op-img-preview')?.remove();
-        const prev = document.createElement('div');
-        prev.id = 'op-img-preview';
-        prev.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 10px;
-            background:rgba(192,57,43,0.15);border-radius:8px;margin-bottom:4px;`;
-        prev.innerHTML = `<span style="font-size:1.6em;">🎬</span>
-            <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${item.nombre}</span>
-            <button onclick="_pendingImgId=null;this.closest('#op-img-preview').remove()"
-                style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;">✕</button>`;
-        $('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
-        $('op-msg-input')?.focus();
-    };
-
     window._opEnviarDesdeGaleria = id => {
-        const allItems = Object.values(opState.imagenesGaleria).flat();
-        const item = allItems.find(i => i.id === id);
-        if (!item) return;
+        _pendingImgId = id;
         _renderTab('chat');
-        if (item.tipo === 'video') {
-            window._opSeleccionarVideo(id);
-        } else {
-            _pendingImgId = id;
-            window._opSeleccionarImg(id);
-        }
+        window._opSeleccionarImg(id);
     };
 
     window._opEliminarImgGaleria = async (id, path) => {

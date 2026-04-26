@@ -113,8 +113,12 @@ export async function cargarImagenesGaleria() {
 }
 
 export async function subirImagenGaleria(file, opId, opNombre, nombre) {
-    const ext  = file.name.split('.').pop().toLowerCase();
-    const safe = nombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    // BUG FIX: usar file.type como fallback de extensión (cubre GIFs pegados sin extensión en nombre)
+    const extFromName = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : null;
+    const extFromType = (file.type.split('/')[1] || 'png').replace('jpeg','jpg');
+    const ext  = extFromName || extFromType;
+    const nombreBase = nombre.replace(/\.[^.]+$/, '');
+    const safe = nombreBase.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const path = `${FOLDER}/${opNombre.toLowerCase().replace(/\s+/g,'_')}/${safe}_${Date.now()}.${ext}`;
 
     const { error: errUp } = await supabase.storage.from(BUCKET)
@@ -123,23 +127,25 @@ export async function subirImagenGaleria(file, opId, opNombre, nombre) {
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
-    const { data, error } = await supabase.from('op_imagenes').insert({
-        op_id:     opId,
-        op_nombre: opNombre,
-        nombre,
-        path,
-        url:       publicUrl,
-        tipo:      'imagen',
-        tamaño_kb: Math.round(file.size / 1024),
-    }).select('*').single();
+    // BUG FIX: si la columna `tipo` no existe en la tabla, reintentar sin ella (error 42703)
+    const payload = { op_id: opId, op_nombre: opNombre, nombre: nombreBase, path, url: publicUrl, tipo: 'imagen', tamaño_kb: Math.round(file.size / 1024) };
+    let { data, error } = await supabase.from('op_imagenes').insert(payload).select('*').single();
+    if (error?.code === '42703') {
+        const { tipo: _drop, ...payloadSinTipo } = payload;
+        ({ data, error } = await supabase.from('op_imagenes').insert(payloadSinTipo).select('*').single());
+    }
 
     return error ? { ok: false, msg: error.message } : { ok: true, imagen: data };
 }
 
 // BUG FIX: función faltante — op-main.js la importaba pero no existía en este archivo.
 export async function subirVideoGaleria(file, opId, opNombre, nombre) {
-    const ext  = file.name.split('.').pop().toLowerCase();
-    const safe = nombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    // BUG FIX: extensión desde file.type como fallback
+    const extFromName = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : null;
+    const extFromType = file.type.split('/')[1] || 'mp4';
+    const ext  = extFromName || extFromType;
+    const nombreBase = nombre.replace(/\.[^.]+$/, '');
+    const safe = nombreBase.toLowerCase().replace(/[^a-z0-9]/g, '_');
     const path = `${FOLDER}/${opNombre.toLowerCase().replace(/\s+/g,'_')}/${safe}_${Date.now()}.${ext}`;
 
     const { error: errUp } = await supabase.storage.from(BUCKET)
@@ -148,15 +154,13 @@ export async function subirVideoGaleria(file, opId, opNombre, nombre) {
 
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
-    const { data, error } = await supabase.from('op_imagenes').insert({
-        op_id:     opId,
-        op_nombre: opNombre,
-        nombre,
-        path,
-        url:       publicUrl,
-        tipo:      'video',          // distingue videos de imágenes en renderGaleria()
-        tamaño_kb: Math.round(file.size / 1024),
-    }).select('*').single();
+    // BUG FIX: defensivo ante columna `tipo` inexistente (error 42703)
+    const payload = { op_id: opId, op_nombre: opNombre, nombre: nombreBase, path, url: publicUrl, tipo: 'video', tamaño_kb: Math.round(file.size / 1024) };
+    let { data, error } = await supabase.from('op_imagenes').insert(payload).select('*').single();
+    if (error?.code === '42703') {
+        const { tipo: _drop, ...payloadSinTipo } = payload;
+        ({ data, error } = await supabase.from('op_imagenes').insert(payloadSinTipo).select('*').single());
+    }
 
     return error ? { ok: false, msg: error.message } : { ok: true, imagen: data };
 }
