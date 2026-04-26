@@ -85,7 +85,10 @@ window.onload = async () => {
 
         const pjsProyectados = (pjData || []).map(pj => {
             try {
-                return proyectarFicha(pj, pjData || [], ptMap, opcionesFusion, bannedTags) || pj;
+                const proyectado = proyectarFicha(pj, pjData || [], ptMap, opcionesFusion, bannedTags) || pj;
+                // Adjuntar el raw de BD para que crearSlot pueda leer bases reales
+                proyectado.gOriginal = pj;
+                return proyectado;
             } catch { return pj; }
         });
         setTodosLosPJs(pjsProyectados);
