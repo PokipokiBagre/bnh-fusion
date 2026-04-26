@@ -107,35 +107,38 @@ function _renderLink(link_url) {
         const { tipo, videoId, playlistId } = youTubeInfo(link_url);
 
         if (tipo === 'playlist') {
-            // Playlist: usar thumbnail del primero disponible + badge cuenta
-            const thumb = playlistId
-                ? `https://i.ytimg.com/vi/0/hqdefault.jpg` // placeholder; YT no da thumb directo
-                : '';
             const embedUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId}&autoplay=1`;
-            return `<div style="position:relative;width:min(320px,100%);cursor:pointer;
+            // ID único para hidratar el card con datos reales desde el browser
+            const cardId = `yt-pl-${playlistId.slice(-8)}-${Math.random().toString(36).slice(2,6)}`;
+            // Lanzar fetch del RSS en background (no bloquea el render)
+            setTimeout(() => window._opHidratarPlaylist(cardId, playlistId), 0);
+            return `<div id="${cardId}" style="position:relative;width:min(320px,100%);cursor:pointer;
                        border-radius:10px;overflow:hidden;margin-top:6px;
                        box-shadow:0 3px 16px rgba(0,0,0,0.4);background:#111;"
                 onclick="window._opAbrirYTModal('${esc(embedUrl)}','${esc(link_url)}')">
-                <div style="width:100%;aspect-ratio:16/9;background:linear-gradient(135deg,#1a1a2e,#16213e);
+                <div class="yt-pl-thumb" style="width:100%;aspect-ratio:16/9;
+                    background:linear-gradient(135deg,#1a1a2e,#16213e);
                     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
                     <div style="width:52px;height:36px;background:#ff0000;border-radius:8px;
-                        display:flex;align-items:center;justify-content:center;
-                        box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+                        display:flex;align-items:center;justify-content:center;">
                         <div style="border-left:18px solid white;border-top:10px solid transparent;
                             border-bottom:10px solid transparent;margin-left:4px;"></div>
                     </div>
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);
-                            color:white;font-size:0.72em;padding:2px 8px;border-radius:12px;font-weight:700;">
-                            ▶ Lista de reproducción
-                        </span>
-                    </div>
+                    <span style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);
+                        color:white;font-size:0.72em;padding:2px 10px;border-radius:12px;font-weight:700;">
+                        ▶ Lista de reproducción
+                    </span>
                 </div>
-                <div style="position:absolute;bottom:0;left:0;right:0;padding:5px 8px;
-                    background:linear-gradient(transparent,rgba(0,0,0,0.8));
-                    font-size:0.68em;color:rgba(255,255,255,0.75);
-                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                    ${esc(link_url)}
+                <div class="yt-pl-info" style="padding:8px 10px;background:#0d0d0d;">
+                    <div class="yt-pl-title" style="font-size:0.8em;color:rgba(255,255,255,0.85);
+                        font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+                        margin-bottom:3px;">Cargando...</div>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="background:#ff0000;border-radius:3px;padding:1px 5px;
+                            font-size:0.62em;color:white;font-weight:700;">▶ YouTube</span>
+                        <span class="yt-pl-count" style="font-size:0.68em;color:rgba(255,255,255,0.45);">
+                            Lista de reproducción</span>
+                    </div>
                 </div>
             </div>`;
         }
@@ -841,4 +844,80 @@ window._opAbrirTikTokModal = (embedUrl, linkUrl) => {
         pip.style.top    = (e.clientY - oy) + 'px';
     });
     document.addEventListener('mouseup', () => { dragging = false; });
+};
+
+// ── Hidratar card de playlist con datos reales del RSS de YouTube ─────────
+// El RSS de YouTube es público y accesible desde el browser (no desde servidor)
+window._opHidratarPlaylist = async (cardId, playlistId) => {
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    try {
+        const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
+        // Usar un proxy CORS público para el RSS (el RSS de YT no tiene CORS headers)
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+
+        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
+        if (!res.ok) throw new Error('fetch failed');
+        const json = await res.json();
+        const xml  = new DOMParser().parseFromString(json.contents, 'text/xml');
+
+        // Título de la playlist
+        const title = xml.querySelector('feed > title')?.textContent || 'Lista de reproducción';
+
+        // Primer video → thumbnail
+        const firstEntry = xml.querySelector('entry');
+        const firstVideoId = firstEntry?.querySelector('videoId')?.textContent
+            || firstEntry?.querySelector('[name="videoId"]')?.textContent;
+
+        // Contar videos
+        const count = xml.querySelectorAll('entry').length;
+        const countLabel = count > 0
+            ? `${count} video${count !== 1 ? 's' : ''}${count >= 15 ? '+' : ''}`
+            : 'Lista de reproducción';
+
+        // Actualizar título
+        const titleEl = card.querySelector('.yt-pl-title');
+        if (titleEl) titleEl.textContent = title;
+
+        // Actualizar count
+        const countEl = card.querySelector('.yt-pl-count');
+        if (countEl) countEl.textContent = countLabel;
+
+        // Actualizar thumbnail si tenemos un video ID
+        if (firstVideoId) {
+            const thumbEl = card.querySelector('.yt-pl-thumb');
+            if (thumbEl) {
+                thumbEl.style.backgroundImage = `url(https://i.ytimg.com/vi/${firstVideoId}/hqdefault.jpg)`;
+                thumbEl.style.backgroundSize   = 'cover';
+                thumbEl.style.backgroundPosition = 'center';
+                // Overlay oscuro para legibilidad del botón play
+                thumbEl.innerHTML = `
+                    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);border-radius:0;"></div>
+                    <div style="position:relative;width:52px;height:36px;background:#ff0000;border-radius:8px;
+                        display:flex;align-items:center;justify-content:center;z-index:1;
+                        box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+                        <div style="border-left:18px solid white;border-top:10px solid transparent;
+                            border-bottom:10px solid transparent;margin-left:4px;"></div>
+                    </div>
+                    <span style="position:relative;z-index:1;background:rgba(0,0,0,0.6);
+                        border:1px solid rgba(255,255,255,0.2);
+                        color:white;font-size:0.72em;padding:2px 10px;border-radius:12px;font-weight:700;">
+                        ▶ Lista de reproducción
+                    </span>`;
+                thumbEl.style.position = 'relative';
+                thumbEl.style.display  = 'flex';
+                thumbEl.style.flexDirection = 'column';
+                thumbEl.style.alignItems = 'center';
+                thumbEl.style.justifyContent = 'center';
+                thumbEl.style.gap = '8px';
+            }
+        }
+    } catch (e) {
+        // Si falla el fetch, dejar el card estático sin cambios
+        const titleEl = card.querySelector('.yt-pl-title');
+        if (titleEl) titleEl.textContent = 'Lista de reproducción';
+        const countEl = card.querySelector('.yt-pl-count');
+        if (countEl) countEl.textContent = '';
+    }
 };
