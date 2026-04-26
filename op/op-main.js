@@ -8,7 +8,7 @@ import {
     crearConversacion, eliminarConversacion, limpiarConversacion,
     cargarMensajes, enviarMensaje, eliminarMensaje,
     cargarImagenesGaleria, subirImagenGaleria, subirVideoGaleria, eliminarImagenGaleria,
-    subirAvatarOP, suscribirMensajes
+    subirAvatarOP, suscribirMensajes, diagnosticarDB
 } from './op-data.js';
 import {
     renderConvList, renderMensajes, appendMensaje,
@@ -45,6 +45,14 @@ export async function initOP() {
     const user = (await supabase.auth.getUser()).data.user;
     if (!user) return;
     window._STORAGE_URL = STORAGE_URL;
+
+    // Diagnóstico al inicio — ver en consola del navegador
+    diagnosticarDB().then(checks => {
+        const fails = Object.entries(checks).filter(([,v]) => v.startsWith('❌'));
+        if (fails.length) {
+            console.warn('[OP Chat] Problemas de DB detectados:', fails);
+        }
+    });
 
     // Cargar perfil propio (crear si no existe)
     let perfil = await cargarPerfil(user.id);

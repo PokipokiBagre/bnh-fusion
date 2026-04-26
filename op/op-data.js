@@ -17,6 +17,27 @@ async function _probarColumna(col) {
     return _colsOk[col];
 }
 
+// ── Diagnóstico de permisos (se llama desde initOP) ──────────
+export async function diagnosticarDB() {
+    const checks = {};
+    // 1. ¿Puede hacer SELECT en op_mensajes?
+    const { error: selErr } = await supabase.from('op_mensajes').select('id').limit(1);
+    checks.select = selErr ? `❌ ${selErr.code}: ${selErr.message}` : '✅';
+
+    // 2. ¿Existen las columnas nuevas?
+    for (const col of ['video_path', 'audio_path', 'tipo']) {
+        const { error } = await supabase.from('op_mensajes').select(col).limit(1);
+        checks[col] = error ? `❌ ${error.code}` : '✅';
+    }
+
+    // 3. ¿Puede hacer SELECT en op_imagenes?
+    const { error: imgErr } = await supabase.from('op_imagenes').select('id').limit(1);
+    checks.op_imagenes = imgErr ? `❌ ${imgErr.code}: ${imgErr.message}` : '✅';
+
+    console.table(checks);
+    return checks;
+}
+
 // ── Perfil ────────────────────────────────────────────────────
 export async function cargarPerfil(userId) {
     const { data } = await supabase.from('op_perfiles')
@@ -124,6 +145,11 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
     }
 
     const { data, error } = await supabase.from('op_mensajes').insert(payloadFinal).select('*').single();
+    if (error) {
+        console.error('[op-data] enviarMensaje error:', error.code, error.message, error.details, error.hint);
+        console.error('[op-data] payloadFinal keys:', Object.keys(payloadFinal));
+        console.error('[op-data] payloadFinal values:', JSON.stringify(payloadFinal, null, 2));
+    }
     return error ? null : data;
 }
 
@@ -207,6 +233,7 @@ export async function subirVideoGaleria(file, opId, opNombre, nombre) {
         ({ data, error } = await supabase.from('op_imagenes').insert(payloadSinTipo).select('*').single());
     }
 
+    if (error) console.error('[op-data] subirVideoGaleria insert error:', error.code, error.message);
     return error ? { ok: false, msg: error.message } : { ok: true, imagen: data };
 }
 
