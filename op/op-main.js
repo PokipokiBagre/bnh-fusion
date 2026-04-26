@@ -17,7 +17,7 @@ import {
 import { mountMarkupAC } from './op-markup.js';
 
 const $ = id => document.getElementById(id);
-let _pendingImgId = null; // imagen de galería seleccionada para enviar
+let _pendingImgId = null;
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initOP() {
@@ -25,7 +25,7 @@ export async function initOP() {
     if (!user) return;
     window._STORAGE_URL = STORAGE_URL;
 
-    // Cargar perfil (crear si no existe)
+    // Cargar perfil propio (crear si no existe)
     let perfil = await cargarPerfil(user.id);
     if (!perfil) {
         await guardarPerfil(user.id, { nombre: 'OP', avatar_path: null });
@@ -33,31 +33,43 @@ export async function initOP() {
     }
     opState.perfil = perfil;
 
-    // Mostrar avatar + nombre en el sidebar header
+    // Mostrar pill en sidebar
     _renderPerfilPill();
 
-    // Cargar PJs para autocomplete
-    const { data: grupos } = await supabase.from('personajes_refinados')
-        .select('nombre_refinado').order('nombre_refinado');
+    // Cargar todos los perfiles de OPs (para avatares en mensajes)
+    const { data: todosPerfiles } = await supabase
+        .from('op_perfiles').select('id, nombre, avatar_path');
+    opState.perfiles = {};
+    (todosPerfiles || []).forEach(p => { opState.perfiles[p.id] = p; });
+    // Asegurar que el perfil propio esté en el mapa
+    opState.perfiles[perfil.id] = perfil;
+
+    // Cargar personajes para autocomplete @Personaje@ (con tags para autocomplete #tag)
+    const { data: grupos } = await supabase
+        .from('personajes_refinados')
+        .select('nombre_refinado, tags')
+        .order('nombre_refinado');
     opState.grupos = grupos || [];
 
-    // Cargar datos
-    await Promise.all([
-        _cargarConvs(),
-        _cargarGaleria(),
-    ]);
+    // Cargar medallas para autocomplete !Medalla!
+    const { data: medallas } = await supabase
+        .from('medallas')
+        .select('nombre')
+        .order('nombre');
+    opState.medallas = medallas || [];
 
-    // Tab inicial
+    // Cargar datos principales
+    await Promise.all([_cargarConvs(), _cargarGaleria()]);
+
     _renderTab('chat');
     _exponerGlobales();
     _mountInput();
 }
 
-// ── Cargar conversaciones y seleccionar la primera ────────────
+// ── Conversaciones ────────────────────────────────────────────
 async function _cargarConvs() {
     opState.conversaciones = await cargarConversaciones();
     if (!opState.conversaciones.length) {
-        // Crear "General" si no existe
         const conv = await crearConversacion('General');
         if (conv) opState.conversaciones = [conv];
     }
@@ -77,7 +89,6 @@ async function _cargarGaleria() {
 
 // ── Seleccionar conversación ──────────────────────────────────
 async function _selConv(id) {
-    // Desuscribir anterior
     if (opState.realtimeSub) {
         supabase.removeChannel(opState.realtimeSub);
         opState.realtimeSub = null;
@@ -86,15 +97,18 @@ async function _selConv(id) {
     opState.mensajes   = await cargarMensajes(id);
     renderMensajes();
 
-    // Suscripción realtime
     opState.realtimeSub = suscribirMensajes(id, msg => {
-        // Solo agregar si no es nuestro (el nuestro ya se agregó al enviar)
         if (msg.autor_id !== opState.perfil?.id) {
+            // Actualizar perfiles si llegó uno nuevo
+            if (!opState.perfiles[msg.autor_id]) {
+                supabase.from('op_perfiles').select('id, nombre, avatar_path')
+                    .eq('id', msg.autor_id).maybeSingle()
+                    .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
+            }
             appendMensaje(msg);
         }
     });
 
-    // Actualizar título del panel
     const conv = opState.conversaciones.find(c => c.id === id);
     const el = $('op-chat-titulo');
     if (el && conv) el.textContent = conv.titulo;
@@ -109,11 +123,11 @@ function _renderTab(tab) {
         const pnl = $(`op-panel-${t}`);
         if (pnl) pnl.style.display = t === tab ? 'flex' : 'none';
     });
-    if (tab === 'ajustes')  renderAjustes();
-    if (tab === 'galeria')  renderGaleria();
+    if (tab === 'ajustes') renderAjustes();
+    if (tab === 'galeria') renderGaleria();
 }
 
-// ── Montar input + autocomplete ───────────────────────────────
+// ── Input + autocomplete ──────────────────────────────────────
 function _mountInput() {
     const ta = $('op-msg-input');
     if (!ta) return;
@@ -129,11 +143,12 @@ function _mountInput() {
 // ── Enviar mensaje ────────────────────────────────────────────
 async function _enviar() {
     if (!opState.convActual || !opState.perfil) return;
-    const ta       = $('op-msg-input');
+    const ta        = $('op-msg-input');
     const contenido = ta?.value.trim() || '';
 
-    // Imagen adjunta desde galería
     let imagenPath = null;
+
+    // Imagen desde galería
     if (_pendingImgId !== null) {
         const allImgs = Object.values(opState.imagenesGaleria).flat();
         const img = allImgs.find(i => i.id === _pendingImgId);
@@ -142,7 +157,7 @@ async function _enviar() {
         $('op-img-preview')?.remove();
     }
 
-    // Imagen adjunta desde archivo
+    // Imagen desde archivo
     const fileInput = $('op-file-input');
     if (fileInput?.files?.length) {
         const file = fileInput.files[0];
@@ -152,7 +167,6 @@ async function _enviar() {
         );
         if (res.ok) {
             imagenPath = res.imagen.path;
-            // Refrescar galería
             await _cargarGaleria();
             renderGaleria();
         }
@@ -171,9 +185,8 @@ async function _enviar() {
     });
 
     if (msg) {
-        if (ta) ta.value = '';
+        if (ta) { ta.value = ''; ta.style.height = 'auto'; }
         appendMensaje(msg);
-        // Actualizar ultimo_msg en sidebar
         const conv = opState.conversaciones.find(c => c.id === opState.convActual);
         if (conv) conv.ultimo_msg = msg.creado_en;
         opState.conversaciones.sort((a, b) => new Date(b.ultimo_msg) - new Date(a.ultimo_msg));
@@ -181,14 +194,14 @@ async function _enviar() {
     }
 }
 
-// ── Exponer funciones globales ─────────────────────────────────
+// ── Globales ──────────────────────────────────────────────────
 function _exponerGlobales() {
     window._opTab        = t => _renderTab(t);
     window._opSelConv    = async id => { await _selConv(id); renderConvList(); };
     window._opEnviar     = _enviar;
     window._opGetPerfil  = () => opState.perfil;
 
-    window._opNuevaConv  = async () => {
+    window._opNuevaConv = async () => {
         const titulo = prompt('Nombre de la conversación:');
         if (!titulo?.trim()) return;
         const conv = await crearConversacion(titulo.trim());
@@ -226,14 +239,12 @@ function _exponerGlobales() {
 
     window._opVerImagen = url => showLightbox(url);
 
-    // Galería
     window._opSeleccionarImg = id => {
         _pendingImgId = id;
         const allImgs = Object.values(opState.imagenesGaleria).flat();
         const img = allImgs.find(i => i.id === id);
         if (!img) return;
         $('op-img-selector').style.display = 'none';
-        // Mostrar preview
         document.getElementById('op-img-preview')?.remove();
         const prev = document.createElement('div');
         prev.id = 'op-img-preview';
@@ -257,11 +268,8 @@ function _exponerGlobales() {
         await eliminarImagenGaleria(id, path);
         await _cargarGaleria();
         renderGaleria();
-        // Actualizar selector si está abierto
         const sel = $('op-img-selector');
-        if (sel?.style.display !== 'none') {
-            sel.outerHTML = renderSelectorImagenes();
-        }
+        if (sel?.style.display !== 'none') sel.outerHTML = renderSelectorImagenes();
     };
 
     window._opMostrarGaleria = () => {
@@ -278,11 +286,8 @@ function _exponerGlobales() {
             const file = input.files[0]; if (!file) return;
             const nombre = prompt('Nombre para esta imagen:', file.name.replace(/\.[^.]+$/, '')) || file.name;
             const res = await subirImagenGaleria(file, opState.perfil.id, opState.perfil.nombre, nombre);
-            if (res.ok) {
-                await _cargarGaleria();
-                renderGaleria();
-                toast('✅ Imagen guardada en galería', 'ok');
-            } else toast('❌ ' + res.msg, 'error');
+            if (res.ok) { await _cargarGaleria(); renderGaleria(); toast('✅ Imagen guardada en galería', 'ok'); }
+            else toast('❌ ' + res.msg, 'error');
         };
         input.click();
     };
@@ -292,34 +297,35 @@ function _exponerGlobales() {
         if (fi) { fi.value = ''; fi.click(); }
     };
 
-    // Ajustes
     window._opPreviewAvatar = input => {
         const file = input.files[0];
         if (!file) return;
-        const url = URL.createObjectURL(file);
         const prev = $('op-avatar-preview');
-        if (prev) prev.src = url;
+        if (prev) prev.src = URL.createObjectURL(file);
     };
 
     window._opGuardarPerfil = async () => {
         const nombre    = $('op-nombre-input')?.value.trim();
         const fileInput = $('op-avatar-file');
         const msgEl     = $('op-ajustes-msg');
-        if (!nombre) { if (msgEl) { msgEl.style.color='#e74c3c'; msgEl.textContent='El nombre no puede estar vacío.'; } return; }
-
+        if (!nombre) {
+            if (msgEl) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'El nombre no puede estar vacío.'; }
+            return;
+        }
         let avatarPath = opState.perfil?.avatar_path;
         if (fileInput?.files?.length) {
             const path = await subirAvatarOP(fileInput.files[0], opState.perfil.id);
             if (path) avatarPath = path;
         }
-
         const ok = await guardarPerfil(opState.perfil.id, { nombre, avatar_path: avatarPath });
         if (ok) {
             opState.perfil.nombre      = nombre;
             opState.perfil.avatar_path = avatarPath;
-            if (msgEl) { msgEl.style.color='#27ae60'; msgEl.textContent='✅ Perfil actualizado'; }
+            opState.perfiles[opState.perfil.id] = { ...opState.perfil };
+            if (msgEl) { msgEl.style.color = '#27ae60'; msgEl.textContent = '✅ Perfil actualizado'; }
+            _renderPerfilPill();
         } else {
-            if (msgEl) { msgEl.style.color='#e74c3c'; msgEl.textContent='Error al guardar.'; }
+            if (msgEl) { msgEl.style.color = '#e74c3c'; msgEl.textContent = 'Error al guardar.'; }
         }
     };
 }
@@ -328,20 +334,18 @@ function _renderPerfilPill() {
     const pill = document.getElementById('op-perfil-pill');
     if (!pill || !opState.perfil) return;
     const p = opState.perfil;
+    const av = p.avatar_path ? `${window._STORAGE_URL || STORAGE_URL}/${p.avatar_path}` : '';
     pill.innerHTML = `
-        <img src="${p.avatar_path ? (window._STORAGE_URL || '') + '/' + p.avatar_path : ''}"
-            id="op-pill-avatar"
+        <img src="${av}" id="op-pill-avatar"
             style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);background:#f8f9fa;"
             onerror="this.style.display='none'">
         <span style="font-size:0.75em;font-weight:700;color:#922b21;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.nombre}</span>`;
-    // Set real avatar URL
     const img = pill.querySelector('#op-pill-avatar');
     if (img && p.avatar_path) {
         import('./op-state.js').then(({ avatarUrl: av }) => { img.src = av(p.avatar_path); });
     }
 }
 
-// Keep reference for index.html
 window._opRenderPerfilPill = _renderPerfilPill;
 
 // ── Toast ──────────────────────────────────────────────────────
