@@ -14,7 +14,8 @@ export function renderMsgMarkup(texto) {
     if (!texto) return '';
 
     // Dividir en tokens preservando los delimitadores (capturing group)
-    const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n)/g);
+    // URLs se tokenizAN para linkificarlas sin romper otros tokens
+    const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n|https?:\/\/[^\s<>"']+)/g);
 
     return partes.map(p => {
         if (!p) return '';
@@ -54,6 +55,15 @@ export function renderMsgMarkup(texto) {
         if (/^![^!]+!$/.test(p)) {
             const nombre = p.slice(1, -1);
             return `<span style="color:#c0392b;font-weight:700;background:#fdecea;padding:1px 6px;border-radius:4px;border:1px solid rgba(192,57,43,0.3);">⚔ ${esc(nombre)}</span>`;
+        }
+
+        // URL suelta → chip azul clickeable
+        if (/^https?:\/\//.test(p)) {
+            let dominio = '';
+            try { dominio = new URL(p).hostname.replace('www.',''); } catch(_) { dominio = p; }
+            return `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer"
+                style="color:#2980b9;text-decoration:underline;word-break:break-all;"
+                title="${esc(p)}">${esc(p)}</a>`;
         }
 
         // Texto plano — escapar HTML

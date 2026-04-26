@@ -147,29 +147,42 @@ function _renderLinkGenerico(url) {
 }
 
 
-// ── Render contenido con detección de links (fallback para msgs viejos) ──────
-// Si el mensaje no tiene link_url guardado pero el contenido tiene una URL,
-// la extrae, renderiza el embed, y muestra el texto SIN la URL suelta.
+// ── Render contenido con detección automática de links ───────────────────────
+// Maneja 3 casos:
+//   A) msg tiene link_url  → solo texto (embed ya se renderizó arriba)
+//   B) msg tiene video/audio_path → suprimir la URL del texto para no duplicar
+//   C) msg solo tiene contenido  → detectar link, renderizar embed + texto sin URL
 function _renderContenidoConLinks(msg) {
     const texto = msg.contenido;
     if (!texto) return '';
 
-    // Si ya tiene link_url guardado, solo renderizar el texto tal cual
+    const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+
+    // A) link_url ya guardado → el embed ya se renderizó, mostrar texto sin la URL
     if (msg.link_url) {
-        return `<div class="op-msg-texto">${renderMsgMarkup(texto)}</div>`;
+        const textoLimpio = texto.replace(msg.link_url, '').trim();
+        return textoLimpio
+            ? `<div class="op-msg-texto">${renderMsgMarkup(textoLimpio)}</div>`
+            : '';
     }
 
-    // Detectar URLs en el contenido
-    const URL_RE = /https?:\/\/[^\s<>"']+/gi;
+    // B) Ya hay video o audio adjunto → suprimir cualquier URL del texto
+    //    (evita mostrar "https://youtu.be/..." debajo del reproductor)
+    if (msg.video_path || msg.audio_path) {
+        const textoLimpio = texto.replace(URL_RE, '').trim();
+        return textoLimpio
+            ? `<div class="op-msg-texto">${renderMsgMarkup(textoLimpio)}</div>`
+            : '';
+    }
+
+    // C) Solo texto — detectar links para embed automático
     const links = [...texto.matchAll(URL_RE)].map(m => m[0]);
     if (!links.length) {
         return `<div class="op-msg-texto">${renderMsgMarkup(texto)}</div>`;
     }
 
     const primerLink = links[0];
-    // Texto sin la URL para no mostrarla dos veces
     const textoSinLink = texto.replace(primerLink, '').trim();
-
     return `
         ${_renderLink(primerLink)}
         ${textoSinLink ? `<div class="op-msg-texto" style="margin-top:4px;">${renderMsgMarkup(textoSinLink)}</div>` : ''}

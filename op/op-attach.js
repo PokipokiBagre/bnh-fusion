@@ -14,7 +14,7 @@ export const isAudio = f => f.type.startsWith('audio/') || /\.(mp3|ogg|wav|flac|
 // ── Subir audio a Supabase Storage ───────────────────────────
 export async function subirAudio(file, opId, opNombre) {
     const extFromName = file.name.includes('.') ? file.name.split('.').pop().toLowerCase() : null;
-    const extFromType = file.type.split('/')[1] || 'mp3';
+    const extFromType = (file.type.split('/')[1] || 'mp3').replace('x-m4a','m4a').replace('mpeg','mp3').replace('ogg; codecs=opus','opus');
     const ext  = extFromName || extFromType;
     const base = file.name.replace(/\.[^.]+$/, '').toLowerCase().replace(/[^a-z0-9]/g,'_') || 'audio';
     const path = `${FOLDER}/${opNombre.toLowerCase().replace(/\s+/g,'_')}/_audio/${base}_${Date.now()}.${ext}`;

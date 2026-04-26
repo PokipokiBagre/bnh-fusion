@@ -86,7 +86,16 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
     if (audioPath)  payload.audio_path  = audioPath;
     if (linkUrl)    payload.link_url    = linkUrl;
 
-    const { data, error } = await supabase.from('op_mensajes').insert(payload).select('*').single();
+    // Intentar insert completo; si alguna columna nueva no existe aún (42703),
+    // reintentar sin los campos opcionales nuevos para no bloquear el envío.
+    let { data, error } = await supabase.from('op_mensajes').insert(payload).select('*').single();
+    if (error?.code === '42703') {
+        const safe = { conversacion_id: payload.conversacion_id, autor_id: payload.autor_id,
+                       autor_nombre: payload.autor_nombre, contenido: payload.contenido,
+                       imagen_path: payload.imagen_path, tipo: payload.tipo };
+        if (videoPath) safe.video_path = videoPath;
+        ({ data, error } = await supabase.from('op_mensajes').insert(safe).select('*').single());
+    }
     return error ? null : data;
 }
 
