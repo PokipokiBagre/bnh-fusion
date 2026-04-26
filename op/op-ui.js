@@ -7,6 +7,42 @@ import { renderMsgMarkup } from './op-markup.js';
 const $ = id => document.getElementById(id);
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+// ── Parse imagen_path: devuelve array de URLs ─────────────────
+function _parsePaths(imagen_path) {
+    if (!imagen_path) return [];
+    try {
+        const parsed = JSON.parse(imagen_path);
+        if (Array.isArray(parsed)) return parsed.map(p => imageUrl(p));
+    } catch (_) {}
+    return [imageUrl(imagen_path)];
+}
+
+// ── Render grid/carrusel de imágenes ─────────────────────────
+function _renderImgGrid(imagen_path, msgId) {
+    const urls = _parsePaths(imagen_path);
+    if (!urls.length) return '';
+    if (urls.length === 1) {
+        return `<img src="${esc(urls[0])}" class="op-msg-img"
+            onclick="window._opVerImagen('${esc(urls[0])}')" alt="imagen">`;
+    }
+    // Grid para múltiples imágenes (máx 4 visibles, resto en "+N")
+    const visible = urls.slice(0, 4);
+    const resto   = urls.length - 4;
+    const cols    = visible.length <= 2 ? visible.length : 2;
+    const gridStyle = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:3px;border-radius:8px;overflow:hidden;max-width:300px;`;
+    const items = visible.map((url, i) => {
+        const isLast = i === 3 && resto > 0;
+        return `<div style="position:relative;aspect-ratio:1;overflow:hidden;cursor:pointer;"
+            onclick="window._opVerGaleriaMensaje('${esc(msgId)}',${i})">
+            <img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;">
+            ${isLast ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);
+                display:flex;align-items:center;justify-content:center;
+                color:white;font-size:1.4em;font-weight:700;">+${resto}</div>` : ''}
+        </div>`;
+    }).join('');
+    return `<div style="${gridStyle}">${items}</div>`;
+}
+
 // ── Sidebar: lista de conversaciones ─────────────────────────
 export function renderConvList() {
     const wrap = $('op-conv-list');
