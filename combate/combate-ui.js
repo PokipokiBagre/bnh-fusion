@@ -119,7 +119,6 @@ export function renderPool() {
 <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;overflow:hidden;">
     <div style="background:#212529;color:white;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-weight:800;font-size:0.82em;letter-spacing:.5px;white-space:nowrap;">👥 PERSONAJES</span>
-        <!-- Botones destino equipo -->
         <div style="display:flex;gap:4px;background:rgba(255,255,255,0.08);padding:3px 6px;border-radius:10px;align-items:center;">
             <span style="font-size:0.68em;color:rgba(255,255,255,0.5);white-space:nowrap;margin-right:2px;">Enviar a:</span>
             ${_destBtn('A','⬤ Azul','#4a90d9')}
@@ -213,7 +212,6 @@ function _renderSlotCard(eq, idx, slot, col) {
             onclick="event.stopPropagation();window._combateQuitarSlot('${eq}',${idx})">✕</button>
     </div>
 
-    <!-- Stats horizontales: PVAct (verde) / PVMax (azul) separados -->
     <div style="display:flex;gap:2px;padding:6px 8px;">
         ${[['POT',slot.pot,'#7d3c00'],['AGI',slot.agi,'#1a4a80'],['CTL',slot.ctl,'#4a235a'],['C/T',slot.cambios,'#1e8449']
           ].map(([l,v,c]) => `
@@ -221,19 +219,16 @@ function _renderSlotCard(eq, idx, slot, col) {
             <div style="font-weight:800;color:${c};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div>
             <div style="color:#adb5bd;font-size:0.8em;">${l}</div>
         </div>`).join('')}
-        <!-- PVMax (azul) -->
         <div style="flex:1.2;background:#e8f4fd;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #b3d7f5;">
             <div style="font-weight:800;color:#1a4a80;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pvMax}</div>
             <div style="color:#5b9bd5;font-size:0.8em;">PVMax</div>
         </div>
-        <!-- PVAct (verde) -->
         <div style="flex:1.4;background:#e9f7ef;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #a9dfbf;">
             <div style="font-weight:800;color:${pvColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pv}/${slot.pvMax}</div>
             <div style="color:#1e8449;font-size:0.8em;">PVAct</div>
         </div>
     </div>
 
-    <!-- Medallas equipadas: click = ver info, solo ✕ desequipa -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 6px;display:flex;flex-wrap:wrap;gap:3px;" onclick="event.stopPropagation()">
         ${slot.medallas.map(m => `
@@ -250,14 +245,12 @@ function _renderSlotCard(eq, idx, slot, col) {
         <span style="font-size:0.65em;color:#aaa;align-self:center;">CTL ${ctlUsado}/${slot.ctl}</span>
     </div>` : ''}
 
-    <!-- Dados con flechas para navegar entre habilidades y PJs -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 8px;display:flex;flex-wrap:wrap;gap:4px;" onclick="event.stopPropagation()">
         ${slot.medallas.map((m, mi) => `
         <div style="display:flex;align-items:center;gap:2px;">
             <span style="font-size:0.62em;color:#888;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                 title="${esc(m.nombre)}">${esc(m.nombre.length>8?m.nombre.slice(0,8)+'…':m.nombre)}</span>
-            <!-- Flecha arriba: pasa dado al PJ anterior -->
             <button title="Pasar al PJ anterior" style="background:none;border:1px solid #dee2e6;border-radius:3px;
                 font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
                 onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',-1)">▲</button>
@@ -268,7 +261,6 @@ function _renderSlotCard(eq, idx, slot, col) {
                 value="${slot.dados[m.id]||''}"
                 onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
                 onkeydown="window._combateDadoNavKey(event,'${eq}',${idx},${mi})">
-            <!-- Flecha abajo: pasa dado al PJ siguiente -->
             <button title="Pasar al PJ siguiente" style="background:none;border:1px solid #dee2e6;border-radius:3px;
                 font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
                 onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',1)">▼</button>
@@ -346,18 +338,18 @@ export function renderSlotDetalle(eq, idx) {
     ${_statBlock('pot', 'POT', slot._pj.pot||0, false, '#7d3c00')}
     ${_statBlock('agi', 'AGI', slot._pj.agi||0, false, '#1a4a80')}
     ${_statBlock('ctl', 'CTL', slot._pj.ctl||0, false, '#4a235a')}
-    ${_statBlock('pv',  '🔵 PV Máx', 0, true, '#1a4a80', '#eaf3fb', '#aecde8')}
-    <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:3px 2px 0;">
-        <span style="font-size:0.68em;font-weight:700;color:#1a4a80;margin-right:2px;">PVMax:</span>
-        ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
-            `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#1a4a80':'#e74c3c'};
-                border-radius:4px;background:${dv>0?'#dbeafe':'#fdecea'};color:${dv>0?'#1a4a80':'#7b241c'};cursor:pointer;"
-                onclick="window._combateDeltaPVMax('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
-        ).join('')}
-    </div>
+    ${_statBlock('pv',  '🔵 PV Máx', 0, true, '#1a4a80', '#eaf3fb', '#aecde8', `
+        <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:5px 2px 2px;">
+            <span style="font-size:0.68em;font-weight:700;color:#1a4a80;margin-right:2px;">PVMax:</span>
+            ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+                `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#1a4a80':'#e74c3c'};
+                    border-radius:4px;background:${dv>0?'#dbeafe':'#fdecea'};color:${dv>0?'#1a4a80':'#7b241c'};cursor:pointer;"
+                    onclick="window._combateDeltaPVMax('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
+            ).join('')}
+        </div>
+    `)}
     ${_statBlock('cambios', 'Camb/T', 0, true, '#1e8449', '#f0faf4', '#a9dfbf')}
 
-    <!-- PV Actual -->
     <div style="background:#f0fff4;border:2px solid #27ae60;border-radius:8px;padding:7px 10px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
             <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">🟢 PV Act</span>
@@ -365,7 +357,7 @@ export function renderSlotDetalle(eq, idx) {
                 style="width:72px;border:2px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;background:white;"
                 id="cb-${eq}-${idx}-pvactual-base"
                 oninput="window._combatePVActualChange('${eq}',${idx},this.value)">
-            <span style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.1em;">${slot.pv}</b>
+            <span id="cb-${eq}-${idx}-pv_actual-result" style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.1em;">${slot.pv}</b>
                 <span style="color:#aaa;">/ ${slot.pvMax}</span></span>
         </div>
         <div style="display:flex;gap:3px;">
@@ -440,11 +432,9 @@ export function renderSlotDetalle(eq, idx) {
         CTL usado: <b style="color:${col};">${ctlUsado}</b> / ${slot.ctl}
         <span style="margin-left:6px;font-size:0.88em;">(simulación, sin límite)</span>
     </div>
-    <!-- Panel info medalla -->
     <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
         <div id="med-info-content-${eq}-${idx}"></div>
     </div>
-    <!-- Lista medallas accesibles -->
     <div style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
         ${medallasAcc.map(m=>{
             const eq2 = medallasEquip.has(String(m.id));
@@ -479,7 +469,6 @@ export function renderSlotDetalle(eq, idx) {
         </div>`;
         }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin medallas accesibles</div>'}
     </div>
-    <!-- Dados de medallas equipadas -->
     ${slot.medallas.length ? `
     <div style="margin-top:10px;border-top:1px solid #eee;padding-top:8px;">
         <div style="font-size:0.68em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;">Dados</div>
@@ -519,7 +508,6 @@ export function renderSlotDetalle(eq, idx) {
     wrap.style.display = 'block';
     wrap.innerHTML = `
 <div style="background:white;border:2px solid ${col};border-radius:12px;overflow:hidden;">
-    <!-- Header -->
     <div style="background:${col};color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;">
         <img src="${imgUrl}" onerror="this.src='${fallback}'"
             style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.4);">
@@ -528,13 +516,11 @@ export function renderSlotDetalle(eq, idx) {
             width:26px;height:26px;cursor:pointer;font-size:1em;"
             onclick="window._combateToggleSlot('${eq}',${idx})">×</button>
     </div>
-    <!-- Tabs -->
     <div style="display:flex;border-bottom:1.5px solid #e9ecef;background:#fafafa;">
         ${_tabBtn('stats',   '📊 Stats')}
         ${_tabBtn('tags',    '🏷 Tags y PT')}
         ${_tabBtn('medallas','🎖 Medallas' + (slot.medallas.length ? ` (${slot.medallas.length})` : ''))}
     </div>
-    <!-- Tab content -->
     <div style="padding:12px;">
         ${tab==='stats'    ? tabStats    : ''}
         ${tab==='tags'     ? tabTags     : ''}
