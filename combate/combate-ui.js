@@ -753,17 +753,23 @@ ${reqsBase.length ? `<div style="font-size:0.7em;font-weight:800;color:#555;text
 <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:6px;">${reqsBase.map(_req).join('')}</div>` : ''}
 ${condActivos.length ? `<div style="font-size:0.7em;font-weight:800;color:#555;text-transform:uppercase;margin-bottom:3px;">Efectos condicionales</div>
 <div style="display:flex;flex-direction:column;gap:3px;">
-${condActivos.map(ec => `
-<div style="border:1.5px solid ${ec.ok?'#27ae60':'#dee2e6'};border-radius:6px;padding:5px 8px;
-    background:${ec.ok?'#f0fff4':'#f8f9fa'};opacity:${ec.ok?1:0.55};">
-    <div style="display:flex;align-items:center;gap:5px;margin-bottom:${ec.efecto_desc?'3px':'0'};">
-        <span style="font-size:0.72em;font-weight:800;background:${ec.ok?col:'#adb5bd'};color:white;
-            border-radius:4px;padding:1px 5px;">${ec.ok?'✓ ACTIVO':'✗'}</span>
-        <span style="font-size:0.78em;font-weight:700;color:${col};">${esc(ec.tag)}</span>
-        ${ec.pts_minimos ? `<span style="font-size:0.72em;color:#888;">≥ ${ec.pts_minimos} PT (tienes ${ec.pts})</span>` : ''}
+${condActivos.map(ec => {
+    const descEc = ec.efecto_desc || ec.efecto || ec.descripcion || ec.efecto_condicional || '';
+    return `
+<div style="border:2px solid ${ec.ok?'#27ae60':'#dee2e6'};border-radius:6px;padding:6px 10px;
+    background:${ec.ok?'#f0fff4':'#f8f9fa'};opacity:${ec.ok?1:0.5};">
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:${descEc?'5px':'0'};">
+        <span style="font-size:0.72em;font-weight:800;background:${ec.ok?'#27ae60':'#adb5bd'};color:white;
+            border-radius:4px;padding:1px 6px;">${ec.ok?'✓ ACTIVO':'✗'}</span>
+        <span style="font-size:0.82em;font-weight:800;color:${ec.ok?'#1a5e35':col};">${esc(ec.tag)}</span>
+        ${ec.pts_minimos ? `<span style="font-size:0.72em;color:#666;">≥ ${ec.pts_minimos} PT (tienes ${ec.pts})</span>` : ''}
     </div>
-    ${ec.efecto_desc ? `<div style="font-size:0.8em;color:#333;line-height:1.4;">${renderMarkup(ec.efecto_desc)}</div>` : ''}
-</div>`).join('')}
+    ${descEc ? `<div style="font-size:0.85em;color:${ec.ok?'#1a5e35':'#555'};line-height:1.5;
+        font-weight:${ec.ok?600:400};padding:${ec.ok?'4px 8px':'0'};
+        background:${ec.ok?'rgba(39,174,96,0.1)':'transparent'};border-radius:4px;">
+        ${renderMarkup(descEc)}</div>` : ''}
+</div>`;
+}).join('')}
 </div>` : ''}`;
 }
 
