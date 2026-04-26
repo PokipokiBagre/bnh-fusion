@@ -194,7 +194,7 @@ function _renderSlotCard(eq, idx, slot, col) {
     }
     const pct      = slot.pvMax > 0 ? Math.max(0, Math.min(100, (slot.pv / slot.pvMax) * 100)) : 0;
     const pvColor  = pct > 60 ? '#1e8449' : pct > 30 ? '#d68910' : '#c0392b';
-    const ctlUsado = calcCTLUsado(slot.medallas);
+    const ctlUsado = slot.ctlUsado ?? calcCTLUsado(slot.medallas);
     const imgUrl   = `${STORAGE_URL}/imgpersonajes/${norm(slot.nombre)}icon.png`;
 
     return `
@@ -415,10 +415,17 @@ export function renderSlotDetalle(eq, idx) {
         </div>
     </div>` : ''}
     <div style="display:flex;flex-direction:column;gap:3px;max-height:380px;overflow-y:auto;">
-        ${Object.entries(slot.pts||{}).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=>{
-            const tD = tag.startsWith('#')?tag:'#'+tag;
-            const enT = tagsActivos.has(tD.toLowerCase());
-            return `
+        ${(() => {
+            const ptsCompleto = { ...(slot.pts || {}) };
+            tagsActivos.forEach(tN => {
+                const tD = tN.startsWith('#') ? tN : '#' + tN;
+                const key = Object.keys(ptsCompleto).find(k => (k.startsWith('#')?k:'#'+k).toLowerCase() === tN);
+                if (!key) ptsCompleto[tD] = 0;
+            });
+            return Object.entries(ptsCompleto).sort((a,b) => b[1]-a[1]).map(([tag,pts]) => {
+                const tD = tag.startsWith('#')?tag:'#'+tag;
+                const enT = tagsActivos.has(tD.toLowerCase());
+                return `
         <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;
             background:${enT?pale:'#f8f9fa'};border:1px solid ${enT?col+'44':'#dee2e6'};">
             <span style="flex:1;font-size:0.78em;font-weight:700;color:${enT?col:'#888'};">${esc(tD)}</span>
@@ -430,7 +437,8 @@ export function renderSlotDetalle(eq, idx) {
                         onclick="window._combateDeltaPT('${eq}',${idx},'${esc(tD)}',${dv})">${dv>0?'+':''}${dv}</button>`
                 ).join('')}
             </div>`:''}</div>`;
-        }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin PT registrados</div>'}
+            }).join('') || '<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin PT registrados</div>';
+        })()}
     </div>
 </div>`;
 
@@ -438,7 +446,7 @@ export function renderSlotDetalle(eq, idx) {
     const tabMedallas = `
 <div>
     <div style="font-size:0.75em;color:#888;margin-bottom:8px;">
-        CTL usado: <b style="color:${col};">${ctlUsado}</b> / ${slot.ctl}
+        CTL usado: <b style="color:${col};">${slot.ctlUsado ?? ctlUsado}</b> / ${slot.ctl}
         <span style="margin-left:6px;font-size:0.88em;">(simulación, sin límite)</span>
     </div>
     <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">

@@ -319,18 +319,39 @@ window._combatePasarDado = (eq, idx, medallaId, dir) => {
 };
 
 // ── Navegación de dado con flechas de teclado ─────────────────
-// Flecha arriba/abajo mueve entre las habilidades del mismo PJ
+// ←/→ mueve entre medallas del mismo PJ
+// ↑/↓ mueve al mismo índice de medalla en el PJ anterior/siguiente del mismo equipo
 window._combateDadoNavKey = (event, eq, idx, medallaIdx) => {
-    const slot = combateState[`equipo${eq}`][idx];
+    const slot = combateState[`equipo${eq}`]?.[idx];
     if (!slot) return;
-    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    const tecla = event.key;
+    if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(tecla)) return;
     event.preventDefault();
-    const medallas = slot.medallas;
-    const nextIdx = medallaIdx + (event.key === 'ArrowDown' ? 1 : -1);
-    if (nextIdx < 0 || nextIdx >= medallas.length) return;
-    const nextId = medallas[nextIdx].id;
-    const nextInput = document.getElementById(`dado-${eq}-${idx}-${nextId}`);
-    if (nextInput) nextInput.focus();
+
+    if (tecla === 'ArrowLeft' || tecla === 'ArrowRight') {
+        // Moverse entre medallas del mismo PJ
+        const medallas = slot.medallas;
+        const nextIdx = medallaIdx + (tecla === 'ArrowRight' ? 1 : -1);
+        if (nextIdx < 0 || nextIdx >= medallas.length) return;
+        const nextInput = document.getElementById(`dado-${eq}-${idx}-${medallas[nextIdx].id}`);
+        if (nextInput) nextInput.focus();
+    } else {
+        // ↑/↓ moverse al mismo índice de medalla en el PJ anterior/siguiente (mismo equipo)
+        const slots = combateState[`equipo${eq}`];
+        const dir = tecla === 'ArrowDown' ? 1 : -1;
+        let nextPJIdx = idx + dir;
+        while (nextPJIdx >= 0 && nextPJIdx < slots.length) {
+            const destSlot = slots[nextPJIdx];
+            if (destSlot && destSlot.medallas.length > 0) {
+                // Usar mismo índice de medalla si existe, o el último
+                const destMedIdx = Math.min(medallaIdx, destSlot.medallas.length - 1);
+                const destId = destSlot.medallas[destMedIdx].id;
+                const destInput = document.getElementById(`dado-${eq}-${nextPJIdx}-${destId}`);
+                if (destInput) { destInput.focus(); return; }
+            }
+            nextPJIdx += dir;
+        }
+    }
 };
 
 
