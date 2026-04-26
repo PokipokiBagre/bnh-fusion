@@ -7,21 +7,17 @@ import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
     cargarMensajes, enviarMensaje, eliminarMensaje,
-    cargarImagenesGaleria, subirImagenGaleria, subirVideoGaleria, eliminarImagenGaleria,
+    cargarImagenesGaleria, subirImagenGaleria, eliminarImagenGaleria,
     subirAvatarOP, suscribirMensajes
 } from './op-data.js';
 import {
     renderConvList, renderMensajes, appendMensaje,
     renderGaleria, renderAjustes, renderSelectorImagenes, showLightbox
 } from './op-ui.js';
-import { mountMarkupAC, renderMsgMarkup } from './op-markup.js';
-import { isAudio, isVideo, isImage, clasificarArchivos, safeExt, subirAudio, extraerLinks, esYouTube } from './op-attach.js';
+import { mountMarkupAC } from './op-markup.js';
 
 const $ = id => document.getElementById(id);
-// Exponer renderMsgMarkup globalmente para los handlers inline de edición
-const renderMsgMarkupGlobal = renderMsgMarkup;
-let _pendingImgId  = null;
-let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
+let _pendingImgId = null;
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initOP() {
@@ -57,7 +53,7 @@ export async function initOP() {
 
     // Cargar medallas para autocomplete !Medalla!
     const { data: medallas } = await supabase
-        .from('medallas_catalogo')
+        .from('medallas')
         .select('nombre')
         .order('nombre');
     opState.medallas = medallas || [];
@@ -68,7 +64,6 @@ export async function initOP() {
     _renderTab('chat');
     _exponerGlobales();
     _mountInput();
-    _initVisibilityReconnect();
 }
 
 // ── Conversaciones ────────────────────────────────────────────
@@ -119,50 +114,6 @@ async function _selConv(id) {
     if (el && conv) el.textContent = conv.titulo;
 }
 
-// ── Reconexión automática al volver a la pestaña ──────────────
-// Los navegadores throttlean websockets en pestañas inactivas.
-// Al recuperar visibilidad: recargar mensajes nuevos y re-suscribir.
-function _initVisibilityReconnect() {
-    let _lastVisible = Date.now();
-
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            _lastVisible = Date.now();
-            return;
-        }
-        // Volvió a ser visible
-        const awayMs = Date.now() - _lastVisible;
-        if (awayMs < 5000 || !opState.convActual) return; // menos de 5s → no hace falta
-
-        // Re-suscribir canal (el websocket puede estar muerto)
-        if (opState.realtimeSub) {
-            try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
-            opState.realtimeSub = null;
-        }
-
-        // Cargar mensajes nuevos que llegaron mientras estaba fuera
-        const mensajesNuevos = await cargarMensajes(opState.convActual, 60);
-        const idsActuales = new Set(opState.mensajes.map(m => m.id));
-        const nuevos = mensajesNuevos.filter(m => !idsActuales.has(m.id));
-        nuevos.forEach(m => {
-            opState.mensajes.push(m);
-            if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
-        });
-
-        // Re-suscribir
-        opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
-            if (msg.autor_id !== opState.perfil?.id) {
-                if (!opState.perfiles[msg.autor_id]) {
-                    supabase.from('op_perfiles').select('id, nombre, avatar_path')
-                        .eq('id', msg.autor_id).maybeSingle()
-                        .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
-                }
-                appendMensaje(msg);
-            }
-        });
-    });
-}
-
 // ── Tabs ──────────────────────────────────────────────────────
 function _renderTab(tab) {
     opState.tab = tab;
@@ -187,124 +138,7 @@ function _mountInput() {
             window._opEnviar();
         }
     });
-
-    // Paste: Ctrl+V con imagen(es) en portapapeles
-    const _handlePaste = e => {
-        const items = Array.from(e.clipboardData?.items || []);
-        const imgItems = items.filter(it => it.type.startsWith('image/'));
-        if (!imgItems.length) return;
-        e.preventDefault();
-        imgItems.forEach(it => {
-            const file = it.getAsFile();
-            if (file) _agregarArchivosPendientes([file], 'paste');
-        });
-    };
-    ta.addEventListener('paste', _handlePaste);
-    document.addEventListener('paste', e => { if (e.target !== ta) _handlePaste(e); });
 }
-
-// ── Sistema unificado de archivos pendientes ──────────────────
-function _agregarArchivosPendientes(files, source = 'file') {
-    files.forEach(file => {
-        const url = URL.createObjectURL(file);
-        _pendingFiles.push({ file, url, source, id: Date.now() + Math.random() });
-    });
-    _renderPendingPreview();
-    $('op-msg-input')?.focus();
-}
-
-function _renderPendingPreview() {
-    let panel = $('op-pending-panel');
-
-    if (!_pendingFiles.length) { panel?.remove(); return; }
-
-    const wrap = $('op-input-wrap');
-    if (!wrap) return;
-
-    if (!panel) {
-        panel = document.createElement('div');
-        panel.id = 'op-pending-panel';
-        panel.style.cssText = `display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
-            background:rgba(108,52,131,0.08);border-radius:10px;margin-bottom:6px;
-            border:1.5px dashed rgba(108,52,131,0.35);align-items:flex-start;`;
-        wrap.insertAdjacentElement('beforebegin', panel);
-    }
-
-    panel.innerHTML = '';
-
-    _pendingFiles.forEach((entry) => {
-        const isImg = isImage(entry.file);
-        const isVid = isVideo(entry.file);
-        const isAud = isAudio(entry.file);
-        const kb    = (entry.file.size / 1024).toFixed(0);
-        const label = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
-        const sizeLabel = kb > 1024 ? `${(kb/1024).toFixed(1)} MB` : `${kb} KB`;
-        const accentColor = isVid ? '#c0392b' : isAud ? '#1a4a80' : '#6c3483';
-        const icon = entry.source === 'paste' ? '📋 ' : isVid ? '🎬 ' : isAud ? '🎵 ' : '📎 ';
-
-        let thumb = '';
-        if (isImg) {
-            thumb = `<img src="${entry.url}" style="width:76px;height:60px;object-fit:cover;border-radius:5px;">`;
-        } else if (isVid) {
-            thumb = `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
-                justify-content:center;font-size:1.8em;background:#fdecea;border-radius:5px;gap:2px;">
-                🎬<span style="font-size:0.3em;color:#c0392b;font-weight:700;">VIDEO</span></div>`;
-        } else if (isAud) {
-            thumb = `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
-                justify-content:center;font-size:1.8em;background:#e8f4f8;border-radius:5px;gap:2px;">
-                🎵<span style="font-size:0.3em;color:#1a4a80;font-weight:700;">AUDIO</span></div>`;
-        } else {
-            thumb = `<div style="width:76px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:#f5eeff;border-radius:5px;">📄</div>`;
-        }
-
-        const card = document.createElement('div');
-        card.style.cssText = `position:relative;display:flex;flex-direction:column;align-items:center;
-            gap:4px;background:white;border-radius:8px;padding:6px;
-            border:1px solid ${isVid ? 'rgba(192,57,43,0.35)' : isAud ? 'rgba(26,74,128,0.3)' : 'rgba(108,52,131,0.25)'};
-            width:88px;box-sizing:border-box;`;
-        card.innerHTML = `
-            ${thumb}
-            <div style="font-size:0.6em;color:${accentColor};text-align:center;line-height:1.3;
-                width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                title="${label}">${icon}${label}</div>
-            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${sizeLabel}</div>
-            <button data-uid="${entry.id}" style="position:absolute;top:-6px;right:-6px;
-                width:18px;height:18px;border-radius:50%;background:#c0392b;border:none;
-                color:white;font-size:0.65em;cursor:pointer;line-height:18px;text-align:center;padding:0;"
-                title="Quitar">✕</button>`;
-
-        card.querySelector('button').onclick = () => {
-            URL.revokeObjectURL(entry.url);
-            _pendingFiles = _pendingFiles.filter(f => f.id !== entry.id);
-            _renderPendingPreview();
-        };
-        panel.appendChild(card);
-    });
-
-    // Footer resumen
-    const footer = document.createElement('div');
-    footer.style.cssText = `width:100%;font-size:0.7em;color:rgba(108,52,131,0.7);
-        margin-top:4px;display:flex;justify-content:space-between;align-items:center;`;
-    const nImgs = _pendingFiles.filter(f => isImage(f.file)).length;
-    const nVids = _pendingFiles.filter(f => isVideo(f.file)).length;
-    const nAuds = _pendingFiles.filter(f => isAudio(f.file)).length;
-    const partes = [
-        nImgs ? `${nImgs} imagen${nImgs > 1 ? 'es' : ''}` : '',
-        nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : '',
-        nAuds ? `${nAuds} audio${nAuds > 1 ? 's' : ''}` : '',
-    ].filter(Boolean).join(' + ');
-    footer.innerHTML = `
-        <span>${partes}</span>
-        <button style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;"
-            onclick="window._opLimpiarPendientes()">Limpiar todo</button>`;
-    panel.appendChild(footer);
-}
-
-window._opLimpiarPendientes = () => {
-    _pendingFiles.forEach(f => URL.revokeObjectURL(f.url));
-    _pendingFiles = [];
-    _renderPendingPreview();
-};
 
 // ── Enviar mensaje ────────────────────────────────────────────
 async function _enviar() {
@@ -312,117 +146,47 @@ async function _enviar() {
     const ta        = $('op-msg-input');
     const contenido = ta?.value.trim() || '';
 
-    // Recolectar archivos del input file nativo
-    const fileInput = $('op-file-input');
-    if (fileInput?.files?.length) {
-        _agregarArchivosPendientes(Array.from(fileInput.files), 'file');
-        fileInput.value = '';
-        $('op-file-preview')?.remove();
-    }
+    let imagenPath = null;
 
-    // Imagen/video de galería pendiente
+    // Imagen desde galería
     if (_pendingImgId !== null) {
-        const isVideoRef = typeof _pendingImgId === 'object' && _pendingImgId?.tipo === 'video';
-        if (isVideoRef) {
-            await _enviarUnMensaje({ contenido: contenido || null, videoPath: _pendingImgId.path });
-            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
-        } else {
-            const allImgs = Object.values(opState.imagenesGaleria).flat();
-            const img = allImgs.find(i => i.id === _pendingImgId);
-            if (img) await _enviarUnMensaje({ contenido: contenido || null, imagenPath: img.path });
-            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
-        }
+        const allImgs = Object.values(opState.imagenesGaleria).flat();
+        const img = allImgs.find(i => i.id === _pendingImgId);
+        imagenPath = img?.path || null;
         _pendingImgId = null;
         $('op-img-preview')?.remove();
     }
 
-    // Archivos pendientes: imágenes, videos, audios
-    if (_pendingFiles.length) {
-        const filesToSend = [..._pendingFiles];
-        _pendingFiles = [];
-        _renderPendingPreview();
-        if (ta) { ta.value = ''; ta.style.height = 'auto'; }
-
-        const imgEntries = filesToSend.filter(e => isImage(e.file));
-        const vidEntries = filesToSend.filter(e => isVideo(e.file));
-        const audEntries = filesToSend.filter(e => isAudio(e.file));
-
-        // El texto y el link embed van con el PRIMER medio del lote solamente.
-        // Los demás mensajes se envían sin texto para no duplicarlo.
-        const links = extraerLinks(contenido);
-        const linkUrl = links.length ? links[0] : null;
-        let textoUsado = false;
-        const tomarTexto = () => { if (textoUsado) return null; textoUsado = true; return contenido || null; };
-        const tomarLink  = () => { if (!linkUrl || textoUsado) return null; return linkUrl; };
-
-        // Imágenes → un solo mensaje agrupado
-        if (imgEntries.length) {
-            const paths = [];
-            for (const entry of imgEntries) {
-                const ext = safeExt(entry.file, 'png');
-                const safeName = entry.source === 'paste'
-                    ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`
-                    : entry.file.name.replace(/\.[^.]+$/, '');
-                const res = await subirImagenGaleria(entry.file, opState.perfil.id, opState.perfil.nombre, safeName);
-                URL.revokeObjectURL(entry.url);
-                if (res.ok) paths.push(res.imagen.path);
-                else toast(`❌ Error subiendo ${safeName}`, 'error');
-            }
-            if (paths.length) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), imagenPaths: paths });
+    // Imagen desde archivo
+    const fileInput = $('op-file-input');
+    if (fileInput?.files?.length) {
+        const file = fileInput.files[0];
+        const res = await subirImagenGaleria(
+            file, opState.perfil.id, opState.perfil.nombre,
+            file.name.replace(/\.[^.]+$/, '')
+        );
+        if (res.ok) {
+            imagenPath = res.imagen.path;
+            await _cargarGaleria();
+            renderGaleria();
         }
-
-        // Videos → un mensaje por video
-        for (const entry of vidEntries) {
-            const ext = safeExt(entry.file, 'mp4');
-            const base = entry.file.name.replace(/\.[^.]+$/, '') || `video_${Date.now()}`;
-            const res = await subirVideoGaleria(entry.file, opState.perfil.id, opState.perfil.nombre, `${base}.${ext}`);
-            URL.revokeObjectURL(entry.url);
-            if (res.ok) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), videoPath: res.imagen.path });
-            else toast(`❌ Error subiendo ${base}`, 'error');
-        }
-
-        // Audios → un mensaje por audio
-        for (const entry of audEntries) {
-            const res = await subirAudio(entry.file, opState.perfil.id, opState.perfil.nombre);
-            URL.revokeObjectURL(entry.url);
-            if (res.ok) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), audioPath: res.path });
-            else toast(`❌ Error subiendo audio`, 'error');
-        }
-
-        await _cargarGaleria();
-        renderGaleria();
-        return;
+        fileInput.value = '';
+        $('op-file-preview')?.remove();
     }
 
-    // Solo texto — detectar links de YouTube/etc para embed
-    if (!contenido) return;
-    if (ta) { ta.value = ''; ta.style.height = 'auto'; }
+    if (!contenido && !imagenPath) return;
 
-    const links = extraerLinks(contenido);
-    if (links.length) {
-        await _enviarUnMensaje({ contenido, linkUrl: links[0] });
-    } else {
-        await _enviarUnMensaje({ contenido });
-    }
-}
-
-
-async function _enviarUnMensaje({ contenido, imagenPath, imagenPaths, videoPath, audioPath, linkUrl }) {
-    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length) && !videoPath && !audioPath && !linkUrl) return;
     const msg = await enviarMensaje({
         convId:      opState.convActual,
         autorId:     opState.perfil.id,
         autorNombre: opState.perfil.nombre,
-        contenido:   contenido  || null,
-        imagenPath:  imagenPath || null,
-        imagenPaths: imagenPaths || null,
-        videoPath:   videoPath  || null,
-        audioPath:   audioPath  || null,
-        linkUrl:     linkUrl    || null,
+        contenido:   contenido || null,
+        imagenPath,
     });
+
     if (msg) {
+        if (ta) { ta.value = ''; ta.style.height = 'auto'; }
         appendMensaje(msg);
-        opState.mensajes.push(msg);
         const conv = opState.conversaciones.find(c => c.id === opState.convActual);
         if (conv) conv.ultimo_msg = msg.creado_en;
         opState.conversaciones.sort((a, b) => new Date(b.ultimo_msg) - new Date(a.ultimo_msg));
@@ -552,10 +316,10 @@ function _exponerGlobales() {
             if (id === opState.convActual) { opState.mensajes = []; renderMensajes(); }
         }));
 
-        // Delete
-        if (opState.conversaciones.length > 1) {
+        // Delete (not for first conv)
+        if (id !== opState.conversaciones[opState.conversaciones.length - 1]?.id || opState.conversaciones.length > 1) {
             menu.appendChild(item('🗑', 'Eliminar conversación', async () => {
-                if (!confirm(`¿Eliminar "${conv.titulo}"?`)) return;
+                if (!confirm('¿Eliminar esta conversación?')) return;
                 await eliminarConversacion(id);
                 opState.conversaciones = opState.conversaciones.filter(c => c.id !== id);
                 if (id === opState.convActual) {
@@ -599,132 +363,9 @@ function _exponerGlobales() {
         const prev = _getConvMeta(id);
         localStorage.setItem(`op_conv_meta_${id}`, JSON.stringify({ ...prev, ...patch }));
     }
-
-    window._opEliminarMsg = async id => {
-        await eliminarMensaje(id);
         opState.mensajes = opState.mensajes.filter(m => m.id !== id);
         const el = document.querySelector(`.op-msg[data-id="${id}"]`);
         if (el) el.remove();
-    };
-
-    window._opEditarMsg = id => {
-        const msg = opState.mensajes.find(m => m.id === id);
-        if (!msg || !msg.contenido) return;
-
-        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
-        if (!msgEl) return;
-        const textoEl = msgEl.querySelector('.op-msg-texto');
-        if (!textoEl) return;
-
-        // Guardar el original en un atributo data para no depender de escape en onclick inline
-        const original = msg.contenido;
-        textoEl.dataset.originalTexto = original;
-
-        // Crear textarea y botones via DOM (sin onclick inline) para evitar bugs con
-        // comillas, saltos de línea y caracteres especiales en el texto original
-        textoEl.innerHTML = '';
-
-        const ta = document.createElement('textarea');
-        ta.id = `op-edit-ta-${id}`;
-        ta.value = original;
-        ta.style.cssText = 'width:100%;min-height:60px;background:rgba(255,255,255,0.1);' +
-            'border:1.5px solid #6c3483;border-radius:6px;color:inherit;font:inherit;' +
-            'padding:6px 8px;resize:vertical;box-sizing:border-box;';
-        textoEl.appendChild(ta);
-
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display:flex;gap:6px;margin-top:6px;justify-content:flex-end;';
-
-        const btnCancelar = document.createElement('button');
-        btnCancelar.textContent = 'Cancelar';
-        btnCancelar.style.cssText = 'background:#f0e6f6;border:1.5px solid #c39bd3;' +
-            'color:#6c3483;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:0.8em;font-weight:600;';
-        btnCancelar.addEventListener('click', () => {
-            textoEl.innerHTML = renderMsgMarkupGlobal(original);
-        });
-
-        const btnGuardar = document.createElement('button');
-        btnGuardar.textContent = '💾 Guardar';
-        btnGuardar.style.cssText = 'background:#6c3483;border:none;color:white;border-radius:6px;' +
-            'padding:4px 10px;cursor:pointer;font-size:0.8em;font-weight:700;';
-        btnGuardar.addEventListener('click', () => window._opGuardarEdicion(id));
-
-        btnRow.appendChild(btnCancelar);
-        btnRow.appendChild(btnGuardar);
-        textoEl.appendChild(btnRow);
-
-        ta.focus();
-    };
-
-    // _opCancelarEdicion mantenido por compatibilidad, pero ya no se usa en el flujo nuevo
-    window._opCancelarEdicion = (id) => {
-        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
-        if (!msgEl) return;
-        const textoEl = msgEl.querySelector('.op-msg-texto');
-        if (!textoEl) return;
-        const original = textoEl.dataset.originalTexto
-            ?? opState.mensajes.find(m => m.id === id)?.contenido ?? '';
-        textoEl.innerHTML = renderMsgMarkupGlobal(original);
-    };
-
-    window._opGuardarEdicion = async id => {
-        const ta = document.getElementById(`op-edit-ta-${id}`);
-        if (!ta) return;
-        const nuevoContenido = ta.value.trim();
-        if (!nuevoContenido) return;
-
-        const { error } = await supabase.from('op_mensajes')
-            .update({ contenido: nuevoContenido, editado_en: new Date().toISOString() })
-            .eq('id', id);
-        if (error) { toast('❌ Error al guardar edición', 'error'); return; }
-
-        // Actualizar state
-        const msg = opState.mensajes.find(m => m.id === id);
-        if (msg) { msg.contenido = nuevoContenido; msg.editado_en = new Date().toISOString(); }
-
-        // Actualizar DOM
-        const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
-        if (!msgEl) return;
-        const textoEl = msgEl.querySelector('.op-msg-texto');
-        if (textoEl) textoEl.innerHTML = renderMsgMarkupGlobal(nuevoContenido);
-        // Marcar como editado en la hora
-        const horaEl = msgEl.querySelector('.op-msg-hora');
-        if (horaEl && !horaEl.querySelector('.op-editado-badge')) {
-            horaEl.insertAdjacentHTML('beforeend', ' <span class="op-editado-badge" style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>');
-        }
-    };
-
-    // ── Catálogo de perfiles ──────────────────────────────────
-    window._opRenombrarPerfil = async (id, nombreActual) => {
-        const nuevo = prompt('Nuevo nombre para este perfil:', nombreActual);
-        if (!nuevo?.trim() || nuevo.trim() === nombreActual) return;
-        const { error } = await supabase.from('op_perfiles')
-            .update({ nombre: nuevo.trim(), actualizado_en: new Date().toISOString() })
-            .eq('id', id);
-        if (error) { toast('❌ Error al renombrar', 'error'); return; }
-        if (opState.perfiles[id]) opState.perfiles[id].nombre = nuevo.trim();
-        if (opState.perfil?.id === id) opState.perfil.nombre = nuevo.trim();
-        renderAjustes();
-        toast('✅ Nombre actualizado', 'ok');
-    };
-
-    window._opSeleccionarPerfil = async (id) => {
-        const perfil = opState.perfiles[id];
-        if (!perfil) return;
-        opState.perfil = { ...perfil };
-        renderAjustes();
-        renderMensajes();
-        _renderPerfilPill();
-        toast(`✅ Perfil activo: ${perfil.nombre}`, 'ok');
-    };
-
-    window._opEliminarPerfil = async (id, nombre) => {
-        if (!confirm(`¿Eliminar el perfil "${nombre}"? Esto no elimina sus mensajes.`)) return;
-        const { error } = await supabase.from('op_perfiles').delete().eq('id', id);
-        if (error) { toast('❌ Error al eliminar perfil', 'error'); return; }
-        delete opState.perfiles[id];
-        renderAjustes();
-        toast('🗑 Perfil eliminado', 'ok');
     };
 
     window._opVerImagen = url => showLightbox(url);
@@ -763,76 +404,20 @@ function _exponerGlobales() {
     };
 
     window._opMostrarGaleria = () => {
-        // Si ya existe el dropdown lo toggling
-        let dd = $('op-img-selector-dropdown');
-        if (dd) { dd.remove(); return; }
-
-        const allImgs = Object.values(opState.imagenesGaleria).flat();
-        const wrap = $('op-input-wrap');
-        if (!wrap) return;
-
-        dd = document.createElement('div');
-        dd.id = 'op-img-selector-dropdown';
-        dd.style.cssText = `position:absolute;bottom:calc(100% + 8px);left:0;right:0;
-            background:#1a1a2e;border:2px solid #6c3483;border-radius:12px;
-            max-height:260px;overflow-y:auto;padding:12px;z-index:100;
-            box-shadow:0 -4px 20px rgba(0,0,0,0.4);`;
-
-        if (!allImgs.length) {
-            dd.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:0.82em;text-align:center;padding:16px;">Sin imágenes en galería</div>`;
-        } else {
-            const header = document.createElement('div');
-            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;';
-            header.innerHTML = `<span style="color:#e2d9f3;font-weight:700;font-size:0.85em;">Galería</span>
-                <button id="op-img-selector-close" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.1em;">✕</button>`;
-            dd.appendChild(header);
-
-            const grid = document.createElement('div');
-            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;';
-            allImgs.forEach(img => {
-                const cell = document.createElement('div');
-                cell.style.cssText = `cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;transition:0.15s;`;
-                cell.onmouseover = () => cell.style.borderColor = '#6c3483';
-                cell.onmouseout  = () => cell.style.borderColor = 'transparent';
-                cell.title = img.nombre;
-                cell.innerHTML = `<img src="${img.url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
-                    <div style="font-size:0.6em;color:rgba(255,255,255,0.6);padding:2px 4px;
-                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0d1117;">
-                        ${img.nombre}
-                    </div>`;
-                cell.onclick = () => { window._opSeleccionarImg(img.id); dd.remove(); };
-                grid.appendChild(cell);
-            });
-            dd.appendChild(grid);
-        }
-
-        // Posicionar relativo al wrap del input
-        const wrapParent = wrap.parentElement;
-        wrapParent.style.position = 'relative';
-        wrapParent.appendChild(dd);
-
-        // Cerrar al hacer click fuera
-        dd.querySelector('#op-img-selector-close')?.addEventListener('click', () => dd.remove());
-        setTimeout(() => {
-            document.addEventListener('mousedown', function _close(e) {
-                if (!dd.contains(e.target) && e.target.getAttribute('onclick') !== 'window._opMostrarGaleria()') {
-                    dd.remove();
-                    document.removeEventListener('mousedown', _close);
-                }
-            });
-        }, 10);
+        const sel = $('op-img-selector');
+        if (!sel) return;
+        sel.innerHTML = renderSelectorImagenes().replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
+        sel.style.display = sel.style.display === 'none' ? 'block' : 'none';
     };
 
     window._opSubirAGaleria = async () => {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac';
+        input.type = 'file'; input.accept = 'image/*';
         input.onchange = async () => {
             const file = input.files[0]; if (!file) return;
-            const isVid = file.type.startsWith('video/');
-            const nombre = prompt(`Nombre para este ${isVid ? 'video' : 'imagen'}:`, file.name.replace(/\.[^.]+$/, '')) || file.name;
-            const fn = isVid ? subirVideoGaleria : subirImagenGaleria;
-            const res = await fn(file, opState.perfil.id, opState.perfil.nombre, nombre);
-            if (res.ok) { await _cargarGaleria(); renderGaleria(); toast(`✅ ${isVid ? 'Video' : 'Imagen'} guardado/a en galería`, 'ok'); }
+            const nombre = prompt('Nombre para esta imagen:', file.name.replace(/\.[^.]+$/, '')) || file.name;
+            const res = await subirImagenGaleria(file, opState.perfil.id, opState.perfil.nombre, nombre);
+            if (res.ok) { await _cargarGaleria(); renderGaleria(); toast('✅ Imagen guardada en galería', 'ok'); }
             else toast('❌ ' + res.msg, 'error');
         };
         input.click();
@@ -840,17 +425,7 @@ function _exponerGlobales() {
 
     window._opFileInput = () => {
         const fi = $('op-file-input');
-        if (fi) { fi.value = ''; fi.multiple = true; fi.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus'; fi.click(); }
-    };
-
-    // Called by the file input's onchange (set in index.html or here)
-    window._opOnFileInput = (input) => {
-        const files = Array.from(input.files || []);
-        if (!files.length) return;
-        _agregarArchivosPendientes(files, 'file');
-        input.value = '';
-        // Remove old single-file preview if present
-        $('op-file-preview')?.remove();
+        if (fi) { fi.value = ''; fi.click(); }
     };
 
     window._opPreviewAvatar = input => {

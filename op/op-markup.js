@@ -14,8 +14,7 @@ export function renderMsgMarkup(texto) {
     if (!texto) return '';
 
     // Dividir en tokens preservando los delimitadores (capturing group)
-    // URLs se tokenizAN para linkificarlas sin romper otros tokens
-    const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n|https?:\/\/[^\s<>"']+)/g);
+    const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n)/g);
 
     return partes.map(p => {
         if (!p) return '';
@@ -24,24 +23,8 @@ export function renderMsgMarkup(texto) {
         // @Personaje@
         if (/^@[^@]+@$/.test(p)) {
             const nombre = p.slice(1, -1);
-            const url    = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
-            // Build normalized image path same way as autocomplete
-            const norm   = str => str.toString().trim().toLowerCase()
-                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
-                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-                .replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
-                .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
-            const imgSrc = `${STORAGE_URL}/imgpersonajes/${norm(nombre)}icon.png`;
-            const noImg  = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-            return `<a href="${url}" target="_blank"
-                style="display:inline-flex;align-items:center;gap:4px;color:#6c3483;font-weight:700;
-                       background:#f5eeff;padding:2px 7px 2px 3px;border-radius:20px;
-                       text-decoration:none;border:1px solid #c39bd3;vertical-align:middle;line-height:1.4;">
-                <img src="${esc(imgSrc)}" alt=""
-                    style="width:18px;height:18px;border-radius:50%;object-fit:cover;flex-shrink:0;"
-                    onerror="this.src='${esc(noImg)}'">
-                ${esc(nombre)}
-            </a>`;
+            const url = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
+            return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;background:#f5eeff;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid #c39bd3;">@${esc(nombre)}@</a>`;
         }
 
         // #Tag
@@ -55,15 +38,6 @@ export function renderMsgMarkup(texto) {
         if (/^![^!]+!$/.test(p)) {
             const nombre = p.slice(1, -1);
             return `<span style="color:#c0392b;font-weight:700;background:#fdecea;padding:1px 6px;border-radius:4px;border:1px solid rgba(192,57,43,0.3);">⚔ ${esc(nombre)}</span>`;
-        }
-
-        // URL suelta → chip azul clickeable
-        if (/^https?:\/\//.test(p)) {
-            let dominio = '';
-            try { dominio = new URL(p).hostname.replace('www.',''); } catch(_) { dominio = p; }
-            return `<a href="${esc(p)}" target="_blank" rel="noopener noreferrer"
-                style="color:#2980b9;text-decoration:underline;word-break:break-all;"
-                title="${esc(p)}">${esc(p)}</a>`;
         }
 
         // Texto plano — escapar HTML
