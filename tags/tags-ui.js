@@ -334,6 +334,17 @@ function _resumenPJ(pj, proy) {
     const agiDeltas = [1,2,3,4,5].map(n => g['delta_agi_'+n]);
     const ctlDeltas = [1,2,3,4,5].map(n => g['delta_ctl_'+n]);
 
+    // CTL Usado: medallas equipadas (del inventario) + delta_ctl_usado_*
+    const ctlUsadoBase = inventarioMedallas.reduce((s, id) => {
+        const med = medallasCat.find(m => m.id === id);
+        return s + (Number(med?.costo_ctl) || 0);
+    }, 0);
+    const ctlUsado = aplicarDeltas(ctlUsadoBase,
+        g.delta_ctl_usado_1, g.delta_ctl_usado_2, g.delta_ctl_usado_3,
+        g.delta_ctl_usado_4, g.delta_ctl_usado_5);
+    const ctlUsadoDeltas = [1,2,3,4,5].map(n => g['delta_ctl_usado_'+n]);
+    const ctlExcedido = ctlUsado > ctl;
+
     const pac = pot + agi + ctl;
     const tierData = (() => {
         if (pac >= 100) return { tier:4, label:'TIER 4', color:'#f39c12' };
@@ -377,9 +388,17 @@ function _resumenPJ(pj, proy) {
                 <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">AGI</div>
                 <div style="font-size:1em;font-weight:800;color:#2980b9;">${_fmtDChain(agiBase, agi, agiDeltas)}</div>
             </div>
-            <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px;text-align:center;">
-                <div style="font-size:0.65em;color:#888;text-transform:uppercase;letter-spacing:.5px;">CTL</div>
-                <div style="font-size:1em;font-weight:800;color:#27ae60;">${_fmtDChain(ctlBase, ctl, ctlDeltas)}</div>
+            <div style="border:1px solid #27ae60;border-radius:6px;overflow:hidden;text-align:center;display:flex;flex-direction:column;">
+                <!-- Zona superior: CTL USADO -->
+                <div style="background:${ctlExcedido?'#fde8e8':'#c8f5dc'};padding:5px 2px 3px;display:flex;flex-direction:column;align-items:center;border-bottom:1px solid #27ae6055;">
+                    <div style="font-size:0.55em;color:${ctlExcedido?'#c0392b':'#1a6b3a'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">🛡 usado</div>
+                    <div style="font-size:1em;font-weight:800;color:${ctlExcedido?'#c0392b':'#1a6b3a'};">${_fmtDChain(ctlUsadoBase, ctlUsado, ctlUsadoDeltas)}</div>
+                </div>
+                <!-- Zona inferior: CTL TOTAL -->
+                <div style="background:#f0fff4;padding:4px 2px 5px;display:flex;flex-direction:column;align-items:center;">
+                    <div style="font-size:0.55em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">CTL total</div>
+                    <div style="font-size:1em;font-weight:800;color:#27ae60;">${_fmtDChain(ctlBase, ctl, ctlDeltas)}</div>
+                </div>
             </div>
         </div>
         <div style="display:flex;flex-direction:column;gap:5px;font-size:0.82em;border-top:1px solid var(--gray-200);padding-top:8px;">
