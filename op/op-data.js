@@ -99,20 +99,22 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         pathValue = imagenPath;
     }
 
+    // tipo: se calcula pero solo se incluye si el constraint lo permite
+    // (constraint op_mensajes_tipo_check puede no incluir 'video'/'audio' aún)
     const tipo = videoPath  ? (contenido ? 'mixto' : 'video')
                : audioPath  ? (contenido ? 'mixto' : 'audio')
                : contenido && pathValue ? 'mixto'
                : pathValue  ? 'imagen'
                : 'texto';
 
-    // Construir payload base; campos opcionales sólo si tienen valor
+    // Construir payload base sin tipo por defecto — se agrega solo si el constraint lo soporta
     const payload = {
         conversacion_id: convId,
         autor_id:        autorId,
         autor_nombre:    autorNombre,
         contenido:       contenido   || null,
         imagen_path:     pathValue   || null,
-        tipo,
+        _tipo:           tipo,  // guardado aparte, se agrega al final según el constraint
     };
     if (videoPath)  payload.video_path  = videoPath;
     if (audioPath)  payload.audio_path  = audioPath;
@@ -132,7 +134,21 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         contenido:       payload.contenido,
         imagen_path:     payload.imagen_path,
     };
-    if (tieneTipo)   payloadFinal.tipo       = payload.tipo;
+
+    // Agregar tipo solo si: (a) la columna existe Y (b) el valor es seguro para el constraint.
+    // Valores seguros siempre: 'texto', 'imagen', 'mixto'.
+    // Valores nuevos 'video'/'audio' pueden violar el constraint hasta que se actualice.
+    const tipoSeguro = ['texto', 'imagen', 'mixto'];
+    const tipoActual = payload._tipo;
+    if (tieneTipo) {
+        if (tipoSeguro.includes(tipoActual)) {
+            payloadFinal.tipo = tipoActual;
+        } else {
+            // 'video' o 'audio' → usar 'mixto' como fallback seguro
+            payloadFinal.tipo = 'mixto';
+        }
+    }
+
     if (tieneVideo && payload.video_path) payloadFinal.video_path = payload.video_path;
     if (tieneAudio && payload.audio_path) payloadFinal.audio_path = payload.audio_path;
 
