@@ -114,7 +114,7 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         autor_nombre:    autorNombre,
         contenido:       contenido   || null,
         imagen_path:     pathValue   || null,
-        _tipo:           tipo,  // guardado aparte, se agrega al final según el constraint
+        _tipo:           tipo,
     };
     if (videoPath)  payload.video_path  = videoPath;
     if (audioPath)  payload.audio_path  = audioPath;
@@ -135,19 +135,8 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         imagen_path:     payload.imagen_path,
     };
 
-    // Agregar tipo solo si: (a) la columna existe Y (b) el valor es seguro para el constraint.
-    // Valores seguros siempre: 'texto', 'imagen', 'mixto'.
-    // Valores nuevos 'video'/'audio' pueden violar el constraint hasta que se actualice.
-    const tipoSeguro = ['texto', 'imagen', 'mixto'];
-    const tipoActual = payload._tipo;
-    if (tieneTipo) {
-        if (tipoSeguro.includes(tipoActual)) {
-            payloadFinal.tipo = tipoActual;
-        } else {
-            // 'video' o 'audio' → usar 'mixto' como fallback seguro
-            payloadFinal.tipo = 'mixto';
-        }
-    }
+    // Agregar tipo directamente — constraint ya soporta todos los valores
+    if (tieneTipo) payloadFinal.tipo = payload._tipo;
 
     if (tieneVideo && payload.video_path) payloadFinal.video_path = payload.video_path;
     if (tieneAudio && payload.audio_path) payloadFinal.audio_path = payload.audio_path;
