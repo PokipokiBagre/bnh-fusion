@@ -634,8 +634,8 @@ export function renderCuadroResumen() {
         {lbl:'PVs',      fmt:s=>`${s.pv}/${s.pvMax}`},
         {lbl:'POT',      fmt:s=>String(s.pot)+_deltaBadgesTxt(s,'pot')},
         {lbl:'AGI',      fmt:s=>String(s.agi)+_deltaBadgesTxt(s,'agi')},
-        {lbl:'CTL',      fmt:s=>String(s.ctlUsado??calcCTLUsado(s.medallas))+'/'+String(s.ctl)+_deltaBadgesTxt(s,'ctl')},
-        {lbl:'C/T',      fmt:s=>String(s.cambios)},
+        {lbl:'CTL Usd',  fmt:s=>String(s.ctlUsado??calcCTLUsado(s.medallas))+' / '+String(s.ctl)+_deltaBadgesTxt(s,'ctl')},
+        {lbl:'Camb/T',   fmt:s=>String(s.cambios)},
         {lbl:'PT Total', fmt:s=>String(calcPTTotal(s.pts))},
         {lbl:'Medallas', fmt:s=>String(s.medallas?.length||0)},
     ];
@@ -660,8 +660,9 @@ export function renderCuadroResumen() {
     let tbody = '';
     stats.forEach(st=>{
         tbody += `<tr><td style="${tdL}">${st.lbl}</td>`;
-        actA.forEach(s=>tbody+=`<td style="${tdA}">${esc(st.fmt(s))}</td>`);
-        actB.forEach(s=>tbody+=`<td style="${tdB}">${esc(st.fmt(s))}</td>`);
+        // No escapar — st.fmt puede devolver HTML con badges
+        actA.forEach(s=>tbody+=`<td style="${tdA}">${st.fmt(s)}</td>`);
+        actB.forEach(s=>tbody+=`<td style="${tdB}">${st.fmt(s)}</td>`);
         tbody += '</tr>';
     });
 
@@ -883,8 +884,8 @@ export async function generarImagenCuadro() {
         {lbl:'PVs',      fmt:s=>`${s.pv}/${s.pvMax}`},
         {lbl:'POT',      fmt:s=>String(s.pot)},
         {lbl:'AGI',      fmt:s=>String(s.agi)},
-        {lbl:'CTL',      fmt:s=>String(s.ctl)},
-        {lbl:'C/T',      fmt:s=>String(s.cambios)},
+        {lbl:'CTL Usd',  fmt:s=>`${s.ctlUsado??calcCTLUsado(s.medallas)} / ${s.ctl}`},
+        {lbl:'Camb/T',   fmt:s=>String(s.cambios)},
         {lbl:'PT Total', fmt:s=>String(calcPTTotal(s.pts))},
         {lbl:'Medallas', fmt:s=>String(s.medallas?.length||0)},
     ];
