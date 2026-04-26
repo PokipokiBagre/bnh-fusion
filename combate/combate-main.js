@@ -224,20 +224,40 @@ window._combatePVActualChange = (eq, idx, valor) => {
     window._combateRecalcDeltas(eq, idx);
 };
 
-// ── Delta rápido en PVs — solo modifica _pvActualManual (Δ1 se usará como acumulador) ──
+// ── Delta rápido en PVs — acumula en delta_pv_actual_1 ────────
 window._combateDeltaPV = (eq, idx, delta) => {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
     const pvActAntes = slot.pv;
     const pvMaxAntes = slot.pvMax;
-    // Sumar al manual (sin clampear al máx, permite superar pvMax temporalmente)
-    const base = slot._pvActualManual !== null && slot._pvActualManual !== undefined
-        ? slot._pvActualManual : slot.pv;
-    slot._pvActualManual = Math.max(0, base + delta);
+
+    // Acumular en Δ1 de PV Actual (el campo visible en la UI)
+    const d1Actual = parseInt(slot._d.delta_pv_actual_1) || 0;
+    slot._d.delta_pv_actual_1 = String(d1Actual + delta);
+
     recalcSlot(slot);
     const pvActNuevo = slot.pv;
     const pvMaxNuevo = slot.pvMax;
     _pushRegistro(slot.nombre, { etiqueta: `${delta>0?'+':''}${delta}PVs(${pvActAntes}/${pvMaxAntes}→${pvActNuevo}/${pvMaxNuevo})` });
+    refrescarEquipo(eq);
+    refrescarRegistro();
+    refrescarCuadro();
+    renderSlotDetalle(eq, idx);
+};
+
+// ── Delta rápido en PV Máx — acumula en delta_pv_1 ───────────
+window._combateDeltaPVMax = (eq, idx, delta) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    const antes = slot.pvMax;
+
+    // Acumular en Δ1 de PV Máx
+    const d1 = parseInt(slot._d.delta_pv_1) || 0;
+    slot._d.delta_pv_1 = String(d1 + delta);
+
+    recalcSlot(slot);
+    const despues = slot.pvMax;
+    _pushRegistro(slot.nombre, { etiqueta: `${delta>0?'+':''}${delta}PVMax(${antes}→${despues})` });
     refrescarEquipo(eq);
     refrescarRegistro();
     refrescarCuadro();

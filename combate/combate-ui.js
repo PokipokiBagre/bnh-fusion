@@ -346,6 +346,14 @@ export function renderSlotDetalle(eq, idx) {
     ${_statBlock('agi', 'AGI', slot._pj.agi||0, false, '#1a4a80')}
     ${_statBlock('ctl', 'CTL', slot._pj.ctl||0, false, '#4a235a')}
     ${_statBlock('pv',  '🔵 PV Máx', 0, true, '#1a4a80', '#eaf3fb', '#aecde8')}
+    <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:3px 2px 0;">
+        <span style="font-size:0.68em;font-weight:700;color:#1a4a80;margin-right:2px;">PVMax:</span>
+        ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+            `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#1a4a80':'#e74c3c'};
+                border-radius:4px;background:${dv>0?'#dbeafe':'#fdecea'};color:${dv>0?'#1a4a80':'#7b241c'};cursor:pointer;"
+                onclick="window._combateDeltaPVMax('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
+        ).join('')}
+    </div>
     ${_statBlock('cambios', 'Camb/T', 0, true, '#1e8449', '#f0faf4', '#a9dfbf')}
 
     <!-- PV Actual -->
