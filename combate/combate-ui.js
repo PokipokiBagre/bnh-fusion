@@ -292,31 +292,32 @@ export function renderSlotDetalle(eq, idx) {
     const medallasAcc   = getMedallasAccesibles(slot);
     const ctlUsado      = calcCTLUsado(slot.medallas);
     const tagsActivos   = new Set((slot.tags||[]).map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase()));
+    const tab = slot._tabActiva || 'stats';
 
-    // Bloque de un stat con deltas encadenados
-    const _statBlock = (key, lbl, baseVal, isAuto=false) => {
+    // ── Bloque stat con deltas ────────────────────────────────
+    const _statBlock = (key, lbl, baseVal, isAuto=false, accentColor=col, bg='#f8f9fa', border='#e9ecef') => {
         const deltas = [1,2,3,4,5].map(n => d[`delta_${key}_${n}`]||'0');
         const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv' }[key] || key;
         const result = slot[resultKey] ?? '?';
         return `
-<div style="background:#f8f9fa;border-radius:8px;padding:8px 10px;border:1px solid #e9ecef;">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
-        <span style="font-weight:800;color:${col};font-size:0.82em;min-width:58px;">${lbl}</span>
+<div style="background:${bg};border-radius:8px;padding:7px 10px;border:1.5px solid ${border};">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+        <span style="font-weight:800;color:${accentColor};font-size:0.82em;min-width:58px;">${lbl}</span>
         ${isAuto
             ? `<span style="background:#e9ecef;border-radius:4px;padding:2px 8px;font-size:0.78em;color:#666;">Auto</span>`
             : `<input type="number" value="${baseVal}"
-                style="width:60px;border:1px solid #ccc;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;"
+                style="width:60px;border:1.5px solid ${border};border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:${accentColor};"
                 id="cb-${eq}-${idx}-${key}-base" oninput="window._combateRecalcDeltas('${eq}',${idx})">`
         }
-        <span style="font-size:0.75em;color:#888;">→ <b style="color:${col};font-size:1.05em;">${result}</b></span>
+        <span style="font-size:0.75em;color:#888;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
     </div>
     <div style="display:flex;gap:3px;">
         ${[1,2,3,4,5].map(n=>`
         <div style="flex:1;text-align:center;">
-            <div style="font-size:0.6em;color:#9b59b6;margin-bottom:1px;font-weight:700;">Δ${n}</div>
+            <div style="font-size:0.58em;color:#9b59b6;margin-bottom:1px;font-weight:700;">Δ${n}</div>
             <input type="text" value="${deltas[n-1]}" placeholder="0"
                 style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 1px;
-                    text-align:center;font-size:0.8em;font-weight:700;color:#6c3483;"
+                    text-align:center;font-size:0.78em;font-weight:700;color:#6c3483;"
                 id="cb-${eq}-${idx}-${key}-d${n}"
                 oninput="window._combateRecalcDeltas('${eq}',${idx})">
         </div>`).join('')}
@@ -324,162 +325,211 @@ export function renderSlotDetalle(eq, idx) {
 </div>`;
     };
 
+    // ── Tab helper ────────────────────────────────────────────
+    const _tabBtn = (id, lbl) => {
+        const active = tab === id;
+        return `<button style="flex:1;padding:7px 4px;border:none;border-bottom:3px solid ${active?col:'transparent'};
+            background:transparent;font-weight:${active?800:500};font-size:0.8em;
+            color:${active?col:'#888'};cursor:pointer;transition:.12s;"
+            onclick="window._combateSetTab('${eq}',${idx},'${id}')">${lbl}</button>`;
+    };
+
+    // ══ TAB: STATS ══════════════════════════════════════════
+    const tabStats = `
+<div style="display:flex;flex-direction:column;gap:6px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:2px;">
+        <span style="font-size:0.7em;color:#aaa;">((( Base Δ1) Δ2) Δ3) Δ4) Δ5)</span>
+        ${combateState.esAdmin ? `<button style="font-size:0.8em;padding:3px 12px;background:${col};color:white;border:none;border-radius:5px;cursor:pointer;"
+            onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
+    </div>
+    ${_statBlock('pot', 'POT', slot._pj.pot||0, false, '#7d3c00')}
+    ${_statBlock('agi', 'AGI', slot._pj.agi||0, false, '#1a4a80')}
+    ${_statBlock('ctl', 'CTL', slot._pj.ctl||0, false, '#4a235a')}
+    ${_statBlock('pv',  '🔵 PV Máx', 0, true, '#1a4a80', '#eaf3fb', '#aecde8')}
+    ${_statBlock('cambios', 'Camb/T', 0, true, '#1e8449', '#f0faf4', '#a9dfbf')}
+
+    <!-- PV Actual -->
+    <div style="background:#f0fff4;border:2px solid #27ae60;border-radius:8px;padding:7px 10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+            <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">🟢 PV Act</span>
+            <input type="number" value="${slot._pvActualManual??''}" placeholder="Vacío=Máx"
+                style="width:72px;border:2px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;background:white;"
+                id="cb-${eq}-${idx}-pvactual-base"
+                oninput="window._combatePVActualChange('${eq}',${idx},this.value)">
+            <span style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.1em;">${slot.pv}</b>
+                <span style="color:#aaa;">/ ${slot.pvMax}</span></span>
+        </div>
+        <div style="display:flex;gap:3px;">
+            ${[1,2,3,4,5].map(n=>`
+            <div style="flex:1;text-align:center;">
+                <div style="font-size:0.58em;color:#27ae60;margin-bottom:1px;font-weight:700;">Δ${n}</div>
+                <input type="text" value="${d[`delta_pv_actual_${n}`]||'0'}" placeholder="0"
+                    style="width:100%;border:1px solid #a9dfbf;border-radius:4px;padding:2px 1px;
+                        text-align:center;font-size:0.78em;font-weight:700;color:#27ae60;background:white;"
+                    id="cb-${eq}-${idx}-pv_actual-d${n}"
+                    oninput="window._combateRecalcDeltas('${eq}',${idx})">
+            </div>`).join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:5px 0 1px;">
+            <span style="font-size:0.68em;font-weight:700;color:#555;margin-right:2px;">PVs:</span>
+            ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+                `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
+                    border-radius:4px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
+                    onclick="window._combateDeltaPV('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
+            ).join('')}
+        </div>
+    </div>
+</div>`;
+
+    // ══ TAB: TAGS Y PT ══════════════════════════════════════
+    const tabTags = `
+<div>
+    ${combateState.esAdmin ? `
+    <div style="margin-bottom:8px;">
+        <button style="font-size:0.78em;padding:4px 12px;background:${col};color:white;border:none;border-radius:6px;cursor:pointer;"
+            onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>
+    </div>
+    <div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
+        <input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"
+            oninput="window._combateFiltrarCatTags('${eq}',${idx},this.value)">
+        <div id="cat-tags-lista-${eq}-${idx}" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">
+            ${catalogoTagsArr.map(t => {
+                const tN = (t.startsWith('#')?t:'#'+t).toLowerCase();
+                const tiene = tagsActivos.has(tN);
+                return `<span data-tag="${esc(t)}"
+                    style="cursor:pointer;padding:2px 8px;border-radius:8px;font-size:0.73em;font-weight:700;
+                    background:${tiene?col:'#f1f3f4'};color:${tiene?'white':'#495057'};
+                    border:1.5px solid ${tiene?col:'#dee2e6'};"
+                    onclick="window._combateToggleTag('${eq}',${idx},'${esc(t)}')">${esc(t)}</span>`;
+            }).join('')}
+        </div>
+    </div>` : ''}
+    <div style="display:flex;flex-direction:column;gap:3px;max-height:380px;overflow-y:auto;">
+        ${Object.entries(slot.pts||{}).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=>{
+            const tD = tag.startsWith('#')?tag:'#'+tag;
+            const enT = tagsActivos.has(tD.toLowerCase());
+            return `
+        <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;
+            background:${enT?pale:'#f8f9fa'};border:1px solid ${enT?col+'44':'#dee2e6'};">
+            <span style="flex:1;font-size:0.78em;font-weight:700;color:${enT?col:'#888'};">${esc(tD)}</span>
+            <span style="font-size:0.82em;font-weight:800;min-width:28px;text-align:right;">${pts}</span>
+            ${combateState.esAdmin?`<div style="display:flex;gap:2px;flex-wrap:nowrap;">
+                ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+                    `<button style="font-size:0.58em;padding:1px 3px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
+                        border-radius:3px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
+                        onclick="window._combateDeltaPT('${eq}',${idx},'${esc(tD)}',${dv})">${dv>0?'+':''}${dv}</button>`
+                ).join('')}
+            </div>`:''}</div>`;
+        }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin PT registrados</div>'}
+    </div>
+</div>`;
+
+    // ══ TAB: MEDALLAS ═══════════════════════════════════════
+    const tabMedallas = `
+<div>
+    <div style="font-size:0.75em;color:#888;margin-bottom:8px;">
+        CTL usado: <b style="color:${col};">${ctlUsado}</b> / ${slot.ctl}
+        <span style="margin-left:6px;font-size:0.88em;">(simulación, sin límite)</span>
+    </div>
+    <!-- Panel info medalla -->
+    <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
+        <div id="med-info-content-${eq}-${idx}"></div>
+    </div>
+    <!-- Lista medallas accesibles -->
+    <div style="max-height:420px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
+        ${medallasAcc.map(m=>{
+            const eq2 = medallasEquip.has(String(m.id));
+            const reqs = (m.requisitos_base||[]).map(r=>{
+                const tN=(r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
+                const cumpleTag = tagsActivos.has(tN);
+                const pts2 = slot.pts?.[(r.tag.startsWith('#')?r.tag:'#'+r.tag)]||0;
+                const cumplePts = pts2 >= (r.pts_minimos||0);
+                return {tag:r.tag, pts:pts2, min:r.pts_minimos||0, ok:cumpleTag&&cumplePts};
+            });
+            return `
+        <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;
+            border:1.5px solid ${eq2?col:'#dee2e6'};background:${eq2?pale:'white'};transition:.12s;">
+            <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${eq2?col:'#adb5bd'};
+                background:${eq2?col:'white'};display:flex;align-items:center;justify-content:center;
+                flex-shrink:0;margin-top:1px;cursor:pointer;"
+                onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',${!eq2})">
+                ${eq2?'<span style="color:white;font-size:0.75em;font-weight:900;">✓</span>':''}
+            </div>
+            <div style="flex:1;min-width:0;cursor:pointer;"
+                onclick="window._combateMostrarInfoMedalla('${eq}',${idx},'${m.id}')">
+                <div style="font-size:0.82em;font-weight:700;">${esc(m.nombre)}
+                    <span style="font-size:0.82em;color:#888;font-weight:500;">${m.costo_ctl}C · ${m.tipo||''}</span>
+                </div>
+                <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:3px;">
+                    ${reqs.map(r=>`<span style="font-size:0.65em;padding:1px 5px;border-radius:4px;font-weight:700;
+                        background:${r.ok?'#d5f5e3':'#fdecea'};color:${r.ok?'#1a5e35':'#7b241c'};
+                        border:1px solid ${r.ok?'#a9dfbf':'#f5b7b1'};">
+                        ${esc(r.tag)} ${r.min?r.pts+'/'+r.min:''} ${r.ok?'✓':'✗'}</span>`).join('')}
+                </div>
+            </div>
+        </div>`;
+        }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:16px;">Sin medallas accesibles</div>'}
+    </div>
+    <!-- Dados de medallas equipadas -->
+    ${slot.medallas.length ? `
+    <div style="margin-top:10px;border-top:1px solid #eee;padding-top:8px;">
+        <div style="font-size:0.68em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px;">Dados</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;">
+            ${slot.medallas.map((m,mi)=>{
+                const dado = slot.dados?.[m.id];
+                return `
+            <div style="display:flex;align-items:center;gap:2px;background:#f5eeff;
+                border:1.5px solid #c8a8e9;border-radius:8px;padding:2px 4px;">
+                <span style="font-size:0.65em;font-weight:700;color:#6c3483;max-width:54px;
+                    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;"
+                    onclick="window._combateMostrarInfoMedalla('${eq}',${idx},'${m.id}')"
+                    title="${esc(m.nombre)}">${esc(m.nombre.length>9?m.nombre.slice(0,8)+'…':m.nombre)}</span>
+                <button style="background:none;border:1px solid #c8a8e9;border-radius:3px;font-size:0.62em;
+                    cursor:pointer;padding:0 2px;color:#6c3483;line-height:1.3;"
+                    onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',-1)">▲</button>
+                <input type="number" min="1" max="100" placeholder="🎲"
+                    id="dado-${eq}-${idx}-${esc(m.id)}"
+                    style="width:40px;padding:1px 3px;border:1.5px solid #c8a8e9;border-radius:5px;
+                        font-size:0.75em;text-align:center;font-weight:800;color:#6c3483;background:white;"
+                    value="${dado!==undefined?dado:''}"
+                    onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
+                    oninput="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
+                    onkeydown="window._combateDadoNavKey(event,'${eq}',${idx},${mi})">
+                <button style="background:none;border:1px solid #c8a8e9;border-radius:3px;font-size:0.62em;
+                    cursor:pointer;padding:0 2px;color:#6c3483;line-height:1.3;"
+                    onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',1)">▼</button>
+                <button style="background:none;border:none;color:#6c3483;cursor:pointer;font-size:0.82em;
+                    padding:0 2px;font-weight:900;line-height:1;"
+                    onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',false)">✕</button>
+            </div>`;
+            }).join('')}
+        </div>
+    </div>` : ''}
+</div>`;
+
     wrap.style.display = 'block';
     wrap.innerHTML = `
 <div style="background:white;border:2px solid ${col};border-radius:12px;overflow:hidden;">
+    <!-- Header -->
     <div style="background:${col};color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;">
         <img src="${imgUrl}" onerror="this.src='${fallback}'"
-            style="width:38px;height:38px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.5);">
-        <span style="font-weight:800;font-size:0.95em;flex:1;">✏️ ${esc(slot.nombre)}</span>
-        <button style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;width:26px;height:26px;cursor:pointer;"
+            style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.4);">
+        <span style="font-weight:800;font-size:0.92em;flex:1;">${esc(slot.nombre)}</span>
+        <button style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;
+            width:26px;height:26px;cursor:pointer;font-size:1em;"
             onclick="window._combateToggleSlot('${eq}',${idx})">×</button>
     </div>
-
-    <div style="padding:14px;display:flex;flex-direction:column;gap:16px;">
-
-        <!-- STATS CON DELTAS ENCADENADOS -->
-        <div>
-            <div style="font-size:0.72em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-                <span>Stats — (((Base Δ1) Δ2) Δ3) Δ4) Δ5)</span>
-                ${combateState.esAdmin ? `<button style="font-size:0.85em;padding:3px 12px;background:${col};color:white;border:none;border-radius:5px;cursor:pointer;"
-                    onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
-            </div>
-            <div style="display:flex;flex-direction:column;gap:6px;">
-                ${_statBlock('pot',      'POT',     slot._pj.pot||0)}
-                ${_statBlock('agi',      'AGI',     slot._pj.agi||0)}
-                ${_statBlock('ctl',      'CTL',     slot._pj.ctl||0)}
-            <!-- PV Máx (azul) con sus deltas — calculado a partir de pot/agi/ctl -->
-            ${_statBlock('pv', 'PV Máx', 0, true)}
-
-            ${_statBlock('cambios',  'Camb/T',  0, true)}
-            </div>
-
-            <!-- PV Actual con sus deltas — cuadro verde -->
-            <div style="background:rgba(30,132,73,0.06);border:2px solid rgba(30,132,73,0.4);border-radius:8px;padding:8px 10px;margin-top:6px;">
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
-                    <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">🟢 PV Actual</span>
-                    <input type="number" value="${slot._pvActualManual??''}" placeholder="Vacío=Máx"
-                        style="width:75px;border:2px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;background:#f0fff4;"
-                        id="cb-${eq}-${idx}-pvactual-base"
-                        oninput="window._combatePVActualChange('${eq}',${idx},this.value)">
-                    <span style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.1em;">${slot.pv}</b>
-                        <span style="color:#aaa;">/ ${slot.pvMax}</span></span>
-                </div>
-                <div style="display:flex;gap:3px;">
-                    ${[1,2,3,4,5].map(n=>`
-                    <div style="flex:1;text-align:center;">
-                        <div style="font-size:0.6em;color:#27ae60;margin-bottom:1px;font-weight:700;">Δ${n}</div>
-                        <input type="text" value="${d[`delta_pv_actual_${n}`]||'0'}" placeholder="0"
-                            style="width:100%;border:1px solid #a9dfbf;border-radius:4px;padding:2px 1px;
-                                text-align:center;font-size:0.8em;font-weight:700;color:#27ae60;background:#f0fff4;"
-                            id="cb-${eq}-${idx}-pv_actual-d${n}"
-                            oninput="window._combateRecalcDeltas('${eq}',${idx})">
-                    </div>`).join('')}
-                </div>
-                <!-- Botones rápidos ±PV → afectan solo delta_pv_actual_1 -->
-                <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 0 2px;">
-                    <span style="font-size:0.68em;font-weight:700;color:#555;margin-right:3px;white-space:nowrap;">PVs:</span>
-                    ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
-                        `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
-                            border-radius:4px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
-                            onclick="window._combateDeltaPV('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
-                    ).join('')}
-                </div>
-            </div>
-
-        <!-- TAGS Y PTS -->
-        <div>
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;">
-                <span style="font-size:0.72em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.5px;">Tags y PT</span>
-                ${combateState.esAdmin ? `<button style="font-size:0.72em;padding:3px 10px;background:${col};color:white;border:none;border-radius:6px;cursor:pointer;"
-                    onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>` : ''}
-            </div>
-            <div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
-                <input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"
-                    oninput="window._combateFiltrarCatTags('${eq}',${idx},this.value)">
-                <div id="cat-tags-lista-${eq}-${idx}" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">
-                    ${catalogoTagsArr.map(t => {
-                        const tN = (t.startsWith('#')?t:'#'+t).toLowerCase();
-                        const tiene = tagsActivos.has(tN);
-                        return `<span data-tag="${esc(t)}"
-                            style="cursor:pointer;padding:2px 8px;border-radius:8px;font-size:0.73em;font-weight:700;
-                            background:${tiene?col:'#f1f3f4'};color:${tiene?'white':'#495057'};
-                            border:1.5px solid ${tiene?col:'#dee2e6'};"
-                            onclick="window._combateToggleTag('${eq}',${idx},'${esc(t)}')">${esc(t)}</span>`;
-                    }).join('')}
-                </div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:3px;max-height:230px;overflow-y:auto;">
-                ${Object.entries(slot.pts||{}).sort((a,b)=>b[1]-a[1]).map(([tag,pts])=>{
-                    const tD = tag.startsWith('#')?tag:'#'+tag;
-                    const enT = tagsActivos.has(tD.toLowerCase());
-                    return `
-                <div style="display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:6px;
-                    background:${enT?pale:'#f8f9fa'};border:1px solid ${enT?col+'44':'#dee2e6'};">
-                    <span style="flex:1;font-size:0.78em;font-weight:700;color:${enT?col:'#888'};">${esc(tD)}</span>
-                    <span style="font-size:0.82em;font-weight:800;min-width:28px;text-align:right;">${pts}</span>
-                    ${combateState.esAdmin?`<div style="display:flex;gap:2px;flex-wrap:nowrap;">
-                        ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
-                            `<button style="font-size:0.58em;padding:1px 3px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
-                                border-radius:3px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
-                                onclick="window._combateDeltaPT('${eq}',${idx},'${esc(tD)}',${dv})">${dv>0?'+':''}${dv}</button>`
-                        ).join('')}
-                    </div>`:''}</div>`;
-                }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:10px;">Sin PT registrados</div>'}
-            </div>
-        </div>
-
-        <!-- MEDALLAS -->
-        <div>
-            <div style="font-size:0.72em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">
-                Medallas — CTL ${ctlUsado}/${slot.ctl}
-                <span style="font-size:0.85em;font-weight:500;color:#aaa;text-transform:none;">(simulación, sin límite)</span>
-            </div>
-            <!-- Panel de info de medalla (visible al hacer click en el nombre) -->
-            <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
-                <div id="med-info-content-${eq}-${idx}"></div>
-            </div>
-            <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:2px;">
-                ${medallasAcc.map(m=>{
-                    const eq2 = medallasEquip.has(String(m.id));
-                    // Verificar requisitos base para mostrar estado visual
-                    const reqs = (m.requisitos_base||[]).map(r=>{
-                        const tN=(r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
-                        const cumpleTag = tagsActivos.has(tN);
-                        const pts2 = slot.pts?.[(r.tag.startsWith('#')?r.tag:'#'+r.tag)]||0;
-                        const cumplePts = pts2 >= (r.pts_minimos||0);
-                        return {tag:r.tag, pts:pts2, min:r.pts_minimos||0, ok:cumpleTag&&cumplePts};
-                    });
-                    return `
-                <div style="display:flex;align-items:flex-start;gap:6px;padding:5px 7px;border-radius:7px;
-                    border:1.5px solid ${eq2?col:'#dee2e6'};background:${eq2?pale:'white'};
-                    transition:.12s;">
-                    <!-- Checkbox (toggle equip) -->
-                    <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${eq2?col:'#adb5bd'};
-                        background:${eq2?col:'white'};display:flex;align-items:center;justify-content:center;
-                        flex-shrink:0;margin-top:1px;cursor:pointer;"
-                        onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',${!eq2})">
-                        ${eq2?'<span style="color:white;font-size:0.75em;font-weight:900;">✓</span>':''}
-                    </div>
-                    <!-- Info del nombre/efecto — click abre panel info -->
-                    <div style="flex:1;min-width:0;cursor:pointer;"
-                        onclick="window._combateMostrarInfoMedalla('${eq}',${idx},'${m.id}')">
-                        <div style="font-size:0.82em;font-weight:700;">${esc(m.nombre)}
-                            <span style="font-size:0.82em;color:#888;font-weight:500;">${m.costo_ctl}C · ${m.tipo||''}</span>
-                        </div>
-                        <div style="font-size:0.73em;color:#555;margin-top:2px;line-height:1.4;">${renderMarkup(m.efecto_desc||'')}</div>
-                        <!-- Requisitos mini-badge -->
-                        <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px;">
-                            ${reqs.map(r=>`<span style="font-size:0.65em;padding:1px 5px;border-radius:4px;font-weight:700;
-                                background:${r.ok?'#d5f5e3':'#fdecea'};color:${r.ok?'#1a5e35':'#7b241c'};
-                                border:1px solid ${r.ok?'#a9dfbf':'#f5b7b1'};">
-                                ${esc(r.tag)} ${r.min?r.pts+'/'+r.min:''} ${r.ok?'✓':'✗'}</span>`).join('')}
-                        </div>
-                    </div>
-                </div>`;
-                }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:10px;">Sin medallas accesibles</div>'}
-            </div>
-        </div>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:1.5px solid #e9ecef;background:#fafafa;">
+        ${_tabBtn('stats',   '📊 Stats')}
+        ${_tabBtn('tags',    '🏷 Tags y PT')}
+        ${_tabBtn('medallas','🎖 Medallas' + (slot.medallas.length ? ` (${slot.medallas.length})` : ''))}
+    </div>
+    <!-- Tab content -->
+    <div style="padding:12px;">
+        ${tab==='stats'    ? tabStats    : ''}
+        ${tab==='tags'     ? tabTags     : ''}
+        ${tab==='medallas' ? tabMedallas : ''}
     </div>
 </div>`;
 }
@@ -571,6 +621,14 @@ export function renderCuadroResumen() {
     </div>
 </div>`;
 }
+
+// ── Cambiar tab del slot detalle ──────────────────────────────
+window._combateSetTab = (eq, idx, tabId) => {
+    const slot = combateState[`equipo${eq}`]?.[idx];
+    if (!slot) return;
+    slot._tabActiva = tabId;
+    renderSlotDetalle(eq, idx);
+};
 
 export function refrescarPool()     { const w=$('combate-pool-wrap');    if(w) w.innerHTML=renderPool(); }
 export function refrescarEquipo(eq) { const w=$(`equipo-${eq}-wrap`);   if(w) w.innerHTML=renderEquipo(eq); }
