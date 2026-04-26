@@ -343,10 +343,17 @@ async function _enviar() {
         _renderPendingPreview();
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
 
-        const { imagenes: imgFiles, videos: vidFiles, audios: audFiles } = clasificarArchivos(filesToSend.map(e => e.file));
         const imgEntries = filesToSend.filter(e => isImage(e.file));
         const vidEntries = filesToSend.filter(e => isVideo(e.file));
         const audEntries = filesToSend.filter(e => isAudio(e.file));
+
+        // El texto y el link embed van con el PRIMER medio del lote solamente.
+        // Los demás mensajes se envían sin texto para no duplicarlo.
+        const links = extraerLinks(contenido);
+        const linkUrl = links.length ? links[0] : null;
+        let textoUsado = false;
+        const tomarTexto = () => { if (textoUsado) return null; textoUsado = true; return contenido || null; };
+        const tomarLink  = () => { if (!linkUrl || textoUsado) return null; return linkUrl; };
 
         // Imágenes → un solo mensaje agrupado
         if (imgEntries.length) {
@@ -361,7 +368,7 @@ async function _enviar() {
                 if (res.ok) paths.push(res.imagen.path);
                 else toast(`❌ Error subiendo ${safeName}`, 'error');
             }
-            if (paths.length) await _enviarUnMensaje({ contenido: contenido || null, imagenPaths: paths });
+            if (paths.length) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), imagenPaths: paths });
         }
 
         // Videos → un mensaje por video
@@ -370,7 +377,7 @@ async function _enviar() {
             const base = entry.file.name.replace(/\.[^.]+$/, '') || `video_${Date.now()}`;
             const res = await subirVideoGaleria(entry.file, opState.perfil.id, opState.perfil.nombre, `${base}.${ext}`);
             URL.revokeObjectURL(entry.url);
-            if (res.ok) await _enviarUnMensaje({ contenido: imgEntries.length ? null : (contenido || null), videoPath: res.imagen.path });
+            if (res.ok) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), videoPath: res.imagen.path });
             else toast(`❌ Error subiendo ${base}`, 'error');
         }
 
@@ -378,7 +385,7 @@ async function _enviar() {
         for (const entry of audEntries) {
             const res = await subirAudio(entry.file, opState.perfil.id, opState.perfil.nombre);
             URL.revokeObjectURL(entry.url);
-            if (res.ok) await _enviarUnMensaje({ contenido: (imgEntries.length || vidEntries.length) ? null : (contenido || null), audioPath: res.path });
+            if (res.ok) await _enviarUnMensaje({ contenido: tomarTexto(), linkUrl: tomarLink(), audioPath: res.path });
             else toast(`❌ Error subiendo audio`, 'error');
         }
 
@@ -393,12 +400,12 @@ async function _enviar() {
 
     const links = extraerLinks(contenido);
     if (links.length) {
-        // El primer link se separa como embed; el texto completo (incluyendo el link) queda como contenido
         await _enviarUnMensaje({ contenido, linkUrl: links[0] });
     } else {
         await _enviarUnMensaje({ contenido });
     }
 }
+
 
 async function _enviarUnMensaje({ contenido, imagenPath, imagenPaths, videoPath, audioPath, linkUrl }) {
     if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length) && !videoPath && !audioPath && !linkUrl) return;

@@ -52,10 +52,26 @@ function _renderImgGrid(imagen_path, msgId) {
 function _renderVideo(video_path) {
     if (!video_path) return '';
     const url = imageUrl(video_path);
-    return `<div style="margin-top:4px;">
-        <video src="${esc(url)}" controls preload="metadata" playsinline
-            style="max-width:320px;width:100%;border-radius:10px;display:block;
-                   background:#111;box-shadow:0 2px 12px rgba(0,0,0,0.35);">
+    const nombre = video_path.split('/').pop().replace(/_\d{13}(\.\w+)$/, '$1') || 'video';
+    // ID único para poder acceder al <video> desde el botón PiP
+    const vid = `vid_${Math.random().toString(36).slice(2,8)}`;
+    return `<div style="display:flex;flex-direction:column;
+        background:linear-gradient(135deg,rgba(192,57,43,0.12),rgba(108,52,131,0.08));
+        border:1.5px solid rgba(192,57,43,0.22);border-radius:12px;
+        width:min(340px,100%);min-width:220px;margin-top:4px;overflow:hidden;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px 4px;
+            background:rgba(0,0,0,0.08);">
+            <span style="font-size:1em;flex-shrink:0;">🎬</span>
+            <span style="font-size:0.72em;color:rgba(255,255,255,0.55);overflow:hidden;
+                text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${esc(nombre)}">${esc(nombre)}</span>
+            <button onclick="window._opVideoPiP('${vid}')"
+                title="Picture in Picture"
+                style="background:rgba(192,57,43,0.25);border:1px solid rgba(192,57,43,0.4);
+                    color:rgba(255,255,255,0.8);border-radius:5px;padding:2px 6px;
+                    cursor:pointer;font-size:0.68em;flex-shrink:0;line-height:1.4;">⧉ PiP</button>
+        </div>
+        <video id="${vid}" src="${esc(url)}" controls preload="metadata" playsinline
+            style="width:100%;display:block;background:#000;max-height:220px;object-fit:contain;">
         </video>
     </div>`;
 }
@@ -602,55 +618,92 @@ export function showLightbox(url) {
     showLightboxCarousel([url], 0);
 }
 
-// ── Modal de YouTube ─────────────────────────────────────────
+// ── YouTube: abre en Picture-in-Picture directamente ─────────
+// Crea un <video> oculto cargando el embed de YT, espera que reproduzca,
+// y solicita PiP. Como YT iframes no exponen el <video> interno al padre,
+// usamos un iframe visible mínimo + requestPictureInPicture en el propio iframe.
+// La forma más confiable: abrir el iframe en un mini-player flotante arrastrable
+// que el usuario puede minimizar o mover mientras escribe.
 window._opAbrirYTModal = (embedUrl, linkUrl) => {
-    let modal = document.getElementById('op-yt-modal');
-    if (modal) modal.remove();
+    // Si ya hay un mini-player para este video, traerlo al frente
+    const existing = document.getElementById('op-yt-pip');
+    if (existing) { existing.style.display = 'flex'; return; }
 
-    modal = document.createElement('div');
-    modal.id = 'op-yt-modal';
-    modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
-        z-index:99999;display:flex;flex-direction:column;align-items:center;
-        justify-content:center;padding:20px;backdrop-filter:blur(6px);`;
+    const pip = document.createElement('div');
+    pip.id = 'op-yt-pip';
+    pip.style.cssText = `position:fixed;bottom:80px;right:20px;
+        width:min(420px,90vw);z-index:99990;
+        border-radius:14px;overflow:hidden;
+        box-shadow:0 8px 40px rgba(0,0,0,0.7);
+        display:flex;flex-direction:column;
+        background:#0d0d0d;border:1.5px solid rgba(192,57,43,0.4);
+        resize:both;`;
 
-    const inner = document.createElement('div');
-    inner.style.cssText = `position:relative;width:min(860px,95vw);`;
+    // Barra de título arrastrable
+    const bar = document.createElement('div');
+    bar.style.cssText = `display:flex;align-items:center;justify-content:space-between;
+        padding:6px 10px;background:rgba(192,57,43,0.2);cursor:move;user-select:none;
+        border-bottom:1px solid rgba(255,255,255,0.08);flex-shrink:0;`;
+    bar.innerHTML = `<span style="font-size:0.72em;color:rgba(255,255,255,0.6);overflow:hidden;
+        text-overflow:ellipsis;white-space:nowrap;flex:1;">▶ YouTube</span>
+        <div style="display:flex;gap:6px;">
+            <button id="op-yt-pip-min" title="Minimizar"
+                style="background:rgba(255,255,255,0.1);border:none;color:rgba(255,255,255,0.7);
+                border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:0.8em;">─</button>
+            <button id="op-yt-pip-close" title="Cerrar"
+                style="background:rgba(192,57,43,0.5);border:none;color:white;
+                border-radius:4px;width:22px;height:22px;cursor:pointer;font-size:0.8em;">✕</button>
+        </div>`;
 
     const iframe = document.createElement('iframe');
     iframe.src = embedUrl;
     iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
     iframe.allowFullscreen = true;
-    iframe.style.cssText = `width:100%;aspect-ratio:16/9;border:none;border-radius:12px;
-        display:block;box-shadow:0 8px 40px rgba(0,0,0,0.6);`;
+    iframe.style.cssText = `width:100%;aspect-ratio:16/9;border:none;display:block;`;
 
-    const btnClose = document.createElement('button');
-    btnClose.textContent = '✕';
-    btnClose.style.cssText = `position:absolute;top:-14px;right:-14px;width:32px;height:32px;
-        border-radius:50%;background:#c0392b;border:none;color:white;font-size:1em;
-        cursor:pointer;display:flex;align-items:center;justify-content:center;
-        box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:1;`;
-    btnClose.onclick = () => modal.remove();
+    pip.appendChild(bar);
+    pip.appendChild(iframe);
+    document.body.appendChild(pip);
 
-    const linkEl = document.createElement('a');
-    linkEl.href   = linkUrl;
-    linkEl.target = '_blank';
-    linkEl.rel    = 'noopener noreferrer';
-    linkEl.textContent = linkUrl;
-    linkEl.style.cssText = `color:rgba(255,255,255,0.4);font-size:0.7em;margin-top:10px;
-        text-decoration:none;word-break:break-all;max-width:min(860px,95vw);text-align:center;`;
-    linkEl.onmouseover = () => linkEl.style.color = 'rgba(255,255,255,0.75)';
-    linkEl.onmouseout  = () => linkEl.style.color = 'rgba(255,255,255,0.4)';
+    // Botones
+    pip.querySelector('#op-yt-pip-close').onclick = () => pip.remove();
+    let minimized = false;
+    pip.querySelector('#op-yt-pip-min').onclick = () => {
+        minimized = !minimized;
+        iframe.style.display = minimized ? 'none' : 'block';
+        pip.querySelector('#op-yt-pip-min').textContent = minimized ? '□' : '─';
+    };
 
-    inner.appendChild(iframe);
-    inner.appendChild(btnClose);
-    modal.appendChild(inner);
-    modal.appendChild(linkEl);
-    modal.onclick = e => { if (e.target === modal) modal.remove(); };
-
-    const onKey = e => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } };
-    document.addEventListener('keydown', onKey);
-    document.body.appendChild(modal);
+    // Drag
+    let ox = 0, oy = 0, dragging = false;
+    bar.onmousedown = e => {
+        dragging = true;
+        ox = e.clientX - pip.getBoundingClientRect().left;
+        oy = e.clientY - pip.getBoundingClientRect().top;
+        e.preventDefault();
+    };
+    document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        pip.style.right  = 'auto';
+        pip.style.bottom = 'auto';
+        pip.style.left   = (e.clientX - ox) + 'px';
+        pip.style.top    = (e.clientY - oy) + 'px';
+    });
+    document.addEventListener('mouseup', () => { dragging = false; });
 };
 
-// Compatibilidad con mensajes viejos que usaban _opExpandirYT
+// Alias legacy
 window._opExpandirYT = (_card, embedUrl) => window._opAbrirYTModal(embedUrl, embedUrl);
+
+// PiP nativo para videos subidos (op-chat storage)
+window._opVideoPiP = async (videoId) => {
+    const vid = document.getElementById(videoId);
+    if (!vid) return;
+    try {
+        await vid.play();
+        await vid.requestPictureInPicture();
+    } catch(e) {
+        // Fallback: si PiP no está soportado, solo reproducir
+        vid.play();
+    }
+};
