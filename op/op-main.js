@@ -18,6 +18,7 @@ import { mountMarkupAC } from './op-markup.js';
 
 const $ = id => document.getElementById(id);
 let _pendingImgId = null;
+let _pasteFile    = null;
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initOP() {
@@ -183,6 +184,70 @@ function _mountInput() {
             window._opEnviar();
         }
     });
+
+    // Ctrl+V con imagen en portapapeles
+    ta.addEventListener('paste', async e => {
+        const items = Array.from(e.clipboardData?.items || []);
+        const imgItem = items.find(it => it.type.startsWith('image/'));
+        if (!imgItem) return; // texto normal, dejar pasar
+
+        e.preventDefault();
+        const file = imgItem.getAsFile();
+        if (!file) return;
+
+        _mostrarPreviaPortapapeles(file);
+    });
+
+    // También capturar paste global (cuando el foco no está en el textarea)
+    document.addEventListener('paste', async e => {
+        if (e.target === ta) return; // ya lo maneja el listener de arriba
+        const items = Array.from(e.clipboardData?.items || []);
+        const imgItem = items.find(it => it.type.startsWith('image/'));
+        if (!imgItem) return;
+        e.preventDefault();
+        const file = imgItem.getAsFile();
+        if (!file) return;
+        _mostrarPreviaPortapapeles(file);
+    });
+}
+
+// ── Preview de imagen pegada desde portapapeles ───────────────
+function _mostrarPreviaPortapapeles(file) {
+    // Limpiar preview anterior si existe
+    $('op-paste-preview')?.remove();
+    $('op-file-preview')?.remove();
+    $('op-img-preview')?.remove();
+
+    const url  = URL.createObjectURL(file);
+    const wrap = $('op-input-wrap');
+    if (!wrap) return;
+
+    const prev = document.createElement('div');
+    prev.id = 'op-paste-preview';
+    prev.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 12px;
+        background:rgba(108,52,131,0.15);border-radius:10px;margin-bottom:4px;
+        border:1.5px dashed rgba(108,52,131,0.4);`;
+    prev.innerHTML = `
+        <img src="${url}" style="height:56px;max-width:80px;border-radius:6px;object-fit:cover;border:1px solid rgba(108,52,131,0.3);">
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:0.78em;color:#6c3483;font-weight:700;">📋 Imagen del portapapeles</div>
+            <div style="font-size:0.7em;color:rgba(108,52,131,0.6);margin-top:2px;">${(file.size/1024).toFixed(0)} KB · ${file.type}</div>
+        </div>
+        <button id="op-paste-cancel"
+            style="background:none;border:none;color:rgba(108,52,131,0.5);cursor:pointer;font-size:1.2em;padding:2px 4px;"
+            title="Cancelar">✕</button>`;
+
+    wrap.insertAdjacentElement('beforebegin', prev);
+
+    prev.querySelector('#op-paste-cancel').onclick = () => {
+        URL.revokeObjectURL(url);
+        prev.remove();
+        _pasteFile = null;
+    };
+
+    _pasteFile = file;
+    // Dar foco al textarea para que el usuario pueda escribir caption si quiere
+    $('op-msg-input')?.focus();
 }
 
 // ── Enviar mensaje ────────────────────────────────────────────
@@ -200,6 +265,24 @@ async function _enviar() {
         imagenPath = img?.path || null;
         _pendingImgId = null;
         $('op-img-preview')?.remove();
+    }
+
+    // Imagen desde portapapeles (Ctrl+V)
+    if (_pasteFile) {
+        const file = _pasteFile;
+        _pasteFile = null;
+        $('op-paste-preview')?.remove();
+        const res = await subirImagenGaleria(
+            file, opState.perfil.id, opState.perfil.nombre,
+            `paste_${Date.now()}`
+        );
+        if (res.ok) {
+            imagenPath = res.imagen.path;
+            await _cargarGaleria();
+            renderGaleria();
+        } else {
+            toast('❌ Error al subir imagen pegada', 'error');
+        }
     }
 
     // Imagen desde archivo
