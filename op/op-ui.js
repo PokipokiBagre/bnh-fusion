@@ -347,15 +347,8 @@ window._opVerGaleriaMensaje = (msgId, idx) => {
     if (!imgs.length) return;
     showLightboxCarousel(imgs, idx);
 };
-    let lb = $('op-lightbox');
-    if (!lb) {
-        lb = document.createElement('div');
-        lb.id = 'op-lightbox';
-        lb.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;
-            display:flex;align-items:center;justify-content:center;cursor:zoom-out;
-            backdrop-filter:blur(4px);`;
-        lb.onclick = () => lb.remove();
-        document.body.appendChild(lb);
-    }
-    lb.innerHTML = `<img src="${esc(url)}" style="max-width:90vw;max-height:90vh;
-        border-radius:8px;box-shadow:0 0 60px rgba(108,52,131,0.5);">`;
+
+// ── Lightbox simple (imagen única) ───────────────────────────
+export function showLightbox(url) {
+    showLightboxCarousel([url], 0);
+}
