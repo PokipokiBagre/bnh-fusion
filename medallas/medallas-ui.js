@@ -1,6 +1,6 @@
 // medallas/medallas-ui.js
 import { medallaState, medallas, grupos, puntosAll, STORAGE_URL, norm } from './medallas-state.js';
-import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ, proyectarPJ } from './medallas-logic.js';
+import { filtrarMedallas, estadoMedallaPJ, efectosActivosPJ, getPuntosPJ, proyectarPJ, calcCtlUsadoProyectado } from './medallas-logic.js';
 import { renderMarkup, initMarkupTextarea } from '../bnh-markup.js';
 import { sugerirTags } from '../bnh-tags.js';
 import { initBloques, updateBloques, clearBloques } from './bloques.js';
@@ -684,7 +684,7 @@ export function renderPersonaje() {
         const gEq    = grupos.find(x => x.nombre_refinado === pj);
         const ctl    = proy.ctl; // ⚡ USAMOS CTL PROYECTADO
         const equipados = medallaState.equipacion || [];
-        const ctlUsado  = equipados.reduce((s, m) => s + (m.costo_ctl||0), 0);
+        const { base: ctlUsadoBase, total: ctlUsado } = calcCtlUsadoProyectado(equipados, gEq);
 
         // ── Datos para el Resumen reactivo ─────────────────────────
         const pot = proy.pot; // ⚡ USAMOS POT PROYECTADO
@@ -758,7 +758,11 @@ export function renderPersonaje() {
                     <div style="background:#f0fff4;border:1px solid #27ae60;border-radius:6px;padding:6px 2px;text-align:center;display:flex;flex-direction:column;align-items:center;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
                         <div style="font-size:0.6em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px;">CTL</div>
                         <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
-                            ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl + ctlUsado + ' / ')}
+                            ${_fmtDChain(proy.ctl_chain_base, ctl, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_'+n]), iconCtl)}
+                        </div>
+                        <div style="font-size:0.75em;font-weight:700;color:${colorCtlTxt};margin-top:4px;width:100%;">
+                            ${_fmtDChain(ctlUsadoBase, ctlUsado, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_usado_'+n]), '🛡 ')}
+                            <div style="font-size:0.85em;color:#aaa;text-align:center;">usado / ${ctl}</div>
                         </div>
                     </div>
                 </div>

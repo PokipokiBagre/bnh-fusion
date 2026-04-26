@@ -8,6 +8,17 @@ import { aplicarDelta } from '../bnh-pac.js';
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 export const normTag = t => (t||'').trim().startsWith('#') ? t.trim().toLowerCase() : '#' + t.trim().toLowerCase();
 
+// Calcula el CTL usado por medallas equipadas aplicando los delta_ctl_usado_* del grupo
+export function calcCtlUsadoProyectado(medallasEquipadas, grupoRaw) {
+    const base = (medallasEquipadas || []).reduce((s, m) => s + (Number(m.costo_ctl) || 0), 0);
+    if (!grupoRaw) return { base, total: base };
+    let acc = base;
+    for (let n = 1; n <= 5; n++) {
+        acc = aplicarDelta(acc, grupoRaw[`delta_ctl_usado_${n}`]);
+    }
+    return { base, total: acc };
+}
+
 // Helper interno para aplicar de 1 a 5 deltas en cadena respetando el orden matemático
 function aplicarDeltas(base, d1, d2, d3, d4, d5) {
     let acc = base;

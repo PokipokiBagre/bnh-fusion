@@ -179,7 +179,9 @@ function _exponerGlobales() {
 
                 // --- 2. VALIDACIÓN DE LÍMITE DE CTL (Usando Lente de Fusión) ---
                 const proy = proyectarPJ(medallaState.pjSeleccionado);
-                const ctlUsado = eq.reduce((a, b) => a + (Number(b.costo_ctl) || 0), 0);
+                const { proyectarPJ: _pj2, calcCtlUsadoProyectado } = await import('./medallas-logic.js');
+                const gRaw = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
+                const { total: ctlUsado } = calcCtlUsadoProyectado(eq, gRaw);
                 
                 if (ctlUsado + (Number(m.costo_ctl) || 0) > proy.ctl) {
                     toast('❌ No tienes suficiente CTL (Incluso con la fusión activa)', 'error');
@@ -208,14 +210,18 @@ function _exponerGlobales() {
         if (!medallaState.pjSeleccionado) { toast('Selecciona un personaje primero', 'error'); return; }
         
         // ⚡ LENTE DE FUSIÓN: Leemos el CTL Proyectado en lugar de la base de datos estática
-        const { proyectarPJ } = await import('./medallas-logic.js');
+        const { proyectarPJ, calcCtlUsadoProyectado } = await import('./medallas-logic.js');
         const proy = proyectarPJ(medallaState.pjSeleccionado);
         const ctl = proy ? proy.ctl : 0;
+        const gRaw = grupos.find(x => x.nombre_refinado === medallaState.pjSeleccionado);
 
         let ctlAcum = 0;
         const validas = (medallaState.equipacion || []).filter(m => {
-            const cabe = (ctlAcum + (m.costo_ctl||0)) <= ctl;
-            if (cabe) ctlAcum += (m.costo_ctl||0);
+            // Simular el acumulado con deltas para cada subset
+            const subset = (medallaState.equipacion || []).slice(0, (medallaState.equipacion || []).indexOf(m) + 1);
+            const { total: ctlConDelta } = calcCtlUsadoProyectado(subset, gRaw);
+            const cabe = ctlConDelta <= ctl;
+            if (cabe) ctlAcum = ctlConDelta;
             return cabe;
         });
 
