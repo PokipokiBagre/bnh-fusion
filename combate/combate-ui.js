@@ -55,6 +55,12 @@ export function recalcSlot(slot) {
         aplicarDeltas(pvBase,
             d.delta_pv_actual_1, d.delta_pv_actual_2, d.delta_pv_actual_3,
             d.delta_pv_actual_4, d.delta_pv_actual_5));
+
+    // CTL Usado: costo de medallas equipadas + deltas
+    const ctlUsadoPuro = calcCTLUsado(slot.medallas);
+    slot.ctlUsado = aplicarDeltas(ctlUsadoPuro,
+        d.delta_ctl_usado_1, d.delta_ctl_usado_2, d.delta_ctl_usado_3,
+        d.delta_ctl_usado_4, d.delta_ctl_usado_5);
 }
 
 // ── Render raíz ───────────────────────────────────────────────
@@ -289,8 +295,10 @@ export function renderSlotDetalle(eq, idx) {
     // ── Bloque stat con deltas ────────────────────────────────
     const _statBlock = (key, lbl, baseVal, isAuto=false, accentColor=col, bg='#f8f9fa', border='#e9ecef', extraHTML='') => {
         const deltas = [1,2,3,4,5].map(n => d[`delta_${key}_${n}`]||'0');
-        const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv' }[key] || key;
-        const result = slot[resultKey] ?? '?';
+        const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv', ctl_usado:'ctlUsado' }[key] || key;
+        const result = key === 'ctl_usado'
+            ? (slot.ctlUsado ?? 0) + ' / ' + slot.ctl
+            : (slot[resultKey] ?? '?');
         return `
 <div style="background:${bg};border-radius:8px;padding:7px 10px;border:1.5px solid ${border};">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
@@ -349,6 +357,7 @@ export function renderSlotDetalle(eq, idx) {
         </div>
     `)}
     ${_statBlock('cambios', 'Camb/T', 0, true, '#1e8449', '#f0faf4', '#a9dfbf')}
+    ${_statBlock('ctl_usado', '🛡 CTL Usd', 0, true, '#4a235a', '#f5eeff', '#c39bd3')}
 
     <div style="background:#f0fff4;border:2px solid #27ae60;border-radius:8px;padding:7px 10px;">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
