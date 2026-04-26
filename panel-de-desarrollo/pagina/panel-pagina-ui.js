@@ -22,6 +22,7 @@ const IMAGENES_INDEX = [
     { key: 'fusion',       archivo: 'fusion.png',       label: 'Tarjeta Fusión',       zona: 'Grid principal → Fusión' },
     { key: 'combate',      archivo: 'combate.png',      label: 'Tarjeta Combate',      zona: 'Grid principal → Combate' },
     { key: 'panel-dev',    archivo: 'panel-dev.png',    label: 'Tarjeta Panel Máster', zona: 'Grid principal → Panel Máster (solo OP)' },
+    { key: 'op-chat',    archivo: 'op-chat.png',        label: 'Tarjeta OP Chat',      zona: 'Grid principal → OP Chat (solo OP)' },
     { key: 'no_encontrado',archivo: 'no_encontrado.png',label: 'Imagen "No encontrado"', zona: 'Fallback cuando falta una imagen' },
 ];
 
