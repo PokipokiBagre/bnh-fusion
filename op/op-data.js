@@ -54,14 +54,24 @@ export async function cargarMensajes(convId, limit = 60) {
     return (data || []).reverse();
 }
 
-export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath }) {
-    const tipo = contenido && imagenPath ? 'mixto' : imagenPath ? 'imagen' : 'texto';
+export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths }) {
+    // imagenPaths: string[] para múltiples imágenes
+    // imagenPath: string para compatibilidad con mensajes existentes
+    let pathValue = null;
+    if (imagenPaths && imagenPaths.length > 1) {
+        pathValue = JSON.stringify(imagenPaths); // guardar como JSON array
+    } else if (imagenPaths && imagenPaths.length === 1) {
+        pathValue = imagenPaths[0];
+    } else if (imagenPath) {
+        pathValue = imagenPath;
+    }
+    const tipo = contenido && pathValue ? 'mixto' : pathValue ? 'imagen' : 'texto';
     const { data, error } = await supabase.from('op_mensajes').insert({
         conversacion_id: convId,
         autor_id:        autorId,
         autor_nombre:    autorNombre,
         contenido:       contenido || null,
-        imagen_path:     imagenPath || null,
+        imagen_path:     pathValue || null,
         tipo,
     }).select('*').single();
     return error ? null : data;
@@ -71,7 +81,11 @@ export async function eliminarMensaje(id) {
     const { data: msg } = await supabase.from('op_mensajes')
         .select('imagen_path').eq('id', id).maybeSingle();
     if (msg?.imagen_path) {
-        await supabase.storage.from(BUCKET).remove([msg.imagen_path]);
+        // Puede ser una sola ruta o un JSON array
+        let paths = [];
+        try { paths = JSON.parse(msg.imagen_path); if (!Array.isArray(paths)) paths = [msg.imagen_path]; }
+        catch { paths = [msg.imagen_path]; }
+        if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
     }
     await supabase.from('op_mensajes').delete().eq('id', id);
 }
