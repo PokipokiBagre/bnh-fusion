@@ -878,7 +878,7 @@ export async function generarImagenCuadro() {
     if (!actA.length && !actB.length) { toast('Sin personajes', 'error'); return null; }
 
     const SCALE = 2;
-    const PAD = 20, ROW_H = 36, COL_LBL = 120, COL_W = 120, IMG_R = 14;
+    const PAD = 20, ROW_H = 44, COL_LBL = 120, COL_W = 130, IMG_R = 14;
     const todos = [...actA, ...actB];
     const stats = [
         {lbl:'PVs',      fmt:s=>`${s.pv}/${s.pvMax}`},
@@ -959,6 +959,37 @@ export async function generarImagenCuadro() {
         cx += COL_W;
     });
 
+    // Helper: draw colored badge pill on canvas
+    const _drawBadge = (ctx, text, cx, cy) => {
+        const s = String(text).trim();
+        const isNeg = s.startsWith('-') || s.startsWith('/');
+        const isMul = s.startsWith('x') || s.startsWith('X') || s.startsWith('*');
+        const isPow = s.startsWith('^');
+        let bg, border, fg;
+        if (isNeg)      { bg='#fdecea'; border='#ef9a9a'; fg='#c0392b'; }
+        else if (isMul) { bg='#f3e5f5'; border='#ce93d8'; fg='#6a1b9a'; }
+        else if (isPow) { bg='#fce4ec'; border='#f48fb1'; fg='#ad1457'; }
+        else            { bg='#e3f2fd'; border='#90caf9'; fg='#1565c0'; }
+
+        ctx.font = `700 8px 'Inter',sans-serif`;
+        const tw = ctx.measureText(s).width;
+        const pw = tw + 8, ph = 13, r = 3;
+        const bx = cx - pw/2, by = cy - ph/2;
+
+        // Background
+        ctx.fillStyle = bg;
+        _rrect(ctx, bx, by, pw, ph, r); ctx.fill();
+        // Border
+        ctx.strokeStyle = border; ctx.lineWidth = 1;
+        _rrect(ctx, bx, by, pw, ph, r); ctx.stroke();
+        // Text
+        ctx.fillStyle = fg;
+        ctx.textAlign = 'center';
+        ctx.fillText(s, cx, by + ph/2 + 3);
+
+        return pw + 3; // return width + gap for next badge
+    };
+
     // Filas stats
     stats.forEach((st, ri) => {
         const y = ROW0_Y + ROW_H * (ri + 1);
@@ -977,27 +1008,41 @@ export async function generarImagenCuadro() {
             const isA = actA.includes(s);
             ctx.fillStyle = isA ? (alt?'#dbeafe':'#bfdbfe') : (alt?'#fde8e8':'#fecaca');
             _rrect(ctx, vcx+2, y, COL_W-4, ROW_H, 4); ctx.fill();
-            ctx.fillStyle = '#1e293b';
-            ctx.font = `600 12px 'Inter',sans-serif`;
-            ctx.textAlign = 'center';
+
             const val = st.fmt(s);
-            // Get delta badges as plain text for this stat
-            const deltaKey = {PVs:null,POT:'pot',AGI:'agi','CTL Usd':'ctl',Camb:'cambios'}[st.lbl];
-            let deltasTxt = '';
-            if (deltaKey && s._d) {
-                const activos = [1,2,3,4,5].map(n=>s._d[`delta_${deltaKey}_${n}`]||'0').filter(d=>d&&d!=='0');
-                if (activos.length) deltasTxt = ' [' + activos.join(' ') + ']';
-            }
-            const cellText = val + deltasTxt;
-            // If text fits on one line draw it, else split val and deltas
-            if (ctx.measureText(cellText).width <= COL_W - 12) {
-                ctx.fillText(cellText, vcx + COL_W/2, y + ROW_H/2 + 4);
+            const deltaKeyMap = {'POT':'pot','AGI':'agi','CTL Usd':'ctl','Camb/T':'cambios'};
+            const deltaKey = deltaKeyMap[st.lbl];
+            const deltas = deltaKey && s._d
+                ? [1,2,3,4,5].map(n=>s._d[`delta_${deltaKey}_${n}`]||'0').filter(d=>d&&d!=='0')
+                : [];
+
+            if (!deltas.length) {
+                // Simple: just center the value
+                ctx.fillStyle = '#1e293b';
+                ctx.font = `600 12px 'Inter',sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(val, vcx + COL_W/2, y + ROW_H/2 + 4);
             } else {
-                ctx.font = `600 11px 'Inter',sans-serif`;
-                ctx.fillText(val, vcx + COL_W/2, y + ROW_H/2 - 4);
-                ctx.font = `500 9px 'Inter',sans-serif`;
-                ctx.fillStyle = '#64748b';
-                ctx.fillText(deltasTxt.trim(), vcx + COL_W/2, y + ROW_H/2 + 10);
+                // Value on top, badges row below
+                ctx.fillStyle = '#1e293b';
+                ctx.font = `700 11px 'Inter',sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.fillText(val, vcx + COL_W/2, y + 11);
+
+                // Draw badges centered in lower half
+                const totalW = deltas.reduce((acc, d) => {
+                    ctx.font = `700 8px 'Inter',sans-serif`;
+                    return acc + ctx.measureText(String(d).trim()).width + 8 + 3;
+                }, -3);
+                let bx = vcx + COL_W/2 - totalW/2;
+                deltas.forEach(d => {
+                    ctx.font = `700 8px 'Inter',sans-serif`;
+                    const tw = ctx.measureText(String(d).trim()).width;
+                    const bw = tw + 8;
+                    bx += bw/2;
+                    bx += _drawBadge(ctx, d, bx, y + ROW_H - 10);
+                    bx -= bw/2; // already advanced by _drawBadge return
+                });
             }
             vcx += COL_W;
         });
