@@ -209,13 +209,16 @@ window._combateRecalcDeltas = (eq, idx) => {
     refrescarCuadro();
 
     // Actualizar displays de resultado sin re-renderizar todo el detalle para no perder foco
-    const statMap = { pot:'pot', agi:'agi', ctl:'ctl', pv:'pvMax', cambios:'cambios', pv_actual:'pv' };
+    const statMap = { pot:'pot', agi:'agi', ctl:'ctl', pv:'pvMax', cambios:'cambios', pv_actual:'pv', ctl_usado:'ctlUsado' };
     Object.entries(statMap).forEach(([key, slotKey]) => {
         const resultEl = document.getElementById(`cb-${eq}-${idx}-${key}-result`);
         if (resultEl) {
             if (key === 'pv_actual') {
                 // Caso especial para el recuadro de PV actual que muestra act / max
                 resultEl.innerHTML = `→ <b style="color:#1e8449;font-size:1.1em;">${slot[slotKey]}</b> <span style="color:#aaa;">/ ${slot.pvMax}</span>`;
+            } else if (key === 'ctl_usado') {
+                // Caso especial: muestra ctlUsado / ctl
+                resultEl.innerHTML = `→ <b style="color:#4a235a;font-size:1.1em;">${slot.ctlUsado} / ${slot.ctl}</b>`;
             } else {
                 // Modificar sólo el interior de la etiqueta <b> que contiene el número para mantener el color
                 const bEl = resultEl.querySelector('b');
