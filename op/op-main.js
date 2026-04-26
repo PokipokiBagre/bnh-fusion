@@ -7,7 +7,7 @@ import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
     cargarMensajes, enviarMensaje, eliminarMensaje,
-    cargarImagenesGaleria, subirImagenGaleria, eliminarImagenGaleria,
+    cargarImagenesGaleria, subirImagenGaleria, subirVideoGaleria, eliminarImagenGaleria,
     subirAvatarOP, suscribirMensajes
 } from './op-data.js';
 import {
@@ -236,23 +236,28 @@ function _renderPendingPreview() {
     panel.innerHTML = '';
 
     _pendingFiles.forEach((entry) => {
-        const isImg = entry.file.type.startsWith('image/');
-        const kb    = (entry.file.size / 1024).toFixed(0);
-        const label = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
+        const isImg   = entry.file.type.startsWith('image/');
+        const isVid   = entry.file.type.startsWith('video/');
+        const kb      = (entry.file.size / 1024).toFixed(0);
+        const label   = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
 
         const card = document.createElement('div');
         card.style.cssText = `position:relative;display:flex;flex-direction:column;align-items:center;
             gap:4px;background:white;border-radius:8px;padding:6px;
-            border:1px solid rgba(108,52,131,0.25);width:88px;box-sizing:border-box;`;
+            border:1px solid ${isVid ? 'rgba(192,57,43,0.35)' : 'rgba(108,52,131,0.25)'};width:88px;box-sizing:border-box;`;
 
         card.innerHTML = `
             ${isImg
                 ? `<img src="${entry.url}" style="width:76px;height:60px;object-fit:cover;border-radius:5px;">`
+                : isVid
+                ? `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
+                    justify-content:center;font-size:1.8em;background:#fdecea;border-radius:5px;gap:2px;">
+                    🎬<span style="font-size:0.3em;color:#c0392b;font-weight:700;">VIDEO</span></div>`
                 : `<div style="width:76px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:#f5eeff;border-radius:5px;">📄</div>`}
-            <div style="font-size:0.6em;color:#6c3483;text-align:center;line-height:1.3;
+            <div style="font-size:0.6em;color:${isVid ? '#c0392b' : '#6c3483'};text-align:center;line-height:1.3;
                 width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                title="${label}">${entry.source === 'paste' ? '📋 ' : '📎 '}${label}</div>
-            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${kb} KB</div>
+                title="${label}">${entry.source === 'paste' ? '📋 ' : isVid ? '🎬 ' : '📎 '}${label}</div>
+            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${kb > 1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB'}</div>
             <button data-uid="${entry.id}" style="position:absolute;top:-6px;right:-6px;
                 width:18px;height:18px;border-radius:50%;background:#c0392b;border:none;
                 color:white;font-size:0.65em;cursor:pointer;line-height:18px;text-align:center;padding:0;"
@@ -271,8 +276,14 @@ function _renderPendingPreview() {
     const footer = document.createElement('div');
     footer.style.cssText = `width:100%;font-size:0.7em;color:rgba(108,52,131,0.7);
         margin-top:4px;display:flex;justify-content:space-between;align-items:center;`;
+    const nImgs = _pendingFiles.filter(f => !f.file.type.startsWith('video/')).length;
+    const nVids = _pendingFiles.filter(f =>  f.file.type.startsWith('video/')).length;
+    const resumen = [
+        nImgs ? `${nImgs} imagen${nImgs > 1 ? 'es' : ''}` : '',
+        nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : '',
+    ].filter(Boolean).join(' + ');
     footer.innerHTML = `
-        <span>${_pendingFiles.length} imagen${_pendingFiles.length > 1 ? 'es' : ''} · se enviarán en un solo mensaje</span>
+        <span>${resumen} · ${nVids ? 'videos en mensajes separados' : 'en un solo mensaje'}</span>
         <button style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;"
             onclick="window._opLimpiarPendientes()">Limpiar todo</button>`;
     panel.appendChild(footer);
@@ -309,31 +320,43 @@ async function _enviar() {
         $('op-img-preview')?.remove();
     }
 
-    // Si hay archivos pendientes, subir TODOS y enviar en un solo mensaje
+    // Si hay archivos pendientes, separar imágenes de videos
     if (_pendingFiles.length) {
         const filesToSend = [..._pendingFiles];
         _pendingFiles = [];
         _renderPendingPreview();
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
 
-        const paths = [];
-        for (const entry of filesToSend) {
-            const safeName = entry.source === 'paste'
-                ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
-                : entry.file.name.replace(/\.[^.]+$/, '');
-            const res = await subirImagenGaleria(
+        const isVideo = f => f.file.type.startsWith('video/');
+        const imgFiles = filesToSend.filter(f => !isVideo(f));
+        const vidFiles = filesToSend.filter(f => isVideo(f));
+
+        // Imágenes → un solo mensaje agrupado
+        if (imgFiles.length) {
+            const paths = [];
+            for (const entry of imgFiles) {
+                const safeName = entry.source === 'paste'
+                    ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
+                    : entry.file.name.replace(/\.[^.]+$/, '');
+                const res = await subirImagenGaleria(
+                    entry.file, opState.perfil.id, opState.perfil.nombre, safeName
+                );
+                URL.revokeObjectURL(entry.url);
+                if (res.ok) paths.push(res.imagen.path);
+                else toast(`❌ Error subiendo ${safeName}`, 'error');
+            }
+            if (paths.length) await _enviarUnMensaje(contenido || null, null, paths);
+        }
+
+        // Videos → un mensaje separado por cada video
+        for (const entry of vidFiles) {
+            const safeName = entry.file.name.replace(/\.[^.]+$/, '');
+            const res = await subirVideoGaleria(
                 entry.file, opState.perfil.id, opState.perfil.nombre, safeName
             );
             URL.revokeObjectURL(entry.url);
-            if (res.ok) {
-                paths.push(res.imagen.path);
-            } else {
-                toast(`❌ Error subiendo ${safeName}`, 'error');
-            }
-        }
-
-        if (paths.length) {
-            await _enviarUnMensaje(contenido || null, null, paths);
+            if (res.ok) await _enviarUnMensaje(imgFiles.length ? null : (contenido || null), null, null, res.imagen.path);
+            else toast(`❌ Error subiendo ${safeName}`, 'error');
         }
 
         await _cargarGaleria();
@@ -341,14 +364,14 @@ async function _enviar() {
         return;
     }
 
-    // Solo texto (sin imágenes)
+    // Solo texto (sin imágenes ni videos)
     if (!contenido) return;
     if (ta) { ta.value = ''; ta.style.height = 'auto'; }
     await _enviarUnMensaje(contenido, null);
 }
 
-async function _enviarUnMensaje(contenido, imagenPath, imagenPaths) {
-    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length)) return;
+async function _enviarUnMensaje(contenido, imagenPath, imagenPaths, videoPath) {
+    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length) && !videoPath) return;
     const msg = await enviarMensaje({
         convId:      opState.convActual,
         autorId:     opState.perfil.id,
@@ -356,6 +379,7 @@ async function _enviarUnMensaje(contenido, imagenPath, imagenPaths) {
         contenido:   contenido || null,
         imagenPath:  imagenPath || null,
         imagenPaths: imagenPaths || null,
+        videoPath:   videoPath || null,
     });
     if (msg) {
         appendMensaje(msg);
@@ -737,12 +761,14 @@ function _exponerGlobales() {
 
     window._opSubirAGaleria = async () => {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*';
+        input.type = 'file'; input.accept = 'image/*,video/*';
         input.onchange = async () => {
             const file = input.files[0]; if (!file) return;
-            const nombre = prompt('Nombre para esta imagen:', file.name.replace(/\.[^.]+$/, '')) || file.name;
-            const res = await subirImagenGaleria(file, opState.perfil.id, opState.perfil.nombre, nombre);
-            if (res.ok) { await _cargarGaleria(); renderGaleria(); toast('✅ Imagen guardada en galería', 'ok'); }
+            const isVid = file.type.startsWith('video/');
+            const nombre = prompt(`Nombre para este ${isVid ? 'video' : 'imagen'}:`, file.name.replace(/\.[^.]+$/, '')) || file.name;
+            const fn = isVid ? subirVideoGaleria : subirImagenGaleria;
+            const res = await fn(file, opState.perfil.id, opState.perfil.nombre, nombre);
+            if (res.ok) { await _cargarGaleria(); renderGaleria(); toast(`✅ ${isVid ? 'Video' : 'Imagen'} guardado/a en galería`, 'ok'); }
             else toast('❌ ' + res.msg, 'error');
         };
         input.click();
@@ -750,7 +776,7 @@ function _exponerGlobales() {
 
     window._opFileInput = () => {
         const fi = $('op-file-input');
-        if (fi) { fi.value = ''; fi.multiple = true; fi.click(); }
+        if (fi) { fi.value = ''; fi.multiple = true; fi.accept = 'image/*,video/*'; fi.click(); }
     };
 
     // Called by the file input's onchange (set in index.html or here)
