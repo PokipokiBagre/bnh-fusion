@@ -25,19 +25,21 @@ function _renderImgGrid(imagen_path, msgId) {
         return `<img src="${esc(urls[0])}" class="op-msg-img"
             onclick="window._opVerImagen('${esc(urls[0])}')" alt="imagen">`;
     }
-    // Grid para múltiples imágenes (máx 4 visibles, resto en "+N")
-    const visible = urls.slice(0, 4);
-    const resto   = urls.length - 4;
-    const cols    = visible.length <= 2 ? visible.length : 2;
+    // Grid: mostrar máx 4 celdas. Si hay más de 4, la celda 4 muestra +(n-3)
+    const MAX_VISIBLE = 4;
+    const showOverlay = urls.length > MAX_VISIBLE;
+    const visible = showOverlay ? urls.slice(0, MAX_VISIBLE) : urls;
+    const ocultas = urls.length - 3; // cuántas quedan sin ver (las 3 primeras son completas)
+    const cols = visible.length <= 2 ? visible.length : 2;
     const gridStyle = `display:grid;grid-template-columns:repeat(${cols},1fr);gap:3px;border-radius:8px;overflow:hidden;max-width:300px;`;
     const items = visible.map((url, i) => {
-        const isLast = i === 3 && resto > 0;
+        const isOverlay = showOverlay && i === MAX_VISIBLE - 1;
         return `<div style="position:relative;aspect-ratio:1;overflow:hidden;cursor:pointer;"
             onclick="window._opVerGaleriaMensaje('${esc(msgId)}',${i})">
             <img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;">
-            ${isLast ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);
+            ${isOverlay ? `<div style="position:absolute;inset:0;background:rgba(0,0,0,0.55);
                 display:flex;align-items:center;justify-content:center;
-                color:white;font-size:1.4em;font-weight:700;">+${resto}</div>` : ''}
+                color:white;font-size:1.4em;font-weight:700;">+${ocultas}</div>` : ''}
         </div>`;
     }).join('');
     return `<div style="${gridStyle}">${items}</div>`;

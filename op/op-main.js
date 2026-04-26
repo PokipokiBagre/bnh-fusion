@@ -578,10 +578,64 @@ function _exponerGlobales() {
     };
 
     window._opMostrarGaleria = () => {
-        const sel = $('op-img-selector');
-        if (!sel) return;
-        sel.innerHTML = renderSelectorImagenes().replace(/^<div[^>]*>/, '').replace(/<\/div>$/, '');
-        sel.style.display = sel.style.display === 'none' ? 'block' : 'none';
+        // Si ya existe el dropdown lo toggling
+        let dd = $('op-img-selector-dropdown');
+        if (dd) { dd.remove(); return; }
+
+        const allImgs = Object.values(opState.imagenesGaleria).flat();
+        const wrap = $('op-input-wrap');
+        if (!wrap) return;
+
+        dd = document.createElement('div');
+        dd.id = 'op-img-selector-dropdown';
+        dd.style.cssText = `position:absolute;bottom:calc(100% + 8px);left:0;right:0;
+            background:#1a1a2e;border:2px solid #6c3483;border-radius:12px;
+            max-height:260px;overflow-y:auto;padding:12px;z-index:100;
+            box-shadow:0 -4px 20px rgba(0,0,0,0.4);`;
+
+        if (!allImgs.length) {
+            dd.innerHTML = `<div style="color:rgba(255,255,255,0.3);font-size:0.82em;text-align:center;padding:16px;">Sin imágenes en galería</div>`;
+        } else {
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;';
+            header.innerHTML = `<span style="color:#e2d9f3;font-weight:700;font-size:0.85em;">Galería</span>
+                <button id="op-img-selector-close" style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;font-size:1.1em;">✕</button>`;
+            dd.appendChild(header);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;';
+            allImgs.forEach(img => {
+                const cell = document.createElement('div');
+                cell.style.cssText = `cursor:pointer;border-radius:8px;overflow:hidden;border:2px solid transparent;transition:0.15s;`;
+                cell.onmouseover = () => cell.style.borderColor = '#6c3483';
+                cell.onmouseout  = () => cell.style.borderColor = 'transparent';
+                cell.title = img.nombre;
+                cell.innerHTML = `<img src="${img.url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">
+                    <div style="font-size:0.6em;color:rgba(255,255,255,0.6);padding:2px 4px;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#0d1117;">
+                        ${img.nombre}
+                    </div>`;
+                cell.onclick = () => { window._opSeleccionarImg(img.id); dd.remove(); };
+                grid.appendChild(cell);
+            });
+            dd.appendChild(grid);
+        }
+
+        // Posicionar relativo al wrap del input
+        const wrapParent = wrap.parentElement;
+        wrapParent.style.position = 'relative';
+        wrapParent.appendChild(dd);
+
+        // Cerrar al hacer click fuera
+        dd.querySelector('#op-img-selector-close')?.addEventListener('click', () => dd.remove());
+        setTimeout(() => {
+            document.addEventListener('mousedown', function _close(e) {
+                if (!dd.contains(e.target) && e.target.getAttribute('onclick') !== 'window._opMostrarGaleria()') {
+                    dd.remove();
+                    document.removeEventListener('mousedown', _close);
+                }
+            });
+        }, 10);
     };
 
     window._opSubirAGaleria = async () => {
