@@ -237,13 +237,14 @@ window._combateRecalcDeltas = (eq, idx) => {
     // Registrar cambios con debounce (600ms) para no spamear al escribir
     clearTimeout(slot._recalcRegistroTimer);
     slot._recalcRegistroTimer = setTimeout(() => {
-        const despues = { pot: slot.pot, agi: slot.agi, ctl: slot.ctl, pvMax: slot.pvMax, pv: slot.pv, ctlUsado: slot.ctlUsado ?? 0 };
+        const despues = { pot: slot.pot, agi: slot.agi, ctl: slot.ctl, pvMax: slot.pvMax, cambios: slot.cambios, pv: slot.pv, ctlUsado: slot.ctlUsado ?? 0 };
         const etiquetas = [];
-        if (despues.pot    !== antes.pot)     etiquetas.push(`POT(${antes.pot}→${despues.pot})`);
-        if (despues.agi    !== antes.agi)     etiquetas.push(`AGI(${antes.agi}→${despues.agi})`);
-        if (despues.ctl    !== antes.ctl)     etiquetas.push(`CTL(${antes.ctl}→${despues.ctl})`);
-        if (despues.pvMax  !== antes.pvMax)   etiquetas.push(`PVMax(${antes.pvMax}→${despues.pvMax})`);
-        if (despues.pv     !== antes.pv)      etiquetas.push(`PV(${antes.pv}→${despues.pv})`);
+        if (despues.pot     !== antes.pot)     etiquetas.push(`POT(${antes.pot}→${despues.pot})`);
+        if (despues.agi     !== antes.agi)     etiquetas.push(`AGI(${antes.agi}→${despues.agi})`);
+        if (despues.ctl     !== antes.ctl)     etiquetas.push(`CTL(${antes.ctl}→${despues.ctl})`);
+        if (despues.pvMax   !== antes.pvMax)   etiquetas.push(`PVMax(${antes.pvMax}→${despues.pvMax})`);
+        if (despues.pv      !== antes.pv)      etiquetas.push(`PV(${antes.pv}→${despues.pv})`);
+        if (despues.cambios !== antes.cambios) etiquetas.push(`Camb/T(${antes.cambios}→${despues.cambios})`);
         if (despues.ctlUsado !== antes.ctlUsado) etiquetas.push(`CTLUsd(${antes.ctlUsado}→${despues.ctlUsado})`);
         if (etiquetas.length) {
             _pushRegistro(slot.nombre, { etiqueta: etiquetas.join(' ') });

@@ -333,10 +333,10 @@ export function renderSlotDetalle(eq, idx) {
                 id="cb-${eq}-${idx}-${key}-base" oninput="window._combateRecalcDeltas('${eq}',${idx})">`
         }
         <span id="cb-${eq}-${idx}-${key}-result" style="font-size:0.75em;color:#888;flex:1;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
-        <textarea placeholder="Nota / Origen…" rows="1"
-            style="width:130px;min-width:80px;max-width:280px;resize:horizontal;border:1px solid #ddd;
-                border-radius:4px;padding:2px 5px;font-size:0.7em;color:#555;background:#fffdf0;
-                vertical-align:middle;line-height:1.3;overflow:hidden;"
+        <textarea placeholder="Nota / Origen…" rows="2"
+            style="width:180px;min-width:120px;min-height:40px;resize:both;border:1px solid #ddd;
+                border-radius:4px;padding:4px 7px;font-size:0.78em;color:#555;background:#fffdf0;
+                line-height:1.4;"
             id="cb-${eq}-${idx}-${key}-nota"
             oninput="window._combateSetNota('${eq}',${idx},'${key}',this.value)">${notaVal}</textarea>
     </div>
@@ -916,7 +916,9 @@ export async function generarImagenCuadro() {
     ctx.fillText('⚔ CUADRO DE COMBATE — BNH', PAD, 26);
     ctx.font = `400 11px 'Inter', sans-serif`;
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.fillText(new Date().toLocaleString('es-419'), PAD, 44);
+    const now = new Date();
+    const utcStr = now.toISOString().replace('T',' ').slice(0,19) + ' UTC';
+    ctx.fillText(utcStr, PAD, 44);
 
     // Equipo labels en header
     let hx = PAD + COL_LBL;
@@ -978,7 +980,25 @@ export async function generarImagenCuadro() {
             ctx.fillStyle = '#1e293b';
             ctx.font = `600 12px 'Inter',sans-serif`;
             ctx.textAlign = 'center';
-            ctx.fillText(st.fmt(s), vcx + COL_W/2, y + ROW_H/2 + 4);
+            const val = st.fmt(s);
+            // Get delta badges as plain text for this stat
+            const deltaKey = {PVs:null,POT:'pot',AGI:'agi','CTL Usd':'ctl',Camb:'cambios'}[st.lbl];
+            let deltasTxt = '';
+            if (deltaKey && s._d) {
+                const activos = [1,2,3,4,5].map(n=>s._d[`delta_${deltaKey}_${n}`]||'0').filter(d=>d&&d!=='0');
+                if (activos.length) deltasTxt = ' [' + activos.join(' ') + ']';
+            }
+            const cellText = val + deltasTxt;
+            // If text fits on one line draw it, else split val and deltas
+            if (ctx.measureText(cellText).width <= COL_W - 12) {
+                ctx.fillText(cellText, vcx + COL_W/2, y + ROW_H/2 + 4);
+            } else {
+                ctx.font = `600 11px 'Inter',sans-serif`;
+                ctx.fillText(val, vcx + COL_W/2, y + ROW_H/2 - 4);
+                ctx.font = `500 9px 'Inter',sans-serif`;
+                ctx.fillStyle = '#64748b';
+                ctx.fillText(deltasTxt.trim(), vcx + COL_W/2, y + ROW_H/2 + 10);
+            }
             vcx += COL_W;
         });
     });
