@@ -6,6 +6,7 @@ import { opState, STORAGE_URL } from './op-state.js';
 import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
+    cargarPerfil,
     cargarMensajes, enviarMensaje, eliminarMensaje,
     cargarImagenesGaleria, subirImagenGaleria, subirVideoGaleria, eliminarImagenGaleria,
     subirAvatarOP, suscribirMensajes, diagnosticarDB
@@ -148,45 +149,75 @@ async function _selConv(id) {
 
 // ── Reconexión automática al volver a la pestaña ──────────────
 // Los navegadores throttlean websockets en pestañas inactivas.
-// Al recuperar visibilidad: recargar mensajes nuevos y re-suscribir.
+// Al recuperar visibilidad: recargar sesión, mensajes nuevos y re-suscribir.
 function _initVisibilityReconnect() {
     let _lastVisible = Date.now();
+    let _reconectando = false;
 
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
             _lastVisible = Date.now();
             return;
         }
-        // Volvió a ser visible
+        if (_reconectando) return;
+        _reconectando = true;
+
         const awayMs = Date.now() - _lastVisible;
-        if (awayMs < 5000 || !opState.convActual) return; // menos de 5s → no hace falta
 
-        // Re-suscribir canal (el websocket puede estar muerto)
-        if (opState.realtimeSub) {
-            try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
-            opState.realtimeSub = null;
-        }
-
-        // Cargar mensajes nuevos que llegaron mientras estaba fuera
-        const mensajesNuevos = await cargarMensajes(opState.convActual, 60);
-        const idsActuales = new Set(opState.mensajes.map(m => m.id));
-        const nuevos = mensajesNuevos.filter(m => !idsActuales.has(m.id));
-        nuevos.forEach(m => {
-            opState.mensajes.push(m);
-            if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
-        });
-
-        // Re-suscribir
-        opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
-            if (msg.autor_id !== opState.perfil?.id) {
-                if (!opState.perfiles[msg.autor_id]) {
-                    supabase.from('op_perfiles').select('id, nombre, avatar_path')
-                        .eq('id', msg.autor_id).maybeSingle()
-                        .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
-                }
-                appendMensaje(msg);
+        try {
+            // 1. Siempre verificar que la sesión de Supabase siga activa
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) {
+                // Sesión expiró — recargar la página
+                window.location.reload();
+                return;
             }
-        });
+
+            // 2. Restaurar perfil si se perdió
+            if (!opState.perfil && session.user) {
+                opState.perfil = await cargarPerfil(session.user.id);
+            }
+
+            // 3. Sin conv activa no hay nada más que hacer
+            if (!opState.convActual) {
+                _reconectando = false;
+                return;
+            }
+
+            // 4. Re-suscribir siempre (websocket pudo haberse caído aunque sea 1s)
+            if (opState.realtimeSub) {
+                try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
+                opState.realtimeSub = null;
+            }
+            opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
+                if (opState.mensajes.some(m => m.id === msg.id)) return;
+                opState.mensajes.push(msg);
+                if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
+            });
+
+            // 5. Cargar mensajes perdidos solo si estuvo fuera más de 3s
+            if (awayMs >= 3000) {
+                const mensajesNuevos = await cargarMensajes(opState.convActual, 60);
+                const idsActuales = new Set(opState.mensajes.map(m => m.id));
+                const nuevos = mensajesNuevos.filter(m => !idsActuales.has(m.id));
+                nuevos.forEach(m => {
+                    opState.mensajes.push(m);
+                    if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
+                });
+            }
+        } catch (e) {
+            console.warn('[OP] Error en reconexión:', e);
+        } finally {
+            _reconectando = false;
+        }
+    });
+
+    // También reconectar en focus de la ventana (además de visibilitychange)
+    window.addEventListener('focus', async () => {
+        if (!opState.convActual || !opState.perfil) return;
+        // Verificar sesión activa
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) window.location.reload();
     });
 }
 
