@@ -216,7 +216,19 @@ window._combateRecalcDeltas = (eq, idx) => {
     });
 };
 
-// ── PV actual manual ──────────────────────────────────────────
+// ── Delta rápido en PV Máx — modifica delta_pv_1 sumando ─────
+window._combateDeltaPVMax = (eq, idx, delta) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    const actual = parseFloat(slot._d.delta_pv_1) || 0;
+    slot._d.delta_pv_1 = String(actual + delta);
+    recalcSlot(slot);
+    refrescarEquipo(eq);
+    refrescarCuadro();
+    renderSlotDetalle(eq, idx);
+};
+
+
 window._combatePVActualChange = (eq, idx, valor) => {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
@@ -250,6 +262,55 @@ window._combateGetMedalla = (id) => todasLasMedallas.find(m => String(m.id) === 
 // ── Mostrar info de medalla (click en chip o en nombre) ────────
 window._combateMostrarInfoMedalla = (eq, idx, medallaId) => {
     renderMedInfoPanel(eq, idx, medallaId);
+};
+
+// ── Pasar dado de una medalla al PJ anterior/siguiente ────────
+// dir: -1 = anterior, +1 = siguiente (entre todos los slots de ambos equipos)
+window._combatePasarDado = (eq, idx, medallaId, dir) => {
+    const slotOrigen = combateState[`equipo${eq}`][idx];
+    if (!slotOrigen) return;
+    const val = slotOrigen.dados[medallaId];
+    if (!val) return;
+
+    // Construir lista plana de slots activos: [{eq, idx, slot}]
+    const todos = [];
+    ['A','B'].forEach(e => combateState[`equipo${e}`].forEach((s, i) => {
+        if (s) todos.push({ eq: e, idx: i, slot: s });
+    }));
+    const actualPos = todos.findIndex(t => t.eq === eq && t.idx === idx);
+    if (actualPos === -1) return;
+    const destPos = (actualPos + dir + todos.length) % todos.length;
+    const destItem = todos[destPos];
+    if (!destItem || destItem.eq === eq && destItem.idx === idx) return;
+
+    // Si el destino tiene la medalla, mover el valor
+    if (destItem.slot.medallas.some(m => String(m.id) === String(medallaId))) {
+        destItem.slot.dados[medallaId] = val;
+        delete slotOrigen.dados[medallaId];
+    } else {
+        toast('El PJ destino no tiene esa medalla equipada', 'info');
+        return;
+    }
+
+    // Refrescar ambos equipos
+    refrescarEquipo(eq);
+    refrescarEquipo(destItem.eq);
+    renderSlotDetalle(combateState.slotActivoEquipo, combateState.slotActivoIdx);
+};
+
+// ── Navegación de dado con flechas de teclado ─────────────────
+// Flecha arriba/abajo mueve entre las habilidades del mismo PJ
+window._combateDadoNavKey = (event, eq, idx, medallaIdx) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const medallas = slot.medallas;
+    const nextIdx = medallaIdx + (event.key === 'ArrowDown' ? 1 : -1);
+    if (nextIdx < 0 || nextIdx >= medallas.length) return;
+    const nextId = medallas[nextIdx].id;
+    const nextInput = document.getElementById(`dado-${eq}-${idx}-${nextId}`);
+    if (nextInput) nextInput.focus();
 };
 
 

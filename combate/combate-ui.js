@@ -132,7 +132,7 @@ export function renderPool() {
             ${_btn('rol','todos','Todos')}${_btn('rol','#jugador','Jugador')}${_btn('rol','#npc','NPC')}
         </div>
         <div style="display:flex;gap:3px;background:rgba(255,255,255,0.1);padding:3px 5px;border-radius:10px;">
-            ${_btn('tipo','todos','Todos')}${_btn('tipo','#héroe_profesional','Héroe')}${_btn('tipo','#villano','Villano')}
+            ${_btn('tipo','todos','Todos')}${_btn('tipo','#héroe','Héroe')}${_btn('tipo','#villano','Villano')}
         </div>
     </div>
     <div style="padding:10px;display:flex;flex-wrap:wrap;gap:6px;max-height:145px;overflow-y:auto;background:#fafafa;">
@@ -250,19 +250,28 @@ function _renderSlotCard(eq, idx, slot, col) {
         <span style="font-size:0.65em;color:#aaa;align-self:center;">CTL ${ctlUsado}/${slot.ctl}</span>
     </div>` : ''}
 
-    <!-- Dados -->
+    <!-- Dados con flechas para navegar entre habilidades y PJs -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 8px;display:flex;flex-wrap:wrap;gap:4px;" onclick="event.stopPropagation()">
-        ${slot.medallas.map(m => `
-        <div style="display:flex;align-items:center;gap:3px;">
+        ${slot.medallas.map((m, mi) => `
+        <div style="display:flex;align-items:center;gap:2px;">
             <span style="font-size:0.62em;color:#888;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                 title="${esc(m.nombre)}">${esc(m.nombre.length>8?m.nombre.slice(0,8)+'…':m.nombre)}</span>
+            <!-- Flecha arriba: pasa dado al PJ anterior -->
+            <button title="Pasar al PJ anterior" style="background:none;border:1px solid #dee2e6;border-radius:3px;
+                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
+                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',-1)">▲</button>
             <input type="number" min="1" max="100" placeholder="🎲"
                 id="dado-${eq}-${idx}-${esc(m.id)}"
                 style="width:46px;padding:2px 3px;border:1.5px solid #dee2e6;border-radius:5px;
                     font-size:0.75em;text-align:center;font-weight:700;"
                 value="${slot.dados[m.id]||''}"
-                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)">
+                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
+                onkeydown="window._combateDadoNavKey(event,'${eq}',${idx},${mi})">
+            <!-- Flecha abajo: pasa dado al PJ siguiente -->
+            <button title="Pasar al PJ siguiente" style="background:none;border:1px solid #dee2e6;border-radius:3px;
+                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
+                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',1)">▼</button>
         </div>`).join('')}
     </div>` : ''}
 </div>`;
@@ -283,8 +292,6 @@ export function renderSlotDetalle(eq, idx) {
     const medallasAcc   = getMedallasAccesibles(slot);
     const ctlUsado      = calcCTLUsado(slot.medallas);
     const tagsActivos   = new Set((slot.tags||[]).map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase()));
-
-    // Bloque de un stat con deltas encadenados
     const _statBlock = (key, lbl, baseVal, isAuto=false) => {
         const deltas = [1,2,3,4,5].map(n => d[`delta_${key}_${n}`]||'0');
         const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv' }[key] || key;
@@ -336,19 +343,53 @@ export function renderSlotDetalle(eq, idx) {
                     onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;">
-                ${_statBlock('pot',      'POT',     slot._pj.pot||0)}
-                ${_statBlock('agi',      'AGI',     slot._pj.agi||0)}
-                ${_statBlock('ctl',      'CTL',     slot._pj.ctl||0)}
-            <!-- PV Máx (azul) con sus deltas — calculado a partir de pot/agi/ctl -->
-            ${_statBlock('pv', 'PV Máx', 0, true)}
-
-            ${_statBlock('cambios',  'Camb/T',  0, true)}
+                ${_statBlock('pot',     'POT',    slot._pj.pot||0)}
+                ${_statBlock('agi',     'AGI',    slot._pj.agi||0)}
+                ${_statBlock('ctl',     'CTL',    slot._pj.ctl||0)}
+                ${_statBlock('cambios', 'Camb/T', 0, true)}
             </div>
 
-            <!-- PV Actual con sus deltas — cuadro verde -->
+            <!-- CTL Usado — calculado, no delta -->
+            <div style="background:#f3e5f5;border:1.5px solid #c8a8e9;border-radius:8px;padding:8px 10px;margin-top:6px;display:flex;align-items:center;gap:8px;">
+                <span style="font-weight:800;color:#6c3483;font-size:0.82em;min-width:72px;">CTL Usado</span>
+                <span style="font-size:0.95em;font-weight:900;color:#6c3483;">${ctlUsado}</span>
+                <span style="font-size:0.82em;color:#aaa;">/ ${slot.ctl}</span>
+                <span style="font-size:0.72em;color:#999;margin-left:4px;">(suma costo_ctl medallas equipadas)</span>
+            </div>
+
+            <!-- PV Máx — cuadro azul claro con botones rápidos que editan delta_pv_1 -->
+            <div style="background:#e8f4fd;border:2px solid #5b9bd5;border-radius:8px;padding:8px 10px;margin-top:6px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
+                    <span style="font-weight:800;color:#1a4a80;font-size:0.82em;min-width:72px;">🔵 PV Máx</span>
+                    <span style="background:#d6eaf8;border-radius:4px;padding:2px 8px;font-size:0.78em;color:#1a4a80;">Auto</span>
+                    <span style="font-size:0.75em;color:#888;">→ <b style="color:#1a4a80;font-size:1.1em;">${slot.pvMax}</b></span>
+                </div>
+                <div style="display:flex;gap:3px;">
+                    ${[1,2,3,4,5].map(n=>`
+                    <div style="flex:1;text-align:center;">
+                        <div style="font-size:0.6em;color:#1a4a80;margin-bottom:1px;font-weight:700;">Δ${n}</div>
+                        <input type="text" value="${d[`delta_pv_${n}`]||'0'}" placeholder="0"
+                            style="width:100%;border:1px solid #b3d7f5;border-radius:4px;padding:2px 1px;
+                                text-align:center;font-size:0.8em;font-weight:700;color:#1a4a80;background:#f0f8ff;"
+                            id="cb-${eq}-${idx}-pv-d${n}"
+                            oninput="window._combateRecalcDeltas('${eq}',${idx})">
+                    </div>`).join('')}
+                </div>
+                <!-- Botones rápidos → modifican delta_pv_1 directamente -->
+                <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 0 2px;">
+                    <span style="font-size:0.68em;font-weight:700;color:#1a4a80;margin-right:3px;white-space:nowrap;">PVMáx:</span>
+                    ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+                        `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#1a4a80':'#5b9bd5'};
+                            border-radius:4px;background:${dv>0?'#d6eaf8':'#ebf5fb'};color:${dv>0?'#1a4a80':'#1f618d'};cursor:pointer;"
+                            onclick="window._combateDeltaPVMax('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
+                    ).join('')}
+                </div>
+            </div>
+
+            <!-- PV Actual — cuadro verde -->
             <div style="background:rgba(30,132,73,0.06);border:2px solid rgba(30,132,73,0.4);border-radius:8px;padding:8px 10px;margin-top:6px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
-                    <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">🟢 PV Actual</span>
+                    <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:72px;">🟢 PV Actual</span>
                     <input type="number" value="${slot._pvActualManual??''}" placeholder="Vacío=Máx"
                         style="width:75px;border:2px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;background:#f0fff4;"
                         id="cb-${eq}-${idx}-pvactual-base"
@@ -367,7 +408,7 @@ export function renderSlotDetalle(eq, idx) {
                             oninput="window._combateRecalcDeltas('${eq}',${idx})">
                     </div>`).join('')}
                 </div>
-                <!-- Botones rápidos ±PV → afectan solo delta_pv_actual_1 -->
+                <!-- Botones rápidos ±PV → modifican _pvActualManual sumando -->
                 <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 0 2px;">
                     <span style="font-size:0.68em;font-weight:700;color:#555;margin-right:3px;white-space:nowrap;">PVs:</span>
                     ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
@@ -377,6 +418,7 @@ export function renderSlotDetalle(eq, idx) {
                     ).join('')}
                 </div>
             </div>
+        </div>
 
         <!-- TAGS Y PTS -->
         <div>
@@ -426,7 +468,7 @@ export function renderSlotDetalle(eq, idx) {
                 Medallas — CTL ${ctlUsado}/${slot.ctl}
                 <span style="font-size:0.85em;font-weight:500;color:#aaa;text-transform:none;">(simulación, sin límite)</span>
             </div>
-            <!-- Panel de info de medalla (visible al hacer click en el nombre) -->
+            <!-- Panel de info de medalla — ARRIBA de la lista, antes de todo -->
             <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
                 <div id="med-info-content-${eq}-${idx}"></div>
             </div>
@@ -637,7 +679,6 @@ ${condDado ? `<div style="font-size:0.78em;background:#f0f0ff;border:1px solid #
 </div>` : ''}`;
 
     panelEl.style.display = 'block';
-    panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 
