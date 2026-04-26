@@ -202,9 +202,11 @@ function _exponerGlobales() {
     window._opGetPerfil  = () => opState.perfil;
 
     window._opNuevaConv = async () => {
-        const titulo = prompt('Nombre de la conversación:');
-        if (!titulo?.trim()) return;
-        const conv = await crearConversacion(titulo.trim());
+        // Auto-name: "Nuevo chat N"
+        const existing = opState.conversaciones.map(c => c.titulo);
+        let n = 1;
+        while (existing.includes(`Nuevo chat ${n}`)) n++;
+        const conv = await crearConversacion(`Nuevo chat ${n}`);
         if (conv) {
             opState.conversaciones.unshift(conv);
             renderConvList();
@@ -230,8 +232,137 @@ function _exponerGlobales() {
         renderConvList();
     };
 
-    window._opEliminarMsg = async id => {
-        await eliminarMensaje(id);
+    window._opMenuConv = (e, id) => {
+        // Remove any existing menu
+        document.getElementById('op-conv-menu')?.remove();
+
+        const conv = opState.conversaciones.find(c => c.id === id);
+        if (!conv) return;
+
+        const meta    = _getConvMeta(id);
+        const fijado  = meta.fijado || false;
+        const color   = meta.color  || '#c0392b';
+
+        const COLORS = [
+            { hex: '#c0392b', label: 'Rojo'     },
+            { hex: '#1a4a80', label: 'Azul'     },
+            { hex: '#1e8449', label: 'Verde'     },
+            { hex: '#6c3483', label: 'Morado'   },
+            { hex: '#b7770d', label: 'Dorado'   },
+            { hex: '#2e4053', label: 'Marino'   },
+        ];
+
+        const menu = document.createElement('div');
+        menu.id = 'op-conv-menu';
+        menu.style.cssText = [
+            'position:fixed','z-index:99999','background:white',
+            'border:1.5px solid #dee2e6','border-radius:10px',
+            'box-shadow:0 4px 20px rgba(0,0,0,0.15)',
+            'min-width:200px','padding:6px 0','font-family:inherit',
+            'font-size:0.85em',
+        ].join(';');
+
+        // Position near the button
+        const rect = e.currentTarget?.getBoundingClientRect?.() || { right: e.clientX + 20, top: e.clientY };
+        menu.style.left = (rect.right - 200) + 'px';
+        menu.style.top  = (rect.bottom || e.clientY) + 'px';
+
+        const item = (icon, label, fn, danger) => {
+            const el = document.createElement('div');
+            el.style.cssText = `padding:8px 14px;cursor:pointer;display:flex;align-items:center;gap:8px;
+                color:${danger ? '#c0392b' : '#212529'};transition:0.1s;`;
+            el.innerHTML = `<span>${icon}</span><span>${label}</span>`;
+            el.onmouseenter = () => el.style.background = danger ? '#fdecea' : '#f8f9fa';
+            el.onmouseleave = () => el.style.background = '';
+            el.onclick = () => { menu.remove(); fn(); };
+            return el;
+        };
+
+        // Rename
+        menu.appendChild(item('✏️', 'Cambiar nombre', () => {
+            const nuevo = prompt('Nuevo nombre:', conv.titulo);
+            if (!nuevo?.trim()) return;
+            window._opRenombrarConv(id, nuevo.trim());
+        }));
+
+        // Color picker row
+        const colorRow = document.createElement('div');
+        colorRow.style.cssText = 'padding:8px 14px;display:flex;gap:6px;align-items:center;border-top:1px solid #f1f3f4;border-bottom:1px solid #f1f3f4;';
+        colorRow.innerHTML = '<span style="color:#666;font-size:0.8em;margin-right:2px;">Color:</span>';
+        COLORS.forEach(c => {
+            const dot = document.createElement('div');
+            dot.title = c.label;
+            dot.style.cssText = `width:18px;height:18px;border-radius:50%;background:${c.hex};cursor:pointer;
+                border:2px solid ${color === c.hex ? '#222' : 'transparent'};transition:0.1s;`;
+            dot.onclick = () => {
+                _setConvMeta(id, { color: c.hex });
+                menu.remove();
+                renderConvList();
+            };
+            colorRow.appendChild(dot);
+        });
+        menu.appendChild(colorRow);
+
+        // Pin/unpin
+        menu.appendChild(item(fijado ? '📌' : '📌', fijado ? 'Desfijar' : 'Fijar', () => {
+            _setConvMeta(id, { fijado: !fijado });
+            renderConvList();
+        }));
+
+        // Clean
+        menu.appendChild(item('🧹', 'Limpiar mensajes', async () => {
+            if (!confirm('¿Limpiar todos los mensajes?')) return;
+            await limpiarConversacion(id);
+            if (id === opState.convActual) { opState.mensajes = []; renderMensajes(); }
+        }));
+
+        // Delete (not for first conv)
+        if (id !== opState.conversaciones[opState.conversaciones.length - 1]?.id || opState.conversaciones.length > 1) {
+            menu.appendChild(item('🗑', 'Eliminar conversación', async () => {
+                if (!confirm('¿Eliminar esta conversación?')) return;
+                await eliminarConversacion(id);
+                opState.conversaciones = opState.conversaciones.filter(c => c.id !== id);
+                if (id === opState.convActual) {
+                    const next = opState.conversaciones[0];
+                    if (next) await _selConv(next.id);
+                    else { opState.convActual = null; opState.mensajes = []; renderMensajes(); }
+                }
+                renderConvList();
+            }, true));
+        }
+
+        document.body.appendChild(menu);
+
+        // Close on outside click
+        setTimeout(() => {
+            document.addEventListener('mousedown', function _close(ev) {
+                if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('mousedown', _close); }
+            });
+        }, 10);
+    };
+
+    window._opRenombrarConv = async (id, titulo) => {
+        const { error } = await supabase.from('op_conversaciones')
+            .update({ titulo }).eq('id', id);
+        if (!error) {
+            const conv = opState.conversaciones.find(c => c.id === id);
+            if (conv) conv.titulo = titulo;
+            renderConvList();
+            if (id === opState.convActual) {
+                const el = $('op-chat-titulo');
+                if (el) el.textContent = titulo;
+            }
+        }
+    };
+
+    // Local meta helpers (color, pin)
+    function _getConvMeta(id) {
+        try { return JSON.parse(localStorage.getItem(`op_conv_meta_${id}`) || '{}'); } catch { return {}; }
+    }
+    function _setConvMeta(id, patch) {
+        const prev = _getConvMeta(id);
+        localStorage.setItem(`op_conv_meta_${id}`, JSON.stringify({ ...prev, ...patch }));
+    }
         opState.mensajes = opState.mensajes.filter(m => m.id !== id);
         const el = document.querySelector(`.op-msg[data-id="${id}"]`);
         if (el) el.remove();

@@ -11,22 +11,43 @@ const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 export function renderConvList() {
     const wrap = $('op-conv-list');
     if (!wrap) return;
-    const convs = opState.conversaciones;
+    // Sort: pinned first, then by ultimo_msg
+    const convs = [...opState.conversaciones].sort((a, b) => {
+        const aMeta = _convMeta(a.id);
+        const bMeta = _convMeta(b.id);
+        if (aMeta.fijado !== bMeta.fijado) return bMeta.fijado ? 1 : -1;
+        return new Date(b.ultimo_msg || 0) - new Date(a.ultimo_msg || 0);
+    });
     if (!convs.length) {
-        wrap.innerHTML = `<div style="padding:20px;color:var(--gray-500,#adb5bd);font-size:0.82em;text-align:center;padding:20px;">Sin conversaciones</div>`;
+        wrap.innerHTML = `<div style="padding:20px;color:var(--gray-500,#adb5bd);font-size:0.82em;text-align:center;">Sin conversaciones</div>`;
         return;
     }
     wrap.innerHTML = convs.map(c => {
         const activa = c.id === opState.convActual;
+        const meta   = _convMeta(c.id);
+        const color  = meta.color || '#c0392b';
+        const fijado = meta.fijado;
         return `
-<div class="op-conv-item ${activa?'activa':''}" data-id="${c.id}" onclick="window._opSelConv(${c.id})">
-    <div class="op-conv-title">${esc(c.titulo)}</div>
+<div class="op-conv-item ${activa?'activa':''}" data-id="${c.id}"
+    style="${activa ? `border-left:3px solid ${color};background:${color}18;` : ''}"
+    onclick="window._opSelConv(${c.id})">
+    <div class="op-conv-title" style="${activa?`color:${color};`:''}">
+        ${fijado ? '📌 ' : ''}${esc(c.titulo)}
+    </div>
     <div class="op-conv-actions">
-        <button class="op-icon-btn" title="Limpiar" onclick="event.stopPropagation();window._opLimpiarConv(${c.id})">🧹</button>
-        ${c.id !== 1 ? `<button class="op-icon-btn danger" title="Eliminar" onclick="event.stopPropagation();window._opEliminarConv(${c.id})">🗑</button>` : ''}
+        <button class="op-icon-btn" title="Opciones" onclick="event.stopPropagation();window._opMenuConv(event,${c.id})">⚙</button>
     </div>
 </div>`;
     }).join('');
+}
+
+// ── Helpers de metadatos de conversación (color, fijado) ──────
+function _convMeta(id) {
+    try { return JSON.parse(localStorage.getItem(`op_conv_meta_${id}`) || '{}'); } catch { return {}; }
+}
+function _setConvMeta(id, patch) {
+    const prev = _convMeta(id);
+    localStorage.setItem(`op_conv_meta_${id}`, JSON.stringify({ ...prev, ...patch }));
 }
 
 // ── Panel de mensajes ─────────────────────────────────────────
@@ -44,22 +65,41 @@ export function renderMensajes() {
     const esPropio = id => id === opState.perfil?.id;
     let html = '';
     let ultimaFecha = '';
+    let ultimoAutorId = null;
+    let ultimaHora = null;
+    const GROUP_GAP_MS = 5 * 60 * 1000; // 5 min
 
-    msgs.forEach(msg => {
+    msgs.forEach((msg, idx) => {
         const fecha = new Date(msg.creado_en);
         const fechaStr = fecha.toLocaleDateString('es', { day:'numeric', month:'short' });
         if (fechaStr !== ultimaFecha) {
             ultimaFecha = fechaStr;
+            ultimoAutorId = null;
             html += `<div class="op-date-sep">${fechaStr}</div>`;
         }
 
-        const propio = esPropio(msg.autor_id);
-        const hora   = fecha.toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
+        const propio  = esPropio(msg.autor_id);
+        const hora    = fecha.toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
+        const msPrev  = ultimaHora ? fecha - ultimaHora : Infinity;
+        const mismoGrupo = msg.autor_id === ultimoAutorId && msPrev < GROUP_GAP_MS;
+        const perfil  = opState.perfiles?.[msg.autor_id];
+        const avSrc   = perfil?.avatar_path ? `${STORAGE_URL}/${perfil.avatar_path}` : '';
+
+        ultimoAutorId = msg.autor_id;
+        ultimaHora    = fecha;
+
+        // Avatar placeholder (espacio) para mensajes agrupados propios
+        const avatarHtml = propio ? '' : (mismoGrupo
+            ? `<div style="width:36px;flex-shrink:0;"></div>`
+            : `<img src="${esc(avSrc)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;
+                flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;"
+                onerror="this.style.visibility='hidden'">`);
 
         html += `
 <div class="op-msg ${propio?'propio':'ajeno'}" data-id="${msg.id}">
+    ${avatarHtml}
     <div class="op-msg-bubble">
-        ${!propio ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
+        ${!propio && !mismoGrupo ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
         ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
             onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
         ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
@@ -72,7 +112,6 @@ export function renderMensajes() {
     });
 
     wrap.innerHTML = html;
-    // Scroll al fondo
     requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
 }
 
@@ -82,12 +121,31 @@ export function appendMensaje(msg) {
     const propio = msg.autor_id === opState.perfil?.id;
     const hora   = new Date(msg.creado_en).toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
 
+    // Check if previous message is from same author within 5 min
+    const prev = wrap.querySelector('.op-msg:last-child');
+    const prevId = prev?.dataset?.id;
+    const prevMsg = opState.mensajes.find(m => String(m.id) === String(prevId));
+    const GROUP_GAP_MS = 5 * 60 * 1000;
+    const mismoGrupo = prevMsg
+        && prevMsg.autor_id === msg.autor_id
+        && (new Date(msg.creado_en) - new Date(prevMsg.creado_en)) < GROUP_GAP_MS;
+
+    const perfil = opState.perfiles?.[msg.autor_id];
+    const avSrc  = perfil?.avatar_path ? `${STORAGE_URL}/${perfil.avatar_path}` : '';
+
+    const avatarHtml = propio ? '' : (mismoGrupo
+        ? `<div style="width:36px;flex-shrink:0;"></div>`
+        : `<img src="${esc(avSrc)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;
+            flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;"
+            onerror="this.style.visibility='hidden'">`);
+
     const div = document.createElement('div');
     div.className = `op-msg ${propio?'propio':'ajeno'}`;
     div.dataset.id = msg.id;
     div.innerHTML = `
+${avatarHtml}
 <div class="op-msg-bubble">
-    ${!propio ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
+    ${!propio && !mismoGrupo ? `<div class="op-msg-autor">${esc(msg.autor_nombre)}</div>` : ''}
     ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
         onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
     ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}

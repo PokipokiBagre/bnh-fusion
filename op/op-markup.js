@@ -97,7 +97,9 @@ function _onInput(e) {
 
     } else if (matchBang) {
         _acType = 'medalla';
-        const query = matchBang[1].toLowerCase();
+        // Strip trailing ! if user already typed it (mid-word completion)
+        const rawQuery = matchBang[1].replace(/!$/, '');
+        const query = rawQuery.toLowerCase();
         const hits  = (opState.medallas || [])
             .filter(m => (m.nombre || '').toLowerCase().includes(query))
             .slice(0, 8)
@@ -223,7 +225,11 @@ function _insertAC(label, triggerStr, pos) {
     else if (_acType === 'tag') ins = `#${label} `;
     else ins = `!${label}! `;
 
-    _acInput.value = val.slice(0, start) + ins + val.slice(pos);
+    // For medalla: if there's already a closing ! right after pos, skip it
+    let endPos = pos;
+    if (_acType === 'medalla' && val[pos] === '!') endPos = pos + 1;
+
+    _acInput.value = val.slice(0, start) + ins + val.slice(endPos);
     _acInput.selectionStart = _acInput.selectionEnd = start + ins.length;
     _acInput.focus();
     _closeAC();
