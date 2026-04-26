@@ -111,7 +111,8 @@ function _renderLink(link_url) {
             // ID único para hidratar el card con datos reales desde el browser
             const cardId = `yt-pl-${playlistId.slice(-8)}-${Math.random().toString(36).slice(2,6)}`;
             // Lanzar fetch del RSS en background (no bloquea el render)
-            setTimeout(() => window._opHidratarPlaylist(cardId, playlistId), 0);
+            // Pasar videoId si la URL lo incluye (?v=xxx&list=yyy) para thumbnail inmediata
+            setTimeout(() => window._opHidratarPlaylist(cardId, playlistId, videoId || null), 0);
             return `<div id="${cardId}" style="position:relative;width:min(320px,100%);cursor:pointer;
                        border-radius:10px;overflow:hidden;margin-top:6px;
                        box-shadow:0 3px 16px rgba(0,0,0,0.4);background:#111;"
@@ -846,78 +847,79 @@ window._opAbrirTikTokModal = (embedUrl, linkUrl) => {
     document.addEventListener('mouseup', () => { dragging = false; });
 };
 
-// ── Hidratar card de playlist con datos reales del RSS de YouTube ─────────
-// El RSS de YouTube es público y accesible desde el browser (no desde servidor)
-window._opHidratarPlaylist = async (cardId, playlistId) => {
+// ── Hidratar card de playlist ────────────────────────────────────────────────
+// Intenta obtener metadata sin API key.
+// Si la URL tiene &v=VIDEO_ID, usa ese ID para la thumbnail.
+// Como último recurso genera una thumbnail via i.ytimg.com del playlist cover.
+window._opHidratarPlaylist = async (cardId, playlistId, videoId) => {
     const card = document.getElementById(cardId);
     if (!card) return;
 
-    try {
-        const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-        // Usar un proxy CORS público para el RSS (el RSS de YT no tiene CORS headers)
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(rssUrl)}`;
+    const thumbEl  = card.querySelector('.yt-pl-thumb');
+    const titleEl  = card.querySelector('.yt-pl-title');
+    const countEl  = card.querySelector('.yt-pl-count');
 
-        const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(6000) });
-        if (!res.ok) throw new Error('fetch failed');
-        const json = await res.json();
-        const xml  = new DOMParser().parseFromString(json.contents, 'text/xml');
-
-        // Título de la playlist
-        const title = xml.querySelector('feed > title')?.textContent || 'Lista de reproducción';
-
-        // Primer video → thumbnail
-        const firstEntry = xml.querySelector('entry');
-        const firstVideoId = firstEntry?.querySelector('videoId')?.textContent
-            || firstEntry?.querySelector('[name="videoId"]')?.textContent;
-
-        // Contar videos
-        const count = xml.querySelectorAll('entry').length;
-        const countLabel = count > 0
-            ? `${count} video${count !== 1 ? 's' : ''}${count >= 15 ? '+' : ''}`
-            : 'Lista de reproducción';
-
-        // Actualizar título
-        const titleEl = card.querySelector('.yt-pl-title');
-        if (titleEl) titleEl.textContent = title;
-
-        // Actualizar count
-        const countEl = card.querySelector('.yt-pl-count');
-        if (countEl) countEl.textContent = countLabel;
-
-        // Actualizar thumbnail si tenemos un video ID
-        if (firstVideoId) {
-            const thumbEl = card.querySelector('.yt-pl-thumb');
-            if (thumbEl) {
-                thumbEl.style.backgroundImage = `url(https://i.ytimg.com/vi/${firstVideoId}/hqdefault.jpg)`;
-                thumbEl.style.backgroundSize   = 'cover';
-                thumbEl.style.backgroundPosition = 'center';
-                // Overlay oscuro para legibilidad del botón play
-                thumbEl.innerHTML = `
-                    <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);border-radius:0;"></div>
-                    <div style="position:relative;width:52px;height:36px;background:#ff0000;border-radius:8px;
-                        display:flex;align-items:center;justify-content:center;z-index:1;
-                        box-shadow:0 2px 8px rgba(0,0,0,0.5);">
-                        <div style="border-left:18px solid white;border-top:10px solid transparent;
-                            border-bottom:10px solid transparent;margin-left:4px;"></div>
-                    </div>
-                    <span style="position:relative;z-index:1;background:rgba(0,0,0,0.6);
-                        border:1px solid rgba(255,255,255,0.2);
-                        color:white;font-size:0.72em;padding:2px 10px;border-radius:12px;font-weight:700;">
-                        ▶ Lista de reproducción
-                    </span>`;
-                thumbEl.style.position = 'relative';
-                thumbEl.style.display  = 'flex';
-                thumbEl.style.flexDirection = 'column';
-                thumbEl.style.alignItems = 'center';
-                thumbEl.style.justifyContent = 'center';
-                thumbEl.style.gap = '8px';
-            }
-        }
-    } catch (e) {
-        // Si falla el fetch, dejar el card estático sin cambios
-        const titleEl = card.querySelector('.yt-pl-title');
+    // Si la URL original tenía un &v=VIDEO_ID, usarlo como thumbnail
+    if (videoId && thumbEl) {
+        _opSetPlaylistThumb(thumbEl, videoId);
         if (titleEl) titleEl.textContent = 'Lista de reproducción';
-        const countEl = card.querySelector('.yt-pl-count');
         if (countEl) countEl.textContent = '';
+        return;
     }
+
+    // Intentar via YT oEmbed con un video conocido de la playlist
+    // YouTube oEmbed funciona para videos individuales, no para playlists directamente.
+    // Usar allorigins como proxy del RSS de YouTube
+    const proxies = [
+        `https://api.allorigins.win/raw?url=${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?playlist_id=' + playlistId)}`,
+        `https://corsproxy.io/?${encodeURIComponent('https://www.youtube.com/feeds/videos.xml?playlist_id=' + playlistId)}`,
+    ];
+
+    for (const proxyUrl of proxies) {
+        try {
+            const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(5000) });
+            if (!res.ok) continue;
+            const text = await res.text();
+            if (!text || text.length < 100) continue;
+
+            const xml   = new DOMParser().parseFromString(text, 'text/xml');
+            const title = xml.querySelector('feed > title')?.textContent?.trim() || 'Lista de reproducción';
+            const entries = xml.querySelectorAll('entry');
+            const count   = entries.length;
+
+            // videoId del primer entry (namespace yt:)
+            const firstVidEl = entries[0]?.getElementsByTagNameNS('http://www.youtube.com/xml/schemas/2015', 'videoId')[0]
+                             || entries[0]?.querySelector('videoId');
+            const firstVid   = firstVidEl?.textContent;
+
+            if (titleEl) titleEl.textContent = title;
+            if (countEl) countEl.textContent = count > 0
+                ? `${count}${count >= 15 ? '+' : ''} video${count !== 1 ? 's' : ''}`
+                : '';
+            if (firstVid && thumbEl) _opSetPlaylistThumb(thumbEl, firstVid);
+            return; // éxito
+        } catch (_) { /* probar siguiente proxy */ }
+    }
+
+    // Todos los proxies fallaron — mostrar card estático con info mínima
+    if (titleEl) titleEl.textContent = 'Lista de reproducción';
+    if (countEl) countEl.textContent = '';
 };
+
+function _opSetPlaylistThumb(thumbEl, videoId) {
+    thumbEl.style.cssText += `;background-image:url(https://i.ytimg.com/vi/${videoId}/hqdefault.jpg);
+        background-size:cover;background-position:center;position:relative;`;
+    thumbEl.innerHTML = `
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);"></div>
+        <div style="position:relative;width:52px;height:36px;background:#ff0000;border-radius:8px;
+            display:flex;align-items:center;justify-content:center;z-index:1;
+            box-shadow:0 2px 8px rgba(0,0,0,0.5);">
+            <div style="border-left:18px solid white;border-top:10px solid transparent;
+                border-bottom:10px solid transparent;margin-left:4px;"></div>
+        </div>
+        <span style="position:relative;z-index:1;background:rgba(0,0,0,0.55);
+            border:1px solid rgba(255,255,255,0.2);color:white;font-size:0.72em;
+            padding:2px 10px;border-radius:12px;font-weight:700;margin-top:4px;">
+            ▶ Lista de reproducción
+        </span>`;
+}
