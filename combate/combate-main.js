@@ -11,7 +11,7 @@ import {
 import {
     renderCombate, renderSlotDetalle, recalcSlot,
     refrescarPool, refrescarEquipo, refrescarRegistro, refrescarCuadro, refrescarTodo,
-    renderCuadroResumen, generarImagenCuadro, toast
+    renderCuadroResumen, generarImagenCuadro, toast, renderMedInfoPanel
 } from './combate-ui.js';
 import { calcCambios, calcPTTotal } from './combate-logic.js';
 import { guardarStatsGrupo } from '../fichas/fichas-data.js';
@@ -100,31 +100,39 @@ window.onload = async () => {
     renderCombate();
 };
 
+// ── Pool: seleccionar destino (A o B) ─────────────────────────
+window._combateSetDestino = (eq) => {
+    combateState._poolDestino = eq;
+    refrescarPool();
+};
+
 // ── Pool: filtrar ─────────────────────────────────────────────
 window._combatePoolFiltro = (grupo, val) => {
     combateState.poolFiltros[grupo] = val;
     refrescarPool();
 };
 
-// ── Pool: añadir PJ al primer slot libre del equipo con menos PJs ─
+// ── Pool: añadir PJ al equipo destino ────────────────────────
 window._combatePoolAddPJ = (el) => {
     const nombre = el.dataset.nombre;
     if (!nombre) return;
     const pj = todosLosPJs.find(p => (p.nombre_refinado || p.nombre) === nombre);
     if (!pj) return;
 
-    // Buscar primer slot libre, preferir equipo con menos PJs
-    const cntA = combateState.equipoA.filter(Boolean).length;
-    const cntB = combateState.equipoB.filter(Boolean).length;
-    const orden = cntA <= cntB ? ['A','B'] : ['B','A'];
-
-    for (const eq of orden) {
-        const slots = combateState[`equipo${eq}`];
-        const idx   = slots.findIndex(s => !s);
-        if (idx !== -1) {
-            _asignarSlot(eq, idx, pj);
-            return;
-        }
+    const dest = combateState._poolDestino || 'A';
+    const slots = combateState[`equipo${dest}`];
+    const idx   = slots.findIndex(s => !s);
+    if (idx !== -1) {
+        _asignarSlot(dest, idx, pj);
+        return;
+    }
+    // Si el equipo destino está lleno, intentar el otro
+    const otro = dest === 'A' ? 'B' : 'A';
+    const slots2 = combateState[`equipo${otro}`];
+    const idx2   = slots2.findIndex(s => !s);
+    if (idx2 !== -1) {
+        _asignarSlot(otro, idx2, pj);
+        return;
     }
     toast('Todos los slots están llenos', 'error');
 };
@@ -216,23 +224,84 @@ window._combatePVActualChange = (eq, idx, valor) => {
     window._combateRecalcDeltas(eq, idx);
 };
 
-// ── Delta rápido en PVs ────────────────────────────────────────
+// ── Delta rápido en PVs — solo modifica _pvActualManual (Δ1 se usará como acumulador) ──
 window._combateDeltaPV = (eq, idx, delta) => {
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
-    const antes  = slot.pv;
-    slot._pvActualManual = Math.max(0, Math.min(slot.pvMax, (slot._pvActualManual ?? slot.pv) + delta));
+    const pvActAntes = slot.pv;
+    const pvMaxAntes = slot.pvMax;
+    // Sumar al manual (sin clampear al máx, permite superar pvMax temporalmente)
+    const base = slot._pvActualManual !== null && slot._pvActualManual !== undefined
+        ? slot._pvActualManual : slot.pv;
+    slot._pvActualManual = Math.max(0, base + delta);
     recalcSlot(slot);
-    const nuevo = slot.pv;
-    _pushRegistro(slot.nombre, { etiqueta: `${delta>0?'+':''}${delta}PVs(${antes}→${nuevo})` });
+    const pvActNuevo = slot.pv;
+    const pvMaxNuevo = slot.pvMax;
+    _pushRegistro(slot.nombre, { etiqueta: `${delta>0?'+':''}${delta}PVs(${pvActAntes}/${pvMaxAntes}→${pvActNuevo}/${pvMaxNuevo})` });
     refrescarEquipo(eq);
     refrescarRegistro();
     refrescarCuadro();
     renderSlotDetalle(eq, idx);
 };
 
-// ── Dado ──────────────────────────────────────────────────────
-window._combateSetDado = (eq, idx, medallaId, valor) => {
+// ── Helper global para que combate-ui.js pueda acceder a medallas ─
+window._combateGetMedalla = (id) => todasLasMedallas.find(m => String(m.id) === String(id));
+
+// ── Mostrar info de medalla (click en chip o en nombre) ────────
+window._combateMostrarInfoMedalla = (eq, idx, medallaId) => {
+    renderMedInfoPanel(eq, idx, medallaId);
+};
+
+// ── Pasar dado de una medalla al PJ anterior/siguiente ────────
+// dir: -1 = anterior, +1 = siguiente (entre todos los slots de ambos equipos)
+window._combatePasarDado = (eq, idx, medallaId, dir) => {
+    const slotOrigen = combateState[`equipo${eq}`][idx];
+    if (!slotOrigen) return;
+    const val = slotOrigen.dados[medallaId];
+    if (!val) return;
+
+    // Construir lista plana de slots activos: [{eq, idx, slot}]
+    const todos = [];
+    ['A','B'].forEach(e => combateState[`equipo${e}`].forEach((s, i) => {
+        if (s) todos.push({ eq: e, idx: i, slot: s });
+    }));
+    const actualPos = todos.findIndex(t => t.eq === eq && t.idx === idx);
+    if (actualPos === -1) return;
+    const destPos = (actualPos + dir + todos.length) % todos.length;
+    const destItem = todos[destPos];
+    if (!destItem || destItem.eq === eq && destItem.idx === idx) return;
+
+    // Si el destino tiene la medalla, mover el valor
+    if (destItem.slot.medallas.some(m => String(m.id) === String(medallaId))) {
+        destItem.slot.dados[medallaId] = val;
+        delete slotOrigen.dados[medallaId];
+    } else {
+        toast('El PJ destino no tiene esa medalla equipada', 'info');
+        return;
+    }
+
+    // Refrescar ambos equipos
+    refrescarEquipo(eq);
+    refrescarEquipo(destItem.eq);
+    renderSlotDetalle(combateState.slotActivoEquipo, combateState.slotActivoIdx);
+};
+
+// ── Navegación de dado con flechas de teclado ─────────────────
+// Flecha arriba/abajo mueve entre las habilidades del mismo PJ
+window._combateDadoNavKey = (event, eq, idx, medallaIdx) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const medallas = slot.medallas;
+    const nextIdx = medallaIdx + (event.key === 'ArrowDown' ? 1 : -1);
+    if (nextIdx < 0 || nextIdx >= medallas.length) return;
+    const nextId = medallas[nextIdx].id;
+    const nextInput = document.getElementById(`dado-${eq}-${idx}-${nextId}`);
+    if (nextInput) nextInput.focus();
+};
+
+
     const slot = combateState[`equipo${eq}`][idx];
     if (!slot) return;
     const n = parseInt(valor);

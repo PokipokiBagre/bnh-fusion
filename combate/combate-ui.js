@@ -50,10 +50,11 @@ export function recalcSlot(slot) {
 
     const pvBase = (slot._pvActualManual !== null && slot._pvActualManual !== undefined)
         ? slot._pvActualManual : slot.pvMax;
-    slot.pv = Math.max(0, Math.min(slot.pvMax,
+    // Sin clampeado superior: PV actual puede superar PVMax (aumento temporal, ej: 100/30)
+    slot.pv = Math.max(0,
         aplicarDeltas(pvBase,
             d.delta_pv_actual_1, d.delta_pv_actual_2, d.delta_pv_actual_3,
-            d.delta_pv_actual_4, d.delta_pv_actual_5)));
+            d.delta_pv_actual_4, d.delta_pv_actual_5));
 }
 
 // ── Render raíz ───────────────────────────────────────────────
@@ -74,8 +75,12 @@ export function renderCombate() {
 }
 
 // ── Pool de personajes con filtros ────────────────────────────
+// Estado de equipo destino (A o B) — persiste mientras el usuario no lo cambia
+if (!combateState._poolDestino) combateState._poolDestino = 'A';
+
 export function renderPool() {
     const f = combateState.poolFiltros;
+    const dest = combateState._poolDestino || 'A';
     const usados = new Set([
         ...combateState.equipoA.filter(Boolean).map(s => s.nombre),
         ...combateState.equipoB.filter(Boolean).map(s => s.nombre),
@@ -99,10 +104,27 @@ export function renderPool() {
             onclick="window._combatePoolFiltro('${grupo}','${val}')">${lbl}</button>`;
     };
 
+    const _destBtn = (eq, lbl, color) => {
+        const activo = dest === eq;
+        return `<button style="padding:4px 14px;border-radius:16px;
+            border:2px solid ${activo?'white':color+'99'};
+            background:${activo?'white':'transparent'};
+            color:${activo?color:'rgba(255,255,255,0.75)'};
+            font-size:0.75em;font-weight:${activo?800:600};cursor:pointer;transition:.15s;white-space:nowrap;
+            ${activo?'box-shadow:0 0 0 3px '+color+'55;':''}"
+            onclick="window._combateSetDestino('${eq}')">${lbl}</button>`;
+    };
+
     return `
 <div style="background:white;border:1.5px solid #dee2e6;border-radius:12px;overflow:hidden;">
     <div style="background:#212529;color:white;padding:8px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-weight:800;font-size:0.82em;letter-spacing:.5px;white-space:nowrap;">👥 PERSONAJES</span>
+        <!-- Botones destino equipo -->
+        <div style="display:flex;gap:4px;background:rgba(255,255,255,0.08);padding:3px 6px;border-radius:10px;align-items:center;">
+            <span style="font-size:0.68em;color:rgba(255,255,255,0.5);white-space:nowrap;margin-right:2px;">Enviar a:</span>
+            ${_destBtn('A','⬤ Azul','#4a90d9')}
+            ${_destBtn('B','⬤ Rojo','#e05252')}
+        </div>
         <div style="display:flex;gap:3px;background:rgba(255,255,255,0.1);padding:3px 5px;border-radius:10px;">
             ${_btn('estado','todos','Todos')}${_btn('estado','#activo','Activo')}${_btn('estado','#inactivo','Inactivo')}
         </div>
@@ -118,12 +140,16 @@ export function renderPool() {
             const nombre = pj.nombre_refinado || pj.nombre;
             const enUso  = usados.has(nombre);
             const imgUrl = `${STORAGE_URL}/imgpersonajes/${norm(nombre)}icon.png`;
+            const destColor = dest === 'A' ? '#1a4a80' : '#a93226';
             return `
         <div style="display:flex;align-items:center;gap:5px;padding:4px 9px 4px 5px;border-radius:20px;
             border:1.5px solid ${enUso?'#adb5bd':'#dee2e6'};background:${enUso?'#f1f3f4':'white'};
             opacity:${enUso?0.55:1};cursor:${enUso?'default':'pointer'};
             box-shadow:${enUso?'none':'0 1px 3px rgba(0,0,0,0.06)'};transition:.12s;"
-            ${enUso?'':'onclick="window._combatePoolAddPJ(this)" onmouseover="this.style.borderColor=\'#212529\'" onmouseout="this.style.borderColor=\'#dee2e6\'"'}
+            ${enUso?'':
+                `onclick="window._combatePoolAddPJ(this)"
+                 onmouseover="this.style.borderColor='${destColor}'"
+                 onmouseout="this.style.borderColor='#dee2e6'"`}
             data-nombre="${esc(nombre)}">
             <img src="${imgUrl}" onerror="this.src='${fallback}'"
                 style="width:26px;height:26px;border-radius:50%;object-fit:cover;object-position:top;flex-shrink:0;">
@@ -187,43 +213,65 @@ function _renderSlotCard(eq, idx, slot, col) {
             onclick="event.stopPropagation();window._combateQuitarSlot('${eq}',${idx})">✕</button>
     </div>
 
-    <!-- Stats horizontales -->
+    <!-- Stats horizontales: PVAct (verde) / PVMax (azul) separados -->
     <div style="display:flex;gap:2px;padding:6px 8px;">
-        ${[['POT',slot.pot,'#7d3c00'],['AGI',slot.agi,'#1a4a80'],['CTL',slot.ctl,'#4a235a'],
-           ['C/T',slot.cambios,'#1e8449'],['PVMax',slot.pvMax,pvColor],['PVAct',`${slot.pv}/${slot.pvMax}`,pvColor]
+        ${[['POT',slot.pot,'#7d3c00'],['AGI',slot.agi,'#1a4a80'],['CTL',slot.ctl,'#4a235a'],['C/T',slot.cambios,'#1e8449']
           ].map(([l,v,c]) => `
         <div style="flex:1;background:#f8f9fa;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;">
             <div style="font-weight:800;color:${c};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${v}</div>
             <div style="color:#adb5bd;font-size:0.8em;">${l}</div>
         </div>`).join('')}
+        <!-- PVMax (azul) -->
+        <div style="flex:1.2;background:#e8f4fd;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #b3d7f5;">
+            <div style="font-weight:800;color:#1a4a80;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pvMax}</div>
+            <div style="color:#5b9bd5;font-size:0.8em;">PVMax</div>
+        </div>
+        <!-- PVAct (verde) -->
+        <div style="flex:1.4;background:#e9f7ef;border-radius:6px;padding:3px 2px;text-align:center;min-width:0;font-size:0.72em;border:1px solid #a9dfbf;">
+            <div style="font-weight:800;color:${pvColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${slot.pv}/${slot.pvMax}</div>
+            <div style="color:#1e8449;font-size:0.8em;">PVAct</div>
+        </div>
     </div>
 
-    <!-- Medallas equipadas: click para desequipar -->
+    <!-- Medallas equipadas: click = ver info, solo ✕ desequipa -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 6px;display:flex;flex-wrap:wrap;gap:3px;" onclick="event.stopPropagation()">
         ${slot.medallas.map(m => `
-        <span title="Click para desequipar"
-            style="font-size:0.68em;background:#f5eeff;color:#6c3483;border:1.5px solid #c8a8e9;
-                padding:2px 7px;border-radius:6px;font-weight:700;cursor:pointer;"
-            onmouseover="this.style.background='#6c3483';this.style.color='white';"
-            onmouseout="this.style.background='#f5eeff';this.style.color='#6c3483';"
-            onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',false)">
-            ✕ ${esc(m.nombre)} <span style="opacity:.6;">${m.costo_ctl}C</span></span>`).join('')}
+        <span title="Click para ver info"
+            style="display:inline-flex;align-items:center;gap:3px;font-size:0.68em;background:#f5eeff;color:#6c3483;
+                border:1.5px solid #c8a8e9;padding:2px 4px 2px 7px;border-radius:6px;font-weight:700;cursor:pointer;"
+            onclick="window._combateMostrarInfoMedalla('${eq}',${idx},'${m.id}')">
+            ${esc(m.nombre)} <span style="opacity:.6;">${m.costo_ctl}C</span>
+            <button style="background:rgba(108,52,131,0.15);border:none;color:#6c3483;cursor:pointer;
+                border-radius:4px;padding:0 3px;font-size:1em;line-height:1;font-weight:900;flex-shrink:0;"
+                title="Desequipar"
+                onclick="event.stopPropagation();window._combateToggleMedalla('${eq}',${idx},'${m.id}',false)">✕</button>
+        </span>`).join('')}
         <span style="font-size:0.65em;color:#aaa;align-self:center;">CTL ${ctlUsado}/${slot.ctl}</span>
     </div>` : ''}
 
-    <!-- Dados -->
+    <!-- Dados con flechas para navegar entre habilidades y PJs -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 8px;display:flex;flex-wrap:wrap;gap:4px;" onclick="event.stopPropagation()">
-        ${slot.medallas.map(m => `
-        <div style="display:flex;align-items:center;gap:3px;">
+        ${slot.medallas.map((m, mi) => `
+        <div style="display:flex;align-items:center;gap:2px;">
             <span style="font-size:0.62em;color:#888;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                 title="${esc(m.nombre)}">${esc(m.nombre.length>8?m.nombre.slice(0,8)+'…':m.nombre)}</span>
+            <!-- Flecha arriba: pasa dado al PJ anterior -->
+            <button title="Pasar al PJ anterior" style="background:none;border:1px solid #dee2e6;border-radius:3px;
+                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
+                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',-1)">▲</button>
             <input type="number" min="1" max="100" placeholder="🎲"
-                style="width:50px;padding:2px 4px;border:1.5px solid #dee2e6;border-radius:5px;
+                id="dado-${eq}-${idx}-${esc(m.id)}"
+                style="width:46px;padding:2px 3px;border:1.5px solid #dee2e6;border-radius:5px;
                     font-size:0.75em;text-align:center;font-weight:700;"
                 value="${slot.dados[m.id]||''}"
-                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)">
+                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
+                onkeydown="window._combateDadoNavKey(event,'${eq}',${idx},${mi})">
+            <!-- Flecha abajo: pasa dado al PJ siguiente -->
+            <button title="Pasar al PJ siguiente" style="background:none;border:1px solid #dee2e6;border-radius:3px;
+                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
+                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',1)">▼</button>
         </div>`).join('')}
     </div>` : ''}
 </div>`;
@@ -300,43 +348,44 @@ export function renderSlotDetalle(eq, idx) {
                 ${_statBlock('pot',      'POT',     slot._pj.pot||0)}
                 ${_statBlock('agi',      'AGI',     slot._pj.agi||0)}
                 ${_statBlock('ctl',      'CTL',     slot._pj.ctl||0)}
-                ${_statBlock('pv',       'PV Máx',  0, true)}
-                ${_statBlock('cambios',  'Camb/T',  0, true)}
+            <!-- PV Máx (azul) con sus deltas — calculado a partir de pot/agi/ctl -->
+            ${_statBlock('pv', 'PV Máx', 0, true)}
+
+            ${_statBlock('cambios',  'Camb/T',  0, true)}
             </div>
 
-            <!-- PV Actual con sus deltas -->
-            <div style="background:rgba(30,132,73,0.06);border:1px solid rgba(30,132,73,0.3);border-radius:8px;padding:8px 10px;margin-top:6px;">
+            <!-- PV Actual con sus deltas — cuadro verde -->
+            <div style="background:rgba(30,132,73,0.06);border:2px solid rgba(30,132,73,0.4);border-radius:8px;padding:8px 10px;margin-top:6px;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;flex-wrap:wrap;">
-                    <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">PV Actual</span>
+                    <span style="font-weight:800;color:#1e8449;font-size:0.82em;min-width:58px;">🟢 PV Actual</span>
                     <input type="number" value="${slot._pvActualManual??''}" placeholder="Vacío=Máx"
-                        style="width:75px;border:1px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;"
+                        style="width:75px;border:2px solid #27ae60;border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:#1e8449;background:#f0fff4;"
                         id="cb-${eq}-${idx}-pvactual-base"
                         oninput="window._combatePVActualChange('${eq}',${idx},this.value)">
-                    <span style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.05em;">${slot.pv}</b></span>
+                    <span style="font-size:0.75em;color:#888;">→ <b style="color:#1e8449;font-size:1.1em;">${slot.pv}</b>
+                        <span style="color:#aaa;">/ ${slot.pvMax}</span></span>
                 </div>
                 <div style="display:flex;gap:3px;">
                     ${[1,2,3,4,5].map(n=>`
                     <div style="flex:1;text-align:center;">
                         <div style="font-size:0.6em;color:#27ae60;margin-bottom:1px;font-weight:700;">Δ${n}</div>
                         <input type="text" value="${d[`delta_pv_actual_${n}`]||'0'}" placeholder="0"
-                            style="width:100%;border:1px solid #ddd;border-radius:4px;padding:2px 1px;
-                                text-align:center;font-size:0.8em;font-weight:700;color:#27ae60;"
+                            style="width:100%;border:1px solid #a9dfbf;border-radius:4px;padding:2px 1px;
+                                text-align:center;font-size:0.8em;font-weight:700;color:#27ae60;background:#f0fff4;"
                             id="cb-${eq}-${idx}-pv_actual-d${n}"
                             oninput="window._combateRecalcDeltas('${eq}',${idx})">
                     </div>`).join('')}
                 </div>
+                <!-- Botones rápidos ±PV → afectan solo delta_pv_actual_1 -->
+                <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 0 2px;">
+                    <span style="font-size:0.68em;font-weight:700;color:#555;margin-right:3px;white-space:nowrap;">PVs:</span>
+                    ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
+                        `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
+                            border-radius:4px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
+                            onclick="window._combateDeltaPV('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
+                    ).join('')}
+                </div>
             </div>
-
-            <!-- Botones rápidos PVs -->
-            <div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;padding:6px 8px;border-radius:8px;background:#f8f9fa;border:1px solid #dee2e6;margin-top:6px;">
-                <span style="font-size:0.7em;font-weight:700;color:#555;margin-right:3px;white-space:nowrap;">PVs:</span>
-                ${[-100,-50,-20,-10,-5,-1,1,5,10,20,50,100].map(dv=>
-                    `<button style="font-size:0.65em;padding:2px 5px;border:1px solid ${dv>0?'#27ae60':'#e74c3c'};
-                        border-radius:4px;background:${dv>0?'#d5f5e3':'#fdecea'};color:${dv>0?'#1a5e35':'#7b241c'};cursor:pointer;"
-                        onclick="window._combateDeltaPV('${eq}',${idx},${dv})">${dv>0?'+':''}${dv}</button>`
-                ).join('')}
-            </div>
-        </div>
 
         <!-- TAGS Y PTS -->
         <div>
@@ -386,25 +435,46 @@ export function renderSlotDetalle(eq, idx) {
                 Medallas — CTL ${ctlUsado}/${slot.ctl}
                 <span style="font-size:0.85em;font-weight:500;color:#aaa;text-transform:none;">(simulación, sin límite)</span>
             </div>
+            <!-- Panel de info de medalla (visible al hacer click en el nombre) -->
+            <div id="med-info-${eq}-${idx}" style="display:none;margin-bottom:10px;border:2px solid ${col};border-radius:8px;padding:10px;background:${pale};">
+                <div id="med-info-content-${eq}-${idx}"></div>
+            </div>
             <div style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;">
                 ${medallasAcc.map(m=>{
                     const eq2 = medallasEquip.has(String(m.id));
+                    // Verificar requisitos base para mostrar estado visual
+                    const reqs = (m.requisitos_base||[]).map(r=>{
+                        const tN=(r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
+                        const cumpleTag = tagsActivos.has(tN);
+                        const pts2 = slot.pts?.[(r.tag.startsWith('#')?r.tag:'#'+r.tag)]||0;
+                        const cumplePts = pts2 >= (r.pts_minimos||0);
+                        return {tag:r.tag, pts:pts2, min:r.pts_minimos||0, ok:cumpleTag&&cumplePts};
+                    });
                     return `
                 <div style="display:flex;align-items:flex-start;gap:8px;padding:9px;border-radius:8px;
                     border:1.5px solid ${eq2?col:'#dee2e6'};background:${eq2?pale:'white'};
-                    cursor:pointer;transition:.12s;"
-                    onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',${!eq2})"
-                    onmouseover="this.style.borderColor='${col}';this.style.background='${pale}'"
-                    onmouseout="this.style.borderColor='${eq2?col:'#dee2e6'}';this.style.background='${eq2?pale:'white'}'">
+                    transition:.12s;">
+                    <!-- Checkbox (toggle equip) -->
                     <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${eq2?col:'#adb5bd'};
-                        background:${eq2?col:'white'};display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">
+                        background:${eq2?col:'white'};display:flex;align-items:center;justify-content:center;
+                        flex-shrink:0;margin-top:1px;cursor:pointer;"
+                        onclick="window._combateToggleMedalla('${eq}',${idx},'${m.id}',${!eq2})">
                         ${eq2?'<span style="color:white;font-size:0.75em;font-weight:900;">✓</span>':''}
                     </div>
-                    <div style="flex:1;min-width:0;">
+                    <!-- Info del nombre/efecto — click abre panel info -->
+                    <div style="flex:1;min-width:0;cursor:pointer;"
+                        onclick="window._combateMostrarInfoMedalla('${eq}',${idx},'${m.id}')">
                         <div style="font-size:0.82em;font-weight:700;">${esc(m.nombre)}
-                            <span style="font-size:0.82em;color:#888;font-weight:500;">${m.costo_ctl}C · ${m.tipo}</span>
+                            <span style="font-size:0.82em;color:#888;font-weight:500;">${m.costo_ctl}C · ${m.tipo||''}</span>
                         </div>
                         <div style="font-size:0.73em;color:#555;margin-top:2px;line-height:1.4;">${renderMarkup(m.efecto_desc||'')}</div>
+                        <!-- Requisitos mini-badge -->
+                        <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:4px;">
+                            ${reqs.map(r=>`<span style="font-size:0.65em;padding:1px 5px;border-radius:4px;font-weight:700;
+                                background:${r.ok?'#d5f5e3':'#fdecea'};color:${r.ok?'#1a5e35':'#7b241c'};
+                                border:1px solid ${r.ok?'#a9dfbf':'#f5b7b1'};">
+                                ${esc(r.tag)} ${r.min?r.pts+'/'+r.min:''} ${r.ok?'✓':'✗'}</span>`).join('')}
+                        </div>
                     </div>
                 </div>`;
                 }).join('')||'<div style="font-size:0.78em;color:#aaa;text-align:center;padding:10px;">Sin medallas accesibles</div>'}
@@ -513,7 +583,73 @@ export function refrescarTodo() {
         renderSlotDetalle(combateState.slotActivoEquipo, combateState.slotActivoIdx);
 }
 
-// ── Generación de imagen Canvas estilizada ────────────────────
+// ── Panel info de medalla ─────────────────────────────────────
+export function renderMedInfoPanel(eq, idx, medallaId) {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    const { todasLasMedallas } = window._combateRefs || {};
+    // todasLasMedallas is imported in combate-state scope; access via combate-state re-export
+    // We'll resolve it from the caller via window._combateGetMedalla
+    const m = window._combateGetMedalla?.(medallaId);
+    if (!m) return;
+
+    const col  = eq === 'A' ? '#1a4a80' : '#a93226';
+    const tagsActivos = new Set((slot.tags||[]).map(t=>(t.startsWith('#')?t:'#'+t).toLowerCase()));
+
+    const reqsBase = (m.requisitos_base||[]).map(r => {
+        const tN = (r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
+        const cumpleTag = tagsActivos.has(tN);
+        const pts = slot.pts?.[(r.tag.startsWith('#')?r.tag:'#'+r.tag)] || 0;
+        const cumplePts = pts >= (r.pts_minimos||0);
+        return { tag: r.tag, pts, min: r.pts_minimos||0, ok: cumpleTag && cumplePts, cumpleTag, cumplePts };
+    });
+    const reqsCond = (m.requisitos_condicionales||[]).map(r => {
+        const tN = (r.tag.startsWith('#')?r.tag:'#'+r.tag).toLowerCase();
+        const cumpleTag = tagsActivos.has(tN);
+        const pts = slot.pts?.[(r.tag.startsWith('#')?r.tag:'#'+r.tag)] || 0;
+        const cumplePts = pts >= (r.pts_minimos||0);
+        return { tag: r.tag, pts, min: r.pts_minimos||0, ok: cumpleTag && cumplePts, cumpleTag, cumplePts };
+    });
+    const condDado = m.condicion_dado || null;
+    const dadoActual = slot.dados?.[m.id];
+
+    const _req = (r, tipo) => `
+<div style="display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:5px;
+    background:${r.ok?'#d5f5e3':'#fdecea'};border:1px solid ${r.ok?'#a9dfbf':'#f5b7b1'};font-size:0.78em;">
+    <span style="font-weight:800;color:${r.ok?'#1a5e35':'#7b241c'};">${r.ok?'✓':'✗'}</span>
+    <span style="font-weight:700;color:#333;">${esc(r.tag)}</span>
+    ${r.min ? `<span style="color:#666;">PT: <b>${r.pts}/${r.min}</b> ${r.cumplePts?'✓':'✗'}</span>` : ''}
+    ${!r.cumpleTag ? `<span style="color:#c0392b;font-size:0.88em;">Tag no activo</span>` : ''}
+    <span style="margin-left:auto;font-size:0.75em;color:#888;font-style:italic;">${tipo}</span>
+</div>`;
+
+    const panelEl = document.getElementById(`med-info-${eq}-${idx}`);
+    const contentEl = document.getElementById(`med-info-content-${eq}-${idx}`);
+    if (!panelEl || !contentEl) return;
+
+    contentEl.innerHTML = `
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;flex-wrap:wrap;">
+    <div>
+        <span style="font-weight:900;font-size:0.9em;color:${col};">${esc(m.nombre)}</span>
+        <span style="font-size:0.78em;color:#888;margin-left:6px;">${m.costo_ctl}C · ${m.tipo||''}</span>
+    </div>
+    <button style="background:none;border:none;cursor:pointer;font-size:1.1em;color:#aaa;"
+        onclick="document.getElementById('med-info-${eq}-${idx}').style.display='none'">✕</button>
+</div>
+<div style="font-size:0.8em;color:#333;line-height:1.5;margin-bottom:8px;">${renderMarkup(m.efecto_desc||'(sin descripción)')}</div>
+${reqsBase.length ? `<div style="font-size:0.7em;font-weight:800;color:#555;text-transform:uppercase;margin-bottom:4px;">Requisitos base</div>
+<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px;">${reqsBase.map(r=>_req(r,'base')).join('')}</div>` : ''}
+${reqsCond.length ? `<div style="font-size:0.7em;font-weight:800;color:#555;text-transform:uppercase;margin-bottom:4px;">Requisitos condicionales</div>
+<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px;">${reqsCond.map(r=>_req(r,'cond.')).join('')}</div>` : ''}
+${condDado ? `<div style="font-size:0.78em;background:#f0f0ff;border:1px solid #c5cae9;border-radius:6px;padding:5px 8px;">
+    🎲 Cond. dado: <b>${esc(condDado)}</b> — dado actual: <b>${dadoActual||'—'}</b>
+</div>` : ''}`;
+
+    panelEl.style.display = 'block';
+    panelEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+
 export async function generarImagenCuadro() {
     const actA = combateState.equipoA.filter(Boolean);
     const actB = combateState.equipoB.filter(Boolean);
