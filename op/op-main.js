@@ -181,21 +181,6 @@ async function _enviar() {
     }
 }
 
-// ── Subir imagen desde archivo directo ───────────────────────
-function _onFileSelect(file) {
-    if (!file) return;
-    const preview = document.createElement('div');
-    preview.id = 'op-file-preview';
-    preview.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 10px;
-        background:rgba(108,52,131,0.2);border-radius:8px;margin-bottom:4px;`;
-    const url = URL.createObjectURL(file);
-    preview.innerHTML = `<img src="${url}" style="height:48px;border-radius:6px;object-fit:cover;">
-        <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${file.name}</span>
-        <button onclick="document.getElementById('op-file-input').value='';this.closest('#op-file-preview').remove()"
-            style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;">✕</button>`;
-    $('op-input-wrap')?.insertAdjacentElement('beforebegin', preview);
-}
-
 // ── Exponer funciones globales ─────────────────────────────────
 function _exponerGlobales() {
     window._opTab        = t => _renderTab(t);
@@ -342,13 +327,9 @@ function _exponerGlobales() {
 function _renderPerfilPill() {
     const pill = document.getElementById('op-perfil-pill');
     if (!pill || !opState.perfil) return;
-    const { avatarUrl } = opState;
     const p = opState.perfil;
-    const av = p.avatar_path
-        ? `${opState.STORAGE_URL || ''}/${p.avatar_path}`
-        : (document.querySelector('[id^=dynamic-favicon]')?.href || '');
     pill.innerHTML = `
-        <img src="${p.avatar_path ? (window._STORAGE_URL||'') + '/' + p.avatar_path : ''}"
+        <img src="${p.avatar_path ? (window._STORAGE_URL || '') + '/' + p.avatar_path : ''}"
             id="op-pill-avatar"
             style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:2px solid rgba(192,57,43,0.3);background:#f8f9fa;"
             onerror="this.style.display='none'">
@@ -363,7 +344,8 @@ function _renderPerfilPill() {
 // Keep reference for index.html
 window._opRenderPerfilPill = _renderPerfilPill;
 
-
+// ── Toast ──────────────────────────────────────────────────────
+function toast(msg, tipo = 'info') {
     const el = document.getElementById('op-toast');
     if (!el) return;
     el.textContent = msg;
