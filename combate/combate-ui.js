@@ -295,7 +295,7 @@ export function renderSlotDetalle(eq, idx) {
     const tab = slot._tabActiva || 'stats';
 
     // ── Bloque stat con deltas ────────────────────────────────
-    const _statBlock = (key, lbl, baseVal, isAuto=false, accentColor=col, bg='#f8f9fa', border='#e9ecef') => {
+    const _statBlock = (key, lbl, baseVal, isAuto=false, accentColor=col, bg='#f8f9fa', border='#e9ecef', extraHTML='') => {
         const deltas = [1,2,3,4,5].map(n => d[`delta_${key}_${n}`]||'0');
         const resultKey = { pv:'pvMax', cambios:'cambios', pv_actual:'pv' }[key] || key;
         const result = slot[resultKey] ?? '?';
@@ -309,7 +309,7 @@ export function renderSlotDetalle(eq, idx) {
                 style="width:60px;border:1.5px solid ${border};border-radius:4px;padding:2px 5px;text-align:center;font-weight:700;color:${accentColor};"
                 id="cb-${eq}-${idx}-${key}-base" oninput="window._combateRecalcDeltas('${eq}',${idx})">`
         }
-        <span style="font-size:0.75em;color:#888;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
+        <span id="cb-${eq}-${idx}-${key}-result" style="font-size:0.75em;color:#888;">→ <b style="color:${accentColor};font-size:1.1em;">${result}</b></span>
     </div>
     <div style="display:flex;gap:3px;">
         ${[1,2,3,4,5].map(n=>`
@@ -322,6 +322,7 @@ export function renderSlotDetalle(eq, idx) {
                 oninput="window._combateRecalcDeltas('${eq}',${idx})">
         </div>`).join('')}
     </div>
+    ${extraHTML}
 </div>`;
     };
 
