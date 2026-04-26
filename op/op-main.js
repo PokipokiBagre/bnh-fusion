@@ -17,8 +17,8 @@ import {
 import { mountMarkupAC } from './op-markup.js';
 
 const $ = id => document.getElementById(id);
-let _pendingImgId = null;
-let _pasteFile    = null;
+let _pendingImgId  = null;
+let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
 
 // ── Init ──────────────────────────────────────────────────────
 export async function initOP() {
@@ -185,70 +185,102 @@ function _mountInput() {
         }
     });
 
-    // Ctrl+V con imagen en portapapeles
-    ta.addEventListener('paste', async e => {
+    // Paste: Ctrl+V con imagen(es) en portapapeles
+    const _handlePaste = e => {
         const items = Array.from(e.clipboardData?.items || []);
-        const imgItem = items.find(it => it.type.startsWith('image/'));
-        if (!imgItem) return; // texto normal, dejar pasar
-
+        const imgItems = items.filter(it => it.type.startsWith('image/'));
+        if (!imgItems.length) return;
         e.preventDefault();
-        const file = imgItem.getAsFile();
-        if (!file) return;
-
-        _mostrarPreviaPortapapeles(file);
-    });
-
-    // También capturar paste global (cuando el foco no está en el textarea)
-    document.addEventListener('paste', async e => {
-        if (e.target === ta) return; // ya lo maneja el listener de arriba
-        const items = Array.from(e.clipboardData?.items || []);
-        const imgItem = items.find(it => it.type.startsWith('image/'));
-        if (!imgItem) return;
-        e.preventDefault();
-        const file = imgItem.getAsFile();
-        if (!file) return;
-        _mostrarPreviaPortapapeles(file);
-    });
+        imgItems.forEach(it => {
+            const file = it.getAsFile();
+            if (file) _agregarArchivosPendientes([file], 'paste');
+        });
+    };
+    ta.addEventListener('paste', _handlePaste);
+    document.addEventListener('paste', e => { if (e.target !== ta) _handlePaste(e); });
 }
 
-// ── Preview de imagen pegada desde portapapeles ───────────────
-function _mostrarPreviaPortapapeles(file) {
-    // Limpiar preview anterior si existe
-    $('op-paste-preview')?.remove();
-    $('op-file-preview')?.remove();
-    $('op-img-preview')?.remove();
+// ── Sistema unificado de archivos pendientes ──────────────────
+function _agregarArchivosPendientes(files, source = 'file') {
+    files.forEach(file => {
+        const url = URL.createObjectURL(file);
+        _pendingFiles.push({ file, url, source, id: Date.now() + Math.random() });
+    });
+    _renderPendingPreview();
+    $('op-msg-input')?.focus();
+}
 
-    const url  = URL.createObjectURL(file);
+function _renderPendingPreview() {
+    let panel = $('op-pending-panel');
+
+    if (!_pendingFiles.length) {
+        panel?.remove();
+        return;
+    }
+
     const wrap = $('op-input-wrap');
     if (!wrap) return;
 
-    const prev = document.createElement('div');
-    prev.id = 'op-paste-preview';
-    prev.style.cssText = `display:flex;align-items:center;gap:10px;padding:8px 12px;
-        background:rgba(108,52,131,0.15);border-radius:10px;margin-bottom:4px;
-        border:1.5px dashed rgba(108,52,131,0.4);`;
-    prev.innerHTML = `
-        <img src="${url}" style="height:56px;max-width:80px;border-radius:6px;object-fit:cover;border:1px solid rgba(108,52,131,0.3);">
-        <div style="flex:1;min-width:0;">
-            <div style="font-size:0.78em;color:#6c3483;font-weight:700;">📋 Imagen del portapapeles</div>
-            <div style="font-size:0.7em;color:rgba(108,52,131,0.6);margin-top:2px;">${(file.size/1024).toFixed(0)} KB · ${file.type}</div>
-        </div>
-        <button id="op-paste-cancel"
-            style="background:none;border:none;color:rgba(108,52,131,0.5);cursor:pointer;font-size:1.2em;padding:2px 4px;"
-            title="Cancelar">✕</button>`;
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'op-pending-panel';
+        panel.style.cssText = `
+            display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
+            background:rgba(108,52,131,0.08);border-radius:10px;margin-bottom:6px;
+            border:1.5px dashed rgba(108,52,131,0.35);align-items:flex-start;`;
+        wrap.insertAdjacentElement('beforebegin', panel);
+    }
 
-    wrap.insertAdjacentElement('beforebegin', prev);
+    panel.innerHTML = '';
 
-    prev.querySelector('#op-paste-cancel').onclick = () => {
-        URL.revokeObjectURL(url);
-        prev.remove();
-        _pasteFile = null;
-    };
+    _pendingFiles.forEach((entry) => {
+        const isImg = entry.file.type.startsWith('image/');
+        const kb    = (entry.file.size / 1024).toFixed(0);
+        const label = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
 
-    _pasteFile = file;
-    // Dar foco al textarea para que el usuario pueda escribir caption si quiere
-    $('op-msg-input')?.focus();
+        const card = document.createElement('div');
+        card.style.cssText = `position:relative;display:flex;flex-direction:column;align-items:center;
+            gap:4px;background:white;border-radius:8px;padding:6px;
+            border:1px solid rgba(108,52,131,0.25);width:88px;box-sizing:border-box;`;
+
+        card.innerHTML = `
+            ${isImg
+                ? `<img src="${entry.url}" style="width:76px;height:60px;object-fit:cover;border-radius:5px;">`
+                : `<div style="width:76px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:#f5eeff;border-radius:5px;">📄</div>`}
+            <div style="font-size:0.6em;color:#6c3483;text-align:center;line-height:1.3;
+                width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                title="${label}">${entry.source === 'paste' ? '📋 ' : '📎 '}${label}</div>
+            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${kb} KB</div>
+            <button data-uid="${entry.id}" style="position:absolute;top:-6px;right:-6px;
+                width:18px;height:18px;border-radius:50%;background:#c0392b;border:none;
+                color:white;font-size:0.65em;cursor:pointer;line-height:18px;text-align:center;padding:0;"
+                title="Quitar">✕</button>`;
+
+        card.querySelector('button').onclick = () => {
+            URL.revokeObjectURL(entry.url);
+            _pendingFiles = _pendingFiles.filter(f => f.id !== entry.id);
+            _renderPendingPreview();
+        };
+
+        panel.appendChild(card);
+    });
+
+    // Footer con contador y "limpiar todo"
+    const footer = document.createElement('div');
+    footer.style.cssText = `width:100%;font-size:0.7em;color:rgba(108,52,131,0.7);
+        margin-top:4px;display:flex;justify-content:space-between;align-items:center;`;
+    footer.innerHTML = `
+        <span>${_pendingFiles.length} imagen${_pendingFiles.length > 1 ? 'es' : ''} · se enviarán como mensajes separados</span>
+        <button style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;"
+            onclick="window._opLimpiarPendientes()">Limpiar todo</button>`;
+    panel.appendChild(footer);
 }
+
+window._opLimpiarPendientes = () => {
+    _pendingFiles.forEach(f => URL.revokeObjectURL(f.url));
+    _pendingFiles = [];
+    _renderPendingPreview();
+};
 
 // ── Enviar mensaje ────────────────────────────────────────────
 async function _enviar() {
@@ -256,54 +288,63 @@ async function _enviar() {
     const ta        = $('op-msg-input');
     const contenido = ta?.value.trim() || '';
 
-    let imagenPath = null;
-
-    // Imagen desde galería
-    if (_pendingImgId !== null) {
-        const allImgs = Object.values(opState.imagenesGaleria).flat();
-        const img = allImgs.find(i => i.id === _pendingImgId);
-        imagenPath = img?.path || null;
-        _pendingImgId = null;
-        $('op-img-preview')?.remove();
-    }
-
-    // Imagen desde portapapeles (Ctrl+V)
-    if (_pasteFile) {
-        const file = _pasteFile;
-        _pasteFile = null;
-        $('op-paste-preview')?.remove();
-        const res = await subirImagenGaleria(
-            file, opState.perfil.id, opState.perfil.nombre,
-            `paste_${Date.now()}`
-        );
-        if (res.ok) {
-            imagenPath = res.imagen.path;
-            await _cargarGaleria();
-            renderGaleria();
-        } else {
-            toast('❌ Error al subir imagen pegada', 'error');
-        }
-    }
-
-    // Imagen desde archivo
+    // Recolectar archivos desde el input file también
     const fileInput = $('op-file-input');
     if (fileInput?.files?.length) {
-        const file = fileInput.files[0];
-        const res = await subirImagenGaleria(
-            file, opState.perfil.id, opState.perfil.nombre,
-            file.name.replace(/\.[^.]+$/, '')
-        );
-        if (res.ok) {
-            imagenPath = res.imagen.path;
-            await _cargarGaleria();
-            renderGaleria();
-        }
+        _agregarArchivosPendientes(Array.from(fileInput.files), 'file');
         fileInput.value = '';
         $('op-file-preview')?.remove();
     }
 
-    if (!contenido && !imagenPath) return;
+    // Imagen desde galería (solo una a la vez)
+    if (_pendingImgId !== null) {
+        const allImgs = Object.values(opState.imagenesGaleria).flat();
+        const img = allImgs.find(i => i.id === _pendingImgId);
+        if (img) {
+            await _enviarUnMensaje(null, img.path);
+        }
+        _pendingImgId = null;
+        $('op-img-preview')?.remove();
+    }
 
+    // Si hay archivos pendientes, subir y enviar cada uno como mensaje separado
+    if (_pendingFiles.length) {
+        const filesToSend = [..._pendingFiles];
+        _pendingFiles = [];
+        _renderPendingPreview();
+
+        // El texto solo va con el primer mensaje
+        let primerConTexto = contenido;
+        if (ta) { ta.value = ''; ta.style.height = 'auto'; }
+
+        for (const entry of filesToSend) {
+            const safeName = entry.source === 'paste'
+                ? `paste_${Date.now()}`
+                : entry.file.name.replace(/\.[^.]+$/, '');
+            const res = await subirImagenGaleria(
+                entry.file, opState.perfil.id, opState.perfil.nombre, safeName
+            );
+            URL.revokeObjectURL(entry.url);
+            if (res.ok) {
+                await _enviarUnMensaje(primerConTexto || null, res.imagen.path);
+                primerConTexto = null; // solo en el primero
+            } else {
+                toast(`❌ Error subiendo ${safeName}`, 'error');
+            }
+        }
+        await _cargarGaleria();
+        renderGaleria();
+        return;
+    }
+
+    // Solo texto (sin imágenes)
+    if (!contenido) return;
+    if (ta) { ta.value = ''; ta.style.height = 'auto'; }
+    await _enviarUnMensaje(contenido, null);
+}
+
+async function _enviarUnMensaje(contenido, imagenPath) {
+    if (!contenido && !imagenPath) return;
     const msg = await enviarMensaje({
         convId:      opState.convActual,
         autorId:     opState.perfil.id,
@@ -311,10 +352,9 @@ async function _enviar() {
         contenido:   contenido || null,
         imagenPath,
     });
-
     if (msg) {
-        if (ta) { ta.value = ''; ta.style.height = 'auto'; }
         appendMensaje(msg);
+        opState.mensajes.push(msg);
         const conv = opState.conversaciones.find(c => c.id === opState.convActual);
         if (conv) conv.ultimo_msg = msg.creado_en;
         opState.conversaciones.sort((a, b) => new Date(b.ultimo_msg) - new Date(a.ultimo_msg));
@@ -556,7 +596,17 @@ function _exponerGlobales() {
 
     window._opFileInput = () => {
         const fi = $('op-file-input');
-        if (fi) { fi.value = ''; fi.click(); }
+        if (fi) { fi.value = ''; fi.multiple = true; fi.click(); }
+    };
+
+    // Called by the file input's onchange (set in index.html or here)
+    window._opOnFileInput = (input) => {
+        const files = Array.from(input.files || []);
+        if (!files.length) return;
+        _agregarArchivosPendientes(files, 'file');
+        input.value = '';
+        // Remove old single-file preview if present
+        $('op-file-preview')?.remove();
     };
 
     window._opPreviewAvatar = input => {
