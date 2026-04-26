@@ -15,6 +15,7 @@ import {
     renderGaleria, renderAjustes, renderSelectorImagenes, showLightbox
 } from './op-ui.js';
 import { mountMarkupAC, renderMsgMarkup } from './op-markup.js';
+import { isAudio, isVideo, isImage, clasificarArchivos, safeExt, subirAudio, extraerLinks, esYouTube } from './op-attach.js';
 
 const $ = id => document.getElementById(id);
 // Exponer renderMsgMarkup globalmente para los handlers inline de edición
@@ -215,10 +216,7 @@ function _agregarArchivosPendientes(files, source = 'file') {
 function _renderPendingPreview() {
     let panel = $('op-pending-panel');
 
-    if (!_pendingFiles.length) {
-        panel?.remove();
-        return;
-    }
+    if (!_pendingFiles.length) { panel?.remove(); return; }
 
     const wrap = $('op-input-wrap');
     if (!wrap) return;
@@ -226,8 +224,7 @@ function _renderPendingPreview() {
     if (!panel) {
         panel = document.createElement('div');
         panel.id = 'op-pending-panel';
-        panel.style.cssText = `
-            display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
+        panel.style.cssText = `display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
             background:rgba(108,52,131,0.08);border-radius:10px;margin-bottom:6px;
             border:1.5px dashed rgba(108,52,131,0.35);align-items:flex-start;`;
         wrap.insertAdjacentElement('beforebegin', panel);
@@ -236,28 +233,41 @@ function _renderPendingPreview() {
     panel.innerHTML = '';
 
     _pendingFiles.forEach((entry) => {
-        const isImg   = entry.file.type.startsWith('image/');
-        const isVid   = entry.file.type.startsWith('video/');
-        const kb      = (entry.file.size / 1024).toFixed(0);
-        const label   = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
+        const isImg = isImage(entry.file);
+        const isVid = isVideo(entry.file);
+        const isAud = isAudio(entry.file);
+        const kb    = (entry.file.size / 1024).toFixed(0);
+        const label = entry.source === 'paste' ? 'Portapapeles' : (entry.file.name || 'archivo');
+        const sizeLabel = kb > 1024 ? `${(kb/1024).toFixed(1)} MB` : `${kb} KB`;
+        const accentColor = isVid ? '#c0392b' : isAud ? '#1a4a80' : '#6c3483';
+        const icon = entry.source === 'paste' ? '📋 ' : isVid ? '🎬 ' : isAud ? '🎵 ' : '📎 ';
+
+        let thumb = '';
+        if (isImg) {
+            thumb = `<img src="${entry.url}" style="width:76px;height:60px;object-fit:cover;border-radius:5px;">`;
+        } else if (isVid) {
+            thumb = `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
+                justify-content:center;font-size:1.8em;background:#fdecea;border-radius:5px;gap:2px;">
+                🎬<span style="font-size:0.3em;color:#c0392b;font-weight:700;">VIDEO</span></div>`;
+        } else if (isAud) {
+            thumb = `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
+                justify-content:center;font-size:1.8em;background:#e8f4f8;border-radius:5px;gap:2px;">
+                🎵<span style="font-size:0.3em;color:#1a4a80;font-weight:700;">AUDIO</span></div>`;
+        } else {
+            thumb = `<div style="width:76px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:#f5eeff;border-radius:5px;">📄</div>`;
+        }
 
         const card = document.createElement('div');
         card.style.cssText = `position:relative;display:flex;flex-direction:column;align-items:center;
             gap:4px;background:white;border-radius:8px;padding:6px;
-            border:1px solid ${isVid ? 'rgba(192,57,43,0.35)' : 'rgba(108,52,131,0.25)'};width:88px;box-sizing:border-box;`;
-
+            border:1px solid ${isVid ? 'rgba(192,57,43,0.35)' : isAud ? 'rgba(26,74,128,0.3)' : 'rgba(108,52,131,0.25)'};
+            width:88px;box-sizing:border-box;`;
         card.innerHTML = `
-            ${isImg
-                ? `<img src="${entry.url}" style="width:76px;height:60px;object-fit:cover;border-radius:5px;">`
-                : isVid
-                ? `<div style="width:76px;height:60px;display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;font-size:1.8em;background:#fdecea;border-radius:5px;gap:2px;">
-                    🎬<span style="font-size:0.3em;color:#c0392b;font-weight:700;">VIDEO</span></div>`
-                : `<div style="width:76px;height:60px;display:flex;align-items:center;justify-content:center;font-size:2em;background:#f5eeff;border-radius:5px;">📄</div>`}
-            <div style="font-size:0.6em;color:${isVid ? '#c0392b' : '#6c3483'};text-align:center;line-height:1.3;
+            ${thumb}
+            <div style="font-size:0.6em;color:${accentColor};text-align:center;line-height:1.3;
                 width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
-                title="${label}">${entry.source === 'paste' ? '📋 ' : isVid ? '🎬 ' : '📎 '}${label}</div>
-            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${kb > 1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB'}</div>
+                title="${label}">${icon}${label}</div>
+            <div style="font-size:0.58em;color:rgba(108,52,131,0.5);">${sizeLabel}</div>
             <button data-uid="${entry.id}" style="position:absolute;top:-6px;right:-6px;
                 width:18px;height:18px;border-radius:50%;background:#c0392b;border:none;
                 color:white;font-size:0.65em;cursor:pointer;line-height:18px;text-align:center;padding:0;"
@@ -268,22 +278,23 @@ function _renderPendingPreview() {
             _pendingFiles = _pendingFiles.filter(f => f.id !== entry.id);
             _renderPendingPreview();
         };
-
         panel.appendChild(card);
     });
 
-    // Footer con contador y "limpiar todo"
+    // Footer resumen
     const footer = document.createElement('div');
     footer.style.cssText = `width:100%;font-size:0.7em;color:rgba(108,52,131,0.7);
         margin-top:4px;display:flex;justify-content:space-between;align-items:center;`;
-    const nImgs = _pendingFiles.filter(f => !f.file.type.startsWith('video/')).length;
-    const nVids = _pendingFiles.filter(f =>  f.file.type.startsWith('video/')).length;
-    const resumen = [
+    const nImgs = _pendingFiles.filter(f => isImage(f.file)).length;
+    const nVids = _pendingFiles.filter(f => isVideo(f.file)).length;
+    const nAuds = _pendingFiles.filter(f => isAudio(f.file)).length;
+    const partes = [
         nImgs ? `${nImgs} imagen${nImgs > 1 ? 'es' : ''}` : '',
         nVids ? `${nVids} video${nVids > 1 ? 's' : ''}` : '',
+        nAuds ? `${nAuds} audio${nAuds > 1 ? 's' : ''}` : '',
     ].filter(Boolean).join(' + ');
     footer.innerHTML = `
-        <span>${resumen} · ${nVids ? 'videos en mensajes separados' : 'en un solo mensaje'}</span>
+        <span>${partes}</span>
         <button style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;"
             onclick="window._opLimpiarPendientes()">Limpiar todo</button>`;
     panel.appendChild(footer);
@@ -301,7 +312,7 @@ async function _enviar() {
     const ta        = $('op-msg-input');
     const contenido = ta?.value.trim() || '';
 
-    // Recolectar archivos desde el input file también
+    // Recolectar archivos del input file nativo
     const fileInput = $('op-file-input');
     if (fileInput?.files?.length) {
         _agregarArchivosPendientes(Array.from(fileInput.files), 'file');
@@ -309,67 +320,66 @@ async function _enviar() {
         $('op-file-preview')?.remove();
     }
 
-    // Imagen desde galería (solo una a la vez)
+    // Imagen/video de galería pendiente
     if (_pendingImgId !== null) {
-        const allImgs = Object.values(opState.imagenesGaleria).flat();
-        const img = allImgs.find(i => i.id === _pendingImgId);
-        if (img) {
-            await _enviarUnMensaje(null, img.path);
+        const isVideoRef = typeof _pendingImgId === 'object' && _pendingImgId?.tipo === 'video';
+        if (isVideoRef) {
+            await _enviarUnMensaje({ contenido: contenido || null, videoPath: _pendingImgId.path });
+            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
+        } else {
+            const allImgs = Object.values(opState.imagenesGaleria).flat();
+            const img = allImgs.find(i => i.id === _pendingImgId);
+            if (img) await _enviarUnMensaje({ contenido: contenido || null, imagenPath: img.path });
+            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
         }
         _pendingImgId = null;
         $('op-img-preview')?.remove();
     }
 
-    // Si hay archivos pendientes, separar imágenes de videos
+    // Archivos pendientes: imágenes, videos, audios
     if (_pendingFiles.length) {
         const filesToSend = [..._pendingFiles];
         _pendingFiles = [];
         _renderPendingPreview();
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
 
-        const isVideo = f => f.file.type.startsWith('video/');
-        const imgFiles = filesToSend.filter(f => !isVideo(f));
-        const vidFiles = filesToSend.filter(f => isVideo(f));
+        const { imagenes: imgFiles, videos: vidFiles, audios: audFiles } = clasificarArchivos(filesToSend.map(e => e.file));
+        const imgEntries = filesToSend.filter(e => isImage(e.file));
+        const vidEntries = filesToSend.filter(e => isVideo(e.file));
+        const audEntries = filesToSend.filter(e => isAudio(e.file));
 
         // Imágenes → un solo mensaje agrupado
-        if (imgFiles.length) {
+        if (imgEntries.length) {
             const paths = [];
-            for (const entry of imgFiles) {
-                // BUG FIX: extensión desde file.type cuando el nombre no la trae (ej: paste de GIF)
-                const extFromType = entry.file.type.split('/')[1]?.replace('jpeg','jpg') || 'png';
-                const extFromName = entry.file.name.includes('.')
-                    ? entry.file.name.split('.').pop().toLowerCase()
-                    : null;
-                const ext = extFromName || extFromType;
+            for (const entry of imgEntries) {
+                const ext = safeExt(entry.file, 'png');
                 const safeName = entry.source === 'paste'
                     ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}.${ext}`
                     : entry.file.name.replace(/\.[^.]+$/, '');
-                const res = await subirImagenGaleria(
-                    entry.file, opState.perfil.id, opState.perfil.nombre, safeName
-                );
+                const res = await subirImagenGaleria(entry.file, opState.perfil.id, opState.perfil.nombre, safeName);
                 URL.revokeObjectURL(entry.url);
                 if (res.ok) paths.push(res.imagen.path);
                 else toast(`❌ Error subiendo ${safeName}`, 'error');
             }
-            if (paths.length) await _enviarUnMensaje(contenido || null, null, paths);
+            if (paths.length) await _enviarUnMensaje({ contenido: contenido || null, imagenPaths: paths });
         }
 
-        // Videos → un mensaje separado por cada video
-        for (const entry of vidFiles) {
-            // BUG FIX: extensión desde file.type cuando el nombre no la trae
-            const extFromType = entry.file.type.split('/')[1] || 'mp4';
-            const extFromName = entry.file.name.includes('.')
-                ? entry.file.name.split('.').pop().toLowerCase()
-                : null;
-            const ext = extFromName || extFromType;
-            const baseName = entry.file.name.replace(/\.[^.]+$/, '') || `video_${Date.now()}`;
-            const safeName = `${baseName}.${ext}`;
-            const res = await subirVideoGaleria(
-                entry.file, opState.perfil.id, opState.perfil.nombre, safeName
-            );
+        // Videos → un mensaje por video
+        for (const entry of vidEntries) {
+            const ext = safeExt(entry.file, 'mp4');
+            const base = entry.file.name.replace(/\.[^.]+$/, '') || `video_${Date.now()}`;
+            const res = await subirVideoGaleria(entry.file, opState.perfil.id, opState.perfil.nombre, `${base}.${ext}`);
             URL.revokeObjectURL(entry.url);
-            if (res.ok) await _enviarUnMensaje(imgFiles.length ? null : (contenido || null), null, null, res.imagen.path);
-            else toast(`❌ Error subiendo ${safeName}`, 'error');
+            if (res.ok) await _enviarUnMensaje({ contenido: imgEntries.length ? null : (contenido || null), videoPath: res.imagen.path });
+            else toast(`❌ Error subiendo ${base}`, 'error');
+        }
+
+        // Audios → un mensaje por audio
+        for (const entry of audEntries) {
+            const res = await subirAudio(entry.file, opState.perfil.id, opState.perfil.nombre);
+            URL.revokeObjectURL(entry.url);
+            if (res.ok) await _enviarUnMensaje({ contenido: (imgEntries.length || vidEntries.length) ? null : (contenido || null), audioPath: res.path });
+            else toast(`❌ Error subiendo audio`, 'error');
         }
 
         await _cargarGaleria();
@@ -377,22 +387,31 @@ async function _enviar() {
         return;
     }
 
-    // Solo texto (sin imágenes ni videos)
+    // Solo texto — detectar links de YouTube/etc para embed
     if (!contenido) return;
     if (ta) { ta.value = ''; ta.style.height = 'auto'; }
-    await _enviarUnMensaje(contenido, null);
+
+    const links = extraerLinks(contenido);
+    if (links.length) {
+        // El primer link se separa como embed; el texto completo (incluyendo el link) queda como contenido
+        await _enviarUnMensaje({ contenido, linkUrl: links[0] });
+    } else {
+        await _enviarUnMensaje({ contenido });
+    }
 }
 
-async function _enviarUnMensaje(contenido, imagenPath, imagenPaths, videoPath) {
-    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length) && !videoPath) return;
+async function _enviarUnMensaje({ contenido, imagenPath, imagenPaths, videoPath, audioPath, linkUrl }) {
+    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length) && !videoPath && !audioPath && !linkUrl) return;
     const msg = await enviarMensaje({
         convId:      opState.convActual,
         autorId:     opState.perfil.id,
         autorNombre: opState.perfil.nombre,
-        contenido:   contenido || null,
+        contenido:   contenido  || null,
         imagenPath:  imagenPath || null,
         imagenPaths: imagenPaths || null,
-        videoPath:   videoPath || null,
+        videoPath:   videoPath  || null,
+        audioPath:   audioPath  || null,
+        linkUrl:     linkUrl    || null,
     });
     if (msg) {
         appendMensaje(msg);
@@ -611,8 +630,8 @@ function _exponerGlobales() {
 
         const btnCancelar = document.createElement('button');
         btnCancelar.textContent = 'Cancelar';
-        btnCancelar.style.cssText = 'background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.2);' +
-            'color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.8em;';
+        btnCancelar.style.cssText = 'background:#f0e6f6;border:1.5px solid #c39bd3;' +
+            'color:#6c3483;border-radius:6px;padding:4px 12px;cursor:pointer;font-size:0.8em;font-weight:600;';
         btnCancelar.addEventListener('click', () => {
             textoEl.innerHTML = renderMsgMarkupGlobal(original);
         });
@@ -799,7 +818,7 @@ function _exponerGlobales() {
 
     window._opSubirAGaleria = async () => {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'image/*,video/*';
+        input.type = 'file'; input.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac';
         input.onchange = async () => {
             const file = input.files[0]; if (!file) return;
             const isVid = file.type.startsWith('video/');
@@ -814,7 +833,7 @@ function _exponerGlobales() {
 
     window._opFileInput = () => {
         const fi = $('op-file-input');
-        if (fi) { fi.value = ''; fi.multiple = true; fi.accept = 'image/*,video/*'; fi.click(); }
+        if (fi) { fi.value = ''; fi.multiple = true; fi.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus'; fi.click(); }
     };
 
     // Called by the file input's onchange (set in index.html or here)

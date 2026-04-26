@@ -54,12 +54,8 @@ export async function cargarMensajes(convId, limit = 60) {
     return (data || []).reverse();
 }
 
-// BUG FIX: se agregó videoPath al signature y al insert.
-// También se corrigió el cálculo de `tipo` para cubrir el caso 'video' y 'mixto' con video.
-export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths, videoPath }) {
-    // imagenPaths: string[] para múltiples imágenes
-    // imagenPath:  string   para compatibilidad con mensajes existentes
-    // videoPath:   string   para un video
+// Soporta: texto, imágenes (una o múltiples), video, audio, link embed
+export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths, videoPath, audioPath, linkUrl }) {
     let pathValue = null;
     if (imagenPaths && imagenPaths.length > 1) {
         pathValue = JSON.stringify(imagenPaths);
@@ -69,26 +65,35 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
         pathValue = imagenPath;
     }
 
-    const tipo = videoPath
-        ? (contenido ? 'mixto' : 'video')
-        : (contenido && pathValue ? 'mixto' : pathValue ? 'imagen' : 'texto');
+    const hasMedia = !!(pathValue || videoPath || audioPath || linkUrl);
+    const tipo = videoPath  ? (contenido ? 'mixto' : 'video')
+               : audioPath  ? (contenido ? 'mixto' : 'audio')
+               : linkUrl    ? (contenido ? 'mixto' : 'link')
+               : contenido && pathValue ? 'mixto'
+               : pathValue  ? 'imagen'
+               : 'texto';
 
-    const { data, error } = await supabase.from('op_mensajes').insert({
+    // Construir payload base; campos opcionales sólo si tienen valor
+    const payload = {
         conversacion_id: convId,
         autor_id:        autorId,
         autor_nombre:    autorNombre,
-        contenido:       contenido  || null,
-        imagen_path:     pathValue  || null,
-        video_path:      videoPath  || null,   // BUG FIX: antes nunca se insertaba
+        contenido:       contenido   || null,
+        imagen_path:     pathValue   || null,
         tipo,
-    }).select('*').single();
+    };
+    if (videoPath)  payload.video_path  = videoPath;
+    if (audioPath)  payload.audio_path  = audioPath;
+    if (linkUrl)    payload.link_url    = linkUrl;
+
+    const { data, error } = await supabase.from('op_mensajes').insert(payload).select('*').single();
     return error ? null : data;
 }
 
-// BUG FIX: al eliminar un mensaje también se limpia video_path del storage.
+// Limpia imagen, video y audio del storage al eliminar un mensaje
 export async function eliminarMensaje(id) {
     const { data: msg } = await supabase.from('op_mensajes')
-        .select('imagen_path, video_path').eq('id', id).maybeSingle();
+        .select('imagen_path, video_path, audio_path').eq('id', id).maybeSingle();
 
     if (msg?.imagen_path) {
         let paths = [];
@@ -96,11 +101,8 @@ export async function eliminarMensaje(id) {
         catch { paths = [msg.imagen_path]; }
         if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
     }
-
-    // BUG FIX: antes no se eliminaba el archivo de video del storage
-    if (msg?.video_path) {
-        await supabase.storage.from(BUCKET).remove([msg.video_path]);
-    }
+    if (msg?.video_path) await supabase.storage.from(BUCKET).remove([msg.video_path]);
+    if (msg?.audio_path) await supabase.storage.from(BUCKET).remove([msg.audio_path]);
 
     await supabase.from('op_mensajes').delete().eq('id', id);
 }

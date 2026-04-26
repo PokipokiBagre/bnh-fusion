@@ -3,6 +3,7 @@
 // ============================================================
 import { opState, avatarUrl, imageUrl, STORAGE_URL } from './op-state.js';
 import { renderMsgMarkup } from './op-markup.js';
+import { esYouTube, youTubeId, esSoundCloud, extraerLinks } from './op-attach.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -51,9 +52,98 @@ function _renderImgGrid(imagen_path, msgId) {
 function _renderVideo(video_path) {
     if (!video_path) return '';
     const url = imageUrl(video_path);
-    return `<video src="${esc(url)}" controls preload="metadata"
-        style="max-width:300px;width:100%;border-radius:8px;display:block;background:#000;margin-top:2px;"
-        playsinline></video>`;
+    return `<div style="margin-top:4px;">
+        <video src="${esc(url)}" controls preload="metadata" playsinline
+            style="max-width:320px;width:100%;border-radius:10px;display:block;
+                   background:#111;box-shadow:0 2px 12px rgba(0,0,0,0.35);">
+        </video>
+    </div>`;
+}
+
+// ── Render audio player ───────────────────────────────────────
+function _renderAudio(audio_path) {
+    if (!audio_path) return '';
+    const url = imageUrl(audio_path);
+    // Extraer nombre del archivo del path
+    const nombre = audio_path.split('/').pop().replace(/_\d{13}(\.\w+)$/, '$1') || 'audio';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
+        background:linear-gradient(135deg,rgba(26,74,128,0.15),rgba(108,52,131,0.1));
+        border:1.5px solid rgba(26,74,128,0.25);border-radius:12px;
+        max-width:320px;margin-top:4px;">
+        <span style="font-size:1.4em;flex-shrink:0;">🎵</span>
+        <div style="flex:1;min-width:0;">
+            <div style="font-size:0.72em;color:rgba(255,255,255,0.5);margin-bottom:4px;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(nombre)}">${esc(nombre)}</div>
+            <audio controls preload="metadata"
+                style="width:100%;height:28px;accent-color:#6c3483;border-radius:4px;">
+                <source src="${esc(url)}">
+                Tu navegador no soporta audio.
+            </audio>
+        </div>
+    </div>`;
+}
+
+// ── Render link embed (YouTube / genérico) ────────────────────
+function _renderLink(link_url) {
+    if (!link_url) return '';
+    const u = esc(link_url);
+
+    if (esYouTube(link_url)) {
+        const vid = youTubeId(link_url);
+        if (!vid) return _renderLinkGenerico(link_url);
+        const thumb = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+        const embed  = `https://www.youtube.com/embed/${vid}?autoplay=1`;
+        return `<div class="op-yt-card" data-embed="${esc(embed)}"
+            style="position:relative;max-width:320px;cursor:pointer;border-radius:10px;
+                   overflow:hidden;margin-top:6px;box-shadow:0 3px 16px rgba(0,0,0,0.4);
+                   background:#111;"
+            onclick="window._opExpandirYT(this,'${esc(embed)}')">
+            <img src="${esc(thumb)}" alt="YouTube"
+                style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:10px;">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+                background:rgba(0,0,0,0.25);border-radius:10px;transition:background 0.15s;"
+                onmouseover="this.style.background='rgba(0,0,0,0.1)'"
+                onmouseout="this.style.background='rgba(0,0,0,0.25)'">
+                <div style="width:52px;height:36px;background:#ff0000;border-radius:8px;
+                    display:flex;align-items:center;justify-content:center;">
+                    <div style="border-left:18px solid white;border-top:10px solid transparent;
+                        border-bottom:10px solid transparent;margin-left:4px;"></div>
+                </div>
+            </div>
+            <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 10px;
+                background:linear-gradient(transparent,rgba(0,0,0,0.7));
+                font-size:0.72em;color:rgba(255,255,255,0.85);border-radius:0 0 10px 10px;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                ${esc(link_url)}
+            </div>
+        </div>`;
+    }
+
+    if (esSoundCloud(link_url)) {
+        const embedUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(link_url)}&color=%236c3483&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&visual=false`;
+        return `<div style="max-width:320px;margin-top:6px;border-radius:10px;overflow:hidden;">
+            <iframe scrolling="no" frameborder="no" allow="autoplay"
+                src="${esc(embedUrl)}"
+                style="width:100%;height:66px;border-radius:10px;display:block;"></iframe>
+        </div>`;
+    }
+
+    return _renderLinkGenerico(link_url);
+}
+
+function _renderLinkGenerico(url) {
+    const u = esc(url);
+    let dominio = '';
+    try { dominio = new URL(url).hostname.replace('www.',''); } catch(_) { dominio = url; }
+    return `<a href="${u}" target="_blank" rel="noopener noreferrer"
+        style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;
+               background:rgba(26,74,128,0.12);border:1.5px solid rgba(26,74,128,0.3);
+               border-radius:8px;color:#5dade2;font-size:0.82em;text-decoration:none;
+               max-width:320px;margin-top:4px;word-break:break-all;transition:background 0.15s;"
+        onmouseover="this.style.background='rgba(26,74,128,0.22)'"
+        onmouseout="this.style.background='rgba(26,74,128,0.12)'">
+        🔗 <span>${esc(dominio)}</span>
+    </a>`;
 }
 
 
@@ -149,8 +239,10 @@ export function renderMensajes() {
     <div class="op-msg-bubble">
         ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
         ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
-        ${msg.video_path  ? _renderVideo(msg.video_path) : ''}
-        ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
+        ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
+        ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
+        ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
+        ${msg.contenido   ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
         <div class="op-msg-meta">
             <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
             ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
@@ -197,8 +289,10 @@ ${!propio ? avatarHtml : ''}
 <div class="op-msg-bubble">
     ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
     ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
-    ${msg.video_path  ? _renderVideo(msg.video_path) : ''}
-    ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
+    ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
+    ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
+    ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
+    ${msg.contenido   ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
     <div class="op-msg-meta">
         <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
         ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
