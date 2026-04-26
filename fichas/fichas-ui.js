@@ -371,7 +371,25 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
     const fusion = getFusionDe(nombreGrupo);
 
     // ⚡ Consultamos al PAC el costo de las medallas equipadas (Esto usa caché si existe)
-    const ctlUsado = await calcCTLUsadoPJ(nombreGrupo);
+    const ctlUsadoBase = await calcCTLUsadoPJ(nombreGrupo);
+
+    // Aplicar deltas encadenados del CTL usado (igual que PV, cambios, etc.)
+    const ctlUsado = (() => {
+        let acc = ctlUsadoBase;
+        for (let n = 1; n <= 5; n++) {
+            const d = String(grupoCrudo['delta_ctl_usado_' + n] || '0').trim();
+            if (!d || d === '0') continue;
+            const powM  = d.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
+            const multM = d.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+            const divM  = d.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+            const addM  = d.match(/^([+-]?\d+(?:\.\d+)?)$/);
+            if (powM)       acc = Math.round(Math.pow(acc, parseFloat(powM[1])));
+            else if (multM) acc = Math.round(acc * parseFloat(multM[1]));
+            else if (divM)  acc = Math.round(acc / parseFloat(divM[1]));
+            else if (addM)  acc = Math.round(acc + parseFloat(addM[1]));
+        }
+        return acc;
+    })();
 
     // 2. Extraemos los valores calculados
     const pot = g.pot_total;
@@ -546,7 +564,7 @@ ${fusion?(()=>{
                 <tr><td>POT</td><td>${statDisplay(_fmtDChain(potChainBase, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, potChainBase)}</td></tr>
                 <tr><td>AGI</td><td>${statDisplay(_fmtDChain(agiChainBase, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, agiChainBase)}</td></tr>
                 
-                <tr><td>CTL</td><td><span style="color:#2980b9;font-weight:600;">${ctlUsado}</span> / ${_fmtDChain(ctlChainBase, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n]))}</td></tr>
+                <tr><td>CTL</td><td>${_fmtDChain(ctlUsadoBase, ctlUsado, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_usado_'+n]))} / ${_fmtDChain(ctlChainBase, ctl, [1,2,3,4,5].map(n=>grupoCrudo['delta_ctl_'+n]))}</td></tr>
                 
                 <tr><td>PV</td><td>${_fmtDChain(pvActualBase, pvActual, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_actual_'+n]))} / ${_fmtDChain(pvMaxBase, pvMax, [1,2,3,4,5].map(n=>grupoCrudo['delta_pv_'+n]))}</td></tr>
                 <tr><td>Cambios/t</td><td>${_fmtDChain(cambiosBase, cambios, [1,2,3,4,5].map(n=>grupoCrudo['delta_cambios_'+n]))}</td></tr>
