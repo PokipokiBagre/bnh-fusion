@@ -135,8 +135,7 @@ export function renderMensajes() {
     ${!propio ? avatarHtml : ''}
     <div class="op-msg-bubble">
         ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
-        ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
-            onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
+        ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
         ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
         <div class="op-msg-meta">
             <span class="op-msg-hora">${hora}</span>
@@ -182,8 +181,7 @@ export function appendMensaje(msg) {
 ${!propio ? avatarHtml : ''}
 <div class="op-msg-bubble">
     ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
-    ${msg.imagen_path ? `<img src="${imageUrl(msg.imagen_path)}" class="op-msg-img"
-        onclick="window._opVerImagen('${imageUrl(msg.imagen_path)}')" alt="imagen">` : ''}
+    ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
     ${msg.contenido ? `<div class="op-msg-texto">${renderMsgMarkup(msg.contenido)}</div>` : ''}
     <div class="op-msg-meta">
         <span class="op-msg-hora">${hora}</span>
@@ -297,8 +295,58 @@ export function renderSelectorImagenes() {
 </div>`;
 }
 
-// ── Lightbox ──────────────────────────────────────────────────
-export function showLightbox(url) {
+// ── Lightbox con navegación (para grids multi-imagen) ────────
+export function showLightboxCarousel(urls, startIdx = 0) {
+    let current = startIdx;
+    let lb = document.getElementById('op-lightbox');
+    if (!lb) {
+        lb = document.createElement('div');
+        lb.id = 'op-lightbox';
+        lb.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;
+            display:flex;align-items:center;justify-content:center;
+            backdrop-filter:blur(4px);`;
+        document.body.appendChild(lb);
+    }
+
+    function render() {
+        const hasPrev = current > 0;
+        const hasNext = current < urls.length - 1;
+        lb.innerHTML = `
+            <button onclick="document.getElementById('op-lightbox').remove()"
+                style="position:absolute;top:16px;right:20px;background:none;border:none;
+                color:white;font-size:1.8em;cursor:pointer;z-index:2;opacity:0.7;">✕</button>
+            ${hasPrev ? `<button id="op-lb-prev"
+                style="position:absolute;left:16px;background:rgba(255,255,255,0.1);border:none;
+                color:white;font-size:2em;cursor:pointer;border-radius:50%;width:48px;height:48px;
+                display:flex;align-items:center;justify-content:center;z-index:2;">‹</button>` : ''}
+            <img src="${esc(urls[current])}" style="max-width:90vw;max-height:88vh;
+                border-radius:8px;box-shadow:0 0 60px rgba(108,52,131,0.5);object-fit:contain;">
+            ${hasNext ? `<button id="op-lb-next"
+                style="position:absolute;right:16px;background:rgba(255,255,255,0.1);border:none;
+                color:white;font-size:2em;cursor:pointer;border-radius:50%;width:48px;height:48px;
+                display:flex;align-items:center;justify-content:center;z-index:2;">›</button>` : ''}
+            <div style="position:absolute;bottom:16px;color:rgba(255,255,255,0.5);font-size:0.82em;">
+                ${current + 1} / ${urls.length}
+            </div>`;
+        lb.querySelector('#op-lb-prev')?.addEventListener('click', e => { e.stopPropagation(); current--; render(); });
+        lb.querySelector('#op-lb-next')?.addEventListener('click', e => { e.stopPropagation(); current++; render(); });
+    }
+
+    lb.onclick = e => { if (e.target === lb) lb.remove(); };
+    render();
+}
+
+// Exponer globalmente para los onclick del grid
+window._opVerGaleriaMensaje = (msgId, idx) => {
+    // Buscar las URLs del mensaje desde el DOM de la imagen ya renderizada
+    const msgEl = document.querySelector(`.op-msg[data-id="${msgId}"]`);
+    if (!msgEl) return;
+    const imgs = Array.from(msgEl.querySelectorAll('img[src]'))
+        .filter(img => !img.closest('.op-msg-autor') && img.style.width !== '36px')
+        .map(img => img.src);
+    if (!imgs.length) return;
+    showLightboxCarousel(imgs, idx);
+};
     let lb = $('op-lightbox');
     if (!lb) {
         lb = document.createElement('div');

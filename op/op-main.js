@@ -270,7 +270,7 @@ function _renderPendingPreview() {
     footer.style.cssText = `width:100%;font-size:0.7em;color:rgba(108,52,131,0.7);
         margin-top:4px;display:flex;justify-content:space-between;align-items:center;`;
     footer.innerHTML = `
-        <span>${_pendingFiles.length} imagen${_pendingFiles.length > 1 ? 'es' : ''} · se enviarán como mensajes separados</span>
+        <span>${_pendingFiles.length} imagen${_pendingFiles.length > 1 ? 'es' : ''} · se enviarán en un solo mensaje</span>
         <button style="background:none;border:none;color:#c0392b;cursor:pointer;font-size:1em;padding:0;"
             onclick="window._opLimpiarPendientes()">Limpiar todo</button>`;
     panel.appendChild(footer);
@@ -307,31 +307,33 @@ async function _enviar() {
         $('op-img-preview')?.remove();
     }
 
-    // Si hay archivos pendientes, subir y enviar cada uno como mensaje separado
+    // Si hay archivos pendientes, subir TODOS y enviar en un solo mensaje
     if (_pendingFiles.length) {
         const filesToSend = [..._pendingFiles];
         _pendingFiles = [];
         _renderPendingPreview();
-
-        // El texto solo va con el primer mensaje
-        let primerConTexto = contenido;
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
 
+        const paths = [];
         for (const entry of filesToSend) {
             const safeName = entry.source === 'paste'
-                ? `paste_${Date.now()}`
+                ? `paste_${Date.now()}_${Math.random().toString(36).slice(2,6)}`
                 : entry.file.name.replace(/\.[^.]+$/, '');
             const res = await subirImagenGaleria(
                 entry.file, opState.perfil.id, opState.perfil.nombre, safeName
             );
             URL.revokeObjectURL(entry.url);
             if (res.ok) {
-                await _enviarUnMensaje(primerConTexto || null, res.imagen.path);
-                primerConTexto = null; // solo en el primero
+                paths.push(res.imagen.path);
             } else {
                 toast(`❌ Error subiendo ${safeName}`, 'error');
             }
         }
+
+        if (paths.length) {
+            await _enviarUnMensaje(contenido || null, null, paths);
+        }
+
         await _cargarGaleria();
         renderGaleria();
         return;
@@ -343,14 +345,15 @@ async function _enviar() {
     await _enviarUnMensaje(contenido, null);
 }
 
-async function _enviarUnMensaje(contenido, imagenPath) {
-    if (!contenido && !imagenPath) return;
+async function _enviarUnMensaje(contenido, imagenPath, imagenPaths) {
+    if (!contenido && !imagenPath && (!imagenPaths || !imagenPaths.length)) return;
     const msg = await enviarMensaje({
         convId:      opState.convActual,
         autorId:     opState.perfil.id,
         autorNombre: opState.perfil.nombre,
         contenido:   contenido || null,
-        imagenPath,
+        imagenPath:  imagenPath || null,
+        imagenPaths: imagenPaths || null,
     });
     if (msg) {
         appendMensaje(msg);
