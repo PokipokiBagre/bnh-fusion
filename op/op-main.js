@@ -309,12 +309,18 @@ async function _enviar() {
         $('op-file-preview')?.remove();
     }
 
-    // Imagen desde galería (solo una a la vez)
+    // Imagen o video desde galería (solo uno a la vez)
+    // BUG FIX: _pendingImgId puede ser un objeto { id, tipo, path } cuando es video
     if (_pendingImgId !== null) {
-        const allImgs = Object.values(opState.imagenesGaleria).flat();
-        const img = allImgs.find(i => i.id === _pendingImgId);
-        if (img) {
-            await _enviarUnMensaje(null, img.path);
+        const isVideoRef = typeof _pendingImgId === 'object' && _pendingImgId?.tipo === 'video';
+        if (isVideoRef) {
+            await _enviarUnMensaje(contenido || null, null, null, _pendingImgId.path);
+            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
+        } else {
+            const allImgs = Object.values(opState.imagenesGaleria).flat();
+            const img = allImgs.find(i => i.id === _pendingImgId);
+            if (img) await _enviarUnMensaje(contenido || null, img.path);
+            if (ta && contenido) { ta.value = ''; ta.style.height = 'auto'; }
         }
         _pendingImgId = null;
         $('op-img-preview')?.remove();
@@ -683,10 +689,39 @@ function _exponerGlobales() {
         $('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
     };
 
+    // BUG FIX: los videos de galería se enviaban como imagen (imagenPath).
+    // Ahora se detecta el tipo y se enruta correctamente via videoPath.
+    // BUG FIX: handler para seleccionar un video de galería como pendiente
+    window._opSeleccionarVideo = id => {
+        const allItems = Object.values(opState.imagenesGaleria).flat();
+        const item = allItems.find(i => i.id === id);
+        if (!item) return;
+        // Reutilizamos _pendingImgId pero con un flag de tipo video
+        _pendingImgId = { id, tipo: 'video', path: item.path, url: item.url, nombre: item.nombre };
+        document.getElementById('op-img-preview')?.remove();
+        const prev = document.createElement('div');
+        prev.id = 'op-img-preview';
+        prev.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 10px;
+            background:rgba(192,57,43,0.15);border-radius:8px;margin-bottom:4px;`;
+        prev.innerHTML = `<span style="font-size:1.6em;">🎬</span>
+            <span style="font-size:0.78em;color:#e2d9f3;flex:1;">${item.nombre}</span>
+            <button onclick="_pendingImgId=null;this.closest('#op-img-preview').remove()"
+                style="background:none;border:none;color:rgba(255,255,255,0.5);cursor:pointer;">✕</button>`;
+        $('op-input-wrap')?.insertAdjacentElement('beforebegin', prev);
+        $('op-msg-input')?.focus();
+    };
+
     window._opEnviarDesdeGaleria = id => {
-        _pendingImgId = id;
+        const allItems = Object.values(opState.imagenesGaleria).flat();
+        const item = allItems.find(i => i.id === id);
+        if (!item) return;
         _renderTab('chat');
-        window._opSeleccionarImg(id);
+        if (item.tipo === 'video') {
+            window._opSeleccionarVideo(id);
+        } else {
+            _pendingImgId = id;
+            window._opSeleccionarImg(id);
+        }
     };
 
     window._opEliminarImgGaleria = async (id, path) => {

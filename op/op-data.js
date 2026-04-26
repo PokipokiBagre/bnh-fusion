@@ -54,39 +54,54 @@ export async function cargarMensajes(convId, limit = 60) {
     return (data || []).reverse();
 }
 
-export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths }) {
+// BUG FIX: se agregó videoPath al signature y al insert.
+// También se corrigió el cálculo de `tipo` para cubrir el caso 'video' y 'mixto' con video.
+export async function enviarMensaje({ convId, autorId, autorNombre, contenido, imagenPath, imagenPaths, videoPath }) {
     // imagenPaths: string[] para múltiples imágenes
-    // imagenPath: string para compatibilidad con mensajes existentes
+    // imagenPath:  string   para compatibilidad con mensajes existentes
+    // videoPath:   string   para un video
     let pathValue = null;
     if (imagenPaths && imagenPaths.length > 1) {
-        pathValue = JSON.stringify(imagenPaths); // guardar como JSON array
+        pathValue = JSON.stringify(imagenPaths);
     } else if (imagenPaths && imagenPaths.length === 1) {
         pathValue = imagenPaths[0];
     } else if (imagenPath) {
         pathValue = imagenPath;
     }
-    const tipo = contenido && pathValue ? 'mixto' : pathValue ? 'imagen' : 'texto';
+
+    const tipo = videoPath
+        ? (contenido ? 'mixto' : 'video')
+        : (contenido && pathValue ? 'mixto' : pathValue ? 'imagen' : 'texto');
+
     const { data, error } = await supabase.from('op_mensajes').insert({
         conversacion_id: convId,
         autor_id:        autorId,
         autor_nombre:    autorNombre,
-        contenido:       contenido || null,
-        imagen_path:     pathValue || null,
+        contenido:       contenido  || null,
+        imagen_path:     pathValue  || null,
+        video_path:      videoPath  || null,   // BUG FIX: antes nunca se insertaba
         tipo,
     }).select('*').single();
     return error ? null : data;
 }
 
+// BUG FIX: al eliminar un mensaje también se limpia video_path del storage.
 export async function eliminarMensaje(id) {
     const { data: msg } = await supabase.from('op_mensajes')
-        .select('imagen_path').eq('id', id).maybeSingle();
+        .select('imagen_path, video_path').eq('id', id).maybeSingle();
+
     if (msg?.imagen_path) {
-        // Puede ser una sola ruta o un JSON array
         let paths = [];
         try { paths = JSON.parse(msg.imagen_path); if (!Array.isArray(paths)) paths = [msg.imagen_path]; }
         catch { paths = [msg.imagen_path]; }
         if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
     }
+
+    // BUG FIX: antes no se eliminaba el archivo de video del storage
+    if (msg?.video_path) {
+        await supabase.storage.from(BUCKET).remove([msg.video_path]);
+    }
+
     await supabase.from('op_mensajes').delete().eq('id', id);
 }
 
@@ -109,11 +124,37 @@ export async function subirImagenGaleria(file, opId, opNombre, nombre) {
     const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
     const { data, error } = await supabase.from('op_imagenes').insert({
-        op_id:    opId,
+        op_id:     opId,
         op_nombre: opNombre,
         nombre,
         path,
-        url:      publicUrl,
+        url:       publicUrl,
+        tipo:      'imagen',
+        tamaño_kb: Math.round(file.size / 1024),
+    }).select('*').single();
+
+    return error ? { ok: false, msg: error.message } : { ok: true, imagen: data };
+}
+
+// BUG FIX: función faltante — op-main.js la importaba pero no existía en este archivo.
+export async function subirVideoGaleria(file, opId, opNombre, nombre) {
+    const ext  = file.name.split('.').pop().toLowerCase();
+    const safe = nombre.toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const path = `${FOLDER}/${opNombre.toLowerCase().replace(/\s+/g,'_')}/${safe}_${Date.now()}.${ext}`;
+
+    const { error: errUp } = await supabase.storage.from(BUCKET)
+        .upload(path, file, { upsert: false, contentType: file.type, cacheControl: '3600' });
+    if (errUp) return { ok: false, msg: errUp.message };
+
+    const { data: { publicUrl } } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+    const { data, error } = await supabase.from('op_imagenes').insert({
+        op_id:     opId,
+        op_nombre: opNombre,
+        nombre,
+        path,
+        url:       publicUrl,
+        tipo:      'video',          // distingue videos de imágenes en renderGaleria()
         tamaño_kb: Math.round(file.size / 1024),
     }).select('*').single();
 
