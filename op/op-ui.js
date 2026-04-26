@@ -43,7 +43,8 @@ function _renderImgGrid(imagen_path, msgId) {
         </div>`;
     }).join('');
     // data-all-urls guarda TODAS las URLs para el carrusel del lightbox
-    return `<div style="${gridStyle}" data-all-urls="${esc(JSON.stringify(urls))}">${items}</div>`;
+    const allUrlsJson = JSON.stringify(urls).replace(/'/g, '&#39;');
+    return `<div style="${gridStyle}" data-all-urls='${allUrlsJson}'>${items}</div>`;
 }
 
 // ── Sidebar: lista de conversaciones ─────────────────────────
