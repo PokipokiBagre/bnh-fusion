@@ -69,7 +69,7 @@ function _renderAudio(audio_path) {
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;
         background:linear-gradient(135deg,rgba(26,74,128,0.15),rgba(108,52,131,0.1));
         border:1.5px solid rgba(26,74,128,0.25);border-radius:12px;
-        max-width:320px;margin-top:4px;">
+        width:min(320px,100%);min-width:220px;margin-top:4px;box-sizing:border-box;">
         <span style="font-size:1.4em;flex-shrink:0;">🎵</span>
         <div style="flex:1;min-width:0;">
             <div style="font-size:0.72em;color:rgba(255,255,255,0.5);margin-bottom:4px;
@@ -91,28 +91,29 @@ function _renderLink(link_url) {
     if (esYouTube(link_url)) {
         const vid = youTubeId(link_url);
         if (!vid) return _renderLinkGenerico(link_url);
-        const thumb = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
-        const embed  = `https://www.youtube.com/embed/${vid}?autoplay=1`;
-        return `<div class="op-yt-card" data-embed="${esc(embed)}"
-            style="position:relative;max-width:320px;cursor:pointer;border-radius:10px;
+        const thumb  = `https://i.ytimg.com/vi/${vid}/hqdefault.jpg`;
+        const embed  = `https://www.youtube.com/embed/${vid}?autoplay=1&rel=0`;
+        // Al hacer click abre modal flotante — no reemplaza la thumbnail
+        return `<div style="position:relative;width:min(320px,100%);cursor:pointer;border-radius:10px;
                    overflow:hidden;margin-top:6px;box-shadow:0 3px 16px rgba(0,0,0,0.4);
-                   background:#111;"
-            onclick="window._opExpandirYT(this,'${esc(embed)}')">
+                   background:#111;flex-shrink:0;"
+            onclick="window._opAbrirYTModal('${esc(embed)}','${esc(link_url)}')">
             <img src="${esc(thumb)}" alt="YouTube"
-                style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;border-radius:10px;">
+                style="width:100%;aspect-ratio:16/9;object-fit:cover;display:block;">
             <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-                background:rgba(0,0,0,0.25);border-radius:10px;transition:background 0.15s;"
-                onmouseover="this.style.background='rgba(0,0,0,0.1)'"
-                onmouseout="this.style.background='rgba(0,0,0,0.25)'">
+                background:rgba(0,0,0,0.2);transition:background 0.15s;"
+                onmouseover="this.style.background='rgba(0,0,0,0.05)'"
+                onmouseout="this.style.background='rgba(0,0,0,0.2)'">
                 <div style="width:52px;height:36px;background:#ff0000;border-radius:8px;
-                    display:flex;align-items:center;justify-content:center;">
+                    display:flex;align-items:center;justify-content:center;
+                    box-shadow:0 2px 8px rgba(0,0,0,0.5);">
                     <div style="border-left:18px solid white;border-top:10px solid transparent;
                         border-bottom:10px solid transparent;margin-left:4px;"></div>
                 </div>
             </div>
-            <div style="position:absolute;bottom:0;left:0;right:0;padding:6px 10px;
-                background:linear-gradient(transparent,rgba(0,0,0,0.7));
-                font-size:0.72em;color:rgba(255,255,255,0.85);border-radius:0 0 10px 10px;
+            <div style="position:absolute;bottom:0;left:0;right:0;padding:5px 8px;
+                background:linear-gradient(transparent,rgba(0,0,0,0.75));
+                font-size:0.68em;color:rgba(255,255,255,0.8);
                 overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                 ${esc(link_url)}
             </div>
@@ -182,7 +183,9 @@ function _renderContenidoConLinks(msg) {
     }
 
     const primerLink = links[0];
-    const textoSinLink = texto.replace(primerLink, '').trim();
+    // Escapar caracteres regex especiales en la URL para el replace
+    const urlEscapada = primerLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const textoSinLink = texto.replace(new RegExp(urlEscapada), '').trim();
     return `
         ${_renderLink(primerLink)}
         ${textoSinLink ? `<div class="op-msg-texto" style="margin-top:4px;">${renderMsgMarkup(textoSinLink)}</div>` : ''}
@@ -598,3 +601,56 @@ window._opVerGaleriaMensaje = (msgId, idx) => {
 export function showLightbox(url) {
     showLightboxCarousel([url], 0);
 }
+
+// ── Modal de YouTube ─────────────────────────────────────────
+window._opAbrirYTModal = (embedUrl, linkUrl) => {
+    let modal = document.getElementById('op-yt-modal');
+    if (modal) modal.remove();
+
+    modal = document.createElement('div');
+    modal.id = 'op-yt-modal';
+    modal.style.cssText = `position:fixed;inset:0;background:rgba(0,0,0,0.88);
+        z-index:99999;display:flex;flex-direction:column;align-items:center;
+        justify-content:center;padding:20px;backdrop-filter:blur(6px);`;
+
+    const inner = document.createElement('div');
+    inner.style.cssText = `position:relative;width:min(860px,95vw);`;
+
+    const iframe = document.createElement('iframe');
+    iframe.src = embedUrl;
+    iframe.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen';
+    iframe.allowFullscreen = true;
+    iframe.style.cssText = `width:100%;aspect-ratio:16/9;border:none;border-radius:12px;
+        display:block;box-shadow:0 8px 40px rgba(0,0,0,0.6);`;
+
+    const btnClose = document.createElement('button');
+    btnClose.textContent = '✕';
+    btnClose.style.cssText = `position:absolute;top:-14px;right:-14px;width:32px;height:32px;
+        border-radius:50%;background:#c0392b;border:none;color:white;font-size:1em;
+        cursor:pointer;display:flex;align-items:center;justify-content:center;
+        box-shadow:0 2px 8px rgba(0,0,0,0.4);z-index:1;`;
+    btnClose.onclick = () => modal.remove();
+
+    const linkEl = document.createElement('a');
+    linkEl.href   = linkUrl;
+    linkEl.target = '_blank';
+    linkEl.rel    = 'noopener noreferrer';
+    linkEl.textContent = linkUrl;
+    linkEl.style.cssText = `color:rgba(255,255,255,0.4);font-size:0.7em;margin-top:10px;
+        text-decoration:none;word-break:break-all;max-width:min(860px,95vw);text-align:center;`;
+    linkEl.onmouseover = () => linkEl.style.color = 'rgba(255,255,255,0.75)';
+    linkEl.onmouseout  = () => linkEl.style.color = 'rgba(255,255,255,0.4)';
+
+    inner.appendChild(iframe);
+    inner.appendChild(btnClose);
+    modal.appendChild(inner);
+    modal.appendChild(linkEl);
+    modal.onclick = e => { if (e.target === modal) modal.remove(); };
+
+    const onKey = e => { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(modal);
+};
+
+// Compatibilidad con mensajes viejos que usaban _opExpandirYT
+window._opExpandirYT = (_card, embedUrl) => window._opAbrirYTModal(embedUrl, embedUrl);

@@ -86,23 +86,34 @@ export async function enviarMensaje({ convId, autorId, autorNombre, contenido, i
     if (audioPath)  payload.audio_path  = audioPath;
     if (linkUrl)    payload.link_url    = linkUrl;
 
-    // Intentar insert completo; si alguna columna nueva no existe aún (42703),
-    // reintentar sin los campos opcionales nuevos para no bloquear el envío.
-    let { data, error } = await supabase.from('op_mensajes').insert(payload).select('*').single();
-    if (error?.code === '42703') {
-        const safe = { conversacion_id: payload.conversacion_id, autor_id: payload.autor_id,
-                       autor_nombre: payload.autor_nombre, contenido: payload.contenido,
-                       imagen_path: payload.imagen_path, tipo: payload.tipo };
-        if (videoPath) safe.video_path = videoPath;
-        ({ data, error } = await supabase.from('op_mensajes').insert(safe).select('*').single());
+    // Insert progresivo: si falla por columna inexistente (42703) va quitando
+    // campos nuevos hasta llegar al payload mínimo que siempre funciona.
+    // Orden de intentos: completo → sin link_url → sin audio_path → sin video_path → sin tipo
+    const intentos = [
+        payload,
+        (({ link_url, ...r }) => r)(payload),
+        (({ link_url, audio_path, ...r }) => r)(payload),
+        (({ link_url, audio_path, video_path, ...r }) => r)(payload),
+        (({ link_url, audio_path, video_path, tipo, ...r }) => r)(payload),
+    ];
+    let data = null, error = null;
+    for (const intento of intentos) {
+        ({ data, error } = await supabase.from('op_mensajes').insert(intento).select('*').single());
+        if (!error || error.code !== '42703') break;
     }
     return error ? null : data;
 }
 
 // Limpia imagen, video y audio del storage al eliminar un mensaje
 export async function eliminarMensaje(id) {
-    const { data: msg } = await supabase.from('op_mensajes')
+    // Intentar seleccionar todos los campos de media; si alguno no existe, caer a mínimo
+    let { data: msg } = await supabase.from('op_mensajes')
         .select('imagen_path, video_path, audio_path').eq('id', id).maybeSingle();
+    if (!msg) {
+        const { data: msgMin } = await supabase.from('op_mensajes')
+            .select('imagen_path').eq('id', id).maybeSingle();
+        msg = msgMin;
+    }
 
     if (msg?.imagen_path) {
         let paths = [];
