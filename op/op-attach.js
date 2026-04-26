@@ -34,12 +34,28 @@ export function extraerLinks(texto) {
 }
 
 export function esYouTube(url) {
-    return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)/i.test(url);
+    return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/playlist)/i.test(url);
 }
 
+// Devuelve { tipo, videoId, playlistId, shortId }
+export function youTubeInfo(url) {
+    // Playlist
+    const pl = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    const v  = url.match(/(?:[?&]v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    return {
+        tipo:       pl && !v ? 'playlist' : v ? 'video' : 'unknown',
+        videoId:    v  ? v[1]  : null,
+        playlistId: pl ? pl[1] : null,
+    };
+}
+
+// Compat alias
 export function youTubeId(url) {
-    const m = url.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-    return m ? m[1] : null;
+    return youTubeInfo(url).videoId;
+}
+
+export function esTikTok(url) {
+    return /tiktok\.com\//i.test(url);
 }
 
 export function esSoundCloud(url) {
