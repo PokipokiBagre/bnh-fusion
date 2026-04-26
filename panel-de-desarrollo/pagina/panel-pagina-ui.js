@@ -20,6 +20,7 @@ const IMAGENES_INDEX = [
     { key: 'tags',         archivo: 'tags.png',         label: 'Tarjeta Tags',         zona: 'Grid principal → Tags' },
     { key: 'medallas',     archivo: 'medallas.png',     label: 'Tarjeta Medallas',     zona: 'Grid principal → Medallas' },
     { key: 'fusion',       archivo: 'fusion.png',       label: 'Tarjeta Fusión',       zona: 'Grid principal → Fusión' },
+    { key: 'combate',      archivo: 'combate.png',      label: 'Tarjeta Combate',      zona: 'Grid principal → Combate' },
     { key: 'panel-dev',    archivo: 'panel-dev.png',    label: 'Tarjeta Panel Máster', zona: 'Grid principal → Panel Máster (solo OP)' },
     { key: 'no_encontrado',archivo: 'no_encontrado.png',label: 'Imagen "No encontrado"', zona: 'Fallback cuando falta una imagen' },
 ];
@@ -197,6 +198,7 @@ function _renderPreviewCompleto(c) {
         { key:'tags',       label:'TAGS' },
         { key:'medallas',   label:'MEDALLAS' },
         { key:'fusion',     label:'FUSIÓN' },
+        { key:'combate',    label:'COMBATE' },
         { key:'panel-dev',  label:'PANEL MÁSTER' }
     ];
 
