@@ -146,7 +146,7 @@ export function renderSlotDetalle(eq, idx) {
 
             <!-- CTL Usado: base = costo medallas equipadas (auto) + deltas, muestra usado/total -->
             <div style="margin-top:6px;">
-                ${_statBlock({ key:'ctl_usado', lbl:'🛡 CTL Usd', isAuto:true, resultVal:\`\${slot.ctlUsado} / \${slot.ctl}\`, accent:'#4a235a', bgColor:'#f5eeff', borderColor:'#c39bd3' })}
+                ${_statBlock({ key:'ctl_usado', lbl:'🛡 CTL Usd', isAuto:true, resultVal: slot.ctlUsado + ' / ' + slot.ctl, accent:'#4a235a', bgColor:'#f5eeff', borderColor:'#c39bd3' })}
             </div>
 
             <!-- PV Actual: cuadro verde, muestra act/máx -->
