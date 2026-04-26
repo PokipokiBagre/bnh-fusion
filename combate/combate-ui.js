@@ -250,28 +250,19 @@ function _renderSlotCard(eq, idx, slot, col) {
         <span style="font-size:0.65em;color:#aaa;align-self:center;">CTL ${ctlUsado}/${slot.ctl}</span>
     </div>` : ''}
 
-    <!-- Dados con flechas para navegar entre habilidades y PJs -->
+    <!-- Dados -->
     ${slot.medallas.length ? `
     <div style="padding:0 8px 8px;display:flex;flex-wrap:wrap;gap:4px;" onclick="event.stopPropagation()">
-        ${slot.medallas.map((m, mi) => `
-        <div style="display:flex;align-items:center;gap:2px;">
+        ${slot.medallas.map(m => `
+        <div style="display:flex;align-items:center;gap:3px;">
             <span style="font-size:0.62em;color:#888;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
                 title="${esc(m.nombre)}">${esc(m.nombre.length>8?m.nombre.slice(0,8)+'…':m.nombre)}</span>
-            <!-- Flecha arriba: pasa dado al PJ anterior -->
-            <button title="Pasar al PJ anterior" style="background:none;border:1px solid #dee2e6;border-radius:3px;
-                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
-                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',-1)">▲</button>
             <input type="number" min="1" max="100" placeholder="🎲"
                 id="dado-${eq}-${idx}-${esc(m.id)}"
                 style="width:46px;padding:2px 3px;border:1.5px solid #dee2e6;border-radius:5px;
                     font-size:0.75em;text-align:center;font-weight:700;"
                 value="${slot.dados[m.id]||''}"
-                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)"
-                onkeydown="window._combateDadoNavKey(event,'${eq}',${idx},${mi})">
-            <!-- Flecha abajo: pasa dado al PJ siguiente -->
-            <button title="Pasar al PJ siguiente" style="background:none;border:1px solid #dee2e6;border-radius:3px;
-                font-size:0.7em;cursor:pointer;padding:0 3px;color:#888;line-height:1.3;"
-                onclick="window._combatePasarDado('${eq}',${idx},'${m.id}',1)">▼</button>
+                onchange="window._combateSetDado('${eq}',${idx},'${m.id}',this.value)">
         </div>`).join('')}
     </div>` : ''}
 </div>`;
