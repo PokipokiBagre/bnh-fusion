@@ -396,28 +396,27 @@ export function renderSlotDetalle(eq, idx) {
 <div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;">
         <span style="font-size:0.72em;font-weight:800;color:${col};text-transform:uppercase;letter-spacing:.5px;">Tags y PT</span>
-        <div style="display:flex;gap:4px;">
-            ${combateState.esAdmin ? `
+        ${combateState.esAdmin ? `<div style="display:flex;gap:4px;">
             <button style="font-size:0.72em;padding:3px 10px;background:#27ae60;color:white;
                 border:none;border-radius:6px;cursor:pointer;"
-                onclick="window._combateGuardarPTs('${eq}',${idx})">💾 Guardar PTs</button>
+                onclick="window._combateGuardarPTs('${eq}',${idx})">&#x1F4BE; Guardar PTs</button>
             <button style="font-size:0.72em;padding:3px 10px;background:${col};color:white;
                 border:none;border-radius:6px;cursor:pointer;"
-                onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>` : ''}
-        </div>
+                onclick="window._combateToggleCatalogoTags('${eq}',${idx})">+ / − Tag</button>
+        </div>` : ''}
     </div>
-    <div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
+    ${combateState.esAdmin ? `<div id="catalogo-tags-${eq}-${idx}" style="display:none;margin-bottom:10px;border:1.5px solid ${col};border-radius:8px;padding:8px;background:#fafafa;">
         <input class="inp" placeholder="Buscar tag…" style="font-size:0.8em;margin-bottom:6px;"
             oninput="window._combateFiltrarCatTags('${eq}',${idx},this.value)">
         <div id="cat-tags-lista-${eq}-${idx}" style="display:flex;flex-wrap:wrap;gap:4px;max-height:120px;overflow-y:auto;">
             ${catalogoTagsArr.map(t => {
                 const tN = (t.startsWith('#')?t:'#'+t).toLowerCase();
                 const tiene = tagsActivos.has(tN);
-                return `<span data-tag="${esc(t)}"
+                return \`<span data-tag="\${esc(t)}"
                     style="cursor:pointer;padding:2px 8px;border-radius:8px;font-size:0.73em;font-weight:700;
-                    background:${tiene?col:'#f1f3f4'};color:${tiene?'white':'#495057'};
-                    border:1.5px solid ${tiene?col:'#dee2e6'};"
-                    onclick="window._combateToggleTag('${eq}',${idx},'${esc(t)}')">${esc(t)}</span>`;
+                    background:\${tiene?col:'#f1f3f4'};color:\${tiene?'white':'#495057'};
+                    border:1.5px solid \${tiene?col:'#dee2e6'};"
+                    onclick="window._combateToggleTag('\${eq}',\${idx},'\${esc(t)}')">\${esc(t)}</span>\`;
             }).join('')}
         </div>
     </div>` : ''}
