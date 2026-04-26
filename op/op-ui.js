@@ -267,8 +267,8 @@ function _renderContenidoConLinks(msg) {
     // Quitar todas las URLs del texto para mostrarlo limpio
     let textoLimpio = texto;
     for (const link of links) {
-        const esc = link.replace(/[.*+?^${}()|[\]\]/g, '\$&');
-        textoLimpio = textoLimpio.replace(new RegExp(esc, 'g'), '');
+        const urlEsc = link.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        textoLimpio = textoLimpio.replace(new RegExp(urlEsc, 'g'), '');
     }
     textoLimpio = textoLimpio.trim();
 
