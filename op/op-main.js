@@ -127,8 +127,12 @@ async function _cargarConvs() {
         const conv = await crearConversacion('General');
         if (conv) opState.conversaciones = [conv];
     }
-    const firstId = opState.conversaciones[0]?.id;
-    if (firstId) await _selConv(firstId);
+    // Leer conv de la URL — si existe y es válida, abrirla; si no, la primera
+    const urlConvId = new URLSearchParams(window.location.search).get('conv');
+    const convInicial = (urlConvId && opState.conversaciones.find(c => c.id === urlConvId))
+        ? urlConvId
+        : opState.conversaciones[0]?.id;
+    if (convInicial) await _selConv(convInicial);
     renderConvList();
 }
 
@@ -143,6 +147,10 @@ async function _cargarGaleria() {
 
 // ── Seleccionar conversación ──────────────────────────────────
 async function _selConv(id) {
+    // Actualizar URL sin recargar la página
+    const url = new URL(window.location.href);
+    url.searchParams.set('conv', id);
+    window.history.replaceState(null, '', url.toString());
     // Cerrar sidebar móvil al abrir conversación
     window._opCloseSidebar?.();
     if (opState.realtimeSub) {
