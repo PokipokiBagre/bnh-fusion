@@ -59,6 +59,9 @@ export const bnhPort = {
         renderBurbuja();
         _exponerGlobales();
         _initVisibilityReconnect();
+        // Abrir por defecto
+        portState.abierto = true;
+        renderPanel();
     },
 };
 
@@ -606,11 +609,4 @@ function _exponerGlobales() {
         toast('✅ Avatar actualizado', 'ok');
     };
 
-    window._bnhPortUsarPerfil = (id) => {
-        const perfil = portState.perfiles[id];
-        if (!perfil) return;
-        portState.perfil = { ...perfil };
-        switchTab('perfil');
-        toast(`✅ Perfil: ${perfil.nombre}`, 'ok');
-    };
 }

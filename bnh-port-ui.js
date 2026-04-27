@@ -518,7 +518,6 @@ function _renderTabPerfil() {
     if (!body) return;
     const p     = portState.perfil;
     const avSrc = p?.avatar_path ? _imageUrl(p.avatar_path) : '';
-    const otros = Object.values(portState.perfiles || {}).filter(pr => pr.id !== p?.id);
 
     body.innerHTML = `
     <div style="flex:1;overflow-y:auto;padding:13px;display:flex;flex-direction:column;gap:13px;
@@ -559,23 +558,7 @@ function _renderTabPerfil() {
             </div>
             <div id="bnh-port-perfil-msg" style="font-size:0.72em;min-height:14px;margin-top:5px;"></div>
         </div>
-        <!-- Otros perfiles -->
-        ${otros.length ? `
-        <div>
-            <div style="font-size:0.67em;color:rgba(255,255,255,0.32);font-weight:700;letter-spacing:0.5px;margin-bottom:5px;">CAMBIAR PERFIL</div>
-            <div style="display:flex;flex-direction:column;gap:5px;">
-                ${otros.map(pr => {
-                    const av = pr.avatar_path ? _imageUrl(pr.avatar_path) : '';
-                    return `<div style="display:flex;align-items:center;gap:7px;padding:6px 9px;
-                        background:rgba(255,255,255,0.04);border-radius:7px;border:1px solid rgba(255,255,255,0.07);">
-                        <img src="${esc(av)}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:1.5px solid rgba(108,52,131,0.3);" onerror="this.style.visibility='hidden'">
-                        <span style="flex:1;font-size:0.78em;color:rgba(255,255,255,0.6);">${esc(pr.nombre)}</span>
-                        <button onclick="window._bnhPortUsarPerfil('${pr.id}')"
-                            style="background:#6c3483;border:none;color:white;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:0.7em;">▶ Usar</button>
-                    </div>`;
-                }).join('')}
-            </div>
-        </div>` : ''}
+
     </div>`;
 }
 
