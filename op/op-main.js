@@ -190,9 +190,9 @@ async function _selConv(id) {
         const el = document.getElementById('op-chat-titulo');
         if (el && conv) el.textContent = conv.titulo;
 
-    } catch (error Critico) {
+    } catch (error) {
         // Si algo más falla, ahora sí lo veremos en rojo en la consola
-        console.error('[OP Chat] Error crítico al cambiar de conversación:', errorCritico);
+        console.error('[OP Chat] Error crítico al cambiar de conversación:', error);
     }
 }
 
