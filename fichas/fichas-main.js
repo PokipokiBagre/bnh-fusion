@@ -91,38 +91,18 @@ function sincronizarVista() {
 window._equipCache = window._equipCache || {};
 
 function exponerGlobales() {
-window.abrirFicha = async (nombreGrupo) => {
-    const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
-    if (!g) return;
-
-    // Mostrar detalle de inmediato — no bloquear en getEquipacionPJ
-    fichasUI.vistaActual  = 'detalle';
-    fichasUI.seleccionado = nombreGrupo;
-    sincronizarVista();
-    window.scrollTo(0, 0);
-
-    // Cargar equipación en background (renderDetalle la usa desde caché si ya existe)
-    if (!window._equipCache[nombreGrupo]) {
-        try {
-            window._equipCache[nombreGrupo] = await getEquipacionPJ(nombreGrupo, { forzar: true });
-            // Re-renderizar con equipación ya cargada solo si seguimos en la misma ficha
-            if (fichasUI.seleccionado === nombreGrupo) sincronizarVista();
-        } catch(e) {
-            console.warn('[Fichas] getEquipacionPJ falló para', nombreGrupo, e);
-        }
-    }
+window.abrirFicha = (nombreGrupo) => {
+    // Navegar via URL — funciona desde cualquier página y evita
+    // bugs de estado/cache entre reconexiones.
+    const url = new URL(window.location.href);
+    url.searchParams.set('ficha', nombreGrupo);
+    window.location.href = url.toString();
 };
 
     window.volverCatalogo = () => {
-        fichasUI.vistaActual  = 'catalogo';
-        fichasUI.seleccionado = null;
-        sincronizarVista();
-        window.scrollTo(0, 0);
-        // Enfocar buscador de nombre al volver al catálogo
-        setTimeout(() => {
-            const inp = document.getElementById('nombre-buscar-inp');
-            if (inp) inp.focus();
-        }, 100);
+        const url = new URL(window.location.href);
+        url.searchParams.delete('ficha');
+        window.location.href = url.toString();
     };
 
     window.abrirPanelOP         = abrirPanelOP;
