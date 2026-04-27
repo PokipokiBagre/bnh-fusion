@@ -148,35 +148,52 @@ async function _cargarGaleria() {
 
 // ── Seleccionar conversación ──────────────────────────────────
 async function _selConv(id) {
-    // Actualizar URL sin recargar la página
-    const url = new URL(window.location.href);
-    url.searchParams.set('conv', id);
-    window.history.replaceState(null, '', url.toString());
-    // Cerrar sidebar móvil al abrir conversación
-    window._opCloseSidebar?.();
-    if (opState.realtimeSub) {
-        supabase.removeChannel(opState.realtimeSub);
-        opState.realtimeSub = null;
-    }
-    opState.convActual = id;
-    opState.mensajes   = await cargarMensajes(id);
-    renderMensajes();
+    try {
+        // 1. Actualizar URL
+        const url = new URL(window.location.href);
+        url.searchParams.set('conv', id);
+        window.history.replaceState(null, '', url.toString());
+        
+        // 2. Cerrar sidebar móvil
+        window._opCloseSidebar?.();
 
-    opState.realtimeSub = suscribirMensajes(id, msg => {
-        if (msg.autor_id !== opState.perfil?.id) {
-            // Actualizar perfiles si llegó uno nuevo
-            if (!opState.perfiles[msg.autor_id]) {
-                supabase.from('op_perfiles').select('id, nombre, avatar_path')
-                    .eq('id', msg.autor_id).maybeSingle()
-                    .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
+        // 3. Limpiar suscripción anterior (BLINDADO)
+        if (opState.realtimeSub) {
+            try {
+                // Await es necesario para evitar choques en el WebSocket
+                await supabase.removeChannel(opState.realtimeSub);
+            } catch (err) {
+                console.warn('[OP Chat] Advertencia al limpiar canal viejo:', err);
             }
-            appendMensaje(msg);
+            opState.realtimeSub = null;
         }
-    });
 
-    const conv = opState.conversaciones.find(c => c.id === id);
-    const el = $('op-chat-titulo');
-    if (el && conv) el.textContent = conv.titulo;
+        // 4. Actualizar estado y renderizar
+        opState.convActual = id;
+        opState.mensajes = await cargarMensajes(id);
+        renderMensajes(); // <--- Aquí se actualiza la interfaz
+
+        // 5. Crear nueva suscripción
+        opState.realtimeSub = suscribirMensajes(id, msg => {
+            if (msg.autor_id !== opState.perfil?.id) {
+                if (!opState.perfiles[msg.autor_id]) {
+                    supabase.from('op_perfiles').select('id, nombre, avatar_path')
+                        .eq('id', msg.autor_id).maybeSingle()
+                        .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
+                }
+                appendMensaje(msg);
+            }
+        });
+
+        // 6. Actualizar título superior (con tolerancia a String/Number)
+        const conv = opState.conversaciones.find(c => String(c.id) === String(id));
+        const el = document.getElementById('op-chat-titulo');
+        if (el && conv) el.textContent = conv.titulo;
+
+    } catch (error Critico) {
+        // Si algo más falla, ahora sí lo veremos en rojo en la consola
+        console.error('[OP Chat] Error crítico al cambiar de conversación:', errorCritico);
+    }
 }
 
 // ── Reconexión automática al volver a la pestaña ──────────────
