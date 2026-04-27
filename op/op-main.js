@@ -129,8 +129,9 @@ async function _cargarConvs() {
     }
     // Leer conv de la URL — si existe y es válida, abrirla; si no, la primera
     const urlConvId = new URLSearchParams(window.location.search).get('conv');
-    const convInicial = (urlConvId && opState.conversaciones.find(c => c.id === urlConvId))
-        ? urlConvId
+    // Comparar como string para que funcione tanto con IDs integer como UUID
+    const convInicial = (urlConvId && opState.conversaciones.find(c => String(c.id) === String(urlConvId)))
+        ? opState.conversaciones.find(c => String(c.id) === String(urlConvId)).id
         : opState.conversaciones[0]?.id;
     if (convInicial) await _selConv(convInicial);
     renderConvList();
