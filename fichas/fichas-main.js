@@ -424,18 +424,16 @@ function _initVisibilityReconnect() {
         const awayMs = Date.now() - _lastVisible;
 
         try {
-            // 1. Verificar sesión — getUser() no necesita lock de storage
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
+            // 1. Verificar sesión usando la referencia en memoria de bnhAuth —
+            //    evita llamar a getUser()/getSession() que compiten por el lock
+            //    interno de Supabase en visibilitychange y causan AbortError.
+            if (!bnhAuth.estaLogueado()) {
                 window.location.reload();
                 return;
             }
 
             // 2. Si estuvo fuera más de 3s, recargar datos para no mostrar estado stale
-            // Pequeño delay para que el lock de auth de Supabase se libere antes de
-            // hacer nuevas queries — evita el "lock not released" que rompe la sesión.
             if (awayMs >= 3000) {
-                await new Promise(r => setTimeout(r, 150));
                 await Promise.all([cargarTodo(), cargarFusiones()]);
                 sincronizarVista();
                 const toastEl = document.getElementById('fichas-toast');
