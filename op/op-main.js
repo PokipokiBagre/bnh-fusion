@@ -207,7 +207,10 @@ function _initVisibilityReconnect() {
 
             // 2. Restaurar perfil si se perdió
             if (!opState.perfil) {
-                opState.perfil = await cargarPerfil(user.id);
+                const authData = await supabase.auth.getUser();
+                if (authData.data.user) {
+                    opState.perfil = await cargarPerfil(authData.data.user.id);
+                }
             }
 
             // 3. Determinar qué conv mostrar: URL > opState > primera disponible
