@@ -440,28 +440,19 @@ function _initVisibilityReconnect() {
         const awayMs = Date.now() - _lastVisible;
 
         try {
-            // 1. Verificar sesión en memoria
+            // 1. Verificar sesión en memoria — no llamar ninguna API de auth aquí
+            //    para no competir con el lock interno de Supabase.
             if (!bnhAuth.estaLogueado()) {
                 window.location.reload();
                 return;
             }
 
-            // 2. Refrescar el token de Supabase siempre al volver —
-            //    sin esto el cliente queda en estado zombie: no da error
-            //    pero las queries y uploads se cuelgan silenciosamente.
-            //    refreshSession() renueva el JWT sin pedir credenciales.
-            try {
-                const { error } = await supabase.auth.refreshSession();
-                if (error) { window.location.reload(); return; }
-            } catch(_) {
-                // Si refreshSession falla (ej: sin red aún), seguimos igual
-            }
-
-            // 3. Si estuvo fuera más de 3s, recargar datos
+            // 2. Si estuvo fuera más de 3s, recargar datos
             if (awayMs >= 3000) {
+                // Pequeña espera para que el lock de auth se libere antes de queries
+                await new Promise(r => setTimeout(r, 200));
                 await Promise.all([cargarTodo(), cargarFusiones()]);
-                // Limpiar cache de equipación — los datos acaban de recargarse
-                // y el cache viejo haría que abrirFicha muestre una ficha anterior.
+                // Limpiar cache de equipación — datos recién recargados
                 window._equipCache = {};
                 cerrarUploadPanel();
                 sincronizarVista();
