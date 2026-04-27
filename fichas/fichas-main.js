@@ -432,7 +432,10 @@ function _initVisibilityReconnect() {
             }
 
             // 2. Si estuvo fuera más de 3s, recargar datos para no mostrar estado stale
+            // Pequeño delay para que el lock de auth de Supabase se libere antes de
+            // hacer nuevas queries — evita el "lock not released" que rompe la sesión.
             if (awayMs >= 3000) {
+                await new Promise(r => setTimeout(r, 150));
                 await Promise.all([cargarTodo(), cargarFusiones()]);
                 sincronizarVista();
                 const toastEl = document.getElementById('fichas-toast');
