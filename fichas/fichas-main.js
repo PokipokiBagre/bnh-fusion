@@ -73,11 +73,15 @@ async function init() {
 }
 
 function sincronizarVista() {
+    // Cerrar upload panel al sincronizar — evita que quede bloqueando tras reconexión.
+    cerrarUploadPanel();
+
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
         document.getElementById('fichas-layout').style.display = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
         const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
-        if (_gDet) renderDetalle(_gDet);
+        // renderDetalle es async — sin .catch los errores internos se pierden silenciosamente.
+        if (_gDet) renderDetalle(_gDet).catch(console.error);
     } else {
         document.getElementById('fichas-layout').style.display = 'grid';
         document.getElementById('fichas-detalle-wrap').style.display = 'none';
