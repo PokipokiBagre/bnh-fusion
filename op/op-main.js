@@ -227,6 +227,7 @@ function _initVisibilityReconnect() {
                     opState.mensajes.push(m);
                     if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
                 });
+                toast('🔄 Reconectado', 'ok');
             }
         } catch (e) {
             console.warn('[OP] Error en reconexión:', e);
