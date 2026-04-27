@@ -210,50 +210,20 @@ function _initVisibilityReconnect() {
                 opState.perfil = await cargarPerfil(user.id);
             }
 
-            // 3. Leer conv activa desde la URL — es la fuente de verdad
-            //    opState.convActual puede estar desactualizado si el browser
-            //    suspendió el JS mientras el usuario cambiaba de conv.
+            // 3. Determinar qué conv mostrar: URL > opState > primera disponible
             const urlConvId = new URLSearchParams(window.location.search).get('conv');
-            const convDesdeUrl = urlConvId
-                ? (opState.conversaciones.find(c => String(c.id) === String(urlConvId))?.id ?? opState.convActual)
-                : opState.convActual;
+            const convId =
+                (urlConvId && opState.conversaciones.find(c => String(c.id) === String(urlConvId)))
+                    ? opState.conversaciones.find(c => String(c.id) === String(urlConvId)).id
+                    : opState.convActual || opState.conversaciones[0]?.id;
 
-            if (!convDesdeUrl) {
-                _reconectando = false;
-                return;
-            }
+            if (!convId) { _reconectando = false; return; }
 
-            // Si la conv cambió mientras estábamos en otra pestaña, recargar todo
-            if (convDesdeUrl !== opState.convActual) {
-                await _selConv(convDesdeUrl);
-                toast('🔄 Reconectado', 'ok');
-                _reconectando = false;
-                return;
-            }
-
-            // 4. Re-suscribir siempre — pequeña espera para que el lock de auth se libere
+            // 4. Siempre re-cargar la conv al reconectar — garantiza que la vista
+            //    esté en sync con la URL independientemente del estado anterior.
             await new Promise(r => setTimeout(r, 200));
-            if (opState.realtimeSub) {
-                try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
-                opState.realtimeSub = null;
-            }
-            opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
-                if (opState.mensajes.some(m => m.id === msg.id)) return;
-                opState.mensajes.push(msg);
-                if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
-            });
-
-            // 5. Cargar mensajes perdidos solo si estuvo fuera más de 3s
-            if (awayMs >= 3000) {
-                const mensajesNuevos = await cargarMensajes(opState.convActual, 60);
-                const idsActuales = new Set(opState.mensajes.map(m => m.id));
-                const nuevos = mensajesNuevos.filter(m => !idsActuales.has(m.id));
-                nuevos.forEach(m => {
-                    opState.mensajes.push(m);
-                    if (m.autor_id !== opState.perfil?.id) appendMensaje(m);
-                });
-                toast('🔄 Reconectado', 'ok');
-            }
+            await _selConv(convId);
+            toast('🔄 Reconectado', 'ok');
         } catch (e) {
             console.warn('[OP] Error en reconexión:', e);
         } finally {
