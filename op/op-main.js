@@ -210,8 +210,23 @@ function _initVisibilityReconnect() {
                 opState.perfil = await cargarPerfil(user.id);
             }
 
-            // 3. Sin conv activa no hay nada más que hacer
-            if (!opState.convActual) {
+            // 3. Leer conv activa desde la URL — es la fuente de verdad
+            //    opState.convActual puede estar desactualizado si el browser
+            //    suspendió el JS mientras el usuario cambiaba de conv.
+            const urlConvId = new URLSearchParams(window.location.search).get('conv');
+            const convDesdeUrl = urlConvId
+                ? (opState.conversaciones.find(c => String(c.id) === String(urlConvId))?.id ?? opState.convActual)
+                : opState.convActual;
+
+            if (!convDesdeUrl) {
+                _reconectando = false;
+                return;
+            }
+
+            // Si la conv cambió mientras estábamos en otra pestaña, recargar todo
+            if (convDesdeUrl !== opState.convActual) {
+                await _selConv(convDesdeUrl);
+                toast('🔄 Reconectado', 'ok');
                 _reconectando = false;
                 return;
             }
