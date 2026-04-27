@@ -713,7 +713,7 @@ function _exponerGlobales() {
         let { error } = await supabase.from('op_mensajes')
             .update({ contenido: nuevoContenido, editado_en: new Date().toISOString() })
             .eq('id', id);
-        if (error?.code === '42703') {
+        if (error?.code === '42703' || error?.code === 'PGRST204') {
             ({ error } = await supabase.from('op_mensajes')
                 .update({ contenido: nuevoContenido })
                 .eq('id', id));
