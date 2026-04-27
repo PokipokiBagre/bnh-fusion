@@ -133,4 +133,69 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
 ::-webkit-scrollbar-thumb { background:var(--gray-300); border-radius:3px; }
 ::-webkit-scrollbar-thumb:hover { background:var(--red); }
 
-@media (max-width:768px) { #op-root { grid-template-columns:1fr; } #op-sidebar { display:none; } }
+/* ── Mobile ─────────────────────────────────────────────────── */
+@media (max-width:768px) {
+    #op-root { grid-template-columns:1fr; }
+
+    /* Sidebar oculta por defecto, se muestra como drawer */
+    #op-sidebar {
+        display:flex;
+        position:fixed;
+        top:0; left:0;
+        width:min(300px, 85vw);
+        height:100vh;
+        z-index:1000;
+        transform:translateX(-100%);
+        transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
+        box-shadow:4px 0 24px rgba(0,0,0,0.18);
+    }
+    #op-sidebar.op-sidebar-open {
+        transform:translateX(0);
+    }
+
+    /* Overlay oscuro detrás del drawer */
+    #op-sidebar-overlay {
+        display:none;
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,0.45);
+        z-index:999;
+        backdrop-filter:blur(2px);
+    }
+    #op-sidebar-overlay.visible { display:block; }
+
+    /* Botón hamburguesa en topbar */
+    .op-menu-btn {
+        display:flex !important;
+    }
+
+    /* Topbar más compacto */
+    .op-panel-topbar { padding:10px 12px; gap:8px; }
+    .op-panel-title  { font-size:0.85em; }
+
+    /* Mensajes ocupan todo el ancho */
+    .op-msg { max-width:88%; }
+
+    /* Input area */
+    .op-input-area { padding:8px 10px 12px; }
+
+    /* Burbujas con radio más pronunciado en mobile */
+    .op-msg-bubble { padding:8px 12px; }
+}
+
+/* Botón menú — oculto en desktop */
+.op-menu-btn {
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:none;
+    border:1px solid var(--gray-300);
+    border-radius:var(--radius);
+    color:var(--gray-700);
+    cursor:pointer;
+    padding:5px 9px;
+    font-size:1.1em;
+    transition:0.15s;
+    flex-shrink:0;
+}
+.op-menu-btn:hover { border-color:var(--red); color:var(--red); background:var(--red-pale); }
