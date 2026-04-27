@@ -95,19 +95,22 @@ window.abrirFicha = async (nombreGrupo) => {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
 
-    // ✅ Cargar SIEMPRE equipación (no depender de fusión)
-    let medEq = window._equipCache[nombreGrupo];
-
-    if (!medEq) {
-        medEq = await getEquipacionPJ(nombreGrupo, { forzar: true });
-        window._equipCache[nombreGrupo] = medEq;
-    }
-
+    // Mostrar detalle de inmediato — no bloquear en getEquipacionPJ
     fichasUI.vistaActual  = 'detalle';
     fichasUI.seleccionado = nombreGrupo;
-
     sincronizarVista();
     window.scrollTo(0, 0);
+
+    // Cargar equipación en background (renderDetalle la usa desde caché si ya existe)
+    if (!window._equipCache[nombreGrupo]) {
+        try {
+            window._equipCache[nombreGrupo] = await getEquipacionPJ(nombreGrupo, { forzar: true });
+            // Re-renderizar con equipación ya cargada solo si seguimos en la misma ficha
+            if (fichasUI.seleccionado === nombreGrupo) sincronizarVista();
+        } catch(e) {
+            console.warn('[Fichas] getEquipacionPJ falló para', nombreGrupo, e);
+        }
+    }
 };
 
     window.volverCatalogo = () => {
@@ -331,22 +334,24 @@ window.abrirFicha = async (nombreGrupo) => {
         // NO llamar renderUploadPanel aquí — tiene lógica toggle que cierra el
         // panel si ya está abierto con el mismo grupo. Los nodos de progreso
         // siempre existen dentro del panel renderizado, solo mostrarlos.
-        const getEl = id => document.getElementById(id);
-        const prog = getEl('fichas-upload-progress');
-        const fill = getEl('fichas-prog-fill');
-        const msg  = getEl('fichas-prog-msg');
-        if (prog) { prog.style.display = 'block'; }
-        if (fill) { fill.style.width = '0%'; }
-        if (msg)  { msg.textContent = 'Preparando…'; msg.style.color = ''; }
+        // Referencias lazy — el panel puede re-renderizarse durante la subida
+        // (cambio de tipo, reconexión), así que siempre buscamos el nodo actual.
+        const prog = () => document.getElementById('fichas-upload-progress');
+        const fill = () => document.getElementById('fichas-prog-fill');
+        const msg  = () => document.getElementById('fichas-prog-msg');
+
+        const p = prog(); if (p) p.style.display = 'block';
+        const f = fill(); if (f) f.style.width = '0%';
+        const m = msg();  if (m) { m.textContent = 'Preparando…'; m.style.color = ''; }
 
         try {
             const url = await subirImagenGrupo(file, nombreGrupo, tipo, (pct, txt) => {
-                if (fill) fill.style.width = pct + '%';
-                if (msg)  msg.textContent = txt;
+                const f2 = fill(); if (f2) f2.style.width = pct + '%';
+                const m2 = msg();  if (m2) m2.textContent = txt;
             });
-            const preview = getEl('upload-preview-img');
+            const preview = document.getElementById('upload-preview-img');
             if (preview) preview.src = url;
-            if (msg) { msg.textContent = '✅ ¡Imagen actualizada!'; msg.style.color = 'var(--green)'; }
+            const m3 = msg(); if (m3) { m3.textContent = '✅ ¡Imagen actualizada!'; m3.style.color = 'var(--green)'; }
             setTimeout(() => {
                 renderCatalogo(postersDelHilo);
                 if (fichasUI.vistaActual === 'detalle') {
@@ -355,9 +360,9 @@ window.abrirFicha = async (nombreGrupo) => {
                 }
             }, 800);
         } catch(e) {
-            if (msg)  { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--red)'; }
-            if (fill) fill.style.width = '0%';
-            setTimeout(() => { if (prog) prog.style.display = 'none'; }, 3500);
+            const m4 = msg();  if (m4) { m4.textContent = '❌ ' + e.message; m4.style.color = 'var(--red)'; }
+            const f4 = fill(); if (f4) f4.style.width = '0%';
+            setTimeout(() => { const p4 = prog(); if (p4) p4.style.display = 'none'; }, 3500);
         }
     }
 
