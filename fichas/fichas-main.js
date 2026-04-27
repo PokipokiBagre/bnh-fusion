@@ -328,26 +328,38 @@ window.abrirFicha = async (nombreGrupo) => {
         const tipo = panel?.dataset.tipo || 'icon';
         if (!nombreGrupo) return;
 
-        const prog = document.getElementById('fichas-upload-progress');
-        const fill = document.getElementById('fichas-prog-fill');
-        const msg  = document.getElementById('fichas-prog-msg');
-        if (prog) prog.style.display = 'block';
+        // Re-renderizar el panel para asegurarse de que los nodos de progreso
+        // existen y están frescos — evita el bug de nodos huérfanos cuando el
+        // panel fue cerrado/reabierto entre que se eligió el archivo y se subió.
+        renderUploadPanel(nombreGrupo);
+
+        // Capturar nodos DESPUÉS del re-render (los anteriores son huérfanos)
+        const getEl = id => document.getElementById(id);
+        const showProg = () => { const p = getEl('fichas-upload-progress'); if (p) p.style.display = 'block'; };
+        showProg();
 
         try {
             const url = await subirImagenGrupo(file, nombreGrupo, tipo, (pct, txt) => {
+                const fill = getEl('fichas-prog-fill');
+                const msg  = getEl('fichas-prog-msg');
                 if (fill) fill.style.width = pct + '%';
                 if (msg)  msg.textContent = txt;
             });
-            // Actualizar preview con la nueva imagen
-            const preview = document.getElementById('upload-preview-img');
+            const preview = getEl('upload-preview-img');
             if (preview) preview.src = url;
+            const msg = getEl('fichas-prog-msg');
             if (msg) { msg.textContent = '✅ ¡Imagen actualizada!'; msg.style.color = 'var(--green)'; }
-            // Refrescar catálogo para que la nueva imagen aparezca
             setTimeout(() => {
                 renderCatalogo(postersDelHilo);
-                if (fichasUI.vistaActual === 'detalle') {     const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);     if (_gDet) renderDetalle(_gDet); }
+                if (fichasUI.vistaActual === 'detalle') {
+                    const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
+                    if (_gDet) renderDetalle(_gDet).catch(console.error);
+                }
             }, 800);
         } catch(e) {
+            const msg  = getEl('fichas-prog-msg');
+            const fill = getEl('fichas-prog-fill');
+            const prog = getEl('fichas-upload-progress');
             if (msg)  { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--red)'; }
             if (fill) fill.style.width = '0%';
             setTimeout(() => { if (prog) prog.style.display = 'none'; }, 3500);
