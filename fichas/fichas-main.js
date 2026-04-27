@@ -11,6 +11,7 @@ import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP, a
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
 import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
+import { supabase } from '../bnh-auth.js';
 
 let postersDelHilo = null;
 
@@ -67,6 +68,8 @@ async function init() {
             if (inp) inp.focus();
         }
     }, 150);
+
+    _initVisibilityReconnect();
 }
 
 function sincronizarVista() {
@@ -401,6 +404,54 @@ window.abrirFicha = async (nombreGrupo) => {
         postersDelHilo = val === 'todos' ? null : await getPosterNamesDelHilo(val);
         sincronizarVista();
     };
+}
+
+// ── Reconexión automática al volver a la pestaña ──────────────
+// Los navegadores throttlean conexiones en pestañas inactivas.
+// Al recuperar visibilidad: verificar sesión y recargar datos si es necesario.
+function _initVisibilityReconnect() {
+    let _lastVisible = Date.now();
+    let _reconectando = false;
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            _lastVisible = Date.now();
+            return;
+        }
+        if (_reconectando) return;
+        _reconectando = true;
+
+        const awayMs = Date.now() - _lastVisible;
+
+        try {
+            // 1. Verificar sesión — getUser() no necesita lock de storage
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) {
+                window.location.reload();
+                return;
+            }
+
+            // 2. Si estuvo fuera más de 3s, recargar datos para no mostrar estado stale
+            if (awayMs >= 3000) {
+                await Promise.all([cargarTodo(), cargarFusiones()]);
+                sincronizarVista();
+                const toastEl = document.getElementById('fichas-toast');
+                if (toastEl) {
+                    toastEl.textContent = '🔄 Reconectado';
+                    toastEl.className = 'toast-ok';
+                    toastEl.style.display = 'block';
+                    setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 2000);
+                }
+            }
+        } catch (e) {
+            console.warn('[Fichas] Error en reconexión:', e);
+        } finally {
+            _reconectando = false;
+        }
+    });
+
+    // Nota: NO agregar listener 'focus' — compite con visibilitychange
+    // por el lock de auth de Supabase y causa AbortError.
 }
 
 init().catch(console.error);
