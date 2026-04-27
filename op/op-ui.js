@@ -579,30 +579,30 @@ export function renderAjustes() {
             const esActivo = prof.id === p?.id;
             return `
         <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;
-            background:${esActivo ? 'rgba(108,52,131,0.15)' : 'rgba(255,255,255,0.04)'};
-            border-radius:10px;border:1.5px solid ${esActivo ? '#6c3483' : 'rgba(255,255,255,0.08)'};">
+            background:${esActivo ? 'rgba(108,52,131,0.08)' : '#f8f5fc'};
+            border-radius:10px;border:1.5px solid ${esActivo ? '#6c3483' : '#e0d5eb'};">
             <img src="${avatarUrl(prof.avatar_path)}"
                 style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;
-                border:2px solid ${esActivo ? '#6c3483' : 'rgba(255,255,255,0.15)'};">
+                border:2px solid ${esActivo ? '#6c3483' : '#d5c5e8'};">
             <div style="flex:1;min-width:0;">
-                <div style="font-weight:700;font-size:0.88em;color:${esActivo ? '#c39bd3' : 'rgba(255,255,255,0.8)'};
+                <div style="font-weight:700;font-size:0.88em;color:${esActivo ? '#6c3483' : '#3d2052'};
                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    ${esc(prof.nombre)}${esActivo ? ' <span style="font-size:0.75em;color:#6c3483;">(tú)</span>' : ''}
+                    ${esc(prof.nombre)}${esActivo ? ' <span style="font-size:0.75em;color:#9b59b6;">(tú)</span>' : ''}
                 </div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;">
                 <button onclick="window._opRenombrarPerfil('${prof.id}','${esc(prof.nombre)}')"
-                    style="background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);
-                    color:rgba(255,255,255,0.6);border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    style="background:white;border:1.5px solid #c39bd3;
+                    color:#6c3483;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;font-weight:600;"
                     title="Editar nombre">✏ Nombre</button>
                 ${!esActivo ? `
                 <button onclick="window._opSeleccionarPerfil('${prof.id}')"
-                    style="background:rgba(108,52,131,0.2);border:1px solid #6c3483;
-                    color:#c39bd3;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    style="background:#6c3483;border:1.5px solid #6c3483;
+                    color:white;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;font-weight:600;"
                     title="Usar este perfil">▶ Usar</button>
                 <button onclick="window._opEliminarPerfil('${prof.id}','${esc(prof.nombre)}')"
-                    style="background:rgba(192,57,43,0.1);border:1px solid rgba(192,57,43,0.3);
-                    color:#e74c3c;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;"
+                    style="background:white;border:1.5px solid #e74c3c;
+                    color:#e74c3c;border-radius:6px;padding:4px 9px;cursor:pointer;font-size:0.75em;font-weight:600;"
                     title="Eliminar perfil">🗑</button>` : ''}
             </div>
         </div>`;

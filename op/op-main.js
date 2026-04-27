@@ -709,14 +709,20 @@ function _exponerGlobales() {
         const nuevoContenido = ta.value.trim();
         if (!nuevoContenido) return;
 
-        const { error } = await supabase.from('op_mensajes')
+        // Intentar con editado_en; si la columna no existe reintentar sin ella
+        let { error } = await supabase.from('op_mensajes')
             .update({ contenido: nuevoContenido, editado_en: new Date().toISOString() })
             .eq('id', id);
-        if (error) { toast('❌ Error al guardar edición', 'error'); return; }
+        if (error?.code === '42703') {
+            ({ error } = await supabase.from('op_mensajes')
+                .update({ contenido: nuevoContenido })
+                .eq('id', id));
+        }
+        if (error) { toast('❌ Error al guardar edición', 'error'); console.error(error); return; }
 
         // Actualizar state
         const msg = opState.mensajes.find(m => m.id === id);
-        if (msg) { msg.contenido = nuevoContenido; msg.editado_en = new Date().toISOString(); }
+        if (msg) { msg.contenido = nuevoContenido; }
 
         // Actualizar DOM
         const msgEl = document.querySelector(`.op-msg[data-id="${id}"]`);
