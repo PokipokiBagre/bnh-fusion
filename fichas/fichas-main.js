@@ -73,9 +73,6 @@ async function init() {
 }
 
 function sincronizarVista() {
-    // Cerrar upload panel al sincronizar — evita que quede bloqueando tras reconexión.
-    cerrarUploadPanel();
-
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
         document.getElementById('fichas-layout').style.display = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
@@ -451,6 +448,9 @@ function _initVisibilityReconnect() {
             // 2. Si estuvo fuera más de 3s, recargar datos para no mostrar estado stale
             if (awayMs >= 3000) {
                 await Promise.all([cargarTodo(), cargarFusiones()]);
+                // Cerrar el upload panel solo en reconexión — si estaba abierto
+                // los datos acaban de recargarse y el estado puede ser stale.
+                cerrarUploadPanel();
                 sincronizarVista();
                 const toastEl = document.getElementById('fichas-toast');
                 if (toastEl) {
