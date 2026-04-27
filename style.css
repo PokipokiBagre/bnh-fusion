@@ -282,3 +282,30 @@ footer {
     border-top: 1px solid var(--gray-200);
     font-weight: 500;
 }
+
+/* ── Adaptación para Móviles (Header) ── */
+@media (max-width: 480px) {
+    .top-bar {
+        padding: 10px 12px; /* Reducimos el padding lateral para ganar espacio */
+    }
+    
+    .top-bar-logo {
+        font-size: 1.2em; /* Reducimos un poco el logo */
+    }
+    
+    .top-bar-right {
+        gap: 8px; /* Reducimos el espacio entre los botones */
+    }
+    
+    .btn-change-campaign {
+        padding: 6px 8px; /* Hacemos el botón de campaña más compacto */
+        font-size: 0.75em;
+        text-align: center;
+        line-height: 1.2;
+    }
+    
+    #bnh-session-badge {
+        flex-shrink: 0; /* Obliga al navegador a respetar el tamaño del botón OP sin aplastarlo */
+    }
+}
+
