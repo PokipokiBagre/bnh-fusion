@@ -48,6 +48,7 @@
         <!-- ══ PANEL: CHAT ══════════════════════════ -->
         <div id="op-panel-chat" class="op-panel" style="display:flex;flex-direction:column;">
             <div class="op-panel-topbar">
+                <button class="op-menu-btn" onclick="window._opToggleSidebar()" title="Menú">☰</button>
                 <a href="../index.html" class="op-back">◀ BNH</a>
                 <span id="op-chat-titulo" class="op-panel-title">General</span>
             </div>
@@ -61,8 +62,8 @@
                     </div>
                     <div class="op-input-row">
                         <button class="op-attach-btn" onclick="window._opMostrarGaleria()" title="Galería">🖼</button>
-                        <button class="op-attach-btn" onclick="window._opFileInput()" title="Adjuntar imagen, video o audio">📎</button>
-                        <input type="file" id="op-file-input" accept="image/*,video/*,audio/*,.mp3,.m4a,.ogg,.wav,.flac,.aac,.opus,.gif" multiple style="display:none"
+                        <button class="op-attach-btn" onclick="window._opFileInput()" title="Subir imagen">📎</button>
+                        <input type="file" id="op-file-input" accept="image/*" style="display:none"
                             onchange="window._opOnFileInput(this)">
                         <textarea id="op-msg-input" class="op-msg-input"
                             placeholder="Escribe… @Personaje@ #Tag  ·  Enter para enviar"
@@ -93,6 +94,7 @@
 
 </div>
 
+<div id="op-sidebar-overlay" onclick="window._opCloseSidebar()"></div>
 <div id="op-toast" class="op-toast"></div>
 
 <script type="module">

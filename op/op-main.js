@@ -25,6 +25,28 @@ let _pendingFiles  = []; // array of { file, url, source: 'paste'|'file' }
 // Exponer para acceso desde onclick inline del preview
 Object.defineProperty(window, '_pendingImgId', { get: () => _pendingImgId, set: v => { _pendingImgId = v; } });
 
+// ── Sidebar móvil ────────────────────────────────────────────
+window._opToggleSidebar = () => {
+    const sb  = document.getElementById('op-sidebar');
+    const ov  = document.getElementById('op-sidebar-overlay');
+    if (!sb) return;
+    const open = sb.classList.toggle('op-sidebar-open');
+    if (ov) ov.classList.toggle('visible', open);
+    // Bloquear scroll del body cuando el drawer está abierto
+    document.body.style.overflow = open ? 'hidden' : '';
+};
+
+window._opCloseSidebar = () => {
+    const sb = document.getElementById('op-sidebar');
+    const ov = document.getElementById('op-sidebar-overlay');
+    if (sb) sb.classList.remove('op-sidebar-open');
+    if (ov) ov.classList.remove('visible');
+    document.body.style.overflow = '';
+};
+
+// Cerrar sidebar al seleccionar una conversación en móvil
+const _origOpTab = window._opTab;
+
 // Definir _opFileInput globalmente de inmediato (antes de initOP)
 // para que el botón del HTML pueda llamarla aunque initOP no haya terminado.
 window._opFileInput = () => {
@@ -121,6 +143,8 @@ async function _cargarGaleria() {
 
 // ── Seleccionar conversación ──────────────────────────────────
 async function _selConv(id) {
+    // Cerrar sidebar móvil al abrir conversación
+    window._opCloseSidebar?.();
     if (opState.realtimeSub) {
         supabase.removeChannel(opState.realtimeSub);
         opState.realtimeSub = null;
@@ -218,6 +242,8 @@ function _initVisibilityReconnect() {
 // ── Tabs ──────────────────────────────────────────────────────
 function _renderTab(tab) {
     opState.tab = tab;
+    // Cerrar sidebar móvil al cambiar de tab
+    if (window.innerWidth <= 768) window._opCloseSidebar();
     ['chat','galeria','ajustes'].forEach(t => {
         const btn = $(`op-tab-${t}`);
         if (btn) btn.classList.toggle('active', t === tab);
