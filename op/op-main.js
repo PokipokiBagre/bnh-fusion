@@ -148,52 +148,35 @@ async function _cargarGaleria() {
 
 // ── Seleccionar conversación ──────────────────────────────────
 async function _selConv(id) {
-    try {
-        // 1. Actualizar URL
-        const url = new URL(window.location.href);
-        url.searchParams.set('conv', id);
-        window.history.replaceState(null, '', url.toString());
-        
-        // 2. Cerrar sidebar móvil
-        window._opCloseSidebar?.();
-
-        // 3. Limpiar suscripción anterior (BLINDADO)
-        if (opState.realtimeSub) {
-            try {
-                // Await es necesario para evitar choques en el WebSocket
-                await supabase.removeChannel(opState.realtimeSub);
-            } catch (err) {
-                console.warn('[OP Chat] Advertencia al limpiar canal viejo:', err);
-            }
-            opState.realtimeSub = null;
-        }
-
-        // 4. Actualizar estado y renderizar
-        opState.convActual = id;
-        opState.mensajes = await cargarMensajes(id);
-        renderMensajes(); // <--- Aquí se actualiza la interfaz
-
-        // 5. Crear nueva suscripción
-        opState.realtimeSub = suscribirMensajes(id, msg => {
-            if (msg.autor_id !== opState.perfil?.id) {
-                if (!opState.perfiles[msg.autor_id]) {
-                    supabase.from('op_perfiles').select('id, nombre, avatar_path')
-                        .eq('id', msg.autor_id).maybeSingle()
-                        .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
-                }
-                appendMensaje(msg);
-            }
-        });
-
-        // 6. Actualizar título superior (con tolerancia a String/Number)
-        const conv = opState.conversaciones.find(c => String(c.id) === String(id));
-        const el = document.getElementById('op-chat-titulo');
-        if (el && conv) el.textContent = conv.titulo;
-
-    } catch (error) {
-        // Si algo más falla, ahora sí lo veremos en rojo en la consola
-        console.error('[OP Chat] Error crítico al cambiar de conversación:', error);
+    // Actualizar URL sin recargar la página
+    const url = new URL(window.location.href);
+    url.searchParams.set('conv', id);
+    window.history.replaceState(null, '', url.toString());
+    // Cerrar sidebar móvil al abrir conversación
+    window._opCloseSidebar?.();
+    if (opState.realtimeSub) {
+        supabase.removeChannel(opState.realtimeSub);
+        opState.realtimeSub = null;
     }
+    opState.convActual = id;
+    opState.mensajes   = await cargarMensajes(id);
+    renderMensajes();
+
+    opState.realtimeSub = suscribirMensajes(id, msg => {
+        if (msg.autor_id !== opState.perfil?.id) {
+            // Actualizar perfiles si llegó uno nuevo
+            if (!opState.perfiles[msg.autor_id]) {
+                supabase.from('op_perfiles').select('id, nombre, avatar_path')
+                    .eq('id', msg.autor_id).maybeSingle()
+                    .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
+            }
+            appendMensaje(msg);
+        }
+    });
+
+    const conv = opState.conversaciones.find(c => c.id === id);
+    const el = $('op-chat-titulo');
+    if (el && conv) el.textContent = conv.titulo;
 }
 
 // ── Reconexión automática al volver a la pestaña ──────────────
@@ -224,25 +207,29 @@ function _initVisibilityReconnect() {
 
             // 2. Restaurar perfil si se perdió
             if (!opState.perfil) {
-                const authData = await supabase.auth.getUser();
-                if (authData.data.user) {
-                    opState.perfil = await cargarPerfil(authData.data.user.id);
-                }
+                opState.perfil = await cargarPerfil(user.id);
             }
 
-            // 3. Determinar qué conv mostrar: URL > opState > primera disponible
-            const urlConvId = new URLSearchParams(window.location.search).get('conv');
-            const convId =
-                (urlConvId && opState.conversaciones.find(c => String(c.id) === String(urlConvId)))
-                    ? opState.conversaciones.find(c => String(c.id) === String(urlConvId)).id
-                    : opState.convActual || opState.conversaciones[0]?.id;
+            // 3. Al reconectar, recargar la página manteniendo la conv activa en la URL.
+            //    El cliente de Supabase queda en estado zombie post-inactividad y las
+            //    queries fallan silenciosamente. Un reload limpio lo resuelve igual que
+            //    el F5 manual, pero preserva la conv gracias a ?conv= en la URL.
+            if (awayMs >= 3000) {
+                window.location.reload();
+                return;
+            }
 
-            if (!convId) { _reconectando = false; return; }
-
-            // 4. Siempre re-cargar la conv al reconectar — garantiza que la vista
-            //    esté en sync con la URL independientemente del estado anterior.
+            // Si estuvo fuera menos de 3s, solo re-suscribir el websocket
             await new Promise(r => setTimeout(r, 200));
-            await _selConv(convId);
+            if (opState.realtimeSub) {
+                try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
+                opState.realtimeSub = null;
+            }
+            opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
+                if (opState.mensajes.some(m => m.id === msg.id)) return;
+                opState.mensajes.push(msg);
+                if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
+            });
             toast('🔄 Reconectado', 'ok');
         } catch (e) {
             console.warn('[OP] Error en reconexión:', e);
