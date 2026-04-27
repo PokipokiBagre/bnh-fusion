@@ -325,26 +325,24 @@ window.abrirFicha = async (nombreGrupo) => {
         const tipo = panel?.dataset.tipo || 'icon';
         if (!nombreGrupo) return;
 
-        // Re-renderizar el panel para asegurarse de que los nodos de progreso
-        // existen y están frescos — evita el bug de nodos huérfanos cuando el
-        // panel fue cerrado/reabierto entre que se eligió el archivo y se subió.
-        renderUploadPanel(nombreGrupo);
-
-        // Capturar nodos DESPUÉS del re-render (los anteriores son huérfanos)
+        // NO llamar renderUploadPanel aquí — tiene lógica toggle que cierra el
+        // panel si ya está abierto con el mismo grupo. Los nodos de progreso
+        // siempre existen dentro del panel renderizado, solo mostrarlos.
         const getEl = id => document.getElementById(id);
-        const showProg = () => { const p = getEl('fichas-upload-progress'); if (p) p.style.display = 'block'; };
-        showProg();
+        const prog = getEl('fichas-upload-progress');
+        const fill = getEl('fichas-prog-fill');
+        const msg  = getEl('fichas-prog-msg');
+        if (prog) { prog.style.display = 'block'; }
+        if (fill) { fill.style.width = '0%'; }
+        if (msg)  { msg.textContent = 'Preparando…'; msg.style.color = ''; }
 
         try {
             const url = await subirImagenGrupo(file, nombreGrupo, tipo, (pct, txt) => {
-                const fill = getEl('fichas-prog-fill');
-                const msg  = getEl('fichas-prog-msg');
                 if (fill) fill.style.width = pct + '%';
                 if (msg)  msg.textContent = txt;
             });
             const preview = getEl('upload-preview-img');
             if (preview) preview.src = url;
-            const msg = getEl('fichas-prog-msg');
             if (msg) { msg.textContent = '✅ ¡Imagen actualizada!'; msg.style.color = 'var(--green)'; }
             setTimeout(() => {
                 renderCatalogo(postersDelHilo);
@@ -354,9 +352,6 @@ window.abrirFicha = async (nombreGrupo) => {
                 }
             }, 800);
         } catch(e) {
-            const msg  = getEl('fichas-prog-msg');
-            const fill = getEl('fichas-prog-fill');
-            const prog = getEl('fichas-upload-progress');
             if (msg)  { msg.textContent = '❌ ' + e.message; msg.style.color = 'var(--red)'; }
             if (fill) fill.style.width = '0%';
             setTimeout(() => { if (prog) prog.style.display = 'none'; }, 3500);
