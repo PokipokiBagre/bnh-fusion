@@ -10,6 +10,7 @@ import { subirImagenGrupo } from './fichas-upload.js';
 import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP, abrirEditarLore } from './fichas-op.js';
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { supabase } from '../bnh-auth.js';
 
@@ -60,6 +61,7 @@ async function init() {
     }
 
     sincronizarVista();
+    bnhPort.init().catch(console.error);
 
     // Enfocar el buscador de nombre por defecto al cargar el catálogo
     setTimeout(() => {
