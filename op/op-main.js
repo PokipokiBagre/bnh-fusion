@@ -188,12 +188,20 @@ function _initVisibilityReconnect() {
         const awayMs = Date.now() - _lastVisible;
 
         try {
-            // 1. Verificar sesión usando la referencia en memoria de bnhAuth —
-            //    evita llamar a getUser()/getSession() que compiten por el lock
-            //    interno de Supabase en visibilitychange y causan AbortError.
+            // 1. Verificar sesión en memoria
             if (!bnhAuth.estaLogueado()) {
                 window.location.reload();
                 return;
+            }
+
+            // 2. Refrescar el token de Supabase siempre al volver —
+            //    sin esto el cliente queda en estado zombie: no da error
+            //    pero las queries y mensajes se cuelgan silenciosamente.
+            try {
+                const { error } = await supabase.auth.refreshSession();
+                if (error) { window.location.reload(); return; }
+            } catch(_) {
+                // Si refreshSession falla (sin red aún), seguimos igual
             }
 
             // 2. Restaurar perfil si se perdió
