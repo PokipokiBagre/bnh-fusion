@@ -208,6 +208,8 @@ function _initVisibilityReconnect() {
             }
 
             // 4. Re-suscribir siempre (websocket pudo haberse caído aunque sea 1s)
+            // Pequeño delay para que el lock de auth de Supabase se libere primero.
+            await new Promise(r => setTimeout(r, 150));
             if (opState.realtimeSub) {
                 try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
                 opState.realtimeSub = null;
