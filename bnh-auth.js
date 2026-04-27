@@ -177,29 +177,41 @@ export const bnhAuth = {
         }
     },
 
-        renderStatusBadge() {
+            renderStatusBadge() {
+        // Estilos comunes para evitar que el botón se deforme
+        const baseStyle = `
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-weight: bold;
+            font-family: inherit;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: 0.2s;
+            box-sizing: border-box;
+            height: 36px;
+            min-width: fit-content;
+        `;
+
         if (this.esAdmin()) {
-            return `<span style="background:var(--white, #fff); color:#0073ff; border:1.5px solid #0073ff;
-                        padding:6px 12px; border-radius:4px; font-weight:bold; box-shadow:0 1px 3px rgba(0,115,255,0.15);
-                        font-family:inherit; cursor:pointer; font-size:0.85em;"
+            return `<span style="${baseStyle} background:#fff; color:#0073ff; border:1.5px solid #0073ff; box-shadow:0 1px 3px rgba(0,115,255,0.15);"
                     onclick="bnhAuth._mostrarPanelSesion()">
                     ⚡ OP
                     </span>`;
         } else if (this.estaLogueado()) {
-            return `<span style="background:var(--white, #fff); color:var(--green, #1e8449); border:1.5px solid var(--green, #1e8449);
-                        padding:6px 12px; border-radius:4px; font-weight:bold; box-shadow:0 1px 3px rgba(30,132,73,0.15);
-                        font-family:inherit; cursor:pointer; font-size:0.85em;"
+            return `<span style="${baseStyle} background:#fff; color:var(--green, #1e8449); border:1.5px solid var(--green, #1e8449); box-shadow:0 1px 3px rgba(30,132,73,0.15);"
                     onclick="bnhAuth._mostrarPanelSesion()">
-                    🟢 ${this.getPersonaje() || this.getEmail()}
+                    🟢 ${this.getPersonaje() || 'User'}
                     </span>`;
         } else {
             return `<button onclick="bnhAuth._mostrarModalLogin()"
-                        style="background:var(--white, #fff); color:var(--gray-700, #495057); border:1.5px dashed var(--gray-500, #adb5bd);
-                               padding:6px 12px; border-radius:4px; font-weight:bold;
-                               font-family:inherit; cursor:pointer; font-size:0.85em; transition: 0.2s;"
+                        style="${baseStyle} background:#fff; color:var(--gray-700, #495057); border:1.5px dashed var(--gray-500, #adb5bd);"
                         onmouseover="this.style.borderColor='#0073ff'; this.style.color='#0073ff';"
                         onmouseout="this.style.borderColor='var(--gray-500)'; this.style.color='var(--gray-700)';">
-                    🔒 Acceso OP
+                    🔒 OP
                     </button>`;
         }
     },
