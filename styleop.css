@@ -78,7 +78,7 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
 .op-msg-bubble:hover .op-msg-del { opacity:1; color:var(--red); }
 
 /* Input */
-.op-input-area { padding:12px 16px 16px; background:var(--white); border-top:1px solid var(--gray-200); flex-shrink:0; box-shadow:0 -2px 8px rgba(0,0,0,0.05); position:relative; }
+.op-input-area { padding:12px 16px 16px; padding-bottom:max(16px, env(safe-area-inset-bottom, 16px)); background:var(--white); border-top:1px solid var(--gray-200); flex-shrink:0; box-shadow:0 -2px 8px rgba(0,0,0,0.05); position:relative; }
 .op-input-wrap { position:relative; }
 .op-input-row { display:flex; align-items:flex-end; gap:8px; background:var(--gray-100); border:1.5px solid var(--gray-300); border-radius:var(--radius-lg); padding:8px 10px; transition:border-color 0.2s; }
 .op-input-row:focus-within { border-color:var(--red); box-shadow:0 0 0 3px var(--red-pale,#fdecea); }
@@ -176,8 +176,8 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
     /* Mensajes ocupan todo el ancho */
     .op-msg { max-width:88%; }
 
-    /* Input area */
-    .op-input-area { padding:8px 10px 12px; }
+    /* Input area — extra padding para barra de navegación del sistema */
+    .op-input-area { padding:8px 10px calc(12px + env(safe-area-inset-bottom, 20px)); }
 
     /* Burbujas con radio más pronunciado en mobile */
     .op-msg-bubble { padding:8px 12px; }
