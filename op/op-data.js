@@ -255,14 +255,16 @@ export async function subirAvatarOP(file, opId) {
     return error ? null : path;
 }
 
-// ── Realtime ──────────────────────────────────────────────────
+// op-data.js (Reemplaza la función existente)
 export function suscribirMensajes(convId, onNuevo) {
-    return supabase.channel(`op-msgs-${convId}`)
-        .on('postgres_changes', {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'op_mensajes',
-            filter: `conversacion_id=eq.${convId}`
-        }, payload => onNuevo(payload.new))
-        .subscribe();
+    const canal = supabase.channel(`op-msgs-${convId}`); // Guardamos el canal
+    
+    canal.on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'op_mensajes',
+        filter: `conversacion_id=eq.${convId}`
+    }, payload => onNuevo(payload.new)).subscribe();
+    
+    return canal; // Retornamos el objeto canal correctamente
 }
