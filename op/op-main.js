@@ -194,15 +194,7 @@ function _initVisibilityReconnect() {
                 return;
             }
 
-            // 2. Refrescar el token de Supabase siempre al volver —
-            //    sin esto el cliente queda en estado zombie: no da error
-            //    pero las queries y mensajes se cuelgan silenciosamente.
-            try {
-                const { error } = await supabase.auth.refreshSession();
-                if (error) { window.location.reload(); return; }
-            } catch(_) {
-                // Si refreshSession falla (sin red aún), seguimos igual
-            }
+
 
             // 2. Restaurar perfil si se perdió
             if (!opState.perfil) {
@@ -215,7 +207,8 @@ function _initVisibilityReconnect() {
                 return;
             }
 
-            // 4. Re-suscribir siempre (websocket pudo haberse caído aunque sea 1s)
+            // 4. Re-suscribir siempre — pequeña espera para que el lock de auth se libere
+            await new Promise(r => setTimeout(r, 200));
             if (opState.realtimeSub) {
                 try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
                 opState.realtimeSub = null;
