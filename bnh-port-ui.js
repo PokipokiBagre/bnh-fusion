@@ -315,8 +315,24 @@ export function _htmlMensaje(msg, mismoGrupo) {
             ${msg.audio_path  ? _renderAudio(msg.audio_path)            : ''}
             ${_renderContenidoConLinks(msg)}
         </div>
-        <div style="font-size:0.59em;color:rgba(255,255,255,0.22);padding:0 3px;${propio?'text-align:right;':''}">
-            ${hora}${msg.editado_en ? ' <em style="opacity:0.7">(editado)</em>' : ''}
+        <div style="display:flex;align-items:center;gap:4px;${propio?'justify-content:flex-end;':''}">
+            ${propio ? `
+            <button onclick="window._bnhPortEditarMsg(${msg.id})"
+                style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;
+                font-size:0.7em;padding:1px 4px;line-height:1;transition:color 0.15s;"
+                onmouseover="this.style.color='rgba(108,52,131,0.8)'"
+                onmouseout="this.style.color='rgba(255,255,255,0.2)'"
+                title="Editar">✏</button>
+            <button onclick="window._bnhPortEliminarMsg(${msg.id})"
+                style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;
+                font-size:0.7em;padding:1px 4px;line-height:1;transition:color 0.15s;"
+                onmouseover="this.style.color='rgba(192,57,43,0.8)'"
+                onmouseout="this.style.color='rgba(255,255,255,0.2)'"
+                title="Eliminar">✕</button>
+            ` : ''}
+            <span style="font-size:0.59em;color:rgba(255,255,255,0.22);">
+                ${hora}${msg.editado_en ? ' <em style="opacity:0.7">(editado)</em>' : ''}
+            </span>
         </div>
     </div>
     ${propio ? avatarHtml : ''}
@@ -441,10 +457,14 @@ function _renderTabChat() {
         <div id="bnh-port-pending" style="flex-shrink:0;"></div>
         <div style="padding:7px 9px;border-top:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
             <div style="display:flex;gap:5px;align-items:flex-end;">
-                <button onclick="window._bnhPortFileInput()" title="Adjuntar"
+                <button onclick="window._bnhPortFileInput()" title="Adjuntar archivo"
                     style="background:none;border:1px solid rgba(255,255,255,0.1);
                     color:rgba(255,255,255,0.38);border-radius:6px;padding:5px 7px;
                     cursor:pointer;font-size:0.82em;flex-shrink:0;line-height:1;">📎</button>
+                <button onclick="window._bnhPortToggleMiniGaleria()" title="GIFs e imágenes recientes" id="bnh-port-gal-btn"
+                    style="background:none;border:1px solid rgba(255,255,255,0.1);
+                    color:rgba(255,255,255,0.38);border-radius:6px;padding:5px 7px;
+                    cursor:pointer;font-size:0.82em;flex-shrink:0;line-height:1;">🖼</button>
                 <textarea id="bnh-port-input" rows="1"
                     placeholder="Escribe… @Personaje@ #Tag"
                     style="flex:1;background:rgba(255,255,255,0.06);

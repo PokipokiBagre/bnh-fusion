@@ -557,6 +557,202 @@ function _exponerGlobales() {
         toast('📎 Archivo listo · pulsa ▶ para enviar', 'info');
     };
 
+    // ── Mini-galería rápida (GIFs e imágenes recientes) ─────────
+    window._bnhPortToggleMiniGaleria = () => {
+        const existing = document.getElementById('bnh-port-minigal');
+        if (existing) { existing.remove(); return; }
+
+        const allItems = Object.values(portState.imagenesGaleria).flat()
+            .filter(i => i.tipo !== 'video')   // solo imágenes/GIFs
+            .slice(0, 30);                      // máx 30 recientes
+
+        const wrap = document.getElementById('bnh-port-input')?.closest('div[style*="padding:7px"]');
+        if (!wrap) return;
+
+        const dd = document.createElement('div');
+        dd.id = 'bnh-port-minigal';
+        dd.style.cssText = `position:absolute;bottom:calc(100% + 6px);left:0;right:0;
+            background:#0d1117;border:1.5px solid rgba(108,52,131,0.5);border-radius:12px;
+            max-height:220px;overflow-y:auto;padding:10px;z-index:100;
+            box-shadow:0 -4px 20px rgba(0,0,0,0.5);scrollbar-width:thin;
+            scrollbar-color:rgba(108,52,131,0.4) transparent;`;
+
+        if (!allItems.length) {
+            dd.innerHTML = `<div style="color:rgba(255,255,255,0.25);font-size:0.78em;text-align:center;padding:14px;">
+                Sin imágenes en galería</div>`;
+        } else {
+            const header = document.createElement('div');
+            header.style.cssText = 'font-size:0.66em;color:rgba(255,255,255,0.3);font-weight:700;letter-spacing:0.5px;margin-bottom:8px;';
+            header.textContent = 'RECIENTES';
+            dd.appendChild(header);
+
+            const grid = document.createElement('div');
+            grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:5px;';
+
+            allItems.forEach(item => {
+                const cell = document.createElement('div');
+                cell.style.cssText = `cursor:pointer;border-radius:7px;overflow:hidden;
+                    border:1.5px solid transparent;transition:0.15s;`;
+                cell.onmouseover = () => cell.style.borderColor = '#6c3483';
+                cell.onmouseout  = () => cell.style.borderColor = 'transparent';
+                cell.title = item.nombre;
+                cell.innerHTML = `<img src="${item.url}" style="width:100%;aspect-ratio:1;object-fit:cover;display:block;">`;
+                cell.onclick = () => {
+                    // Seleccionar imagen para enviar
+                    portState.pendingImgId = item.id;
+                    dd.remove();
+                    // Mostrar preview compacto sobre el input
+                    document.getElementById('bnh-port-galsel')?.remove();
+                    const prev = document.createElement('div');
+                    prev.id = 'bnh-port-galsel';
+                    prev.style.cssText = `display:flex;align-items:center;gap:7px;padding:5px 9px;
+                        background:rgba(108,52,131,0.15);border-top:1px solid rgba(108,52,131,0.3);flex-shrink:0;`;
+                    prev.innerHTML = `<img src="${item.url}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;">
+                        <span style="font-size:0.72em;color:rgba(255,255,255,0.55);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.nombre}</span>
+                        <button onclick="portState.pendingImgId=null;document.getElementById('bnh-port-galsel')?.remove();"
+                            style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.9em;padding:0;">✕</button>`;
+                    const pending = document.getElementById('bnh-port-pending');
+                    if (pending) pending.insertAdjacentElement('beforebegin', prev);
+                    document.getElementById('bnh-port-input')?.focus();
+                    toast('📎 Imagen lista · pulsa ▶ para enviar', 'info');
+                };
+                grid.appendChild(cell);
+            });
+            dd.appendChild(grid);
+        }
+
+        // Posicionar relativo al área de input
+        const inputArea = document.getElementById('bnh-port-input')?.closest('div[style*="padding:7px"]');
+        if (inputArea) {
+            inputArea.style.position = 'relative';
+            inputArea.appendChild(dd);
+        }
+
+        // Cerrar al click fuera
+        setTimeout(() => {
+            document.addEventListener('mousedown', function _close(e) {
+                if (!dd.contains(e.target) && e.target.id !== 'bnh-port-gal-btn') {
+                    dd.remove();
+                    document.removeEventListener('mousedown', _close);
+                }
+            });
+        }, 10);
+    };
+
+    // ── Eliminar mensaje propio ───────────────────────────────
+    window._bnhPortEliminarMsg = async (id) => {
+        const { supabase } = await import('./bnh-auth.js');
+        // Obtener paths de media para limpiar storage
+        const msg = portState.mensajes.find(m => m.id === id);
+        if (!msg) return;
+
+        // Borrar del DOM inmediatamente (optimista)
+        document.querySelector(`.bnh-port-msg[data-msg-id="${id}"]`)?.remove();
+        portState.mensajes = portState.mensajes.filter(m => m.id !== id);
+
+        // Limpiar storage si tiene media
+        if (msg.imagen_path) {
+            let paths = [];
+            try { paths = JSON.parse(msg.imagen_path); if (!Array.isArray(paths)) paths = [msg.imagen_path]; }
+            catch(_) { paths = [msg.imagen_path]; }
+            if (paths.length) await supabase.storage.from('imagenes-bnh').remove(paths);
+        }
+        if (msg.video_path)  await supabase.storage.from('imagenes-bnh').remove([msg.video_path]);
+        if (msg.audio_path)  await supabase.storage.from('imagenes-bnh').remove([msg.audio_path]);
+
+        await supabase.from('op_mensajes').delete().eq('id', id);
+    };
+
+    // ── Editar mensaje propio (inline) ────────────────────────
+    window._bnhPortEditarMsg = (id) => {
+        const msg = portState.mensajes.find(m => m.id === id);
+        if (!msg || !msg.contenido) return;
+
+        const msgEl  = document.querySelector(`.bnh-port-msg[data-msg-id="${id}"]`);
+        if (!msgEl) return;
+
+        // Buscar el div de contenido de texto dentro de la burbuja
+        // Es el último div con font-size:0.82em dentro del bubble
+        const bubble  = msgEl.querySelector('[style*="border:1px solid"]');
+        if (!bubble) return;
+
+        // Reemplazar la parte de texto por un textarea inline
+        // Guardar el contenido original en el bubble como data attr
+        bubble.dataset.originalContenido = msg.contenido;
+
+        // Buscar y ocultar el div de texto (último hijo del bubble si tiene texto)
+        const textoDiv = bubble.querySelector('div[style*="0.82em"]');
+        const originalHTML = textoDiv ? textoDiv.outerHTML : '';
+        if (textoDiv) textoDiv.remove();
+
+        const ta = document.createElement('textarea');
+        ta.value = msg.contenido;
+        ta.style.cssText = `width:100%;min-height:54px;background:rgba(255,255,255,0.08);
+            border:1.5px solid rgba(108,52,131,0.6);border-radius:6px;
+            color:rgba(255,255,255,0.88);font:inherit;font-size:0.8em;
+            padding:5px 7px;resize:vertical;box-sizing:border-box;outline:none;`;
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;gap:5px;justify-content:flex-end;margin-top:4px;';
+
+        const btnCancelar = document.createElement('button');
+        btnCancelar.textContent = 'Cancelar';
+        btnCancelar.style.cssText = `background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);
+            color:rgba(255,255,255,0.55);border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.72em;`;
+        btnCancelar.onclick = () => {
+            ta.remove(); btnRow.remove();
+            // Restaurar div de texto original
+            const restored = document.createElement('div');
+            restored.innerHTML = originalHTML;
+            const node = restored.firstElementChild;
+            if (node) bubble.appendChild(node);
+        };
+
+        const btnGuardar = document.createElement('button');
+        btnGuardar.textContent = '💾 Guardar';
+        btnGuardar.style.cssText = `background:#6c3483;border:none;color:white;
+            border-radius:5px;padding:3px 9px;cursor:pointer;font-size:0.72em;font-weight:700;`;
+        btnGuardar.onclick = async () => {
+            const nuevo = ta.value.trim();
+            if (!nuevo) return;
+            const { supabase } = await import('./bnh-auth.js');
+            let { error } = await supabase.from('op_mensajes')
+                .update({ contenido: nuevo, editado_en: new Date().toISOString() }).eq('id', id);
+            if (error?.code === '42703' || error?.code === 'PGRST204') {
+                ({ error } = await supabase.from('op_mensajes').update({ contenido: nuevo }).eq('id', id));
+            }
+            if (error) { toast('❌ Error al guardar', 'error'); return; }
+
+            // Actualizar estado local
+            const m = portState.mensajes.find(m => m.id === id);
+            if (m) { m.contenido = nuevo; m.editado_en = new Date().toISOString(); }
+
+            ta.remove(); btnRow.remove();
+            // Re-renderizar solo el bubble text
+            const newTexto = document.createElement('div');
+            newTexto.style.cssText = 'font-size:0.82em;line-height:1.45;word-break:break-word;';
+            // Markup básico
+            newTexto.innerHTML = String(nuevo)
+                .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                .replace(/@([^@\n]+)@/g,'<strong style="color:#c39bd3;">@$1@</strong>')
+                .replace(/#(\S+)/g,'<span style="color:#5dade2;">#$1</span>');
+            bubble.appendChild(newTexto);
+
+            // Actualizar la línea de hora para mostrar (editado)
+            const horaDiv = msgEl.querySelector('div[style*="0.59em"]') || msgEl.querySelector('div[style*="flex;align-items"]');
+            if (horaDiv && !horaDiv.querySelector('em')) {
+                horaDiv.insertAdjacentHTML('beforeend', ' <em style="font-size:0.85em;opacity:0.6;">(editado)</em>');
+            }
+            toast('✅ Mensaje editado', 'ok');
+        };
+
+        btnRow.appendChild(btnCancelar);
+        btnRow.appendChild(btnGuardar);
+        bubble.appendChild(ta);
+        bubble.appendChild(btnRow);
+        ta.focus();
+    };
+
     window._bnhPortSubirGaleria = () => {
         const inp = document.createElement('input');
         inp.type = 'file'; inp.accept = 'image/*,video/*';
