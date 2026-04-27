@@ -20,10 +20,10 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--gray-900); line-height:1.5; height:100vh; overflow:hidden; }
+body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--gray-900); line-height:1.5; height:100vh; height:100dvh; overflow:hidden; }
 
 /* Layout */
-#op-root { display:grid; grid-template-columns:250px 1fr; height:100vh; overflow:hidden; }
+#op-root { display:grid; grid-template-columns:250px 1fr; height:100vh; height:100dvh; overflow:hidden; }
 
 /* Sidebar */
 #op-sidebar { background:var(--white); border-right:1px solid var(--gray-200); display:flex; flex-direction:column; overflow:hidden; box-shadow:var(--shadow-sm); }
@@ -51,8 +51,8 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
 .op-conv-item:hover .op-conv-actions { opacity:1; }
 
 /* Main */
-#op-main { display:flex; flex-direction:column; overflow:hidden; background:var(--gray-100); }
-.op-panel { flex:1; display:flex; overflow:hidden; }
+#op-main { display:flex; flex-direction:column; overflow:hidden; background:var(--gray-100); height:100vh; height:100dvh; }
+.op-panel { flex:1; display:flex; overflow:hidden; min-height:0; }
 .op-panel-topbar { display:flex; align-items:center; gap:14px; padding:11px 20px; border-bottom:1px solid var(--gray-200); background:var(--white); flex-shrink:0; box-shadow:var(--shadow-sm); }
 .op-back { color:var(--gray-500); text-decoration:none; font-size:0.8em; font-weight:600; transition:0.12s; white-space:nowrap; }
 .op-back:hover { color:var(--red); }
@@ -135,7 +135,10 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
 
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width:768px) {
-    #op-root { grid-template-columns:1fr; }
+    #op-root { grid-template-columns:1fr; height:100dvh; }
+
+    /* Main ocupa toda la pantalla en mobile */
+    #op-main { height:100dvh; }
 
     /* Sidebar oculta por defecto, se muestra como drawer */
     #op-sidebar {
@@ -144,6 +147,7 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
         top:0; left:0;
         width:min(300px, 85vw);
         height:100vh;
+        height:100dvh;
         z-index:1000;
         transform:translateX(-100%);
         transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);
@@ -177,7 +181,10 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
     .op-msg { max-width:88%; }
 
     /* Input area — extra padding para barra de navegación del sistema */
-    .op-input-area { padding:8px 10px calc(12px + env(safe-area-inset-bottom, 20px)); }
+    .op-input-area {
+        padding:8px 10px 12px;
+        padding-bottom:max(16px, calc(12px + env(safe-area-inset-bottom, 20px)));
+    }
 
     /* Burbujas con radio más pronunciado en mobile */
     .op-msg-bubble { padding:8px 12px; }
