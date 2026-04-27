@@ -460,6 +460,9 @@ function _initVisibilityReconnect() {
             // 3. Si estuvo fuera más de 3s, recargar datos
             if (awayMs >= 3000) {
                 await Promise.all([cargarTodo(), cargarFusiones()]);
+                // Limpiar cache de equipación — los datos acaban de recargarse
+                // y el cache viejo haría que abrirFicha muestre una ficha anterior.
+                window._equipCache = {};
                 cerrarUploadPanel();
                 sincronizarVista();
                 const toastEl = document.getElementById('fichas-toast');
