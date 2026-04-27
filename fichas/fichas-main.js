@@ -278,9 +278,13 @@ window.abrirFicha = async (nombreGrupo) => {
     };
 
     // ── Upload de imagen ─────────────────────────────────────
+    // _fichasAbrirUpload: abre siempre, nunca cierra.
+    // renderUploadPanel tiene lógica toggle (cierra si ya está abierto con el mismo grupo),
+    // así que limpiamos dataset.grupo antes de llamarla para forzar siempre el render.
     window._fichasAbrirUpload = (nombreGrupo) => {
+        const panel = document.getElementById('fichas-upload-panel');
+        if (panel) panel.dataset.grupo = ''; // evitar toggle-cierre
         renderUploadPanel(nombreGrupo);
-        // Scroll al panel si está en detalle
         setTimeout(() => {
             document.getElementById('fichas-upload-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }, 60);
@@ -299,10 +303,9 @@ window.abrirFicha = async (nombreGrupo) => {
         const panel = document.getElementById('fichas-upload-panel');
         if (!panel || panel.style.display === 'none') return;
         panel.dataset.tipo = tipo;
-        // Forzar re-render sin pasar por el toggle: temporalmente cambiar grupo
         const nombreGrupo = panel.dataset.grupo;
         if (!nombreGrupo) return;
-        panel.dataset.grupo = ''; // evitar que renderUploadPanel lo cierre por toggle
+        panel.dataset.grupo = ''; // evitar toggle-cierre
         renderUploadPanel(nombreGrupo);
     };
 
