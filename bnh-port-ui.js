@@ -344,6 +344,20 @@ export function _htmlMensaje(msg, mismoGrupo) {
 // ─────────────────────────────────────────────────────────────
 export function renderBurbuja() {
     if ($(ID_BUBBLE)) return;
+
+    // Inyectar CSS de ocultamiento móvil (una sola vez)
+    if (!document.getElementById('bnh-port-mobile-css')) {
+        const style = document.createElement('style');
+        style.id = 'bnh-port-mobile-css';
+        style.textContent = `
+            @media (max-width: 768px) {
+                #bnh-port-bubble,
+                #bnh-port-panel { display: none !important; }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     const el = document.createElement('div');
     el.id = ID_BUBBLE;
     el.title = 'Panel OP';
