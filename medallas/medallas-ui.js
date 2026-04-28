@@ -977,7 +977,7 @@ export function renderPersonaje() {
         }
 
         equipHtml = `
-        <div id="pj-equip-panel" style="width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
+        <div id="pj-equip-panel" style="width:260px;min-width:260px;flex-shrink:0;align-self:flex-start;position:sticky;top:0;
                     display:flex;flex-direction:column;gap:10px;max-height:calc(100vh - 80px);overflow-y:auto;overflow-x:hidden;">
 
             ${resumenCard}
@@ -1027,7 +1027,7 @@ export function renderPersonaje() {
     const prevFocus = document.activeElement?.id === 'pj-med-buscar';
     
     wrap.innerHTML = `
-        <div style="display:flex;gap:16px;align-items:flex-start;">
+        <div id="pj-main-layout" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
             <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:14px;">
                 <div class="card" id="pj-selector-card" style="position:sticky;top:0;z-index:15;box-shadow:0 4px 12px rgba(0,0,0,0.08);">
                     <div class="card-title">Personaje</div>
