@@ -81,8 +81,32 @@ async function init() {
     if (guardado) {
         try {
             estadoUI.hiloActivo = JSON.parse(guardado);
-            await cargarHiloActivo();
+            // Verificar que el hilo guardado sigue existiendo
+            const aun = hilosState.find(h =>
+                h.board === estadoUI.hiloActivo.board &&
+                h.thread_id == estadoUI.hiloActivo.thread_id
+            );
+            if (aun) {
+                await cargarHiloActivo();
+            } else {
+                estadoUI.hiloActivo = null;
+                sessionStorage.removeItem('hist_hilo_activo');
+            }
         } catch { estadoUI.hiloActivo = null; }
+    }
+
+    // Si no hay hilo activo (primera visita o hilo eliminado),
+    // preseleccionar el más reciente automáticamente
+    if (!estadoUI.hiloActivo && hilosState.length) {
+        const primero = hilosState[0]; // ya viene ordenado por creado_en DESC
+        estadoUI.hiloActivo = {
+            board:      primero.board,
+            thread_id:  primero.thread_id,
+            thread_url: primero.thread_url || '',
+            titulo:     primero.titulo     || '',
+        };
+        sessionStorage.setItem('hist_hilo_activo', JSON.stringify(estadoUI.hiloActivo));
+        await cargarHiloActivo();
     }
 
     _sync();
