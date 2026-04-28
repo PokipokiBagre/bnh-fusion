@@ -5,21 +5,28 @@ import { supabase } from './bnh-auth.js';
 import { REGLAS_SISTEMA } from './bnh-reglas.js';
 import { gruposGlobal, ptGlobal } from './fichas/fichas-state.js';
 
-export async function llamarIA(peticionUsuario, contextoDeDatos) {
+export async function llamarIA(peticionUsuario, contextoDeDatos, imagenData = null) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 segundos
 
-        const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
-            body: { 
-                prompt: peticionUsuario, 
-                contextoAdicional: `
+        const body = { 
+            prompt: peticionUsuario, 
+            contextoAdicional: `
                     ${REGLAS_SISTEMA}
                     
                     DATOS DE LA BASE DE DATOS ACTUAL:
                     ${contextoDeDatos}
                 `
-            },
+        };
+        // Si viene imagen, añadirla al body para que la edge function la pase a Gemini
+        if (imagenData?.base64 && imagenData?.mimeType) {
+            body.imagenBase64  = imagenData.base64;
+            body.imagenMimeType = imagenData.mimeType;
+        }
+
+        const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
+            body,
             signal: controller.signal
         });
 
