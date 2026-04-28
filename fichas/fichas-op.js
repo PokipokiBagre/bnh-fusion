@@ -247,13 +247,23 @@ window._opRefreshTab1Pools = (grupoId, nombreGrupo) => {
         });
     });
 
-    // ── Pool de tags a asignar (40 aleatorios de los que NO tiene) ──
+    // ── Pool de tags a asignar (100, fusión TAGS_CANONICOS + tags reales del catálogo) ──
     const poolAsignar = document.getElementById('op-tags-pool');
     if (poolAsignar) {
-        const disponibles = TAGS_CANONICOS
-            .filter(t => !tagsActuales.has(t.startsWith('#')?t:'#'+t))
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 40);
+        // Unir tags canónicos con todos los tags reales que existen en cualquier grupo
+        const tagsEnCatalogo = Object.keys(tagCount);
+        const todosLosTagsSet = new Set([
+            ...TAGS_CANONICOS.map(t => t.startsWith('#') ? t : '#' + t),
+            ...tagsEnCatalogo
+        ]);
+        const disponibles = [...todosLosTagsSet]
+            .filter(t => !tagsActuales.has(t))
+            // Ordenar: más usados primero, luego alfabético para estabilidad
+            .sort((a, b) => {
+                const diff = (tagCount[b] || 0) - (tagCount[a] || 0);
+                return diff !== 0 ? diff : a.localeCompare(b);
+            })
+            .slice(0, 100);
 
         poolAsignar.innerHTML = disponibles.length
             ? disponibles.map(t => {
