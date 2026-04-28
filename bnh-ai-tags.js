@@ -102,29 +102,38 @@ ${catalogoStr}
     `.trim();
 
     const prompt = `
-Eres un asistente de un juego de rol basado en My Hero Academia. 
+Eres un asistente de un juego de rol basado en My Hero Academia.
 Se te proporciona la ficha de un personaje y el catálogo COMPLETO de tags del juego.
 
-Tu tarea: analiza el lore, quirk, personalidad, stats e información del personaje, 
-y propón qué tags del catálogo le corresponderían mejor. 
-TAMBIÉN puedes proponer tags NUEVOS que no estén en el catálogo si crees que encajan perfectamente 
-y que enriquecerían el juego.
+Tu tarea: analiza el lore, quirk, personalidad, stats e información del personaje,
+y propón qué tags del catálogo le corresponderían mejor.
+SOLO SI no existe ningún tag del catálogo que cubra un concepto importante del personaje,
+puedes proponer tags nuevos — pero con criterio muy estricto.
 
 REGLAS CRÍTICAS:
 1. NO repitas tags que el personaje ya tiene.
 2. Los tags del catálogo que propongas deben estar escritos EXACTAMENTE como aparecen en el catálogo.
-3. Los tags nuevos (que no están en el catálogo) deben seguir el formato #PalabraConMayúscula.
-4. Propón entre 5 y 15 tags en total. Prioriza calidad sobre cantidad.
+3. Prioriza SIEMPRE tags del catálogo existente. Solo propone un tag nuevo si el concepto
+   no está cubierto por ningún tag ya existente, ni siquiera de forma aproximada.
+4. Propón entre 5 y 12 tags en total. Prioriza calidad sobre cantidad.
 5. Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin texto extra.
+
+REGLAS DE FORMATO PARA TAGS NUEVOS (MUY IMPORTANTE):
+- Deben ser concisos: 1 o 2 palabras máximo.
+- Usar sustantivos o adjetivos simples, no frases descriptivas.
+- Si son dos palabras, unirlas con guión bajo: #Influencia_Oculta, #Fuerza_Bruta, #Mente_Maestra.
+- Una sola palabra va sin guión: #Catador, #Infiltrador, #Nómada.
+- NUNCA uses frases largas o compuestas como #SaborExperto, #PoderOscuro, #HabilidadEspecial.
+- Sigue el estilo del catálogo existente — revisa los ejemplos del catálogo antes de inventar.
 
 Formato de respuesta OBLIGATORIO:
 {
   "razonamiento": "Breve explicación (2-3 líneas) de tu análisis del personaje.",
   "tags_catalogo": ["#Tag1", "#Tag2", "#Tag3"],
-  "tags_nuevos": ["#TagNuevo1", "#TagNuevo2"]
+  "tags_nuevos": ["#TagNuevo1", "#Tag_Nuevo2"]
 }
 
-Si no tienes tags nuevos que proponer, usa un array vacío: "tags_nuevos": []
+Si no hay tags nuevos necesarios, usa array vacío: "tags_nuevos": []
     `.trim();
 
     return await llamarIA(prompt, contexto, imagenData);
