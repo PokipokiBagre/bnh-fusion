@@ -220,11 +220,11 @@ ${infoExtraStr}
         
         ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
 
-        ⚠️ REGLA DE PÁRRAFOS: Divide el texto en párrafos proporcionales al contenido:
-        - Texto corto (1-3 oraciones): 1 párrafo, sin separación.
-        - Texto medio (4-7 oraciones): 2 párrafos separados por "\\n\\n".
-        - Texto largo (8+ oraciones): 3 o 4 párrafos separados por "\\n\\n".
-        NUNCA entregues un bloque de texto largo sin párrafos.
+        ⚠️ REGLAS DE PÁRRAFOS POR SECCIÓN (OBLIGATORIO):
+        - "descripcion": SIEMPRE 1 solo párrafo compacto, sin saltos de línea. Todo en un bloque.
+        - "lore": mínimo 2 párrafos separados por "\\n\\n". Sin límite máximo.
+        - "personalidad": 1 o 2 párrafos máximo, separados por "\\n\\n" si son 2.
+        - "quirk": preferiblemente 1 o 2 párrafos. Solo añade un tercero si el quirk es muy complejo.
 
         REGLAS DE info_extra:
         - Conserva todos los valores que ya tienen contenido.
