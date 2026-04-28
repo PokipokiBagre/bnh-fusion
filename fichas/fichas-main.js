@@ -71,6 +71,24 @@ async function init() {
         }
     }, 150);
 
+    // Botón Atrás/Adelante del navegador — mantener SPA coherente
+    window.addEventListener('popstate', () => {
+        const params = new URLSearchParams(window.location.search);
+        const ficha  = params.get('ficha');
+        if (ficha) {
+            const g = gruposGlobal.find(x =>
+                x.nombre_refinado.toLowerCase() === ficha.toLowerCase() ||
+                x.nombre_refinado.toLowerCase().replace(/ /g,'_') === ficha.toLowerCase().replace(/ /g,'_')
+            );
+            fichasUI.vistaActual  = g ? 'detalle' : 'catalogo';
+            fichasUI.seleccionado = g ? g.nombre_refinado : null;
+        } else {
+            fichasUI.vistaActual  = 'catalogo';
+            fichasUI.seleccionado = null;
+        }
+        sincronizarVista();
+    });
+
     _initVisibilityReconnect();
 }
 
@@ -94,17 +112,22 @@ window._equipCache = window._equipCache || {};
 
 function exponerGlobales() {
 window.abrirFicha = (nombreGrupo) => {
-    // Navegar via URL — funciona desde cualquier página y evita
-    // bugs de estado/cache entre reconexiones.
+    // SPA: actualizar URL sin recargar para no destruir el chat ni los reproductores
     const url = new URL(window.location.href);
     url.searchParams.set('ficha', nombreGrupo);
-    window.location.href = url.toString();
+    window.history.pushState(null, '', url.toString());
+    fichasUI.vistaActual  = 'detalle';
+    fichasUI.seleccionado = nombreGrupo;
+    sincronizarVista();
 };
 
     window.volverCatalogo = () => {
         const url = new URL(window.location.href);
         url.searchParams.delete('ficha');
-        window.location.href = url.toString();
+        window.history.pushState(null, '', url.toString());
+        fichasUI.vistaActual  = 'catalogo';
+        fichasUI.seleccionado = null;
+        sincronizarVista();
     };
 
     window.abrirPanelOP         = abrirPanelOP;
