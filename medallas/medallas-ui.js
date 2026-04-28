@@ -691,14 +691,15 @@ export function renderPersonaje() {
         const agi = proy.agi; // ⚡ USAMOS AGI PROYECTADO
         const pac = pot + agi + ctl;
         const tierData = (() => {
+            if (pac >= 150) return { label: 'TIER 5', color: '#9b59b6' };
             if (pac >= 100) return { label: 'TIER 4', color: '#f39c12' };
             if (pac >= 80)  return { label: 'TIER 3', color: '#8e44ad' };
             if (pac >= 60)  return { label: 'TIER 2', color: '#2980b9' };
             return          { label: 'TIER 1', color: '#27ae60' };
         })();
         const cambios   = Math.floor(agi / 4);
-        const tierNum   = pac>=100?4:pac>=80?3:pac>=60?2:1;
-        const bonoPV    = [5,10,15,20][tierNum-1] || 5;
+        const tierNum   = pac>=150?5:pac>=100?4:pac>=80?3:pac>=60?2:1;
+        const bonoPV    = [5,10,15,20,30][tierNum-1] || 5;
         const pvMax     = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV+(gEq?.pv_max_delta||0);
         const pvActual  = gEq?.pv_actual ?? pvMax;
         const norm_pj   = pj.toString().trim().toLowerCase()
