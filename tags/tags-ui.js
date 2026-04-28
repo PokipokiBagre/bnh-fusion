@@ -347,13 +347,14 @@ function _resumenPJ(pj, proy) {
 
     const pac = pot + agi + ctl;
     const tierData = (() => {
+        if (pac >= 150) return { tier:5, label:'TIER 5', color:'#9b59b6' };
         if (pac >= 100) return { tier:4, label:'TIER 4', color:'#f39c12' };
         if (pac >= 80)  return { tier:3, label:'TIER 3', color:'#8e44ad' };
         if (pac >= 60)  return { tier:2, label:'TIER 2', color:'#2980b9' };
         return          { tier:1, label:'TIER 1', color:'#27ae60' };
     })();
 
-    const bonoPV = [5,10,15,20][tierData.tier-1] || 5;
+    const bonoPV = [5,10,15,20,30][tierData.tier-1] || 5;
     const pvMaxPuro = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoPV;
     const pvMax     = aplicarDeltas(pvMaxPuro,  g.delta_pv_1, g.delta_pv_2, g.delta_pv_3, g.delta_pv_4, g.delta_pv_5);
     const pvActBase = (g.pv_actual !== null && g.pv_actual !== undefined) ? g.pv_actual : pvMax;
