@@ -623,7 +623,7 @@ export function exponerGlobalesOP() {
 
         try {
             btn.disabled = true;
-            status.textContent = "⏳ Analizando y repartiendo en cajas...";
+            status.textContent = "⏳ Ronda 1/2: Procesando instrucción...";
             status.style.color = "#2980b9";
             
             const infoExtraActual = {
@@ -686,7 +686,7 @@ export function exponerGlobalesOP() {
                 setIE('lore-info-nota',      ie.nota);
             }
             
-            status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
+            status.textContent = "✅ Ficha completada (2 rondas). ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
 
