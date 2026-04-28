@@ -340,7 +340,7 @@ export function renderCatalogo(postersDelHilo) {
             <div class="ficha-info">
                 <div class="ficha-name" title="${g.nombre_refinado}">${g.nombre_refinado}</div>
                 ${misAliases?`<div style="font-size:0.68em;color:var(--gray-400);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${misAliases}">${misAliases}</div>`:''}
-                <div class="ficha-pac">PAC ${pac} · PV ${pvA}/${pvMax}</div>
+                <div class="ficha-pac">PAC ${pac} · PV ${pvA}/${pvMax} · <span title="Cantidad de tags">${(g.tags||[]).length} tags</span></div>
                 <div class="pv-bar"><div class="pv-fill ${pvCls}" style="width:${pvPct}%"></div></div>
                 <div class="ficha-tags-preview" style="margin-top:4px;">${tagsPreview}</div>
             </div>
@@ -560,6 +560,7 @@ ${fusion?(()=>{
                 style="width:100%;height:auto;display:block;border-bottom:1px solid var(--booru-border);">
             <table>
                 <tr><td>PAC</td><td style="color:${tc.text};font-weight:700;">${pac}</td></tr>
+                <tr><td>Tags</td><td style="font-weight:700;">${(g.tags||[]).length}</td></tr>
                 <tr><td>Tier</td><td style="color:${tc.text};font-weight:700;">${tc.label}</td></tr>
                 <tr><td>POT</td><td>${statDisplay(_fmtDChain(potChainBase, pot, [1,2,3,4,5].map(n=>grupoCrudo['delta_pot_'+n])), potA, potChainBase)}</td></tr>
                 <tr><td>AGI</td><td>${statDisplay(_fmtDChain(agiChainBase, agi, [1,2,3,4,5].map(n=>grupoCrudo['delta_agi_'+n])), agiA, agiChainBase)}</td></tr>
