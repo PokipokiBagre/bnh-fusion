@@ -155,7 +155,23 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
             </div>
         </div>
 
-        <div style="display:flex; gap:8px; margin-top:14px; align-items:center;">
+        <div style="display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; align-items:center; padding:8px; background:#fef9f0; border:1px solid #f0d9b0; border-radius:6px;">
+            <span style="font-size:0.68em; font-weight:700; color:#a04000; white-space:nowrap; margin-right:2px;">🔧 Utilidades:</span>
+            <button class="op-btn op-btn-gray" style="font-size:0.75em; padding:3px 10px; white-space:nowrap;"
+                onclick="window._opBorrarDelta1()">
+                ✕ Borrar Δ1
+            </button>
+            <button class="op-btn op-btn-gray" style="font-size:0.75em; padding:3px 10px; white-space:nowrap;"
+                onclick="window._opBorrarTodosDeltas()">
+                ✕✕ Borrar todos los Δ
+            </button>
+            <button class="op-btn" style="font-size:0.75em; padding:3px 10px; white-space:nowrap; background:#1a4a80; color:white; border-color:#1a4a80;"
+                onclick="window._opIgualarPVMax('${g.nombre_refinado.replace(/'/g,"\\'")}')">
+                💚 Igualar PV Máx
+            </button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
             <button class="op-btn op-btn-green" onclick="window._opGuardarStats('${g.nombre_refinado.replace(/'/g,"\\'")}')">💾 Guardar Stats</button>
             <div id="msg-stats" class="op-msg"></div>
         </div>
@@ -834,6 +850,67 @@ export function exponerGlobalesOP() {
         } finally {
             btn.disabled = false;
         }
+    };
+
+    // ── Borra solo Δ1 de todos los stats ──────────────────────
+    window._opBorrarDelta1 = () => {
+        const campos = [
+            'op-pot-delta-1','op-agi-delta-1','op-ctl-delta-1',
+            'op-pv-delta-1','op-cambios-delta-1','op-ctl_usado-delta-1','op-pv_actual-delta-1'
+        ];
+        campos.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.value = '0';
+        });
+        setMsg('msg-stats', '✅ Δ1 borrados — recuerda guardar', true);
+    };
+
+    // ── Borra todos los Δ (1–5) de todos los stats ────────────
+    window._opBorrarTodosDeltas = () => {
+        const stats = ['pot','agi','ctl','pv','cambios','ctl_usado','pv_actual'];
+        stats.forEach(s => {
+            [1,2,3,4,5].forEach(n => {
+                const el = document.getElementById(`op-${s}-delta-${n}`);
+                if (el) el.value = '0';
+            });
+        });
+        setMsg('msg-stats', '✅ Todos los Δ borrados — recuerda guardar', true);
+    };
+
+    // ── Iguala pv_actual al PV Máx proyectado (post-deltas) ───
+    window._opIgualarPVMax = (nombreGrupo) => {
+        const d = id => document.getElementById(id)?.value?.trim() ?? '';
+        const pot = parseInt(d('op-pot-base')) || 0;
+        const agi = parseInt(d('op-agi-base')) || 0;
+        const ctl = parseInt(d('op-ctl-base')) || 0;
+
+        let pvMax = calcPVMax(pot, agi, ctl);
+
+        const applyDelta = (val, deltaStr) => {
+            if (!deltaStr || deltaStr === '0') return val;
+            const s = String(deltaStr).trim();
+            const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
+            const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+            const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+            const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+            if (powM)  return Math.round(Math.pow(val, parseFloat(powM[1])));
+            if (multM) return Math.round(val * parseFloat(multM[1]));
+            if (divM)  return Math.round(val / parseFloat(divM[1]));
+            if (addM)  return Math.round(val + parseFloat(addM[1]));
+            return val;
+        };
+
+        [1,2,3,4,5].forEach(n => {
+            pvMax = applyDelta(pvMax, d(`op-pv-delta-${n}`));
+        });
+
+        const pvActEl = document.getElementById('op-pv-actual');
+        if (pvActEl) {
+            pvActEl.value = pvMax;
+            pvActEl.style.background = '#d5f5e3';
+            setTimeout(() => { pvActEl.style.background = ''; }, 1200);
+        }
+        setMsg('msg-stats', `💚 PV Actual igualado a ${pvMax} — recuerda guardar`, true);
     };
 
     window._opGuardarStats = async (nombreGrupo) => {
