@@ -15,6 +15,7 @@ import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../b
 import { supabase } from '../bnh-auth.js';
 import { initMarkupTextarea, renderMarkup } from './fichas-markup.js';
 import { crearTagInput, TAGS_CANONICOS } from '../bnh-tags.js';
+import { initIATagsPanel, htmlIATagsWidget } from '../bnh-ai-tags.js';
 
 // ── Modal ─────────────────────────────────────────────────────
 function abrirModal(titulo, html) {
@@ -160,6 +161,8 @@ export async function abrirPanelOP(nombreGrupo) {
         <div class="tags-chips" id="op-chips">${_chipsHTML(g.id, g.tags||[], ptGlobal[nombreGrupo]||{})}</div>
         <div id="op-tag-inp-wrap" style="margin-bottom:6px;"></div>
 
+        ${htmlIATagsWidget(g.id, g.nombre_refinado)}
+
         <div style="font-size:0.72em;font-weight:600;color:var(--gray-500);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">
             Tags a asignar <span style="font-weight:400;color:var(--gray-400);">(click para agregar)</span>
         </div>
@@ -229,6 +232,7 @@ export async function abrirPanelOP(nombreGrupo) {
             wrap.appendChild(widget.el);
         }
         window._opRefreshTab1Pools(g.id, nombreGrupo);
+        initIATagsPanel();
     }, 60);
 }
 
@@ -247,23 +251,13 @@ window._opRefreshTab1Pools = (grupoId, nombreGrupo) => {
         });
     });
 
-    // ── Pool de tags a asignar (100, fusión TAGS_CANONICOS + tags reales del catálogo) ──
+    // ── Pool de tags a asignar (40 aleatorios de los que NO tiene) ──
     const poolAsignar = document.getElementById('op-tags-pool');
     if (poolAsignar) {
-        // Unir tags canónicos con todos los tags reales que existen en cualquier grupo
-        const tagsEnCatalogo = Object.keys(tagCount);
-        const todosLosTagsSet = new Set([
-            ...TAGS_CANONICOS.map(t => t.startsWith('#') ? t : '#' + t),
-            ...tagsEnCatalogo
-        ]);
-        const disponibles = [...todosLosTagsSet]
-            .filter(t => !tagsActuales.has(t))
-            // Ordenar: más usados primero, luego alfabético para estabilidad
-            .sort((a, b) => {
-                const diff = (tagCount[b] || 0) - (tagCount[a] || 0);
-                return diff !== 0 ? diff : a.localeCompare(b);
-            })
-            .slice(0, 100);
+        const disponibles = TAGS_CANONICOS
+            .filter(t => !tagsActuales.has(t.startsWith('#')?t:'#'+t))
+            .sort(() => Math.random() - 0.5)
+            .slice(0, 40);
 
         poolAsignar.innerHTML = disponibles.length
             ? disponibles.map(t => {
