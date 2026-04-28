@@ -3,6 +3,7 @@
 // ============================================================
 
 import { bnhAuth } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import { STORAGE_URL } from './dev-state.js';
 import { initStatsDev } from './estadisticas/panel-stats-logic.js';
 import { renderPanelStats } from './estadisticas/panel-stats-ui.js';
@@ -23,6 +24,8 @@ window.onload = async () => {
         document.getElementById('access-denied').classList.remove('oculto');
         return;
     }
+
+    bnhPort.init().catch(console.error);
 
     try {
         await initStatsDev(); 
