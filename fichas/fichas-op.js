@@ -1083,6 +1083,75 @@ export function abrirCrearGrupo() {
         });
         wrap.appendChild(widget.el);
         renderChipsCp();
+
+        // ── Navegación rápida con flechas y Enter ───────────────
+        // Orden: Nombre → POT → AGI → CTL → Tag input → Crear
+        const seq = ['cp-nom', 'cp-pot', 'cp-agi', 'cp-ctl'];
+        // El input de tags lo busca por su id real dentro del widget
+        const getTagInp = () => document.getElementById('cp-tag-inp') || wrap.querySelector('input');
+
+        const focusNext = (currentId) => {
+            const idx = seq.indexOf(currentId);
+            if (idx === -1) return;
+            if (idx < seq.length - 1) {
+                document.getElementById(seq[idx + 1])?.focus();
+            } else {
+                // Después de CTL → ir al tag input
+                getTagInp()?.focus();
+            }
+        };
+        const focusPrev = (currentId) => {
+            const idx = seq.indexOf(currentId);
+            if (idx > 0) {
+                document.getElementById(seq[idx - 1])?.focus();
+            }
+        };
+
+        // Nombre: Enter/ArrowDown → POT
+        const nom = document.getElementById('cp-nom');
+        if (nom) {
+            nom.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === 'ArrowDown') {
+                    e.preventDefault(); focusNext('cp-nom');
+                }
+            });
+        }
+
+        // POT / AGI / CTL: flechas arriba/abajo navegan entre campos
+        // Enter también avanza; las flechas izq/der siguen cambiando el número
+        ['cp-pot', 'cp-agi', 'cp-ctl'].forEach(id => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                    e.preventDefault(); focusNext(id);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault(); focusPrev(id);
+                }
+            });
+        });
+
+        // Tag input: ArrowUp → CTL; Enter en vacío → Crear Grupo
+        const tagInp = getTagInp();
+        if (tagInp) {
+            tagInp.addEventListener('keydown', e => {
+                if (e.key === 'ArrowUp' && !tagInp.value) {
+                    e.preventDefault();
+                    document.getElementById('cp-ctl')?.focus();
+                }
+                if (e.key === 'Enter' && !tagInp.value) {
+                    // Solo crear si el dropdown de sugerencias no está abierto
+                    const ddOpen = wrap.querySelector('ul[style*="display:block"], ul[style*="display: block"]');
+                    if (!ddOpen) {
+                        e.preventDefault();
+                        window._cpCrearGrupo?.();
+                    }
+                }
+            });
+        }
+
+        // Autofocus en Nombre al abrir
+        nom?.focus();
     }, 60);
 
     let _cpRol = 'Jugador', _cpEstado = 'Activo';
