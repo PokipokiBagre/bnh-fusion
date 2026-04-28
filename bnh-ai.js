@@ -132,6 +132,8 @@ ${infoExtraStr}
             · "altura" y "peso": estima según el lore y stats (POT alto = complexión robusta).
             · "edad": usa etiquetas como #Madurez, #Joven, etc. si hay tags relevantes.
         - Para "familia", usa marcado @Nombre@ para cada miembro mencionado. CRÍTICO: el nombre va EXACTAMENTE como aparece en el contexto o como lo escribió el OP, con espacios y tildes incluidos. NUNCA uses guiones bajos en nombres de personas. Correcto: @Coyote Peterson@. Incorrecto: @Coyote_Peterson@.
+        - REGLA CRÍTICA DE FAMILIA: Si el OP NO menciona familiares explícitamente y el campo "familia" en el contexto está "Vacío", DEBES dejarlo vacío (""). NUNCA inventes nombres de familia. NUNCA inferir familiares desde los stats o el lore.
+        - Para "nota": Es un campo de UNA SOLA LÍNEA corta (máximo 10-15 palabras). Solo datos factuales muy puntuales que no encajan en ningún otro campo. NUNCA redactes párrafos, oraciones largas, ni texto narrativo aquí. Si no hay nada concreto que anotar, déjalo vacío ("").
         - NUNCA inventes tags que no estén en la lista de TAGS EQUIPADOS.
         - Si el OP solo pide editar una sección de texto, copia las demás sin cambios.
         
@@ -233,8 +235,10 @@ ${infoExtraStr}
 
         REGLAS DE info_extra:
         - Conserva todos los valores que ya tienen contenido.
-        - Si un campo estaba "Vacío", infiere un valor razonable usando los TAGS EQUIPADOS.
-        - Para "familia", usa marcado @Nombre@ para cada miembro. NUNCA uses guiones bajos en nombres de personas.
+        - Si un campo estaba "Vacío", infiere un valor razonable usando los TAGS EQUIPADOS — EXCEPTO "familia" y "nota".
+        - "familia": Si está "Vacío", déjalo vacío (""). NUNCA inventes nombres de familiares.
+        - "nota": Si se rellena, debe ser UNA SOLA LÍNEA corta (máximo 10-15 palabras), solo un dato puntual. NUNCA redactes párrafos ni texto narrativo aquí. Si no hay nada concreto, déjalo vacío ("").
+        - Para "familia" con contenido: usa marcado @Nombre@ para cada miembro. NUNCA uses guiones bajos en nombres de personas.
         - NUNCA inventes tags que no estén en la lista de TAGS EQUIPADOS.
     `;
 
