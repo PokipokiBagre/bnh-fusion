@@ -56,24 +56,29 @@ export async function iaGestionarLore(nombrePJ, instruccion, textosActuales) {
     const pj = gruposGlobal.find(g => g.nombre_refinado === nombrePJ);
     if (!pj) throw new Error("Personaje no encontrado.");
 
-    // ── Tags del personaje (vienen de gruposGlobal, no de ptGlobal) ──
-    const tagsEquipados = (pj.tags || []).map(t => t.startsWith('#') ? t : '#' + t);
+    // Tags de gestión interna — no aportan al lore, se excluyen del contexto de IA
+    const TAGS_META = new Set(['#jugador','#npc','#activo','#inactivo','#archivado','#nuevo']);
+    const esMeta = t => TAGS_META.has((t.startsWith('#') ? t : '#'+t).toLowerCase());
+
+    // ── Tags del personaje — se filtran los meta para que la IA no los use en el lore ──
+    const tagsEquipados = (pj.tags || [])
+        .map(t => t.startsWith('#') ? t : '#' + t)
+        .filter(t => !esMeta(t));
 
     // ── PT por tag (puede estar vacío si el PJ no tiene progresión aún) ──
     const pts = ptGlobal[nombrePJ] || {};
 
     // Construimos una lista unificada: todos los tags equipados, con su PT si lo tienen
     const tagsConPT = tagsEquipados.map(tag => {
-        // Buscar el PT del tag (las claves de ptGlobal pueden o no tener #)
         const ptVal = pts[tag] ?? pts[tag.replace(/^#/, '')] ?? 0;
         return ptVal > 0 ? `${tag} [${ptVal} PT]` : tag;
     });
 
-    // Tags con PT que NO están en la lista de equipados (ej: stats internos)
+    // Tags con PT que NO están en la lista de equipados (ej: stats internos), también sin meta
     const tagsExtraPT = Object.entries(pts)
         .filter(([t]) => {
             const norm = (t.startsWith('#') ? t : '#' + t).toLowerCase();
-            return !tagsEquipados.some(te => te.toLowerCase() === norm);
+            return !esMeta(t) && !tagsEquipados.some(te => te.toLowerCase() === norm);
         })
         .map(([t, p]) => `${t.startsWith('#') ? t : '#' + t} [${p} PT]`);
 
@@ -110,6 +115,12 @@ ${infoExtraStr}
         Usa estas claves exactas: "descripcion", "lore", "personalidad", "quirk", e "info_extra" (objeto con las claves: estado, edad, altura, peso, genero, lugar_nac, ocupacion, afiliacion, familia, nota).
         
         ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
+        
+        ⚠️ REGLA DE PÁRRAFOS: Divide el texto en párrafos proporcionales al contenido:
+        - Texto corto (1-3 oraciones): 1 párrafo, sin separación.
+        - Texto medio (4-7 oraciones): 2 párrafos separados por "\\n\\n".
+        - Texto largo (8+ oraciones): 3 o 4 párrafos separados por "\\n\\n".
+        NUNCA entregues un bloque de texto largo sin párrafos.
         
         REGLAS DE info_extra:
         - Si el OP da datos concretos (altura, edad, familia, ocupación, etc.), extráelos y colócalos en info_extra.
@@ -191,6 +202,12 @@ ${infoExtraStr2}
         Usa estas claves exactas: "descripcion", "lore", "personalidad", "quirk", e "info_extra" (objeto con las claves: estado, edad, altura, peso, genero, lugar_nac, ocupacion, afiliacion, familia, nota).
         
         ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
+
+        ⚠️ REGLA DE PÁRRAFOS: Divide el texto en párrafos proporcionales al contenido:
+        - Texto corto (1-3 oraciones): 1 párrafo, sin separación.
+        - Texto medio (4-7 oraciones): 2 párrafos separados por "\\n\\n".
+        - Texto largo (8+ oraciones): 3 o 4 párrafos separados por "\\n\\n".
+        NUNCA entregues un bloque de texto largo sin párrafos.
 
         REGLAS DE info_extra:
         - Conserva todos los valores que ya tienen contenido.
