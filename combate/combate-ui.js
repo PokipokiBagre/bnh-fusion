@@ -42,10 +42,11 @@ export function recalcSlot(slot) {
 
     const pvMaxPuro = calcPVMax(slot.pot, slot.agi, slot.ctl);
     slot.pvMax = aplicarDeltas(pvMaxPuro,
+        d.delta_pv_1, d.delta_pv_2, d.delta_pv_3, d.delta_pv_4, d.delta_pv_5);
 
     slot.cambios = aplicarDeltas(Math.floor(slot.agi / 4),
         d.delta_cambios_1, d.delta_cambios_2, d.delta_cambios_3,
-        d.delta_cambios_4, d.delta_cambios_5);)
+        d.delta_cambios_4, d.delta_cambios_5);
 
     const pvBase = (slot._pvActualManual !== null && slot._pvActualManual !== undefined)
         ? slot._pvActualManual : slot.pvMax;
