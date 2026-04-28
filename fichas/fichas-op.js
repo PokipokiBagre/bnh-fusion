@@ -476,7 +476,13 @@ export function abrirEditarLore(nombreGrupo) {
     <textarea id="ia-lore-input" rows="2" class="op-input" 
         style="width:100%; font-size:0.85em; resize:vertical; font-family:monospace; margin-bottom:6px; box-sizing:border-box;"
         placeholder="Ej: Rellena la info extra con datos del personaje, redacta su lore épico, describe su Quirk..."></textarea>
-    <div style="display:flex; justify-content:flex-end;">
+    <div style="display:flex; justify-content:flex-end; gap:6px;">
+        <button id="btn-lore-optimizar" class="op-btn"
+            onclick="window._loreOptimizar('${g.nombre_refinado.replace(/'/g,"\\'")}','${g.id}')"
+            style="background:linear-gradient(135deg,#7d3c98,#5b2c8f);color:white;border:none;padding:4px 14px;"
+            title="Expande el lore actual según los tags del personaje">
+            ✦ Optimizar
+        </button>
         <button id="btn-ia-lore" class="op-btn" style="background:#f39c12; color:white; border:none; padding:4px 16px;" 
                 onclick="window._ejecutarIALore('${g.nombre_refinado.replace(/'/g,"\\'")}')">Generar</button>
     </div>
@@ -508,11 +514,6 @@ export function abrirEditarLore(nombreGrupo) {
                     </div>
                     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <button class="op-btn op-btn-green" onclick="window._loreGuardar('${g.id}')">💾 Guardar</button>
-                        <button class="op-btn" id="btn-lore-optimizar"
-                            onclick="window._loreOptimizar('${g.nombre_refinado.replace(/'/g,"\\'")}','${g.id}')"
-                            style="background:linear-gradient(135deg,#7d3c98,#5b2c8f);color:white;border:none;">
-                            ✦ Optimizar
-                        </button>
                         <button class="op-btn op-btn-gray" onclick="document.getElementById('op-overlay').style.display='none'">Cancelar</button>
                         <div id="msg-lore-modal" class="op-msg" style="flex:1;"></div>
                     </div>
@@ -628,7 +629,7 @@ export function exponerGlobalesOP() {
 
         try {
             btn.disabled = true;
-            status.textContent = "⏳ Ronda 1/2: Procesando instrucción...";
+            status.textContent = "⏳ Analizando y repartiendo en cajas...";
             status.style.color = "#2980b9";
             
             const infoExtraActual = {
@@ -691,7 +692,7 @@ export function exponerGlobalesOP() {
                 setIE('lore-info-nota',      ie.nota);
             }
             
-            status.textContent = "✅ Ficha completada (2 rondas). ¡Revisa y guarda!";
+            status.textContent = "✅ Ficha autocompletada. ¡Revisa y guarda!";
             status.style.color = "var(--green)";
             input.value = "";
 
@@ -915,6 +916,70 @@ export function exponerGlobalesOP() {
                 document.getElementById('op-overlay').style.display = 'none';
                 window.sincronizarVista?.();
             }, 800);
+        }
+    };
+
+    // _loreOptimizar — expande el lore actual según los tags del personaje
+    window._loreOptimizar = async (nombreGrupo, grupoId) => {
+        const btn = document.getElementById('btn-lore-optimizar');
+        const status = document.getElementById('ia-lore-status');
+        const setS = (ok, msg) => {
+            if (status) { status.style.color = ok ? 'var(--green)' : 'var(--red)'; status.textContent = msg; }
+        };
+
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizando…'; }
+        setS(true, '⏳ Analizando tags y expandiendo…');
+
+        try {
+            const INFO_KEYS = ['estado','edad','altura','peso','genero','lugar_nac','ocupacion','afiliacion','familia','nota'];
+            const info_extra = {};
+            INFO_KEYS.forEach(k => {
+                const v = document.getElementById('lore-info-' + k)?.value?.trim();
+                if (v) info_extra[k] = v;
+            });
+            const textosActuales = {
+                descripcion: document.getElementById('lore-descripcion')?.value || '',
+                lore:        document.getElementById('lore-lore')?.value        || '',
+                personalidad:document.getElementById('lore-personalidad')?.value|| '',
+                quirk:       document.getElementById('lore-quirk')?.value       || '',
+                info_extra
+            };
+
+            const resultadoRaw = await iaOptimizarLore(nombreGrupo, textosActuales);
+
+            let cleanJson = resultadoRaw.replace(/```json/gi,'').replace(/```/g,'').trim();
+            cleanJson = cleanJson.replace(/[\u0000-\u0019]+/g,'');
+            const resultadoJson = JSON.parse(cleanJson);
+
+            if (resultadoJson.descripcion !== undefined)
+                document.getElementById('lore-descripcion').value = resultadoJson.descripcion;
+            if (resultadoJson.lore !== undefined)
+                document.getElementById('lore-lore').value = resultadoJson.lore;
+            if (resultadoJson.personalidad !== undefined)
+                document.getElementById('lore-personalidad').value = resultadoJson.personalidad;
+            if (resultadoJson.quirk !== undefined)
+                document.getElementById('lore-quirk').value = resultadoJson.quirk;
+            if (resultadoJson.info_extra && typeof resultadoJson.info_extra === 'object') {
+                const ie = resultadoJson.info_extra;
+                const setIE = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+                setIE('lore-info-estado',    ie.estado);
+                setIE('lore-info-edad',      ie.edad);
+                setIE('lore-info-altura',    ie.altura);
+                setIE('lore-info-peso',      ie.peso);
+                setIE('lore-info-genero',    ie.genero);
+                setIE('lore-info-lugar_nac', ie.lugar_nac);
+                setIE('lore-info-ocupacion', ie.ocupacion);
+                setIE('lore-info-afiliacion',ie.afiliacion);
+                setIE('lore-info-familia',   ie.familia);
+                setIE('lore-info-nota',      ie.nota);
+            }
+
+            setS(true, '✅ Optimizado según tags. Revisa y guarda.');
+        } catch(e) {
+            console.error('_loreOptimizar:', e);
+            setS(false, '❌ ' + (e.message || 'Error desconocido.'));
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '✦ Optimizar'; }
         }
     };
 
