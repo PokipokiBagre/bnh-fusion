@@ -6,6 +6,7 @@ import { sugerirTags } from '../bnh-tags.js';
 import { initBloques, updateBloques, clearBloques } from './bloques.js';
 import { renderFusionBadge } from '../bnh-fusion.js';
 import { renderBloqueIA, renderBarraIAGlobal } from './medallas-ai.js';
+import { aplicarDeltas } from '../bnh-pac.js';
 
 const mTags = m => (m.requisitos_base||[]).map(r => r.tag.startsWith('#') ? r.tag : '#'+r.tag);
 const _esc  = s => String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
@@ -698,10 +699,23 @@ export function renderPersonaje() {
             return          { label: 'TIER 1', color: '#27ae60' };
         })();
         const cambios   = Math.floor(agi / 4);
+        
+        // CÁLCULO MEJORADO DE PV Y PV MÁXIMO CON MATEMÁTICAS PAC
         const tierNum   = pac>=150?5:pac>=100?4:pac>=80?3:pac>=60?2:1;
         const bonoPV    = [5,10,15,20,30][tierNum-1] || 5;
-        const pvMax     = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV+(gEq?.pv_max_delta||0);
-        const pvActual  = gEq?.pv_actual ?? pvMax;
+        const pvMaxBase = Math.floor(pot/4)+Math.floor(agi/4)+Math.floor(ctl/4)+bonoPV+(gEq?.pv_max_delta||0);
+        const pvMax     = aplicarDeltas(pvMaxBase, gEq?.delta_pv_1, gEq?.delta_pv_2, gEq?.delta_pv_3, gEq?.delta_pv_4, gEq?.delta_pv_5);
+        
+        const pvActualBase = (gEq?.pv_actual !== null && gEq?.pv_actual !== undefined) ? gEq?.pv_actual : pvMax;
+        const pvActual     = aplicarDeltas(pvActualBase, gEq?.delta_pv_actual_1, gEq?.delta_pv_actual_2, gEq?.delta_pv_actual_3, gEq?.delta_pv_actual_4, gEq?.delta_pv_actual_5);
+
+        // Helper inline para las píldoras de PV sin romper la línea
+        const _bdg = (deltas) => (deltas||[]).filter(d=>d&&String(d).trim()!=='0').map(d=>{
+            const s=String(d).trim();
+            const isNeg = s.startsWith('-')||s.startsWith('/');
+            return `<span style="padding:1px 4px;border-radius:4px;font-size:0.65em;background:${isNeg?'#ffebee':'#e3f2fd'};color:${isNeg?'#c62828':'#1565c0'};border:1px solid ${isNeg?'#ef9a9a':'#90caf9'};margin-left:4px;">${s.match(/^[0-9]/)?'+'+s:s}</span>`;
+        }).join('');
+
         const norm_pj   = pj.toString().trim().toLowerCase()
             .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
             .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
@@ -757,14 +771,12 @@ export function renderPersonaje() {
                         </div>
                     </div>
                     <div style="border:1px solid #27ae60;border-radius:6px;overflow:hidden;text-align:center;display:flex;flex-direction:column;" title="${ctlEsFusionado ? `Base: ${baseCtl}` : ''}">
-                        <!-- Zona superior: CTL USADO -->
                         <div style="background:${ctlExcedido?'#fde8e8':'#c8f5dc'};padding:5px 2px 3px;display:flex;flex-direction:column;align-items:center;border-bottom:1px solid #27ae6055;">
                             <div style="font-size:0.55em;color:${ctlExcedido?'#c0392b':'#1a6b3a'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">🛡 usado</div>
                             <div style="font-size:0.95em;font-weight:800;color:${ctlExcedido?'#c0392b':colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
                                 ${_fmtDChain(ctlUsadoBase, ctlUsado, [1,2,3,4,5].map(n=>gEq?.['delta_ctl_usado_'+n]))}
                             </div>
                         </div>
-                        <!-- Zona inferior: CTL TOTAL -->
                         <div style="background:#f0fff4;padding:4px 2px 5px;display:flex;flex-direction:column;align-items:center;">
                             <div style="font-size:0.55em;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">CTL total</div>
                             <div style="font-size:0.95em;font-weight:800;color:${colorCtlTxt};display:flex;flex-direction:column;align-items:center;line-height:1;width:100%;">
@@ -779,7 +791,14 @@ export function renderPersonaje() {
                 ${ctlExcedido ? `<div style="font-size:0.7em;color:#e74c3c;margin-top:4px;font-weight:700;">⚠ CTL EXCEDIDO. Desequipa o se auto-ajustará.</div>` : ''}
                 <div style="display:flex;flex-direction:column;gap:4px;font-size:0.78em;border-top:1px solid var(--gray-200);padding-top:6px;margin-top:4px;">
                     <div style="display:flex;justify-content:space-between;"><span>PAC</span><b style="${proy.esFusion ? 'color:#8e44ad;' : ''}">${proy.esFusion ? '⚡' : ''}${pac}</b></div>
-                    <div style="display:flex;justify-content:space-between;"><span>PV</span><b>${pvActual} / ${pvMax}</b></div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span>PV</span>
+                        <div style="display:flex;align-items:center;font-weight:bold;">
+                            ${pvActual}${_bdg([1,2,3,4,5].map(n=>gEq?.['delta_pv_actual_'+n]))}
+                            <span style="margin:0 4px;">/</span>
+                            ${pvMax}${_bdg([1,2,3,4,5].map(n=>gEq?.['delta_pv_'+n]))}
+                        </div>
+                    </div>
                     <div style="display:flex;justify-content:space-between;"><span>Cambios/t</span><b>${cambios}</b></div>
                     <div style="display:flex;justify-content:space-between;border-top:1px solid #f0f0f0;padding-top:4px;margin-top:2px;">
                         <span>PT totales</span><b style="${proy.esFusion ? 'color:#8e44ad;' : 'color:var(--green);'}">${proy.esFusion ? '⚡' : ''}${totalPT}</b>
@@ -1563,7 +1582,7 @@ const reqsHtml = (m.requisitos_base||[]).map(r => {
 
     return `
     <div class="medalla-card" style="opacity:${opacity}; border-color:${colorBorde}; background:${equipada ? 'rgba(39,174,96,0.05)' : 'white'}; padding:14px; border-radius:10px; display:flex; flex-direction:column; justify-content:space-between; box-shadow:0 2px 6px rgba(0,0,0,0.06); transition:all 0.2s;">
-        <div onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}, '${pjNombre.replace(/'/g,"\\'")}'); event.stopPropagation();" style="cursor:pointer; flex-grow:1;">
+        <div onclick="window._medallasAbrirDetalle(${JSON.stringify(m).replace(/"/g,'&quot;')}, '${pjNombre.replace(/'/g,"\\\\'")}'); event.stopPropagation();" style="cursor:pointer; flex-grow:1;">
             
             <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
                 <div style="font-weight:800; font-size:0.95em; color:var(--gray-900); display:flex; align-items:center; gap:6px; line-height:1.2;">
