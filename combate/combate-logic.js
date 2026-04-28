@@ -2,15 +2,9 @@
 // combate/combate-logic.js
 // ============================================================
 import { combateState, todasLasMedallas, todosLosPTs, catalogoTagsArr } from './combate-state.js';
+import { calcPVMax, calcCambios } from '../bnh-pac.js';
 
-// ── Calcular PV máx a partir de stats ────────────────────────
-export function calcPVMax(pot, agi, ctl) {
-    const pac = pot + agi + ctl;
-    const bono = pac >= 100 ? 20 : pac >= 80 ? 15 : pac >= 60 ? 10 : 5;
-    return Math.floor(pot / 4) + Math.floor(agi / 4) + Math.floor(ctl / 4) + bono;
-}
-
-export function calcCambios(agi) { return Math.floor(agi / 4); }
+export { calcPVMax, calcCambios };
 
 export function calcPTTotal(pts) {
     if (!pts) return 0;

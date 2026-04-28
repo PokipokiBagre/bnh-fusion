@@ -3,7 +3,7 @@
 // Render del panel de detalle de un slot (stats, PVs, tags, PT)
 // ============================================================
 import { combateState, STORAGE_URL, norm, catalogoTagsArr } from './combate-state.js';
-import { calcCTLUsado } from './combate-logic.js';
+import { calcCTLUsado, calcPVMax } from './combate-logic.js';
 import { aplicarDeltas } from '../bnh-pac.js';
 
 const $ = id => document.getElementById(id);
@@ -25,9 +25,7 @@ export function recalcSlot(slot) {
         d.delta_ctl_1, d.delta_ctl_2, d.delta_ctl_3, d.delta_ctl_4, d.delta_ctl_5);
 
     // PV Máx: se calcula a partir de POT/AGI/CTL ya con deltas, luego aplica sus propios deltas
-    const pac = slot.pot + slot.agi + slot.ctl;
-    const bono = pac >= 100 ? 20 : pac >= 80 ? 15 : pac >= 60 ? 10 : 5;
-    const pvMaxPuro = Math.floor(slot.pot / 4) + Math.floor(slot.agi / 4) + Math.floor(slot.ctl / 4) + bono;
+    const pvMaxPuro = calcPVMax(slot.pot, slot.agi, slot.ctl);
     slot.pvMax = aplicarDeltas(pvMaxPuro,
         d.delta_pv_1, d.delta_pv_2, d.delta_pv_3, d.delta_pv_4, d.delta_pv_5);
 
