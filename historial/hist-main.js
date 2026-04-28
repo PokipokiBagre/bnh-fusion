@@ -59,6 +59,7 @@ async function init() {
     await bnhAuth.init();
     estadoUI.esAdmin = bnhAuth.esAdmin();
     bnhPort.init().catch(console.error);
+    if (estadoUI.esAdmin) window.dispatchEvent(new Event('_bnhAdminReady'));
 
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
@@ -136,6 +137,7 @@ window._histSelHiloInline = async function(valor) {
 
 // Scrape
 window.scrapeManual = async function(board, threadId) {
+    if (!estadoUI.esAdmin) { toast('⛔ Solo los OPs pueden actualizar hilos', 'error'); return; }
     const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
     if (!hilo) return;
     toast('⏳ Obteniendo posts…', 'info');
@@ -193,6 +195,7 @@ window.actualizarManual = async function(board, threadId) {
 
 // Calcular / Eliminar PT
 window.calcularPT = async function(rango) {
+    if (!estadoUI.esAdmin) { toast('⛔ Solo los OPs pueden calcular PT', 'error'); return; }
     if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
     const { board, thread_id } = estadoUI.hiloActivo;
     let df = null, lbl = 'completo';
@@ -208,6 +211,7 @@ window.calcularPT = async function(rango) {
 };
 
 window.eliminarPT = async function(rango) {
+    if (!estadoUI.esAdmin) { toast('⛔ Solo los OPs pueden eliminar PT', 'error'); return; }
     if (!estadoUI.hiloActivo) { toast('Selecciona un hilo primero', 'error'); return; }
     const { board, thread_id } = estadoUI.hiloActivo;
     let df = null, lbl = 'todos';
