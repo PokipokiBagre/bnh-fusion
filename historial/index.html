@@ -33,8 +33,8 @@
                 🔄 Actualizar
             </button>
 
-            <!-- Calcular PT dropdown -->
-            <div style="position:relative;" id="pt-dropdown-wrap">
+            <!-- Calcular PT dropdown: oculto por defecto, solo OP -->
+            <div style="position:relative;display:none;" id="pt-dropdown-wrap">
                 <button class="btn btn-sm" onclick="toggleDropdown('pt-menu')"
                     style="background:#1a4a80; border-color:#2980b9; color:white;">
                     ⚡ Calcular PT ▾
@@ -55,8 +55,8 @@
                 </div>
             </div>
 
-            <!-- Eliminar PT dropdown -->
-            <div style="position:relative;" id="del-dropdown-wrap">
+            <!-- Eliminar PT dropdown: oculto por defecto, solo OP -->
+            <div style="position:relative;display:none;" id="del-dropdown-wrap">
                 <button class="btn btn-sm" onclick="toggleDropdown('del-menu')"
                     style="background:#7b241c; border-color:#c0392b; color:white;">
                     🗑 Eliminar PT ▾
@@ -140,6 +140,14 @@ document.addEventListener('click', (e) => {
         if (wrap && !wrap.contains(e.target)) {
             wrap.querySelector('.dropdown-menu')?.classList.remove('open');
         }
+    });
+});
+
+// Mostrar controles OP solo si es admin
+window.addEventListener('_bnhAdminReady', () => {
+    ['pt-dropdown-wrap','del-dropdown-wrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = '';
     });
 });
 </script>
