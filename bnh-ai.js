@@ -156,43 +156,60 @@ ${infoExtraStr}
         }
     `;
 
-    // ── Primera llamada: instrucción del OP ──────────────────────
-    const rondaUno = await llamarIA(prompt, contexto);
+    return await llamarIA(prompt, contexto);
+}
 
-    // Parsear resultado de la primera ronda para usarlo como base de la segunda
-    let parsedUno;
-    try {
-        let clean = rondaUno.replace(/```json/gi, '').replace(/```/g, '').replace(/[\u0000-\u0019]+/g, '').trim();
-        parsedUno = JSON.parse(clean);
-    } catch(e) {
-        // Si falla el parseo, devolver tal cual — el caller manejará el error
-        return rondaUno;
-    }
+/**
+ * OPTIMIZAR LORE: Segunda pasada que expande el lore existente según los tags.
+ * Se llama manualmente desde el botón "Optimizar" en el modal de lore.
+ */
+export async function iaOptimizarLore(nombrePJ, textosActuales) {
+    const pj = gruposGlobal.find(g => g.nombre_refinado === nombrePJ);
+    if (!pj) throw new Error("Personaje no encontrado.");
 
-    // ── Segunda llamada: expandir y complementar según los tags ──
-    const ie2 = parsedUno.info_extra || {};
-    const infoExtraStr2 = Object.entries({
-        estado: ie2.estado, edad: ie2.edad, altura: ie2.altura, peso: ie2.peso,
-        genero: ie2.genero, lugar_nac: ie2.lugar_nac, ocupacion: ie2.ocupacion,
-        afiliacion: ie2.afiliacion, familia: ie2.familia, nota: ie2.nota
+    const TAGS_META = new Set(['#jugador','#npc','#activo','#inactivo','#archivado','#nuevo']);
+    const esMeta = t => TAGS_META.has((t.startsWith('#') ? t : '#'+t).toLowerCase());
+
+    const tagsEquipados = (pj.tags || [])
+        .map(t => t.startsWith('#') ? t : '#' + t)
+        .filter(t => !esMeta(t));
+
+    const pts = ptGlobal[nombrePJ] || {};
+    const tagsConPT = tagsEquipados.map(tag => {
+        const ptVal = pts[tag] ?? pts[tag.replace(/^#/, '')] ?? 0;
+        return ptVal > 0 ? `${tag} [${ptVal} PT]` : tag;
+    });
+    const tagsExtraPT = Object.entries(pts)
+        .filter(([t]) => {
+            const norm = (t.startsWith('#') ? t : '#' + t).toLowerCase();
+            return !esMeta(t) && !tagsEquipados.some(te => te.toLowerCase() === norm);
+        })
+        .map(([t, p]) => `${t.startsWith('#') ? t : '#' + t} [${p} PT]`);
+    const tagsStr = [...tagsConPT, ...tagsExtraPT].join(', ') || 'Ninguno';
+
+    const ie = textosActuales.info_extra || {};
+    const infoExtraStr = Object.entries({
+        estado: ie.estado, edad: ie.edad, altura: ie.altura, peso: ie.peso,
+        genero: ie.genero, lugar_nac: ie.lugar_nac, ocupacion: ie.ocupacion,
+        afiliacion: ie.afiliacion, familia: ie.familia, nota: ie.nota
     }).map(([k, v]) => `  - ${k}: ${v || 'Vacío'}`).join('\n');
 
-    const contexto2 = `
+    const contexto = `
         PERSONAJE: @${pj.nombre_refinado}@
         STATS: POT ${pj.pot}, AGI ${pj.agi}, CTL ${pj.ctl}.
-        TAGS EQUIPADOS (úsalos para inferir ocupación, afiliación, etc.): ${tagsStr}
+        TAGS EQUIPADOS (úsalos para reflejar en el lore): ${tagsStr}
         
-        TEXTOS ACTUALES EN LA UI (resultado de la ronda anterior — expande sobre estos):
-        - descripcion: ${parsedUno.descripcion || 'Vacío'}
-        - lore: ${parsedUno.lore || 'Vacío'}
-        - personalidad: ${parsedUno.personalidad || 'Vacío'}
-        - quirk: ${parsedUno.quirk || 'Vacío'}
+        TEXTOS ACTUALES (expande sobre estos, no los reemplaces):
+        - descripcion: ${textosActuales.descripcion || 'Vacío'}
+        - lore: ${textosActuales.lore || 'Vacío'}
+        - personalidad: ${textosActuales.personalidad || 'Vacío'}
+        - quirk: ${textosActuales.quirk || 'Vacío'}
         
         INFORMACIÓN EXTRA ACTUAL:
-${infoExtraStr2}
+${infoExtraStr}
     `;
 
-    const prompt2 = `
+    const prompt = `
         INSTRUCCIÓN: Añade, complementa y expande la información según los tags del personaje.
         Cada tag equipado debe verse reflejado de alguna forma en el lore, personalidad o quirk.
         No pierdas ni reduzcas nada de lo que ya hay — solo amplía y enriquece.
@@ -216,7 +233,7 @@ ${infoExtraStr2}
         - NUNCA inventes tags que no estén en la lista de TAGS EQUIPADOS.
     `;
 
-    return await llamarIA(prompt2, contexto2);
+    return await llamarIA(prompt, contexto);
 }
 
 /**
