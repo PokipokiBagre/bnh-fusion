@@ -6,6 +6,7 @@
 // ── Cálculo de Tier según PAC ─────────────────────────────────
 export function calcTier(pot, agi, ctl) {
     const pac = pot + agi + ctl;
+    if (pac >= 150) return { tier: 5, bono: 30, label: 'TIER 5' };
     if (pac >= 100) return { tier: 4, bono: 20, label: 'TIER 4' };
     if (pac >= 80)  return { tier: 3, bono: 15, label: 'TIER 3' };
     if (pac >= 60)  return { tier: 2, bono: 10, label: 'TIER 2' };
