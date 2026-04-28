@@ -45,7 +45,7 @@ export function recalcSlot(slot) {
 
     slot.cambios = aplicarDeltas(Math.floor(slot.agi / 4),
         d.delta_cambios_1, d.delta_cambios_2, d.delta_cambios_3,
-        d.delta_cambios_4, d.delta_cambios_5);
+        d.delta_cambios_4, d.delta_cambios_5);)
 
     const pvBase = (slot._pvActualManual !== null && slot._pvActualManual !== undefined)
         ? slot._pvActualManual : slot.pvMax;
