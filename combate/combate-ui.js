@@ -372,6 +372,15 @@ export function renderSlotDetalle(eq, idx) {
         ${combateState.esAdmin ? `<button style="font-size:0.8em;padding:3px 12px;background:${col};color:white;border:none;border-radius:5px;cursor:pointer;"
             onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
     </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;padding:6px 8px;background:#fef9f0;border:1px solid #f0d9b0;border-radius:6px;">
+        <span style="font-size:0.67em;font-weight:800;color:#a04000;white-space:nowrap;margin-right:2px;">🔧 Utilidades:</span>
+        <button style="font-size:0.72em;padding:3px 10px;background:#e9ecef;border:1px solid #ced4da;border-radius:5px;cursor:pointer;color:#495057;white-space:nowrap;"
+            onclick="window._combateLimpiarDeltas('${eq}',${idx},1)">✕ Borrar Δ1</button>
+        <button style="font-size:0.72em;padding:3px 10px;background:#e9ecef;border:1px solid #ced4da;border-radius:5px;cursor:pointer;color:#495057;white-space:nowrap;"
+            onclick="window._combateLimpiarDeltas('${eq}',${idx},0)">✕✕ Borrar todos los Δ</button>
+        <button style="font-size:0.72em;padding:3px 10px;background:#1a4a80;border:1px solid #1a4a80;border-radius:5px;cursor:pointer;color:white;white-space:nowrap;"
+            onclick="window._combateIgualarPVMax('${eq}',${idx})">💚 Igualar PV Máx</button>
+    </div>
     ${_statBlock('pot', 'POT', slot._pj.pot||0, false, '#7d3c00')}
     ${_statBlock('agi', 'AGI', slot._pj.agi||0, false, '#1a4a80')}
     ${_statBlock('ctl', 'CTL', slot._pj.ctl||0, false, '#4a235a')}
@@ -586,6 +595,72 @@ export function renderSlotDetalle(eq, idx) {
         ${tab==='medallas' ? tabMedallas : ''}
     </div>
 </div>`;
+    // Inicializar navegación por flechas si estamos en la tab Stats
+    if (tab === 'stats') setTimeout(() => _setupKeyboardNavCombate(eq, idx), 40);
+}
+
+
+// ── Navegación por teclado entre inputs del panel Stats ───────
+function _setupKeyboardNavCombate(eq, idx) {
+    const statKeys = ['pot','agi','ctl','pv','cambios','ctl_usado','pv_actual'];
+    const haBase   = { pot:true, agi:true, ctl:true, pv:false, cambios:false, ctl_usado:false, pv_actual:true };
+
+    const grid = statKeys.map(k => {
+        const base   = haBase[k] ? `cb-${eq}-${idx}-${k}-base` : null;
+        const nota   = `cb-${eq}-${idx}-${k}-nota`;
+        const deltas = [1,2,3,4,5].map(n => `cb-${eq}-${idx}-${k}-d${n}`);
+        return [base, nota, ...deltas].filter(Boolean);
+    });
+    // pv_actual usa ID distinto para su base input
+    const pvActRow = grid[grid.length - 1];
+    if (pvActRow.length && pvActRow[0] === `cb-${eq}-${idx}-pv_actual-base`) {
+        pvActRow[0] = `cb-${eq}-${idx}-pvactual-base`;
+    }
+
+    const getEl = (row, c) => document.getElementById(row[c] || '');
+    const focusEl = el => { if (el) { el.focus(); el.select?.(); } };
+
+    function navigate(fromEl, dir) {
+        let r = -1, c = -1;
+        outer: for (let ri = 0; ri < grid.length; ri++) {
+            for (let ci = 0; ci < grid[ri].length; ci++) {
+                if (document.getElementById(grid[ri][ci]) === fromEl) { r = ri; c = ci; break outer; }
+            }
+        }
+        if (r === -1) return;
+        const row = grid[r];
+        let target = null;
+        if (dir === 'right') {
+            if (c < row.length - 1) target = getEl(row, c + 1);
+        } else if (dir === 'left') {
+            if (c > 0) target = getEl(row, c - 1);
+        } else if (dir === 'down') {
+            for (let nr = r + 1; nr < grid.length; nr++) {
+                const t = getEl(grid[nr], Math.min(c, grid[nr].length - 1));
+                if (t) { target = t; break; }
+            }
+        } else if (dir === 'up') {
+            for (let nr = r - 1; nr >= 0; nr--) {
+                const t = getEl(grid[nr], Math.min(c, grid[nr].length - 1));
+                if (t) { target = t; break; }
+            }
+        }
+        if (target) focusEl(target);
+    }
+
+    for (const row of grid) {
+        for (const id of row) {
+            const el = document.getElementById(id);
+            if (!el) continue;
+            el.addEventListener('keydown', function(e) {
+                const dir = { ArrowRight:'right', ArrowLeft:'left', ArrowDown:'down', ArrowUp:'up' }[e.key];
+                if (!dir) return;
+                if (e.target.tagName === 'TEXTAREA') return;
+                e.preventDefault();
+                navigate(this, dir);
+            });
+        }
+    }
 }
 
 // ── Registro ──────────────────────────────────────────────────

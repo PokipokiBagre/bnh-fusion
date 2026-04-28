@@ -541,6 +541,28 @@ window._combateLimpiarDeltas = (eq, idx, cual) => {
     renderSlotDetalle(eq, idx);
 };
 
+// ── Igualar PV Actual al PV Máximo proyectado ─────────────────
+window._combateIgualarPVMax = (eq, idx) => {
+    const slot = combateState[`equipo${eq}`]?.[idx];
+    if (!slot) return;
+    // recalcSlot ya dejó pvMax correcto (con deltas de pv_max aplicados)
+    recalcSlot(slot);
+    const pvMaxProyectado = slot.pvMax;
+    // Escribir en el input de base y en el estado del slot
+    slot._pvActualManual = pvMaxProyectado;
+    const inputEl = document.getElementById(`cb-${eq}-${idx}-pvactual-base`);
+    if (inputEl) {
+        inputEl.value = pvMaxProyectado;
+        inputEl.style.background = '#d5f5e3';
+        setTimeout(() => { inputEl.style.background = ''; }, 1200);
+    }
+    recalcSlot(slot);
+    refrescarEquipo(eq);
+    refrescarCuadro();
+    renderSlotDetalle(eq, idx);
+    toast(`💚 PV Actual igualado a ${pvMaxProyectado}`, 'ok');
+};
+
 // ── Nota de texto para cada stat ──────────────────────────────
 window._combateSetNota = (eq, idx, key, valor) => {
     const slot = combateState[`equipo${eq}`]?.[idx];
