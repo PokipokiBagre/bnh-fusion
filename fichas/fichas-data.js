@@ -4,6 +4,7 @@
 import { supabase }  from '../bnh-auth.js';
 import { db }        from '../bnh-db.js';
 import { gruposGlobal, aliasesGlobal, ptGlobal, hilosGlobal } from './fichas-state.js';
+import { calcPVMax } from '../bnh-pac.js';
 
 // NUEVO: Exportar opciones y baneados
 export let opcionesFusion = {};
@@ -55,7 +56,7 @@ export async function crearGrupo({ nombre, pot, agi, ctl, tags, lore, quirk }) {
     const existe = gruposGlobal.find(g => g.nombre_refinado.toLowerCase() === nombre.trim().toLowerCase());
     if (existe) return { ok: false, msg: 'Ya existe un grupo con ese nombre.' };
 
-    const pv = calcPVSimple(pot, agi, ctl);
+    const pv = calcPVMax(pot||0, agi||0, ctl||0);
     const { data, error } = await supabase.from('personajes_refinados').insert({
         nombre_refinado: nombre.trim(),
         pot: pot||0, agi: agi||0, ctl: ctl||0,
@@ -203,11 +204,8 @@ export async function aplicarDeltaPT(nombreGrupo, tag, delta, motivo) {
     return { ok: true };
 }
 
-function calcPVSimple(pot, agi, ctl) {
-    const pac = (pot||0)+(agi||0)+(ctl||0);
-    const b = pac>=150?30:pac>=100?20:pac>=80?15:pac>=60?10:5;
-    return Math.floor((pot||0)/4)+Math.floor((agi||0)/4)+Math.floor((ctl||0)/4)+b;
-}
+
+
 
 // Borra PT de un tag específico de un grupo (al desasignar el tag)
 export async function borrarPTDeTag(nombreGrupo, tag) {

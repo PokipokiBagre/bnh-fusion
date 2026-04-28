@@ -2,7 +2,7 @@
 // fichas-op.js — Panel OP centrado en GRUPOS + editor de aliases
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
-import { calcPVMax, fmtTag } from './fichas-logic.js';
+import { calcPVMax, calcTier, fmtTag } from './fichas-logic.js';
 import { getEquipacionPJ, calcCTLUsado, setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import {
     guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo, borrarPTDeTag,
@@ -1235,14 +1235,17 @@ export function abrirCrearGrupo() {
             const ctl = parseInt(document.getElementById('cp-ctl')?.value) || 0;
             const pac = pot + agi + ctl;
 
-            let tier, bono, bg, color, border;
-            if      (pac >= 150) { tier=5; bono=30; bg='#1a0533'; color='#d7bde2'; border='#9b59b6'; }
-            else if (pac >= 100) { tier=4; bono=20; bg='#7d3c00'; color='#f8c471'; border='#f39c12'; }
-            else if (pac >= 80)  { tier=3; bono=15; bg='#4a235a'; color='#c39bd3'; border='#8e44ad'; }
-            else if (pac >= 60)  { tier=2; bono=10; bg='#1a4a80'; color='#7fb3d3'; border='#2980b9'; }
-            else                 { tier=1; bono=5;  bg='#1e5631'; color='#82e0aa'; border='#27ae60'; }
+            const { tier, bono } = calcTier(pot, agi, ctl);
+            const pv = calcPVMax(pot, agi, ctl);
 
-            const pv = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bono;
+            const TIER_STYLES = {
+                5: { bg:'#1a0533', color:'#d7bde2', border:'#9b59b6' },
+                4: { bg:'#7d3c00', color:'#f8c471', border:'#f39c12' },
+                3: { bg:'#4a235a', color:'#c39bd3', border:'#8e44ad' },
+                2: { bg:'#1a4a80', color:'#7fb3d3', border:'#2980b9' },
+                1: { bg:'#1e5631', color:'#82e0aa', border:'#27ae60' },
+            };
+            const { bg, color, border } = TIER_STYLES[tier];
 
             const pacVal    = document.getElementById('cp-pac-val');
             const tierBadge = document.getElementById('cp-tier-badge');
@@ -1252,8 +1255,8 @@ export function abrirCrearGrupo() {
             if (pvVal)     pvVal.textContent  = pv;
             if (tierBadge) {
                 tierBadge.textContent = 'TIER ' + tier;
-                tierBadge.style.background = bg;
-                tierBadge.style.color      = color;
+                tierBadge.style.background  = bg;
+                tierBadge.style.color       = color;
                 tierBadge.style.borderColor = border;
             }
         };

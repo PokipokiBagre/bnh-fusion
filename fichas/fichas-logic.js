@@ -2,7 +2,7 @@
 // fichas-logic.js
 // ============================================================
 import { getFusionDe } from '../bnh-fusion.js';
-import { aplicarDelta, aplicarDeltas } from '../bnh-pac.js';
+import { aplicarDelta, aplicarDeltas, calcTier, calcPVMax } from '../bnh-pac.js';
 
 import { ptGlobal } from './fichas-state.js';
 import { opcionesFusion, bannedTags } from './fichas-data.js';
@@ -80,11 +80,8 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     const ctlBase = aplicarDeltas(ctlBaseReal, grupoBase.delta_ctl_1, grupoBase.delta_ctl_2, grupoBase.delta_ctl_3, grupoBase.delta_ctl_4, grupoBase.delta_ctl_5);
 
     // 2. Calcular PV y Cambios usando las bases con deltas
-    // (Usamos la función interna para no tener dependencias circulares)
-    const pacBase = potBase + agiBase + ctlBase;
-    const bonoTier = pacBase >= 150 ? 30 : pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
-    
-    const pvMaxPuro = Math.floor(potBase/4) + Math.floor(agiBase/4) + Math.floor(ctlBase/4) + bonoTier;
+    const pacBase    = potBase + agiBase + ctlBase;
+    const pvMaxPuro  = calcPVMax(potBase, agiBase, ctlBase);
     const pvMaxTotal     = aplicarDeltas(pvMaxPuro,        grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
     const pvActualPuro   = (grupoBase.pv_actual !== null && grupoBase.pv_actual !== undefined) ? grupoBase.pv_actual : pvMaxTotal;
     const pvActualTotal  = aplicarDeltas(pvActualPuro,    grupoBase.delta_pv_actual_1, grupoBase.delta_pv_actual_2, grupoBase.delta_pv_actual_3, grupoBase.delta_pv_actual_4, grupoBase.delta_pv_actual_5);
@@ -196,9 +193,8 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     }
 
     // --- 4. NUEVO: Lente de Totales para la UI (Basado en la fusión resultante) ---
-    const pacFusion = pot + agi + ctl;
-    const bonoTierFusion = pacFusion >= 150 ? 30 : pacFusion >= 100 ? 20 : pacFusion >= 80 ? 15 : pacFusion >= 60 ? 10 : 5;
-    const pvMaxPuroFusion = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoTierFusion;
+    const pacFusion       = pot + agi + ctl;
+    const pvMaxPuroFusion = calcPVMax(pot, agi, ctl);
     
     // Aplicamos los deltas del PJ base a su nuevo estado fusionado
     const pvMaxTotalFusion    = aplicarDeltas(pvMaxPuroFusion,   grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
