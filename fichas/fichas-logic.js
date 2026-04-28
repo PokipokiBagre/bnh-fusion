@@ -16,6 +16,7 @@ export {
 
 export function colorTier(tier) {
     const t = {
+        5: { bg:'#1a0533', border:'#9b59b6', text:'#d7bde2', label:'TIER 5' },
         4: { bg:'#7d3c00', border:'#f39c12', text:'#f8c471', label:'TIER 4' },
         3: { bg:'#4a235a', border:'#8e44ad', text:'#c39bd3', label:'TIER 3' },
         2: { bg:'#1a4a80', border:'#2980b9', text:'#7fb3d3', label:'TIER 2' },
@@ -81,7 +82,7 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
     // 2. Calcular PV y Cambios usando las bases con deltas
     // (Usamos la función interna para no tener dependencias circulares)
     const pacBase = potBase + agiBase + ctlBase;
-    const bonoTier = pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
+    const bonoTier = pacBase >= 150 ? 30 : pacBase >= 100 ? 20 : pacBase >= 80 ? 15 : pacBase >= 60 ? 10 : 5;
     
     const pvMaxPuro = Math.floor(potBase/4) + Math.floor(agiBase/4) + Math.floor(ctlBase/4) + bonoTier;
     const pvMaxTotal     = aplicarDeltas(pvMaxPuro,        grupoBase.delta_pv_1,        grupoBase.delta_pv_2,        grupoBase.delta_pv_3,        grupoBase.delta_pv_4,        grupoBase.delta_pv_5);
@@ -196,7 +197,7 @@ export function proyectarFicha(grupoBase, gruposGlobal, ptGlobal, opcionesFusion
 
     // --- 4. NUEVO: Lente de Totales para la UI (Basado en la fusión resultante) ---
     const pacFusion = pot + agi + ctl;
-    const bonoTierFusion = pacFusion >= 100 ? 20 : pacFusion >= 80 ? 15 : pacFusion >= 60 ? 10 : 5;
+    const bonoTierFusion = pacFusion >= 150 ? 30 : pacFusion >= 100 ? 20 : pacFusion >= 80 ? 15 : pacFusion >= 60 ? 10 : 5;
     const pvMaxPuroFusion = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bonoTierFusion;
     
     // Aplicamos los deltas del PJ base a su nuevo estado fusionado
