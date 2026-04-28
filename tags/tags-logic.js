@@ -30,15 +30,32 @@ export function proyectarPJ(nombrePJ) {
     const ptOriginal = getPuntosPJ(nombrePJ);
     const tagsOriginal = g.tags || [];
 
-    // Caso sin fusión: aplicar 5 deltas encadenados directamente al raw
-    const potSolo = aplicarDeltas(g.pot||0, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
-    const agiSolo = aplicarDeltas(g.agi||0, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
-    const ctlSolo = aplicarDeltas(g.ctl||0, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
+    // ── Bonos de PT estructurales (50 PT = +1 Stat) ──────────
+    let ptPot = 0, ptAgi = 0, ptCtl = 0;
+    Object.keys(ptOriginal).forEach(k => {
+        const norm = k.toLowerCase().replace(/^#/, '');
+        if (norm === 'stat_pot') ptPot = ptOriginal[k];
+        if (norm === 'stat_agi') ptAgi = ptOriginal[k];
+        if (norm === 'stat_ctl') ptCtl = ptOriginal[k];
+    });
+    const bonoPot = Math.floor(ptPot / 50);
+    const bonoAgi = Math.floor(ptAgi / 50);
+    const bonoCtl = Math.floor(ptCtl / 50);
+
+    // Base Real = Base DB + Bonos PT
+    const potBaseReal = (g.pot || 0) + bonoPot;
+    const agiBaseReal = (g.agi || 0) + bonoAgi;
+    const ctlBaseReal = (g.ctl || 0) + bonoCtl;
+
+    // Caso sin fusión: aplicar 5 deltas encadenados sobre la Base Real
+    const potSolo = aplicarDeltas(potBaseReal, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
+    const agiSolo = aplicarDeltas(agiBaseReal, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
+    const ctlSolo = aplicarDeltas(ctlBaseReal, g.delta_ctl_1, g.delta_ctl_2, g.delta_ctl_3, g.delta_ctl_4, g.delta_ctl_5);
 
     if (!f) return {
         esFusion: false,
         pot: potSolo, agi: agiSolo, ctl: ctlSolo,
-        pot_chain_base: g.pot||0, agi_chain_base: g.agi||0, ctl_chain_base: g.ctl||0,
+        pot_chain_base: potBaseReal, agi_chain_base: agiBaseReal, ctl_chain_base: ctlBaseReal,
         tags: tagsOriginal, ptsMapa: ptOriginal, ptOriginal, gOriginal: g
     };
 
@@ -46,7 +63,19 @@ export function proyectarPJ(nombrePJ) {
     const compG = grupos.find(x => x.nombre_refinado === compNombre) || {};
     const compPt = getPuntosPJ(compNombre);
 
-    // Fusión: 1) combinar raws × MULT, 2) aplicar deltas propios sobre el resultado
+    // Bonos PT del compañero
+    let ptPotC = 0, ptAgiC = 0, ptCtlC = 0;
+    Object.keys(compPt).forEach(k => {
+        const n = k.toLowerCase().replace(/^#/, '');
+        if (n === 'stat_pot') ptPotC = compPt[k];
+        if (n === 'stat_agi') ptAgiC = compPt[k];
+        if (n === 'stat_ctl') ptCtlC = compPt[k];
+    });
+    const potBaseRealC = (compG.pot || 0) + Math.floor(ptPotC / 50);
+    const agiBaseRealC = (compG.agi || 0) + Math.floor(ptAgiC / 50);
+    const ctlBaseRealC = (compG.ctl || 0) + Math.floor(ptCtlC / 50);
+
+    // Fusión: 1) combinar bases reales × MULT, 2) aplicar deltas propios
     const MULT = f.rendimiento > 100 ? 1.5 : 1;
     const calcStat = (valA, valB) => {
         const modo = opcionesFusion?.modo_stats || 'suma';
@@ -55,9 +84,9 @@ export function proyectarPJ(nombrePJ) {
         return valA + valB; 
     };
 
-    const potFusionRaw = Math.round(calcStat(g.pot||0, compG.pot||0) * MULT);
-    const agiFusionRaw = Math.round(calcStat(g.agi||0, compG.agi||0) * MULT);
-    const ctlFusionRaw = Math.round(calcStat(g.ctl||0, compG.ctl||0) * MULT);
+    const potFusionRaw = Math.round(calcStat(potBaseReal, potBaseRealC) * MULT);
+    const agiFusionRaw = Math.round(calcStat(agiBaseReal, agiBaseRealC) * MULT);
+    const ctlFusionRaw = Math.round(calcStat(ctlBaseReal, ctlBaseRealC) * MULT);
 
     const pot = aplicarDeltas(potFusionRaw, g.delta_pot_1, g.delta_pot_2, g.delta_pot_3, g.delta_pot_4, g.delta_pot_5);
     const agi = aplicarDeltas(agiFusionRaw, g.delta_agi_1, g.delta_agi_2, g.delta_agi_3, g.delta_agi_4, g.delta_agi_5);
