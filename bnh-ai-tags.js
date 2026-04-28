@@ -1,18 +1,10 @@
 // ============================================================
 // bnh-ai-tags.js — Sugerencia de Tags por IA para el Panel OP
 // ============================================================
-// Lee el lore/quirk/descripción/stats del PJ + el catálogo completo
-// de tags disponibles, y le pide a la IA que proponga cuáles encajan.
-// Los tags sugeridos se muestran en una caja:
-//   · Violeta  → ya existe en el catálogo (click = asignar al PJ)
-//   · Amarillo → no existe aún (click = crear tag nuevo y asignar)
-// ============================================================
-
 import { llamarIA } from './bnh-ai.js';
 import { gruposGlobal, ptGlobal } from './fichas/fichas-state.js';
 import { supabase } from './bnh-auth.js';
 import { guardarTagsGrupo } from './fichas/fichas-data.js';
-import { urlIcono } from './fichas/fichas-upload.js';
 
 // ── Obtener catálogo real de tags desde la BD ─────────────────
 async function _getCatalogoTags() {
@@ -24,7 +16,7 @@ async function _getCatalogoTags() {
     return data || [];
 }
 
-// ── Crear un tag nuevo en el catálogo directamente ───────────
+// ── Crear un tag nuevo en el catálogo ────────────────────────
 async function _crearTagEnCatalogo(tagNombre) {
     const nombre = tagNombre.startsWith('#') ? tagNombre : '#' + tagNombre;
     const { error } = await supabase
@@ -33,54 +25,27 @@ async function _crearTagEnCatalogo(tagNombre) {
     return !error;
 }
 
-// ── Intentar cargar icono del PJ como base64 ─────────────────
-async function _fetchIconoBase64(nombreRefinado) {
-    try {
-        const url = urlIcono(nombreRefinado) + '?v=' + Date.now();
-        const resp = await fetch(url);
-        if (!resp.ok) return null;
-        const blob = await resp.blob();
-        // Solo pasar si es imagen válida
-        if (!blob.type.startsWith('image/')) return null;
-        return new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                // reader.result = "data:image/png;base64,XXXX"
-                const base64 = reader.result.split(',')[1];
-                resolve({ base64, mimeType: blob.type });
-            };
-            reader.onerror = () => resolve(null);
-            reader.readAsDataURL(blob);
-        });
-    } catch {
-        return null; // si la imagen no existe, silencioso
-    }
-}
-
-// ── Llamada principal a la IA ─────────────────────────────────
-async function _pedirSugerenciasIA(pj, catalogoTags, imagenData) {
+// ── Llamada a la IA ───────────────────────────────────────────
+async function _pedirSugerenciasIA(pj, catalogoTags) {
     const tagsEquipados = (pj.tags || []).map(t => t.startsWith('#') ? t : '#' + t);
 
-    // Info extra del PJ (campos de lore estructurado)
     const ie = pj.info_extra || {};
     const infoExtra = [
-        ie.estado && `Estado: ${ie.estado}`,
-        ie.edad && `Edad: ${ie.edad}`,
-        ie.ocupacion && `Ocupación: ${ie.ocupacion}`,
+        ie.estado     && `Estado: ${ie.estado}`,
+        ie.edad       && `Edad: ${ie.edad}`,
+        ie.ocupacion  && `Ocupación: ${ie.ocupacion}`,
         ie.afiliacion && `Afiliación: ${ie.afiliacion}`,
-        ie.lugar_nac && `Lugar de nacimiento: ${ie.lugar_nac}`,
-        ie.familia && `Familia: ${ie.familia}`,
-        ie.nota && `Nota: ${ie.nota}`,
+        ie.lugar_nac  && `Lugar de nacimiento: ${ie.lugar_nac}`,
+        ie.familia    && `Familia: ${ie.familia}`,
+        ie.nota       && `Nota: ${ie.nota}`,
     ].filter(Boolean).join('\n');
 
-    // PT del PJ (tags con progresión)
     const pts = ptGlobal[pj.nombre_refinado] || {};
     const ptStr = Object.entries(pts)
         .filter(([, v]) => v > 0)
         .map(([t, v]) => `${t} (${v} PT)`)
         .join(', ') || 'Ninguno';
 
-    // Catálogo completo de tags (nombre + descripción resumida)
     const catalogoStr = catalogoTags
         .map(t => `${t.nombre}${t.descripcion ? ': ' + t.descripcion.slice(0, 80) : ''}`)
         .join('\n');
@@ -105,54 +70,47 @@ ${catalogoStr}
 Eres un asistente de un juego de rol basado en My Hero Academia.
 Se te proporciona la ficha de un personaje y el catálogo COMPLETO de tags del juego.
 
-Tu tarea: analiza el lore, quirk, personalidad, stats e información del personaje,
-y propón qué tags del catálogo le corresponderían mejor.
-SOLO SI no existe ningún tag del catálogo que cubra un concepto importante del personaje,
-puedes proponer tags nuevos — pero con criterio muy estricto.
+Tu tarea: analizar el personaje a fondo y proponer TODOS los tags relevantes del catálogo que le correspondan.
 
-REGLAS CRÍTICAS:
+REGLAS:
 1. NO repitas tags que el personaje ya tiene.
-2. Los tags del catálogo que propongas deben estar escritos EXACTAMENTE como aparecen en el catálogo.
-3. Prioriza SIEMPRE tags del catálogo existente. Solo propone un tag nuevo si el concepto
-   no está cubierto por ningún tag ya existente, ni siquiera de forma aproximada.
-4. Propón entre 5 y 12 tags en total. Prioriza calidad sobre cantidad.
-5. Responde ÚNICAMENTE con un objeto JSON válido, sin markdown, sin texto extra.
+2. Los tags del catálogo deben estar escritos EXACTAMENTE como aparecen en el catálogo.
+3. Propón entre 10 y 20 tags del catálogo. Sé generoso — si un tag encaja aunque sea parcialmente, inclúyelo.
+4. Solo propone tags nuevos si el concepto realmente no está cubierto por ningún tag del catálogo.
+5. Máximo 4 tags nuevos. Deben ser concisos (1-2 palabras, estilo catálogo).
+6. El razonamiento debe ser MUY BREVE: 1 sola oración de máximo 15 palabras.
+7. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra.
 
-REGLAS DE FORMATO PARA TAGS NUEVOS (MUY IMPORTANTE):
-- Deben ser concisos: 1 o 2 palabras máximo.
-- Usar sustantivos o adjetivos simples, no frases descriptivas.
-- Si son dos palabras, unirlas con guión bajo: #Influencia_Oculta, #Fuerza_Bruta, #Mente_Maestra.
-- Una sola palabra va sin guión: #Catador, #Infiltrador, #Nómada.
-- NUNCA uses frases largas o compuestas como #SaborExperto, #PoderOscuro, #HabilidadEspecial.
-- Sigue el estilo del catálogo existente — revisa los ejemplos del catálogo antes de inventar.
+FORMATO DE TAGS NUEVOS:
+- 1 o 2 palabras con guión_bajo si son dos: #Mente_Maestra, #Fuerza_Bruta.
+- NUNCA frases largas ni palabras compuestas sin separar.
 
-Formato de respuesta OBLIGATORIO:
+Respuesta OBLIGATORIA:
 {
-  "razonamiento": "Breve explicación (2-3 líneas) de tu análisis del personaje.",
-  "tags_catalogo": ["#Tag1", "#Tag2", "#Tag3"],
-  "tags_nuevos": ["#TagNuevo1", "#Tag_Nuevo2"]
+  "razonamiento": "Una sola oración breve sobre el personaje.",
+  "tags_catalogo": ["#Tag1", "#Tag2", ...hasta 20],
+  "tags_nuevos": ["#TagNuevo1"]
 }
 
-Si no hay tags nuevos necesarios, usa array vacío: "tags_nuevos": []
+Si no hacen falta tags nuevos: "tags_nuevos": []
     `.trim();
 
-    return await llamarIA(prompt, contexto, imagenData);
+    return await llamarIA(prompt, contexto);
 }
 
-// ── Renderizar el widget en el DOM ────────────────────────────
+// ── Renderizar el widget ──────────────────────────────────────
 function _renderWidget(grupoId, nombreGrupo, estado) {
     const container = document.getElementById('bnh-ai-tags-widget');
     if (!container) return;
 
     if (estado === 'loading') {
         container.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;
-            background:linear-gradient(135deg,#f3e8ff,#ede0ff);
-            border:1px solid #9b59b6;border-radius:8px;">
-            <span style="font-size:1.1em;">🤖</span>
-            <span style="font-size:0.78em;color:#6c3483;font-weight:600;">La IA está analizando al personaje…</span>
-            <div style="margin-left:auto;width:16px;height:16px;border:2px solid #9b59b6;
-                border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;
+            background:#faf5ff;border:1px solid #c39bd3;border-radius:6px;">
+            <div style="width:14px;height:14px;border:2px solid #9b59b6;
+                border-top-color:transparent;border-radius:50%;
+                animation:spin .8s linear infinite;flex-shrink:0;"></div>
+            <span style="font-size:0.75em;color:#6c3483;">Analizando personaje…</span>
         </div>
         <style>@keyframes spin{to{transform:rotate(360deg)}}</style>`;
         return;
@@ -160,11 +118,10 @@ function _renderWidget(grupoId, nombreGrupo, estado) {
 
     if (estado === 'error') {
         container.innerHTML = `
-        <div style="padding:8px 12px;background:#fdecea;border:1px solid #e74c3c;
-            border-radius:8px;font-size:0.75em;color:#c0392b;">
+        <div style="padding:7px 11px;background:#fdecea;border:1px solid #e74c3c;
+            border-radius:6px;font-size:0.74em;color:#c0392b;">
             ❌ Error al consultar la IA. Intenta de nuevo.
         </div>`;
-        // Re-mostrar botón
         const btn = document.getElementById('btn-ia-tags-sugerir');
         if (btn) btn.disabled = false;
         return;
@@ -172,15 +129,16 @@ function _renderWidget(grupoId, nombreGrupo, estado) {
 
     if (!estado || !estado.razonamiento) return;
 
-    const { razonamiento, tags_catalogo = [], tags_nuevos = [], catalogoSet } = estado;
+    const { razonamiento, tags_catalogo = [], tags_nuevos = [] } = estado;
+    const hayChips = tags_catalogo.length > 0 || tags_nuevos.length > 0;
 
     const chipsCatalogo = tags_catalogo.map(tag => {
         const safe = tag.replace(/'/g, "\\'");
-        return `<span 
+        return `<span
             onclick="window._iaTags_asignar('${grupoId}','${nombreGrupo.replace(/'/g,"\\'")}','${safe}',false)"
-            title="Tag del catálogo — click para asignar"
-            style="background:#f3e8ff;border:1.5px solid #8e44ad;color:#6c3483;
-                padding:3px 10px;border-radius:10px;font-size:0.72em;font-weight:700;
+            title="Del catálogo — click para asignar"
+            style="background:#f3e8ff;border:1px solid #9b59b6;color:#6c3483;
+                padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;
                 cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;"
             onmouseover="this.style.background='#8e44ad';this.style.color='white'"
             onmouseout="this.style.background='#f3e8ff';this.style.color='#6c3483'"
@@ -189,73 +147,71 @@ function _renderWidget(grupoId, nombreGrupo, estado) {
 
     const chipsNuevos = tags_nuevos.map(tag => {
         const safe = tag.replace(/'/g, "\\'");
-        return `<span 
+        return `<span
             onclick="window._iaTags_asignar('${grupoId}','${nombreGrupo.replace(/'/g,"\\'")}','${safe}',true)"
-            title="Tag nuevo — click para crear en catálogo y asignar"
-            style="background:#fffbea;border:1.5px solid #f1c40f;color:#9a7d0a;
-                padding:3px 10px;border-radius:10px;font-size:0.72em;font-weight:700;
+            title="Tag nuevo — click para crear y asignar"
+            style="background:#fffbea;border:1px solid #e2b000;color:#7d6000;
+                padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;
                 cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;"
-            onmouseover="this.style.background='#f1c40f';this.style.color='#5d4e00'"
-            onmouseout="this.style.background='#fffbea';this.style.color='#9a7d0a'"
+            onmouseover="this.style.background='#f1c40f';this.style.color='#4a3800'"
+            onmouseout="this.style.background='#fffbea';this.style.color='#7d6000'"
         >${tag} ✨</span>`;
     }).join('');
 
-    const hayChips = tags_catalogo.length > 0 || tags_nuevos.length > 0;
-
     container.innerHTML = `
-    <div style="background:linear-gradient(135deg,#faf5ff,#f3e8ff);
-        border:1.5px solid #9b59b6;border-radius:10px;padding:12px 14px;">
+    <div style="border:1px solid #c39bd3;border-radius:8px;overflow:hidden;">
 
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
-            <span style="font-size:1em;">🤖</span>
-            <span style="font-size:0.75em;font-weight:800;color:#6c3483;text-transform:uppercase;letter-spacing:.5px;">
-                La IA propone
-            </span>
-            <button onclick="window._iaTags_sugerir('${grupoId}','${nombreGrupo.replace(/'/g,"\\'")}');this.disabled=true"
-                style="margin-left:auto;background:transparent;border:1px solid #9b59b6;color:#8e44ad;
-                    border-radius:6px;padding:1px 8px;font-size:0.68em;cursor:pointer;font-weight:600;"
-                onmouseover="this.style.background='#9b59b6';this.style.color='white'"
-                onmouseout="this.style.background='transparent';this.style.color='#8e44ad'">
-                🔄 Volver a pedir
+        <div style="display:flex;align-items:center;gap:7px;padding:7px 11px;
+            background:#f5eeff;border-bottom:1px solid #c39bd3;">
+            <span style="font-size:0.72em;font-weight:700;color:#5b2c8f;
+                text-transform:uppercase;letter-spacing:.4px;">IA Propone</span>
+            <span style="flex:1;font-size:0.72em;color:#7d5a9a;font-style:italic;
+                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                title="${razonamiento.replace(/"/g,'&quot;')}">${razonamiento}</span>
+            <button
+                onclick="window._iaTags_sugerir('${grupoId}','${nombreGrupo.replace(/'/g,"\\'")}');this.disabled=true"
+                style="flex-shrink:0;background:none;border:1px solid #9b59b6;color:#8e44ad;
+                    border-radius:5px;padding:1px 7px;font-size:0.68em;cursor:pointer;
+                    font-weight:600;transition:all .15s;"
+                onmouseover="this.style.background='#8e44ad';this.style.color='white'"
+                onmouseout="this.style.background='none';this.style.color='#8e44ad'">
+                ↺ Reintentar
             </button>
         </div>
 
-        <div style="font-size:0.72em;color:#6c3483;line-height:1.5;margin-bottom:10px;
-            background:rgba(155,89,182,0.07);border-radius:6px;padding:6px 9px;font-style:italic;">
-            ${razonamiento}
+        <div style="padding:8px 11px;">
+            ${hayChips ? `
+            <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                ${chipsCatalogo}
+                ${tags_nuevos.length > 0 ? `
+                    <span style="width:100%;font-size:0.62em;color:#7d6000;font-weight:700;
+                        text-transform:uppercase;letter-spacing:.3px;margin-top:3px;">
+                        Nuevos →
+                    </span>
+                    ${chipsNuevos}
+                ` : ''}
+            </div>
+            <div style="margin-top:7px;font-size:0.62em;color:#a08cbb;">
+                <span style="background:#f3e8ff;border:1px solid #c39bd3;
+                    padding:1px 5px;border-radius:4px;color:#6c3483;">Violeta</span>
+                = catálogo &nbsp;·&nbsp;
+                <span style="background:#fffbea;border:1px solid #e2b000;
+                    padding:1px 5px;border-radius:4px;color:#7d6000;">Amarillo ✨</span>
+                = nuevo
+            </div>
+            ` : `
+            <div style="font-size:0.74em;color:#a08cbb;">
+                Sin sugerencias adicionales para este personaje.
+            </div>
+            `}
+            <div id="ia-tags-msg" style="margin-top:5px;font-size:0.71em;min-height:1em;"></div>
         </div>
-
-        ${hayChips ? `
-        <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
-            ${chipsCatalogo}
-            ${tags_nuevos.length > 0 ? `
-            <span style="width:100%;font-size:0.65em;color:#9a7d0a;font-weight:600;
-                margin-top:3px;text-transform:uppercase;letter-spacing:.4px;">
-                Tags nuevos (no están en el catálogo aún):
-            </span>
-            ${chipsNuevos}
-            ` : ''}
-        </div>
-        <div style="margin-top:8px;font-size:0.65em;color:#a08cbb;line-height:1.4;">
-            <span style="background:#f3e8ff;border:1px solid #9b59b6;padding:1px 6px;border-radius:6px;color:#6c3483;">Violeta</span> 
-            = existe en catálogo &nbsp;·&nbsp;
-            <span style="background:#fffbea;border:1px solid #f1c40f;padding:1px 6px;border-radius:6px;color:#9a7d0a;">Amarillo ✨</span> 
-            = tag nuevo (se crea al hacer click)
-        </div>
-        ` : `
-        <div style="font-size:0.75em;color:#a08cbb;">
-            La IA no encontró tags adicionales que sugerir para este personaje.
-        </div>
-        `}
-
-        <div id="ia-tags-msg" style="margin-top:6px;font-size:0.72em;min-height:1em;"></div>
     </div>`;
 }
 
 // ── Exponer globales ──────────────────────────────────────────
 export function initIATagsPanel() {
 
-    // Llamada principal: pide sugerencias y renderiza
     window._iaTags_sugerir = async (grupoId, nombreGrupo) => {
         const btn = document.getElementById('btn-ia-tags-sugerir');
         if (btn) btn.disabled = true;
@@ -271,12 +227,8 @@ export function initIATagsPanel() {
             if (!pjData) throw new Error('Personaje no encontrado');
 
             const catalogoSet = new Set(catalogoTags.map(t => t.nombre.toLowerCase()));
+            const raw = await _pedirSugerenciasIA(pjData, catalogoTags);
 
-            // Intentar cargar el icono del PJ (silencioso si no existe)
-            const imagenData = await _fetchIconoBase64(pjData.nombre_refinado);
-            const raw = await _pedirSugerenciasIA(pjData, catalogoTags, imagenData);
-
-            // Limpiar y parsear
             let clean = raw
                 .replace(/```json/gi, '')
                 .replace(/```/g, '')
@@ -291,20 +243,27 @@ export function initIATagsPanel() {
                 throw new Error('La IA devolvió un formato inesperado.');
             }
 
-            // Normalizar arrays
+            // Normalizar
             resultado.tags_catalogo = (resultado.tags_catalogo || [])
                 .map(t => t.startsWith('#') ? t : '#' + t);
             resultado.tags_nuevos = (resultado.tags_nuevos || [])
-                .map(t => t.startsWith('#') ? t : '#' + t);
+                .map(t => t.startsWith('#') ? t : '#' + t)
+                .slice(0, 4); // máximo 4 nuevos
 
-            // Filtrar los que el PJ ya tiene
+            // Filtrar ya asignados
             const g = gruposGlobal.find(x => x.id === grupoId);
-            const yaAsignados = new Set((g?.tags || []).map(t => (t.startsWith('#') ? t : '#' + t).toLowerCase()));
+            const yaAsignados = new Set((g?.tags || []).map(t =>
+                (t.startsWith('#') ? t : '#' + t).toLowerCase()
+            ));
             resultado.tags_catalogo = resultado.tags_catalogo.filter(t => !yaAsignados.has(t.toLowerCase()));
             resultado.tags_nuevos   = resultado.tags_nuevos.filter(t => !yaAsignados.has(t.toLowerCase()));
 
-            resultado.catalogoSet = catalogoSet;
+            // Truncar razonamiento a ~100 chars para que quepa en una línea
+            if (resultado.razonamiento && resultado.razonamiento.length > 100) {
+                resultado.razonamiento = resultado.razonamiento.slice(0, 97) + '…';
+            }
 
+            resultado.catalogoSet = catalogoSet;
             _renderWidget(grupoId, nombreGrupo, resultado);
 
         } catch(e) {
@@ -313,32 +272,31 @@ export function initIATagsPanel() {
         }
     };
 
-    // Click en un chip: asignar al PJ (y crear en catálogo si es nuevo)
     window._iaTags_asignar = async (grupoId, nombreGrupo, tag, esNuevo) => {
         const msgEl = document.getElementById('ia-tags-msg');
         const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
 
-        // Encontrar el chip que se clickeó y desactivarlo visualmente
+        // Atenuar chip clickeado
         const chips = document.querySelectorAll('#bnh-ai-tags-widget span[onclick]');
         chips.forEach(c => {
-            if (c.textContent.trim().startsWith(tag)) {
+            if (c.textContent.trim().replace(' ✨','') === tag) {
                 c.style.opacity = '0.4';
                 c.style.pointerEvents = 'none';
             }
         });
 
         try {
-            // 1. Si es nuevo, crear en catálogo primero
             if (esNuevo) {
-                if (msgEl) { msgEl.style.color = '#9a7d0a'; msgEl.textContent = `⏳ Creando ${tagNorm} en el catálogo…`; }
+                if (msgEl) { msgEl.style.color = '#9a7d0a'; msgEl.textContent = `⏳ Creando ${tagNorm}…`; }
                 await _crearTagEnCatalogo(tagNorm);
             }
 
-            // 2. Asignar al grupo
             const g = gruposGlobal.find(x => x.id === grupoId);
             if (!g) throw new Error('Grupo no encontrado');
 
-            const yaLo = (g.tags || []).some(t => (t.startsWith('#') ? t : '#' + t).toLowerCase() === tagNorm.toLowerCase());
+            const yaLo = (g.tags || []).some(t =>
+                (t.startsWith('#') ? t : '#' + t).toLowerCase() === tagNorm.toLowerCase()
+            );
             if (yaLo) {
                 if (msgEl) { msgEl.style.color = '#888'; msgEl.textContent = `${tagNorm} ya asignado.`; }
                 return;
@@ -346,29 +304,21 @@ export function initIATagsPanel() {
 
             const nuevosTags = [...(g.tags || []), tagNorm];
             const res = await guardarTagsGrupo(grupoId, nuevosTags);
-
             if (!res.ok) throw new Error(res.msg);
 
             if (msgEl) {
-                msgEl.style.color = esNuevo ? '#9a7d0a' : '#6c3483';
-                msgEl.textContent = `✅ ${tagNorm} asignado${esNuevo ? ' (y añadido al catálogo)' : ''}.`;
+                msgEl.style.color = esNuevo ? '#7d6000' : '#5b2c8f';
+                msgEl.textContent = `✅ ${tagNorm} asignado${esNuevo ? ' (nuevo en catálogo)' : ''}.`;
             }
 
-            // Refrescar chips de tags actuales y pool
-            const chipsEl = document.getElementById('op-chips');
-            const ptDePJ = ptGlobal[nombreGrupo] || {};
-            if (chipsEl) {
-                // Importar _chipsHTML no es posible directamente — llamar al refresh global
-                window._opRefreshTab1Pools?.(grupoId, nombreGrupo);
-            }
+            window._opRefreshTab1Pools?.(grupoId, nombreGrupo);
             window.sincronizarVista?.();
 
         } catch(e) {
             console.error('[bnh-ai-tags] asignar:', e);
             if (msgEl) { msgEl.style.color = 'var(--red)'; msgEl.textContent = `❌ ${e.message}`; }
-            // Reactivar el chip
             chips.forEach(c => {
-                if (c.textContent.trim().startsWith(tag)) {
+                if (c.textContent.trim().replace(' ✨','') === tag) {
                     c.style.opacity = '1';
                     c.style.pointerEvents = '';
                 }
@@ -377,24 +327,26 @@ export function initIATagsPanel() {
     };
 }
 
-// ── HTML del widget (se inyecta en el tab Tags & PT) ──────────
+// ── HTML del botón (se inyecta en el tab Tags & PT) ───────────
 export function htmlIATagsWidget(grupoId, nombreGrupo) {
     const safeNombre = nombreGrupo.replace(/'/g, "\\'");
     return `
     <div style="margin-bottom:10px;">
         <button id="btn-ia-tags-sugerir"
             onclick="this.disabled=true; window._iaTags_sugerir('${grupoId}','${safeNombre}')"
-            style="display:flex;align-items:center;gap:6px;background:linear-gradient(135deg,#8e44ad,#6c3483);
-                color:white;border:none;border-radius:8px;padding:6px 14px;
-                font-size:0.78em;font-weight:700;cursor:pointer;transition:opacity .15s;width:100%;"
-            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-            <span>🤖</span>
+            style="display:flex;align-items:center;gap:7px;width:100%;
+                background:linear-gradient(135deg,#7d3c98,#5b2c8f);
+                color:white;border:none;border-radius:7px;padding:7px 13px;
+                font-size:0.77em;font-weight:600;cursor:pointer;
+                transition:opacity .15s;letter-spacing:.2px;"
+            onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">
+            <span style="font-size:1.05em;">✦</span>
             <span>Sugerir tags con IA</span>
-            <span style="margin-left:auto;font-size:0.75em;opacity:.8;font-weight:400;">
+            <span style="margin-left:auto;font-size:0.72em;opacity:.7;font-weight:400;">
                 Analiza lore, quirk y stats
             </span>
         </button>
-        <div id="bnh-ai-tags-widget" style="margin-top:6px;"></div>
+        <div id="bnh-ai-tags-widget" style="margin-top:5px;"></div>
     </div>
     <hr style="border:none;border-top:1px solid var(--gray-200);margin:0 0 10px;">`;
 }
