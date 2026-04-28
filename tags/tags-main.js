@@ -2,6 +2,7 @@
 // tags/tags-main.js
 // ============================================================
 import { bnhAuth, currentConfig } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import { tagsState, STORAGE_URL, grupos, catalogoTags, solicitudes, medallasCat } from './tags-state.js';
 import {
     cargarTodo, guardarDescripcionTag, guardarBaneoTag, renameTag, deleteTag,
@@ -25,6 +26,7 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     tagsState.esAdmin = bnhAuth.esAdmin();
+    bnhPort.init().catch(console.error);
 
     const tabBan = document.getElementById('tab-baneados');
     if (tabBan) tabBan.style.display = tagsState.esAdmin ? '' : 'none';
