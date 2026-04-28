@@ -219,11 +219,14 @@ ${infoExtraStr}
         
         Usa estas claves exactas: "descripcion", "lore", "personalidad", "quirk", e "info_extra" (objeto con las claves: estado, edad, altura, peso, genero, lugar_nac, ocupacion, afiliacion, familia, nota).
         
-        ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
+        ⚠️ REGLA DE FORMATO: Para separar párrafos usa "\\n\\n" (dos barras n). NUNCA uses saltos de línea reales.
+        Ejemplo CORRECTO:   "Primer párrafo.\\n\\nSegundo párrafo."
+        Ejemplo INCORRECTO: "Primer párrafo.\nSegundo párrafo."  ← solo un \\n, NO válido
+        Ejemplo INCORRECTO: "Primer párrafo. Segundo párrafo."   ← sin separación, NO válido
 
         ⚠️ LÍMITES ESTRICTOS POR SECCIÓN:
         - "descripcion": 1 párrafo, máximo 3-4 oraciones. Solo apariencia y rasgos clave.
-        - "lore": 2 párrafos, máximo 4-5 oraciones cada uno. Lo esencial de la historia.
+        - "lore": 2 párrafos separados por "\\n\\n", máximo 4-5 oraciones cada uno.
         - "personalidad": 1 párrafo, máximo 4-5 oraciones. Rasgos principales y contradicciones clave.
         - "quirk": 1 párrafo, máximo 4-5 oraciones. Descripción del poder, limitaciones y uso en combate.
         Si el texto actual ya cumple estos límites, NO lo alargues — solo añade lo que falte de los tags.
