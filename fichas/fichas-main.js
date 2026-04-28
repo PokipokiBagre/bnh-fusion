@@ -15,6 +15,7 @@ import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion
 import { supabase } from '../bnh-auth.js';
 
 let postersDelHilo = null;
+let _scrollCatalogo = 0; // guarda posición de scroll al entrar al detalle
 
 async function init() {
     // Inyectar supabase en bnh-pac para getEquipacionPJ
@@ -76,17 +77,22 @@ async function init() {
         const params = new URLSearchParams(window.location.search);
         const ficha  = params.get('ficha');
         if (ficha) {
+            // Guardar scroll actual antes de ir al detalle (por si navegan con el botón adelante)
+            _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
             const g = gruposGlobal.find(x =>
                 x.nombre_refinado.toLowerCase() === ficha.toLowerCase() ||
                 x.nombre_refinado.toLowerCase().replace(/ /g,'_') === ficha.toLowerCase().replace(/ /g,'_')
             );
             fichasUI.vistaActual  = g ? 'detalle' : 'catalogo';
             fichasUI.seleccionado = g ? g.nombre_refinado : null;
+            sincronizarVista();
         } else {
             fichasUI.vistaActual  = 'catalogo';
             fichasUI.seleccionado = null;
+            sincronizarVista();
+            // Restaurar scroll al volver con el botón atrás
+            requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
         }
-        sincronizarVista();
     });
 
     _initVisibilityReconnect();
@@ -96,6 +102,7 @@ function sincronizarVista() {
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
         document.getElementById('fichas-layout').style.display = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
+        window.scrollTo(0, 0); // siempre arriba al abrir detalle
         const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
         // renderDetalle es async — sin .catch los errores internos se pierden silenciosamente.
         if (_gDet) renderDetalle(_gDet).catch(console.error);
@@ -112,6 +119,8 @@ window._equipCache = window._equipCache || {};
 
 function exponerGlobales() {
 window.abrirFicha = (nombreGrupo) => {
+    // Guardar scroll antes de entrar al detalle
+    _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
     // SPA: actualizar URL sin recargar para no destruir el chat ni los reproductores
     const url = new URL(window.location.href);
     url.searchParams.set('ficha', nombreGrupo);
@@ -128,6 +137,8 @@ window.abrirFicha = (nombreGrupo) => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
         sincronizarVista();
+        // Restaurar posición de scroll
+        requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
     };
 
     window.abrirPanelOP         = abrirPanelOP;
