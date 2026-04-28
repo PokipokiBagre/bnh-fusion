@@ -113,8 +113,9 @@ const TAG_EXCLUSIVOS = [
 ];
 
 export async function guardarTagsGrupo(grupoId, tags) {
+    // Normalizar: todos los tags deben empezar con #
     // Aplicar exclusividad: si se añade uno del par, quitar el otro
-    let tagsFinal = [...tags];
+    let tagsFinal = tags.map(t => t.startsWith('#') ? t : '#' + t);
     TAG_EXCLUSIVOS.forEach(([a, b]) => {
         const tieneA = tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === a.toLowerCase());
         const tieneB = tagsFinal.some(t => (t.startsWith('#')?t:'#'+t).toLowerCase() === b.toLowerCase());
