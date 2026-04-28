@@ -205,7 +205,7 @@ export async function aplicarDeltaPT(nombreGrupo, tag, delta, motivo) {
 
 function calcPVSimple(pot, agi, ctl) {
     const pac = (pot||0)+(agi||0)+(ctl||0);
-    const b = pac>=100?20:pac>=80?15:pac>=60?10:5;
+    const b = pac>=150?30:pac>=100?20:pac>=80?15:pac>=60?10:5;
     return Math.floor((pot||0)/4)+Math.floor((agi||0)/4)+Math.floor((ctl||0)/4)+b;
 }
 
