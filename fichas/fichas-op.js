@@ -10,7 +10,7 @@ import {
     crearAlias, asignarAlias, eliminarAlias,
     aplicarDeltaPT, crearGrupo
 } from './fichas-data.js';
-import { iaGestionarLore } from '../bnh-ai.js'; // ⚡ SOLO LORE
+import { iaGestionarLore, iaOptimizarLore } from '../bnh-ai.js'; // ⚡ SOLO LORE
 import { activarFusion, terminarFusion, getFusionDe, cargarFusiones } from '../bnh-fusion.js';
 import { supabase } from '../bnh-auth.js';
 import { initMarkupTextarea, renderMarkup } from './fichas-markup.js';
@@ -506,8 +506,13 @@ export function abrirEditarLore(nombreGrupo) {
                         <label class="op-label" style="display:block;margin-bottom:4px;">Quirk / Habilidad</label>
                         <textarea id="lore-quirk" rows="4" class="op-input" style="resize:vertical;line-height:1.6;font-family:monospace;">${escTA(g.quirk||'')}</textarea>
                     </div>
-                    <div style="display:flex;gap:8px;align-items:center;">
+                    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
                         <button class="op-btn op-btn-green" onclick="window._loreGuardar('${g.id}')">💾 Guardar</button>
+                        <button class="op-btn" id="btn-lore-optimizar"
+                            onclick="window._loreOptimizar('${g.nombre_refinado.replace(/'/g,"\\'")}','${g.id}')"
+                            style="background:linear-gradient(135deg,#7d3c98,#5b2c8f);color:white;border:none;">
+                            ✦ Optimizar
+                        </button>
                         <button class="op-btn op-btn-gray" onclick="document.getElementById('op-overlay').style.display='none'">Cancelar</button>
                         <div id="msg-lore-modal" class="op-msg" style="flex:1;"></div>
                     </div>
