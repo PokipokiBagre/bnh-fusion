@@ -12,6 +12,7 @@ import { llamarIA } from './bnh-ai.js';
 import { gruposGlobal, ptGlobal } from './fichas/fichas-state.js';
 import { supabase } from './bnh-auth.js';
 import { guardarTagsGrupo } from './fichas/fichas-data.js';
+import { urlIcono } from './fichas/fichas-upload.js';
 
 // ── Obtener catálogo real de tags desde la BD ─────────────────
 async function _getCatalogoTags() {
@@ -32,8 +33,32 @@ async function _crearTagEnCatalogo(tagNombre) {
     return !error;
 }
 
+// ── Intentar cargar icono del PJ como base64 ─────────────────
+async function _fetchIconoBase64(nombreRefinado) {
+    try {
+        const url = urlIcono(nombreRefinado) + '?v=' + Date.now();
+        const resp = await fetch(url);
+        if (!resp.ok) return null;
+        const blob = await resp.blob();
+        // Solo pasar si es imagen válida
+        if (!blob.type.startsWith('image/')) return null;
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                // reader.result = "data:image/png;base64,XXXX"
+                const base64 = reader.result.split(',')[1];
+                resolve({ base64, mimeType: blob.type });
+            };
+            reader.onerror = () => resolve(null);
+            reader.readAsDataURL(blob);
+        });
+    } catch {
+        return null; // si la imagen no existe, silencioso
+    }
+}
+
 // ── Llamada principal a la IA ─────────────────────────────────
-async function _pedirSugerenciasIA(pj, catalogoTags) {
+async function _pedirSugerenciasIA(pj, catalogoTags, imagenData) {
     const tagsEquipados = (pj.tags || []).map(t => t.startsWith('#') ? t : '#' + t);
 
     // Info extra del PJ (campos de lore estructurado)
@@ -102,7 +127,7 @@ Formato de respuesta OBLIGATORIO:
 Si no tienes tags nuevos que proponer, usa un array vacío: "tags_nuevos": []
     `.trim();
 
-    return await llamarIA(prompt, contexto);
+    return await llamarIA(prompt, contexto, imagenData);
 }
 
 // ── Renderizar el widget en el DOM ────────────────────────────
@@ -238,7 +263,9 @@ export function initIATagsPanel() {
 
             const catalogoSet = new Set(catalogoTags.map(t => t.nombre.toLowerCase()));
 
-            const raw = await _pedirSugerenciasIA(pjData, catalogoTags);
+            // Intentar cargar el icono del PJ (silencioso si no existe)
+            const imagenData = await _fetchIconoBase64(pjData.nombre_refinado);
+            const raw = await _pedirSugerenciasIA(pjData, catalogoTags, imagenData);
 
             // Limpiar y parsear
             let clean = raw
