@@ -2,6 +2,7 @@
 // medallas/medallas-main.js
 // ============================================================
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import { medallaState, medallas, grupos, puntosAll, STORAGE_URL } from './medallas-state.js';
 import { cargarTodo, guardarMedalla, eliminarMedalla } from './medallas-data.js';
 import {
@@ -23,6 +24,7 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     medallaState.esAdmin = bnhAuth.esAdmin();
+    bnhPort.init().catch(console.error);
     
     // Inyectar supabase en bnh-pac para que pueda consultar equipación
     setSupabaseRef(supabase);
