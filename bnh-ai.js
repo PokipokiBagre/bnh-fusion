@@ -210,9 +210,10 @@ ${infoExtraStr}
     `;
 
     const prompt = `
-        INSTRUCCIÓN: Añade, complementa y expande la información según los tags del personaje.
-        Cada tag equipado debe verse reflejado de alguna forma en el lore, personalidad o quirk.
-        No pierdas ni reduzcas nada de lo que ya hay — solo amplía y enriquece.
+        INSTRUCCIÓN: Complementa la información según los tags del personaje.
+        Cada tag equipado debe verse reflejado sutilmente en alguna sección.
+        No pierdas lo que ya hay — ajusta y enriquece con moderación.
+        NO inflés el texto: sé conciso y directo, como una ficha de referencia, no una novela.
 
         REGLA CRÍTICA: Responde ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. Sin markdown, sin texto extra.
         
@@ -220,11 +221,12 @@ ${infoExtraStr}
         
         ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
 
-        ⚠️ REGLAS DE PÁRRAFOS POR SECCIÓN (OBLIGATORIO):
-        - "descripcion": SIEMPRE 1 solo párrafo compacto, sin saltos de línea. Todo en un bloque.
-        - "lore": mínimo 2 párrafos separados por "\\n\\n". Sin límite máximo.
-        - "personalidad": 1 o 2 párrafos máximo, separados por "\\n\\n" si son 2.
-        - "quirk": preferiblemente 1 o 2 párrafos. Solo añade un tercero si el quirk es muy complejo.
+        ⚠️ LÍMITES ESTRICTOS POR SECCIÓN:
+        - "descripcion": 1 párrafo, máximo 3-4 oraciones. Solo apariencia y rasgos clave.
+        - "lore": 2 párrafos, máximo 4-5 oraciones cada uno. Lo esencial de la historia.
+        - "personalidad": 1 párrafo, máximo 4-5 oraciones. Rasgos principales y contradicciones clave.
+        - "quirk": 1 párrafo, máximo 4-5 oraciones. Descripción del poder, limitaciones y uso en combate.
+        Si el texto actual ya cumple estos límites, NO lo alargues — solo añade lo que falte de los tags.
 
         REGLAS DE info_extra:
         - Conserva todos los valores que ya tienen contenido.
