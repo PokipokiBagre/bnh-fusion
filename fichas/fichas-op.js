@@ -54,7 +54,7 @@ function setMsg(id, txt, ok) {
     if (el) { el.className='op-msg '+(ok?'ok':'err'); el.textContent = txt; }
 }
 
-export async function abrirPanelOP(nombreGrupo) {
+export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
 
@@ -225,6 +225,14 @@ export async function abrirPanelOP(nombreGrupo) {
     `;
 
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
+
+    // Cambiar a la pestaña solicitada (si no es la 0)
+    if (tabInicial > 0) {
+        setTimeout(() => window._opTab(tabInicial), 30);
+    }
+
+    // Activar navegación por flechas en la pestaña Stats
+    setTimeout(() => _setupKeyboardNavStatsOP(), 60);
 
     // Montar tab 1: widget input + pool de tags sugeridos + pool PT
     setTimeout(() => {
@@ -448,6 +456,127 @@ function _grupoHTML(g) {
     </div>`;
 }
 
+// ── Navegación por flechas en la pestaña Stats del Panel OP ──
+// Grid: cada stat tiene cols [base?, nota, Δ1, Δ2, Δ3, Δ4, Δ5]
+// Down desde base/nota → Δ1 del mismo stat (están visualmente encima)
+// Down desde Δn       → mismo Δn del siguiente stat
+// Right desde base    → nota
+// Right desde nota    → Δ1
+function _setupKeyboardNavStatsOP() {
+    const STATS = [
+        { key: 'pot',       baseId: 'op-pot-base',    notaId: 'op-pot-nota',      dPrefix: 'op-pot-delta-' },
+        { key: 'agi',       baseId: 'op-agi-base',    notaId: 'op-agi-nota',      dPrefix: 'op-agi-delta-' },
+        { key: 'ctl',       baseId: 'op-ctl-base',    notaId: 'op-ctl-nota',      dPrefix: 'op-ctl-delta-' },
+        { key: 'pv',        baseId: null,             notaId: 'op-pv-nota',        dPrefix: 'op-pv-delta-' },
+        { key: 'cambios',   baseId: null,             notaId: 'op-cambios-nota',   dPrefix: 'op-cambios-delta-' },
+        { key: 'ctl_usado', baseId: null,             notaId: 'op-ctl_usado-nota', dPrefix: 'op-ctl_usado-delta-' },
+        { key: 'pv_actual', baseId: 'op-pv-actual',  notaId: 'op-pv_actual-nota', dPrefix: 'op-pv_actual-delta-' },
+    ];
+
+    // col: 0=base, 1=nota, 2=Δ1, 3=Δ2, 4=Δ3, 5=Δ4, 6=Δ5
+    const grid = STATS.map(s => ({
+        ...s,
+        inputs: [
+            s.baseId,
+            s.notaId,
+            s.dPrefix + '1',
+            s.dPrefix + '2',
+            s.dPrefix + '3',
+            s.dPrefix + '4',
+            s.dPrefix + '5',
+        ]
+    }));
+
+    function getEl(row, col) {
+        const id = row.inputs[col];
+        return id ? document.getElementById(id) : null;
+    }
+
+    function findPos(el) {
+        const id = el.id;
+        for (let r = 0; r < grid.length; r++) {
+            for (let c = 0; c < grid[r].inputs.length; c++) {
+                if (grid[r].inputs[c] === id) return { r, c };
+            }
+        }
+        return null;
+    }
+
+    function focusEl(el) {
+        if (!el) return;
+        el.focus();
+        try { el.select(); } catch (_) {}
+    }
+
+    function navigate(el, dir) {
+        const pos = findPos(el);
+        if (!pos) return;
+        const { r, c } = pos;
+        let target = null;
+
+        if (dir === 'right') {
+            // Avanzar dentro de la misma fila
+            for (let nc = c + 1; nc < grid[r].inputs.length; nc++) {
+                const t = getEl(grid[r], nc);
+                if (t) { target = t; break; }
+            }
+        } else if (dir === 'left') {
+            for (let nc = c - 1; nc >= 0; nc--) {
+                const t = getEl(grid[r], nc);
+                if (t) { target = t; break; }
+            }
+        } else if (dir === 'down') {
+            if (c <= 1) {
+                // Base o nota → Δ1 del mismo stat (visualmente debajo)
+                const t = getEl(grid[r], 2);
+                if (t) { target = t; }
+            } else {
+                // Delta → mismo delta del siguiente stat
+                for (let nr = r + 1; nr < grid.length; nr++) {
+                    const t = getEl(grid[nr], c);
+                    if (t) { target = t; break; }
+                }
+            }
+        } else if (dir === 'up') {
+            if (c === 2) {
+                // Δ1 → nota del mismo stat (visualmente encima)
+                const t = getEl(grid[r], 1);
+                if (t) { target = t; }
+            } else if (c <= 1) {
+                // Base o nota → nota del stat anterior
+                for (let nr = r - 1; nr >= 0; nr--) {
+                    const t = getEl(grid[nr], 1);
+                    if (t) { target = t; break; }
+                }
+            } else {
+                // Delta > Δ1 → mismo delta del stat anterior
+                for (let nr = r - 1; nr >= 0; nr--) {
+                    const t = getEl(grid[nr], c);
+                    if (t) { target = t; break; }
+                }
+            }
+        }
+
+        if (target) focusEl(target);
+    }
+
+    // Adjuntar listeners a todos los inputs de la grilla Stats
+    for (let r = 0; r < grid.length; r++) {
+        for (let c = 0; c < grid[r].inputs.length; c++) {
+            const el = getEl(grid[r], c);
+            if (!el) continue;
+            el.addEventListener('keydown', function(e) {
+                const dir = { ArrowRight:'right', ArrowLeft:'left', ArrowDown:'down', ArrowUp:'up' }[e.key];
+                if (!dir) return;
+                // No interceptar flechas en textarea (se mueven dentro del texto)
+                if (e.target.tagName === 'TEXTAREA') return;
+                e.preventDefault();
+                navigate(this, dir);
+            });
+        }
+    }
+}
+
 export function abrirEditarLore(nombreGrupo) {
     const g = gruposGlobal.find(x => x.nombre_refinado === nombreGrupo);
     if (!g) return;
@@ -610,6 +739,8 @@ export function exponerGlobalesOP() {
             if(p) p.style.display=j===i?'block':'none';
             if(t) t.classList.toggle('active',j===i);
         });
+        // Re-adjuntar navegación por flechas si volvemos a Stats
+        if (i === 0) setTimeout(() => _setupKeyboardNavStatsOP(), 30);
     };
 
     // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.

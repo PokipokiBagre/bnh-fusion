@@ -435,8 +435,12 @@ export async function renderDetalle(grupoCrudo, htmlLore) {
             ${g.nombre_refinado}
             ${fusion ? renderFusionBadge(nombreGrupo, STORAGE_URL, norm) : ''}
             ${fichasUI.esAdmin?`
-            <button onclick="window.abrirPanelOP('${safeN}')" class="btn btn-green btn-sm" style="margin-left:auto;">⚙️ Panel OP</button>
-            <button onclick="window._fichasAbrirUpload('${safeN}')" class="btn btn-sm" style="background:#1a4a80;border-color:#2980b9;color:white;">📷 Imagen</button>
+            <div style="margin-left:auto;display:flex;gap:5px;flex-wrap:wrap;align-items:center;">
+                <button onclick="window.abrirPanelOP('${safeN}',0)" class="btn btn-green btn-sm">📊 Stats</button>
+                <button onclick="window.abrirPanelOP('${safeN}',1)" class="btn btn-sm" style="background:#1a4a80;border-color:#2980b9;color:white;">🏷 Tags&amp;PT</button>
+                <button onclick="window.abrirPanelOP('${safeN}',2)" class="btn btn-sm" style="background:#6c3483;border-color:#8e44ad;color:white;">👥 Grupo</button>
+                <button onclick="window._fichasAbrirUpload('${safeN}')" class="btn btn-sm" style="background:#555;border-color:#777;color:white;">📷 Imagen</button>
+            </div>
             `:'<span style="margin-left:auto;"></span>'}
             <button onclick="window.abrirEditarLore('${safeN}')" class="btn btn-sm" style="background:#6c757d;border-color:#6c757d;color:white;font-size:0.78em;padding:4px 10px;">📝 Editar lore</button>
         </div>
