@@ -17,6 +17,11 @@ import { initMarkupTextarea, renderMarkup } from './fichas-markup.js';
 import { crearTagInput, TAGS_CANONICOS } from '../bnh-tags.js';
 import { initIATagsPanel, htmlIATagsWidget } from '../bnh-ai-tags.js';
 
+// ── Normaliza un tag para comparación (quita #, lowercase, guiones y guiones bajos) ──
+function normTag(t) {
+    return String(t||'').replace(/^#/, '').toLowerCase().replace(/[-_]/g, '');
+}
+
 // ── Modal ─────────────────────────────────────────────────────
 function abrirModal(titulo, html) {
     let ov = document.getElementById('op-overlay');
@@ -166,7 +171,7 @@ export async function abrirPanelOP(nombreGrupo) {
         <div style="font-size:0.72em;font-weight:600;color:var(--gray-500);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px;">
             Tags a asignar <span style="font-weight:400;color:var(--gray-400);">(click para agregar)</span>
         </div>
-        <div id="op-tags-pool" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;max-height:120px;overflow-y:auto;padding:4px 0;"></div>
+        <div id="op-tags-pool" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px;max-height:180px;overflow-y:auto;padding:4px 0;"></div>
 
         <div id="msg-tags" class="op-msg"></div>
         <hr style="border:none;border-top:1px solid var(--gray-200);margin:12px 0 10px;">
@@ -240,24 +245,34 @@ export async function abrirPanelOP(nombreGrupo) {
 window._opRefreshTab1Pools = (grupoId, nombreGrupo) => {
     const g = gruposGlobal.find(x => x.id === grupoId);
     if (!g) return;
-    const tagsActuales = new Set((g.tags||[]).map(t => t.startsWith('#')?t:'#'+t));
+
+    // ── Set normalizado de tags actuales del PJ (para comparación robusta) ──
+    // Usa normTag() para que #Mente_Maestra y #MenteMaestra se traten igual
+    const tagsActualesNorm = new Set((g.tags||[]).map(t => normTag(t)));
 
     // Índice de cuántos grupos tienen cada tag (para mostrar popularidad)
     const tagCount = {};
     gruposGlobal.forEach(gr => {
         (gr.tags||[]).forEach(t => {
-            const k = t.startsWith('#')?t:'#'+t;
-            tagCount[k] = (tagCount[k]||0)+1;
+            const k = t.startsWith('#') ? t : '#'+t;
+            tagCount[k] = (tagCount[k]||0) + 1;
         });
     });
 
-    // ── Pool de tags a asignar (40 aleatorios de los que NO tiene) ──
+    // ── Pool de tags a asignar (100 tags, ordenados por popularidad desc) ──
     const poolAsignar = document.getElementById('op-tags-pool');
     if (poolAsignar) {
         const disponibles = TAGS_CANONICOS
-            .filter(t => !tagsActuales.has(t.startsWith('#')?t:'#'+t))
-            .sort(() => Math.random() - 0.5)
-            .slice(0, 40);
+            // Excluir los que el PJ ya tiene, comparando de forma normalizada
+            .filter(t => !tagsActualesNorm.has(normTag(t)))
+            // Ordenar por popularidad descendente, luego alfabético como desempate
+            .sort((a, b) => {
+                const ka = a.startsWith('#') ? a : '#'+a;
+                const kb = b.startsWith('#') ? b : '#'+b;
+                const diff = (tagCount[kb]||0) - (tagCount[ka]||0);
+                return diff !== 0 ? diff : ka.localeCompare(kb);
+            })
+            .slice(0, 100); // ← aumentado de 40 a 100
 
         poolAsignar.innerHTML = disponibles.length
             ? disponibles.map(t => {
@@ -593,7 +608,7 @@ export function exponerGlobalesOP() {
 
     // _opRecalcPV eliminado: el nuevo sistema guarda Base+Delta+Nota por separado.
 
-window._ejecutarIALore = async (nombre) => {
+    window._ejecutarIALore = async (nombre) => {
         const input = document.getElementById('ia-lore-input');
         const status = document.getElementById('ia-lore-status');
         const btn = document.getElementById('btn-ia-lore');
@@ -677,7 +692,6 @@ window._ejecutarIALore = async (nombre) => {
 
         } catch (e) {
             console.error("Error en proceso IA:", e);
-            // Ahora mostrará el mensaje real (ej: saturación de Google o error de parseo)
             status.textContent = "❌ " + (e.message || "Error desconocido.");
             status.style.color = "var(--red)";
         } finally {
@@ -759,7 +773,10 @@ window._ejecutarIALore = async (nombre) => {
         })();
         if(!tag) return;
         const g=gruposGlobal.find(x=>x.id===grupoId); if(!g) return;
-        if((g.tags||[]).includes(tag)){setMsg('msg-tags','Ya existe',false);return;}
+        // Comparación normalizada para evitar duplicados con variantes de guión bajo
+        if((g.tags||[]).some(t => normTag(t) === normTag(tag))){
+            setMsg('msg-tags','Ya existe',false); return;
+        }
         const nuevosTags=[...(g.tags||[]),tag];
         const res=await guardarTagsGrupo(grupoId,nuevosTags);
         setMsg('msg-tags',res.ok?`✅ ${tag} agregado`:'❌ '+res.msg,res.ok);
@@ -823,16 +840,11 @@ window._ejecutarIALore = async (nombre) => {
         if (!g) return;
         const ptDePJ = ptGlobal[nombreGrupo] || {};
         const tagsDelPJ = new Set([
-            ...(g.tags||[]).map(t => t.startsWith('#')?t:'#'+t),
-            ...(g.tags||[]).map(t => t.startsWith('#')?t.slice(1):t)
+            ...(g.tags||[]).map(t => normTag(t)),
         ]);
         const msgEl = document.getElementById('msg-huerfanos');
 
-        const huerfanos = Object.keys(ptDePJ).filter(tag => {
-            const conHash = tag.startsWith('#') ? tag : '#'+tag;
-            const sinHash = tag.startsWith('#') ? tag.slice(1) : tag;
-            return !tagsDelPJ.has(conHash) && !tagsDelPJ.has(sinHash);
-        });
+        const huerfanos = Object.keys(ptDePJ).filter(tag => !tagsDelPJ.has(normTag(tag)));
 
         if (!huerfanos.length) {
             if (msgEl) { msgEl.className='op-msg ok'; msgEl.textContent='✅ No hay tags huérfanos'; }
@@ -973,12 +985,6 @@ window._ejecutarIALore = async (nombre) => {
     };
 
     // ── Absorción permanente de grupos ────────────────────────
-    // Toma el grupo fuente (sel) y lo absorbe en el destino (grupoId):
-    //   1. Copia tags únicos de fuente → destino
-    //   2. Reasigna todos los aliases de fuente → destino
-    //   3. Elimina el grupo fuente (sus PT quedan en log_puntos_tag
-    //      bajo su nombre original — el OP puede migrarlos manualmente
-    //      si lo desea)
     window._opAbsorberGrupo = async (grupoDestinoId, nombreDestino) => {
         const nombreFuente = document.getElementById('op-absorber-sel')?.value;
         if (!nombreFuente) { setMsg('msg-absorber','Elige un grupo a absorber',false); return; }
@@ -999,13 +1005,17 @@ window._ejecutarIALore = async (nombre) => {
         setMsg('msg-absorber','⏳ Procesando…', true);
 
         try {
-            // 1. Fusionar tags (union sin duplicados)
-            const tagsDestino = new Set((gDestino.tags||[]).map(t=>t.startsWith('#')?t:'#'+t));
-            const tagsFuente  = (gFuente.tags||[]).map(t=>t.startsWith('#')?t:'#'+t);
-            tagsFuente.forEach(t => tagsDestino.add(t));
-            const tagsUnidos  = [...tagsDestino];
+            // 1. Fusionar tags (union sin duplicados, comparación normalizada)
+            const tagsDestinoNorm = new Set((gDestino.tags||[]).map(t => normTag(t)));
+            const tagsDestino = [...(gDestino.tags||[])];
+            (gFuente.tags||[]).forEach(t => {
+                if (!tagsDestinoNorm.has(normTag(t))) {
+                    tagsDestino.push(t.startsWith('#') ? t : '#'+t);
+                    tagsDestinoNorm.add(normTag(t));
+                }
+            });
 
-            const r1 = await guardarTagsGrupo(grupoDestinoId, tagsUnidos);
+            const r1 = await guardarTagsGrupo(grupoDestinoId, tagsDestino);
             if (!r1.ok) { setMsg('msg-absorber','❌ Error al fusionar tags: '+r1.msg, false); return; }
 
             // 2. Reasignar aliases de la fuente al destino
@@ -1015,14 +1025,12 @@ window._ejecutarIALore = async (nombre) => {
             }
 
             // 3. Eliminar el grupo fuente
-            // (eliminarGrupo desasigna aliases primero, pero ya los reasignamos arriba)
             await supabase.from('personajes_refinados').delete().eq('id', gFuente.id);
             const idx = gruposGlobal.findIndex(g => g.id === gFuente.id);
             if (idx !== -1) gruposGlobal.splice(idx, 1);
 
             setMsg('msg-absorber',`✅ "${nombreFuente}" absorbido en "${nombreDestino}"`, true);
 
-            // Refrescar vista y cerrar modal tras breve pausa
             setTimeout(async () => {
                 cerrarModal();
                 await window.sincronizarVista?.();
@@ -1091,15 +1099,15 @@ export function abrirCrearGrupo() {
         const wrap = document.getElementById('cp-tag-inp-wrap');
         if (!wrap) return;
         const widget = crearTagInput('cp-tag-inp', TAGS_CANONICOS, (tag) => {
-            if (!tagsSel.includes(tag)) { tagsSel.push(tag); renderChipsCp(); }
+            if (!tagsSel.some(t => normTag(t) === normTag(tag))) {
+                tagsSel.push(tag); renderChipsCp();
+            }
         });
         wrap.appendChild(widget.el);
         renderChipsCp();
 
         // ── Navegación rápida con flechas y Enter ───────────────
-        // Orden: Nombre → POT → AGI → CTL → Tag input → Crear
         const seq = ['cp-nom', 'cp-pot', 'cp-agi', 'cp-ctl'];
-        // El input de tags lo busca por su id real dentro del widget
         const getTagInp = () => document.getElementById('cp-tag-inp') || wrap.querySelector('input');
 
         const focusNext = (currentId) => {
@@ -1108,42 +1116,30 @@ export function abrirCrearGrupo() {
             if (idx < seq.length - 1) {
                 document.getElementById(seq[idx + 1])?.focus();
             } else {
-                // Después de CTL → ir al tag input
                 getTagInp()?.focus();
             }
         };
         const focusPrev = (currentId) => {
             const idx = seq.indexOf(currentId);
-            if (idx > 0) {
-                document.getElementById(seq[idx - 1])?.focus();
-            }
+            if (idx > 0) { document.getElementById(seq[idx - 1])?.focus(); }
         };
 
-        // Nombre: Enter/ArrowDown → POT
         const nom = document.getElementById('cp-nom');
         if (nom) {
             nom.addEventListener('keydown', e => {
-                if (e.key === 'Enter' || e.key === 'ArrowDown') {
-                    e.preventDefault(); focusNext('cp-nom');
-                }
+                if (e.key === 'Enter' || e.key === 'ArrowDown') { e.preventDefault(); focusNext('cp-nom'); }
             });
         }
 
-        // POT / AGI / CTL: flechas arriba/abajo navegan entre campos
-        // Enter también avanza; las flechas izq/der siguen cambiando el número
         ['cp-pot', 'cp-agi', 'cp-ctl'].forEach(id => {
             const el = document.getElementById(id);
             if (!el) return;
             el.addEventListener('keydown', e => {
-                if (e.key === 'ArrowDown' || e.key === 'Enter') {
-                    e.preventDefault(); focusNext(id);
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault(); focusPrev(id);
-                }
+                if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); focusNext(id); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); focusPrev(id); }
             });
         });
 
-        // Tag input: ArrowUp → CTL; Enter en vacío → Crear Grupo
         const tagInp = getTagInp();
         if (tagInp) {
             tagInp.addEventListener('keydown', e => {
@@ -1152,17 +1148,12 @@ export function abrirCrearGrupo() {
                     document.getElementById('cp-ctl')?.focus();
                 }
                 if (e.key === 'Enter' && !tagInp.value) {
-                    // Solo crear si el dropdown de sugerencias no está abierto
                     const ddOpen = wrap.querySelector('ul[style*="display:block"], ul[style*="display: block"]');
-                    if (!ddOpen) {
-                        e.preventDefault();
-                        window._cpCrearGrupo?.();
-                    }
+                    if (!ddOpen) { e.preventDefault(); window._cpCrearGrupo?.(); }
                 }
             });
         }
 
-        // Autofocus en Nombre al abrir
         nom?.focus();
     }, 60);
 
@@ -1183,9 +1174,9 @@ export function abrirCrearGrupo() {
 
             const pv = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bono;
 
-            const pacVal   = document.getElementById('cp-pac-val');
+            const pacVal    = document.getElementById('cp-pac-val');
             const tierBadge = document.getElementById('cp-tier-badge');
-            const pvVal    = document.getElementById('cp-pv-val');
+            const pvVal     = document.getElementById('cp-pv-val');
 
             if (pacVal)    pacVal.textContent = pac;
             if (pvVal)     pvVal.textContent  = pv;
@@ -1196,7 +1187,7 @@ export function abrirCrearGrupo() {
                 tierBadge.style.borderColor = border;
             }
         };
-        window._cpActualizarPAC(); // inicial
+        window._cpActualizarPAC();
 
         window._cpToggleRol = (v) => {
             _cpRol = v;
