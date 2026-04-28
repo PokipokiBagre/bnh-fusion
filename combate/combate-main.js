@@ -2,6 +2,7 @@
 // combate/combate-main.js  v2
 // ============================================================
 import { bnhAuth, supabase } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import {
     combateState, STORAGE_URL, crearSlot, norm,
     setTodosLosPJs, setTodosLosPTs, setTodasLasMedallas,
@@ -28,6 +29,7 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     combateState.esAdmin = bnhAuth.esAdmin();
+    bnhPort.init().catch(console.error);
 
     try {
         await cargarFusiones();
