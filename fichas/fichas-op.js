@@ -1037,9 +1037,17 @@ export function abrirCrearGrupo() {
     <div class="op-row"><span class="op-label">Nombre</span>
         <input id="cp-nom" type="text" class="op-input" style="flex:1;" placeholder="Ej: Elisa"></div>
     <div class="stats-grid">
-        <div class="stat-field"><label>POT</label><input id="cp-pot" type="number" value="0"></div>
-        <div class="stat-field"><label>AGI</label><input id="cp-agi" type="number" value="0"></div>
-        <div class="stat-field"><label>CTL</label><input id="cp-ctl" type="number" value="0"></div>
+        <div class="stat-field"><label>POT</label><input id="cp-pot" type="number" value="0" oninput="window._cpActualizarPAC()"></div>
+        <div class="stat-field"><label>AGI</label><input id="cp-agi" type="number" value="0" oninput="window._cpActualizarPAC()"></div>
+        <div class="stat-field"><label>CTL</label><input id="cp-ctl" type="number" value="0" oninput="window._cpActualizarPAC()"></div>
+    </div>
+    <div id="cp-pac-info" style="display:flex;align-items:center;gap:8px;padding:7px 12px;
+        background:var(--gray-100);border-radius:8px;border:1px solid var(--gray-200);margin-bottom:10px;font-size:0.82em;">
+        <span style="color:var(--gray-500);">PAC</span>
+        <span id="cp-pac-val" style="font-weight:800;font-size:1.1em;color:var(--gray-700);">0</span>
+        <span id="cp-tier-badge" style="padding:2px 10px;border-radius:12px;font-weight:700;font-size:0.82em;
+            background:#1e5631;color:#82e0aa;border:1px solid #27ae60;">TIER 1</span>
+        <span id="cp-pv-preview" style="margin-left:auto;color:var(--gray-500);">PV base: <strong id="cp-pv-val">5</strong></span>
     </div>
     <label style="font-size:0.78em;font-weight:600;color:var(--gray-700);display:block;margin-bottom:4px;">Tags</label>
     <div id="cp-tags-chips" class="tags-chips" style="margin-bottom:6px;"></div>
@@ -1156,6 +1164,36 @@ export function abrirCrearGrupo() {
 
     let _cpRol = 'Jugador', _cpEstado = 'Activo';
     setTimeout(() => {
+        window._cpActualizarPAC = () => {
+            const pot = parseInt(document.getElementById('cp-pot')?.value) || 0;
+            const agi = parseInt(document.getElementById('cp-agi')?.value) || 0;
+            const ctl = parseInt(document.getElementById('cp-ctl')?.value) || 0;
+            const pac = pot + agi + ctl;
+
+            let tier, bono, bg, color, border;
+            if      (pac >= 150) { tier=5; bono=30; bg='#1a0533'; color='#d7bde2'; border='#9b59b6'; }
+            else if (pac >= 100) { tier=4; bono=20; bg='#7d3c00'; color='#f8c471'; border='#f39c12'; }
+            else if (pac >= 80)  { tier=3; bono=15; bg='#4a235a'; color='#c39bd3'; border='#8e44ad'; }
+            else if (pac >= 60)  { tier=2; bono=10; bg='#1a4a80'; color='#7fb3d3'; border='#2980b9'; }
+            else                 { tier=1; bono=5;  bg='#1e5631'; color='#82e0aa'; border='#27ae60'; }
+
+            const pv = Math.floor(pot/4) + Math.floor(agi/4) + Math.floor(ctl/4) + bono;
+
+            const pacVal   = document.getElementById('cp-pac-val');
+            const tierBadge = document.getElementById('cp-tier-badge');
+            const pvVal    = document.getElementById('cp-pv-val');
+
+            if (pacVal)    pacVal.textContent = pac;
+            if (pvVal)     pvVal.textContent  = pv;
+            if (tierBadge) {
+                tierBadge.textContent = 'TIER ' + tier;
+                tierBadge.style.background = bg;
+                tierBadge.style.color      = color;
+                tierBadge.style.borderColor = border;
+            }
+        };
+        window._cpActualizarPAC(); // inicial
+
         window._cpToggleRol = (v) => {
             _cpRol = v;
             document.getElementById('cp-jugador').className = `op-btn ${v==='Jugador'?'op-btn-green':'op-btn-gray'}`;
