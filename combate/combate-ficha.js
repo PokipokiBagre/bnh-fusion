@@ -121,10 +121,18 @@ export function renderSlotDetalle(eq, idx) {
                 letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;
                 justify-content:space-between;flex-wrap:wrap;gap:6px;">
                 <span>Stats — (((Base Δ1) Δ2) Δ3) Δ4) Δ5)</span>
-                ${combateState.esAdmin ? `
-                <button style="font-size:0.85em;padding:3px 12px;background:${col};color:white;
-                    border:none;border-radius:5px;cursor:pointer;"
-                    onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
+                <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap;">
+                    <button title="Borrar todos los Δ1" style="font-size:0.78em;padding:2px 8px;background:#fff3cd;
+                        border:1px solid #e6ac00;border-radius:5px;cursor:pointer;color:#6d4c00;font-weight:700;"
+                        onclick="window._combateLimpiarDeltas('${eq}',${idx},1)">⊘ Δ1</button>
+                    <button title="Borrar todos los deltas" style="font-size:0.78em;padding:2px 8px;background:#fde8e8;
+                        border:1px solid #dc3545;border-radius:5px;cursor:pointer;color:#7b1c2a;font-weight:700;"
+                        onclick="window._combateLimpiarDeltas('${eq}',${idx},'todos')">⊘ Todos Δ</button>
+                    ${combateState.esAdmin ? `
+                    <button style="font-size:0.85em;padding:3px 12px;background:${col};color:white;
+                        border:none;border-radius:5px;cursor:pointer;"
+                        onclick="window._combateGuardarStatsSlot('${eq}',${idx})">💾 Guardar en BD</button>` : ''}
+                </div>
             </div>
             <div style="display:flex;flex-direction:column;gap:6px;">
                 ${_statBlock({ key:'pot', lbl:'POT', baseVal:slot._pj.pot||0, resultVal:slot.pot, accent:'#7d3c00' })}
@@ -244,4 +252,111 @@ export function renderSlotDetalle(eq, idx) {
 
     </div>
 </div>`;
+
+    // Activar navegación por flechas en la pestaña Stats
+    setupKeyboardNavStats(eq, idx);
+}
+
+// ── Navegación por flechas en la grilla de Stats ──────────────
+function setupKeyboardNavStats(eq, idx) {
+    // Grilla: cada fila = un stat, columnas = [base(0), Δ1(1)..Δ5(5)]
+    const STATS = [
+        { key: 'pot',       baseId: `cb-${eq}-${idx}-pot-base` },
+        { key: 'agi',       baseId: `cb-${eq}-${idx}-agi-base` },
+        { key: 'ctl',       baseId: `cb-${eq}-${idx}-ctl-base` },
+        { key: 'pv',        baseId: null },   // auto
+        { key: 'cambios',   baseId: null },   // auto
+        { key: 'ctl_usado', baseId: null },   // auto
+        { key: 'pv_actual', baseId: `cb-${eq}-${idx}-pvactual-base` },
+    ];
+
+    const grid = STATS.map(s => ({
+        baseId: s.baseId,
+        deltas: [1,2,3,4,5].map(n => `cb-${eq}-${idx}-${s.key}-d${n}`),
+    }));
+
+    function getEl(row, col) {
+        const id = col === 0 ? row.baseId : row.deltas[col - 1];
+        return id ? document.getElementById(id) : null;
+    }
+
+    function findPos(el) {
+        const id = el.id;
+        for (let r = 0; r < grid.length; r++) {
+            if (grid[r].baseId === id) return { r, col: 0 };
+            for (let c = 1; c <= 5; c++) {
+                if (grid[r].deltas[c - 1] === id) return { r, col: c };
+            }
+        }
+        return null;
+    }
+
+    function focusEl(el) {
+        if (!el) return;
+        el.focus();
+        try { el.select(); } catch (_) {}
+    }
+
+    function navigate(el, dir) {
+        const pos = findPos(el);
+        if (!pos) return;
+        const { r, col } = pos;
+        let target = null;
+
+        if (dir === 'right') {
+            for (let c = col + 1; c <= 5; c++) {
+                const t = getEl(grid[r], c);
+                if (t) { target = t; break; }
+            }
+        } else if (dir === 'left') {
+            for (let c = col - 1; c >= 0; c--) {
+                const t = getEl(grid[r], c);
+                if (t) { target = t; break; }
+            }
+        } else if (dir === 'down') {
+            if (col === 0) {
+                // Base → bajar a Δ1 del mismo stat (visualmente está debajo)
+                target = getEl(grid[r], 1);
+            } else {
+                // Delta → misma columna en el siguiente stat
+                for (let nr = r + 1; nr < grid.length; nr++) {
+                    const t = getEl(grid[nr], col);
+                    if (t) { target = t; break; }
+                }
+            }
+        } else if (dir === 'up') {
+            if (col === 0) {
+                // Base → base del stat anterior
+                for (let nr = r - 1; nr >= 0; nr--) {
+                    const t = getEl(grid[nr], 0);
+                    if (t) { target = t; break; }
+                }
+            } else if (col === 1 && grid[r].baseId) {
+                // Δ1 → subir a la base del mismo stat
+                target = getEl(grid[r], 0);
+            } else {
+                // Delta → misma columna en el stat anterior
+                for (let nr = r - 1; nr >= 0; nr--) {
+                    const t = getEl(grid[nr], col);
+                    if (t) { target = t; break; }
+                }
+            }
+        }
+
+        if (target) focusEl(target);
+    }
+
+    // Adjuntar listener a todos los inputs de la grilla
+    for (let r = 0; r < grid.length; r++) {
+        for (let col = 0; col <= 5; col++) {
+            const el = getEl(grid[r], col);
+            if (!el) continue;
+            el.addEventListener('keydown', function(e) {
+                const dir = { ArrowRight:'right', ArrowLeft:'left', ArrowDown:'down', ArrowUp:'up' }[e.key];
+                if (!dir) return;
+                e.preventDefault();
+                navigate(this, dir);
+            });
+        }
+    }
 }

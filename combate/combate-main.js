@@ -521,6 +521,26 @@ window._combateGuardarStatsSlot = async (eq, idx) => {
     toast(res.ok ? '✅ Stats guardados' : '❌ ' + res.msg, res.ok ? 'ok' : 'error');
 };
 
+// ── Limpiar deltas en Stats ───────────────────────────────────
+window._combateLimpiarDeltas = (eq, idx, cual) => {
+    const slot = combateState[`equipo${eq}`][idx];
+    if (!slot) return;
+    const keys = ['pot','agi','ctl','pv','cambios','ctl_usado','pv_actual'];
+    if (cual === 1) {
+        keys.forEach(k => { slot._d[`delta_${k}_1`] = '0'; });
+        toast('Δ1 borrados', 'ok');
+    } else {
+        keys.forEach(k => {
+            [1,2,3,4,5].forEach(n => { slot._d[`delta_${k}_${n}`] = '0'; });
+        });
+        toast('Todos los deltas borrados', 'ok');
+    }
+    recalcSlot(slot);
+    refrescarEquipo(eq);
+    refrescarCuadro();
+    renderSlotDetalle(eq, idx);
+};
+
 // ── Nota de texto para cada stat ──────────────────────────────
 window._combateSetNota = (eq, idx, key, valor) => {
     const slot = combateState[`equipo${eq}`]?.[idx];
