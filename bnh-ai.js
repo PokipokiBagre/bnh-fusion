@@ -145,7 +145,61 @@ ${infoExtraStr}
         }
     `;
 
-    return await llamarIA(prompt, contexto);
+    // ── Primera llamada: instrucción del OP ──────────────────────
+    const rondaUno = await llamarIA(prompt, contexto);
+
+    // Parsear resultado de la primera ronda para usarlo como base de la segunda
+    let parsedUno;
+    try {
+        let clean = rondaUno.replace(/```json/gi, '').replace(/```/g, '').replace(/[\u0000-\u0019]+/g, '').trim();
+        parsedUno = JSON.parse(clean);
+    } catch(e) {
+        // Si falla el parseo, devolver tal cual — el caller manejará el error
+        return rondaUno;
+    }
+
+    // ── Segunda llamada: expandir y complementar según los tags ──
+    const ie2 = parsedUno.info_extra || {};
+    const infoExtraStr2 = Object.entries({
+        estado: ie2.estado, edad: ie2.edad, altura: ie2.altura, peso: ie2.peso,
+        genero: ie2.genero, lugar_nac: ie2.lugar_nac, ocupacion: ie2.ocupacion,
+        afiliacion: ie2.afiliacion, familia: ie2.familia, nota: ie2.nota
+    }).map(([k, v]) => `  - ${k}: ${v || 'Vacío'}`).join('\n');
+
+    const contexto2 = `
+        PERSONAJE: @${pj.nombre_refinado}@
+        STATS: POT ${pj.pot}, AGI ${pj.agi}, CTL ${pj.ctl}.
+        TAGS EQUIPADOS (úsalos para inferir ocupación, afiliación, etc.): ${tagsStr}
+        
+        TEXTOS ACTUALES EN LA UI (resultado de la ronda anterior — expande sobre estos):
+        - descripcion: ${parsedUno.descripcion || 'Vacío'}
+        - lore: ${parsedUno.lore || 'Vacío'}
+        - personalidad: ${parsedUno.personalidad || 'Vacío'}
+        - quirk: ${parsedUno.quirk || 'Vacío'}
+        
+        INFORMACIÓN EXTRA ACTUAL:
+${infoExtraStr2}
+    `;
+
+    const prompt2 = `
+        INSTRUCCIÓN: Añade, complementa y expande la información según los tags del personaje.
+        Cada tag equipado debe verse reflejado de alguna forma en el lore, personalidad o quirk.
+        No pierdas ni reduzcas nada de lo que ya hay — solo amplía y enriquece.
+
+        REGLA CRÍTICA: Responde ÚNICA y EXCLUSIVAMENTE con un objeto JSON válido. Sin markdown, sin texto extra.
+        
+        Usa estas claves exactas: "descripcion", "lore", "personalidad", "quirk", e "info_extra" (objeto con las claves: estado, edad, altura, peso, genero, lugar_nac, ocupacion, afiliacion, familia, nota).
+        
+        ⚠️ REGLA DE FORMATO: Si necesitas párrafos o saltos de línea, usa "\\n". NUNCA uses saltos de línea reales en el JSON.
+
+        REGLAS DE info_extra:
+        - Conserva todos los valores que ya tienen contenido.
+        - Si un campo estaba "Vacío", infiere un valor razonable usando los TAGS EQUIPADOS.
+        - Para "familia", usa marcado @Nombre@ para cada miembro. NUNCA uses guiones bajos en nombres de personas.
+        - NUNCA inventes tags que no estén en la lista de TAGS EQUIPADOS.
+    `;
+
+    return await llamarIA(prompt2, contexto2);
 }
 
 /**
