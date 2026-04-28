@@ -2,6 +2,7 @@
 // hist-main.js
 // ============================================================
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import {
     hilosState, postsState, rankingState,
     ptTagState, estadoUI, selPostsState, mapaAliasAGrupo
@@ -57,6 +58,7 @@ async function init() {
 
     await bnhAuth.init();
     estadoUI.esAdmin = bnhAuth.esAdmin();
+    bnhPort.init().catch(console.error);
 
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
