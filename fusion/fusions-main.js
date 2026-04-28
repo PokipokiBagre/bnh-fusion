@@ -1,5 +1,6 @@
 // fusions/fusions-main.js
 import { bnhAuth, supabase } from '../bnh-auth.js';
+import { bnhPort } from '../bnh-port-principal.js';
 import {
     fusionsState, setPersonajes, setPtGlobales, setFusionesActivas, setRegistroFusiones,
     personajes, ptGlobales, fusionesActivas, STORAGE_URL, 
@@ -25,6 +26,7 @@ window.onload = async () => {
     const badge = document.getElementById('bnh-session-badge');
     if (badge) badge.innerHTML = bnhAuth.renderStatusBadge();
     esAdmin = bnhAuth.esAdmin();
+    bnhPort.init().catch(console.error);
     fusionsState.esAdmin = esAdmin;
 
     const tabOpc = document.getElementById('tab-opciones');
