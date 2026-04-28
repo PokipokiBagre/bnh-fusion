@@ -2,6 +2,9 @@
 // Lógica pura de cálculo — sin efectos secundarios, sin UI.
 
 import { opcionesState } from './fusions-options.js';
+import { calcPVMax, calcTier } from '../bnh-pac.js';
+
+export { calcPVMax, calcTier };
 
 // ─── Reglas dinámicas ─────────────────────────────────────────
 export function getReglas(opciones = opcionesState) {
@@ -104,6 +107,8 @@ export function calcularResultadoFusion(pjA, pjB, d100, todosLosPTs, opciones = 
         opciones:          { ...opciones },
         statsBase,
         statsFinales:      { ...statsBase },
+        pvMaxBase:         calcPVMax(statsBase.pot, statsBase.agi, statsBase.ctl),
+        tierBase:          calcTier(statsBase.pot, statsBase.agi, statsBase.ctl),
         tags:              tagsResultantes,
         tagsUnion:         [...new Set([...tagsA, ...tagsB])],
         maxTagCompartido,

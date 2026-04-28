@@ -1,6 +1,6 @@
 // fusions/fusions-ui.js
 import { fusionsState, personajes, fusionesActivas, registroFusiones, STORAGE_URL, norm } from './fusions-state.js';
-import { getRegla, getReglas, calcCompatibilidadTags } from './fusions-logic.js';
+import { getRegla, getReglas, calcCompatibilidadTags, calcTier, calcPVMax } from './fusions-logic.js';
 import { opcionesState, renderOpciones } from './fusions-options.js';
 import { estaEnFusion } from '../bnh-fusion.js';
 
@@ -112,7 +112,10 @@ function renderSlot(letra) {
 
     const pj = personajes.find(p => p.nombre === nombre);
     if (!pj) return '';
-    const pac  = (pj.pot||0) + (pj.agi||0) + (pj.ctl||0);
+    const pac    = (pj.pot||0) + (pj.agi||0) + (pj.ctl||0);
+    const { tier, label: tierLabel } = calcTier(pj.pot||0, pj.agi||0, pj.ctl||0);
+    const pvMax  = calcPVMax(pj.pot||0, pj.agi||0, pj.ctl||0);
+    const TIER_C = { 5:'#d7bde2', 4:'#f8c471', 3:'#c39bd3', 2:'#7fb3d3', 1:'#82e0aa' };
     const tags = (pj.tags || []).slice(0, 10).map(t => {
         const tn = t.startsWith('#') ? t : '#' + t;
         return `<span class="stag">${_esc(tn)}</span>`;
@@ -128,6 +131,8 @@ function renderSlot(letra) {
         <div class="slot-stat"><span class="s-lbl">AGI</span><span class="s-val" style="color:#2980b9;">${pj.agi||0}</span></div>
         <div class="slot-stat"><span class="s-lbl">CTL</span><span class="s-val" style="color:var(--green-light);">${pj.ctl||0}</span></div>
         <div class="slot-stat"><span class="s-lbl">PAC</span><span class="s-val" style="color:var(--fp);">${pac}</span></div>
+        <div class="slot-stat"><span class="s-lbl">PV</span><span class="s-val" style="color:var(--green-dark);">${pvMax}</span></div>
+        <div class="slot-stat"><span class="s-lbl">TIER</span><span class="s-val" style="color:${TIER_C[tier]||'#82e0aa'};font-weight:800;">${tier}</span></div>
     </div>
     <div class="slot-tag-cloud">${tags}</div>`;
 }
@@ -245,6 +250,10 @@ export function renderResultado(resultado) {
     const pot = sf.pot !== null ? sf.pot : statsFinales.pot;
     const agi = sf.agi !== null ? sf.agi : statsFinales.agi;
     const ctl = sf.ctl !== null ? sf.ctl : statsFinales.ctl;
+    const pacRes  = pot + agi + ctl;
+    const { tier: tierRes, label: tierLabelRes } = calcTier(pot, agi, ctl);
+    const pvMaxRes = calcPVMax(pot, agi, ctl);
+    const TIER_C  = { 5:'#d7bde2', 4:'#f8c471', 3:'#c39bd3', 2:'#7fb3d3', 1:'#82e0aa' };
 
     const dL = d => d === 0 ? '' : (d > 0 ? `+${d}` : `${d}`);
     const dC = d => d === 0 ? 'sdelta-neu' : (d > 0 ? 'sdelta-pos' : 'sdelta-neg');
@@ -354,7 +363,9 @@ export function renderResultado(resultado) {
             </div>
             <div style="margin-top:8px;font-size:0.75em;color:var(--gray-500);">
                 Base (modo <b>${resultado.opciones.modo_stats}</b>): POT ${statsBase.pot} · AGI ${statsBase.agi} · CTL ${statsBase.ctl}
-                &nbsp;·&nbsp; PAC: <b id="pac-display">${pot + agi + ctl}</b>
+                &nbsp;·&nbsp; PAC: <b id="pac-display">${pacRes}</b>
+                &nbsp;·&nbsp; PV: <b id="pv-display" style="color:var(--green-dark);">${pvMaxRes}</b>
+                &nbsp;·&nbsp; <span id="tier-display" style="font-weight:800;color:${TIER_C[tierRes]||'#82e0aa'};">${tierLabelRes}</span>
             </div>
         </div>
 
@@ -546,7 +557,7 @@ export async function renderRegistro() {
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:repeat(4,auto) 1fr;gap:8px;align-items:center;flex-wrap:wrap;">
+            <div style="display:grid;grid-template-columns:repeat(4,auto) auto 1fr;gap:8px;align-items:center;flex-wrap:wrap;">
                 ${[['POT',f.stats_pot,'rgba(214,137,16,0.08)','rgba(214,137,16,0.3)','var(--orange)'],
                    ['AGI',f.stats_agi,'rgba(41,128,185,0.08)','rgba(41,128,185,0.3)','#2980b9'],
                    ['CTL',f.stats_ctl,'rgba(39,174,96,0.08)','rgba(39,174,96,0.3)','var(--green-light)']].map(([l,v,bg,brd,c]) =>
@@ -558,6 +569,21 @@ export async function renderRegistro() {
                     <div style="font-size:0.7em;color:var(--gray-500);">PAC</div>
                     <div style="font-weight:800;color:var(--fp-dark);">${f.stats_pac || (f.stats_pot + f.stats_agi + f.stats_ctl)}</div>
                 </div>
+                ${(() => {
+                    const pot = f.stats_pot || 0, agi = f.stats_agi || 0, ctl = f.stats_ctl || 0;
+                    const { tier, label } = calcTier(pot, agi, ctl);
+                    const pvMax = calcPVMax(pot, agi, ctl);
+                    const TIER_C = { 5:'#9b59b6', 4:'#f39c12', 3:'#8e44ad', 2:'#2980b9', 1:'#27ae60' };
+                    return `
+                    <div style="font-size:0.78em;text-align:center;background:rgba(39,174,96,0.06);border:1px solid rgba(39,174,96,0.3);border-radius:6px;padding:4px 8px;">
+                        <div style="font-size:0.7em;color:var(--gray-500);">PV</div>
+                        <div style="font-weight:800;color:var(--green-dark);">${pvMax}</div>
+                    </div>
+                    <div style="font-size:0.78em;text-align:center;padding:4px 8px;border-radius:6px;border:1px solid ${TIER_C[tier]||'#27ae60'}44;background:${TIER_C[tier]||'#27ae60'}11;">
+                        <div style="font-size:0.7em;color:var(--gray-500);">TIER</div>
+                        <div style="font-weight:800;color:${TIER_C[tier]||'#27ae60'};">${tier}</div>
+                    </div>`;
+                })()}
                 ${f.max_tag_compartido ? `<div style="font-size:0.75em;color:var(--gray-500);">Mayor compartido: <b style="color:var(--fp-dark);">${_esc(f.max_tag_compartido)}</b> · ${f.max_pts_compartidos}pt</div>` : '<div></div>'}
             </div>
 

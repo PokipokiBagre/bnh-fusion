@@ -199,8 +199,23 @@ function _exponerGlobales() {
             const pot = sf.pot !== null ? sf.pot : r.statsFinales.pot;
             const agi = sf.agi !== null ? sf.agi : r.statsFinales.agi;
             const ctl = sf.ctl !== null ? sf.ctl : r.statsFinales.ctl;
-            const el = document.getElementById('pac-display');
-            if (el) el.textContent = pot + agi + ctl;
+
+            const pacEl  = document.getElementById('pac-display');
+            const pvEl   = document.getElementById('pv-display');
+            const tierEl = document.getElementById('tier-display');
+
+            if (pacEl) pacEl.textContent = pot + agi + ctl;
+
+            // Importación dinámica evitada: calcTier y calcPVMax se exponen desde fusions-logic.js
+            // y fusions-main.js ya importa calcularResultadoFusion del mismo módulo,
+            // así que podemos importarlos aquí directamente.
+            import('./fusions-logic.js').then(({ calcTier, calcPVMax }) => {
+                const { tier, label } = calcTier(pot, agi, ctl);
+                const pvMax = calcPVMax(pot, agi, ctl);
+                const TIER_C = { 5:'#d7bde2', 4:'#f8c471', 3:'#c39bd3', 2:'#7fb3d3', 1:'#82e0aa' };
+                if (pvEl)   { pvEl.textContent = pvMax; }
+                if (tierEl) { tierEl.textContent = label; tierEl.style.color = TIER_C[tier] || '#82e0aa'; }
+            });
         }
     };
 
