@@ -129,20 +129,24 @@ function _renderWidget(grupoId, nombreGrupo, estado) {
 
     if (!estado || !estado.razonamiento) return;
 
-    const { razonamiento, tags_catalogo = [], tags_nuevos = [] } = estado;
+    const { razonamiento, tags_catalogo = [], tags_nuevos = [], tagCount = {} } = estado;
     const hayChips = tags_catalogo.length > 0 || tags_nuevos.length > 0;
 
     const chipsCatalogo = tags_catalogo.map(tag => {
         const safe = tag.replace(/'/g, "\\'");
+        const cnt = tagCount[tag.toLowerCase()] || 0;
+        const cntHtml = cnt > 0
+            ? ` <span style="opacity:.55;font-weight:400;font-size:0.9em;">(${cnt})</span>`
+            : '';
         return `<span
             onclick="window._iaTags_asignar('${grupoId}','${nombreGrupo.replace(/'/g,"\\'")}','${safe}',false)"
-            title="Del catálogo — click para asignar"
+            title="Del catálogo — ${cnt} personaje${cnt!==1?'s':''} lo tienen — click para asignar"
             style="background:#f3e8ff;border:1px solid #9b59b6;color:#6c3483;
                 padding:2px 8px;border-radius:10px;font-size:0.7em;font-weight:600;
                 cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;"
             onmouseover="this.style.background='#8e44ad';this.style.color='white'"
             onmouseout="this.style.background='#f3e8ff';this.style.color='#6c3483'"
-        >${tag}</span>`;
+        >${tag}${cntHtml}</span>`;
     }).join('');
 
     const chipsNuevos = tags_nuevos.map(tag => {
@@ -264,6 +268,17 @@ export function initIATagsPanel() {
             }
 
             resultado.catalogoSet = catalogoSet;
+
+            // Contar cuántos grupos tienen cada tag (para mostrar popularidad)
+            const tagCount = {};
+            gruposGlobal.forEach(gr => {
+                (gr.tags || []).forEach(t => {
+                    const k = (t.startsWith('#') ? t : '#' + t).toLowerCase();
+                    tagCount[k] = (tagCount[k] || 0) + 1;
+                });
+            });
+            resultado.tagCount = tagCount;
+
             _renderWidget(grupoId, nombreGrupo, resultado);
 
         } catch(e) {
