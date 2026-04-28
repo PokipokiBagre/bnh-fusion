@@ -160,6 +160,7 @@ async function _enviar() {
             });
         }
         portState.pendingImgId = null;
+        document.getElementById('bnh-port-galsel')?.remove();
         if (ta) { ta.value = ''; ta.style.height = 'auto'; }
         return;
     }
@@ -504,6 +505,11 @@ function _exponerGlobales() {
     };
 
     window._bnhPortEnviar    = _enviar;
+    window._bnhPortLimpiarGalSel = () => {
+        portState.pendingImgId = null;
+        document.getElementById('bnh-port-galsel')?.remove();
+    };
+
     window._bnhPortLimpiarPendientes = () => {
         portState.pendingFiles.forEach(f => URL.revokeObjectURL(f.url));
         portState.pendingFiles = [];
@@ -609,7 +615,7 @@ function _exponerGlobales() {
                         background:rgba(108,52,131,0.15);border-top:1px solid rgba(108,52,131,0.3);flex-shrink:0;`;
                     prev.innerHTML = `<img src="${item.url}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;">
                         <span style="font-size:0.72em;color:rgba(255,255,255,0.55);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${item.nombre}</span>
-                        <button onclick="portState.pendingImgId=null;document.getElementById('bnh-port-galsel')?.remove();"
+                        <button onclick="window._bnhPortLimpiarGalSel()"
                             style="background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;font-size:0.9em;padding:0;">✕</button>`;
                     const pending = document.getElementById('bnh-port-pending');
                     if (pending) pending.insertAdjacentElement('beforebegin', prev);
