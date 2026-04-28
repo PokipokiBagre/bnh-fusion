@@ -76,23 +76,22 @@ REGLAS:
 1. NO repitas tags que el personaje ya tiene.
 2. Los tags del catálogo deben estar escritos EXACTAMENTE como aparecen en el catálogo.
 3. Propón entre 10 y 20 tags del catálogo. Sé generoso — si un tag encaja aunque sea parcialmente, inclúyelo.
-4. Solo propone tags nuevos si el concepto realmente no está cubierto por ningún tag del catálogo.
-5. Máximo 4 tags nuevos. Deben ser concisos (1-2 palabras, estilo catálogo).
+4. SIEMPRE propón entre 2 y 4 tags nuevos que capturen rasgos únicos o específicos del personaje que el catálogo no cubre bien. No es opcional — el personaje siempre tiene algún rasgo distintivo que merece un tag propio.
+5. Tags nuevos deben ser concisos (1-2 palabras, estilo catálogo) y referirse a algo concreto del personaje: su quirk, personalidad, origen, rol social, etc.
 6. El razonamiento debe ser MUY BREVE: 1 sola oración de máximo 15 palabras.
 7. Responde ÚNICAMENTE con JSON válido, sin markdown ni texto extra.
 
 FORMATO DE TAGS NUEVOS:
 - 1 o 2 palabras con guión_bajo si son dos: #Mente_Maestra, #Fuerza_Bruta.
 - NUNCA frases largas ni palabras compuestas sin separar.
+- Ejemplos de buenos tags nuevos: #Seducción, #Manipuladora, #Criokinesis, #Doble_Vida, #Apariencia_Engañosa.
 
 Respuesta OBLIGATORIA:
 {
   "razonamiento": "Una sola oración breve sobre el personaje.",
   "tags_catalogo": ["#Tag1", "#Tag2", ...hasta 20],
-  "tags_nuevos": ["#TagNuevo1"]
+  "tags_nuevos": ["#TagNuevo1", "#TagNuevo2", "#TagNuevo3"]
 }
-
-Si no hacen falta tags nuevos: "tags_nuevos": []
     `.trim();
 
     return await llamarIA(prompt, contexto);
