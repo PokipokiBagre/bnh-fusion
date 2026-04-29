@@ -1,7 +1,7 @@
 // ============================================================
-// fichas-main.js
+// fichas-main.js — Versión Corregida (Deep Wake-Up)
 // ============================================================
-import { bnhAuth, currentConfig } from '../bnh-auth.js';
+import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import { fichasUI, gruposGlobal, ptGlobal } from './fichas-state.js';
 import { cargarTodo, getPosterNamesDelHilo } from './fichas-data.js';
 import { cargarFusiones } from '../bnh-fusion.js';
@@ -11,15 +11,13 @@ import { abrirPanelOP, abrirCrearGrupo, abrirGestorAliases, exponerGlobalesOP, a
 import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './fichas-data.js';
 import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
 import { bnhPort } from '../bnh-port-principal.js';
-import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
-import { supabase } from '../bnh-auth.js';
+import { setSupabaseRef } from '../bnh-pac.js';
+import { initRecon } from '../bnh-recon.js';
 
 let postersDelHilo = null;
-let _scrollCatalogo = 0; // guarda posición de scroll al entrar al detalle
+let _scrollCatalogo = 0; 
 
 async function init() {
-    // Inyectar supabase en bnh-pac para getEquipacionPJ
-    const { supabase } = await import('../bnh-auth.js');
     setSupabaseRef(supabase);
 
     const favicon = document.getElementById('dynamic-favicon');
@@ -33,10 +31,8 @@ async function init() {
 
     await Promise.all([cargarTodo(), cargarFusiones()]);
 
-    // Cargar medallas para autocompletado !Medalla! en markup
     let medallasCargadas = [];
     try {
-        const { supabase } = await import('../bnh-auth.js');
         const { data: med } = await supabase.from('medallas_catalogo')
             .select('nombre').eq('propuesta', false).order('nombre');
         medallasCargadas = med || [];
@@ -46,7 +42,6 @@ async function init() {
     exponerGlobalesOP();
     exponerGlobales();
 
-    // Navegación por URL: ?ficha=NombreGrupo
     const urlParams = new URLSearchParams(window.location.search);
     const fichaParam = urlParams.get('ficha');
     if (fichaParam) {
@@ -64,7 +59,6 @@ async function init() {
     sincronizarVista();
     bnhPort.init().catch(console.error);
 
-    // Enfocar el buscador de nombre por defecto al cargar el catálogo
     setTimeout(() => {
         if (fichasUI.vistaActual === 'catalogo') {
             const inp = document.getElementById('nombre-buscar-inp');
@@ -72,12 +66,10 @@ async function init() {
         }
     }, 150);
 
-    // Botón Atrás/Adelante del navegador — mantener SPA coherente
     window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
         const ficha  = params.get('ficha');
         if (ficha) {
-            // Guardar scroll actual antes de ir al detalle (por si navegan con el botón adelante)
             _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
             const g = gruposGlobal.find(x =>
                 x.nombre_refinado.toLowerCase() === ficha.toLowerCase() ||
@@ -90,21 +82,29 @@ async function init() {
             fichasUI.vistaActual  = 'catalogo';
             fichasUI.seleccionado = null;
             sincronizarVista();
-            // Restaurar scroll al volver con el botón atrás
             requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
         }
     });
 
-    _initVisibilityReconnect();
+    // ⚡ NUEVA RECONEXIÓN PROFUNDA
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs: 3000,
+        onReconectar: async () => {
+            await Promise.all([cargarTodo(), cargarFusiones()]);
+            window._equipCache = {};
+            cerrarUploadPanel();
+            sincronizarVista();
+        }
+    });
 }
 
 function sincronizarVista() {
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
         document.getElementById('fichas-layout').style.display = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
-        window.scrollTo(0, 0); // siempre arriba al abrir detalle
+        window.scrollTo(0, 0); 
         const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
-        // renderDetalle es async — sin .catch los errores internos se pierden silenciosamente.
         if (_gDet) renderDetalle(_gDet).catch(console.error);
     } else {
         document.getElementById('fichas-layout').style.display = 'grid';
@@ -118,17 +118,15 @@ function sincronizarVista() {
 window._equipCache = window._equipCache || {};
 
 function exponerGlobales() {
-window.abrirFicha = (nombreGrupo) => {
-    // Guardar scroll antes de entrar al detalle
-    _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
-    // SPA: actualizar URL sin recargar para no destruir el chat ni los reproductores
-    const url = new URL(window.location.href);
-    url.searchParams.set('ficha', nombreGrupo);
-    window.history.pushState(null, '', url.toString());
-    fichasUI.vistaActual  = 'detalle';
-    fichasUI.seleccionado = nombreGrupo;
-    sincronizarVista();
-};
+    window.abrirFicha = (nombreGrupo) => {
+        _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
+        const url = new URL(window.location.href);
+        url.searchParams.set('ficha', nombreGrupo);
+        window.history.pushState(null, '', url.toString());
+        fichasUI.vistaActual  = 'detalle';
+        fichasUI.seleccionado = nombreGrupo;
+        sincronizarVista();
+    };
 
     window.volverCatalogo = () => {
         const url = new URL(window.location.href);
@@ -137,7 +135,6 @@ window.abrirFicha = (nombreGrupo) => {
         fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
         sincronizarVista();
-        // Restaurar posición de scroll
         requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
     };
 
@@ -149,7 +146,6 @@ window.abrirFicha = (nombreGrupo) => {
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
         try {
-            const { supabase } = await import('../bnh-auth.js');
             const { data: med } = await supabase.from('medallas_catalogo')
                 .select('nombre').eq('propuesta', false).order('nombre');
             initMarkup({ grupos: gruposGlobal, medallas: med || [] });
@@ -175,7 +171,6 @@ window.abrirFicha = (nombreGrupo) => {
 
     window._fichaClearTags = () => { fichasUI.tagsFiltro = []; sincronizarVista(); };
 
-    // Buscador de nombre/alias — debounced para no rerenderizar en cada letra
     let _nombreSearchTimer = null;
     window._fichaNombreSearch = (v) => {
         fichasUI.nombreBusqueda = v;
@@ -185,7 +180,6 @@ window.abrirFicha = (nombreGrupo) => {
         }, 180);
     };
 
-    // Limpia todos los filtros (tags + nombre)
     window._fichaClearAll = () => {
         fichasUI.tagsFiltro     = [];
         fichasUI.nombreBusqueda = '';
@@ -194,30 +188,24 @@ window.abrirFicha = (nombreGrupo) => {
 
     window._fichaTagSearch = (v) => {
         fichasUI.tagBusqueda = v;
-        _renderTagListOnly(); // update only tag list, preserve input focus
+        _renderTagListOnly(); 
     };
 
-    // ── Modo Asignar Tags ─────────────────────────────────────
-    // Activar/desactivar modo asignar (toggle)
     window._fichaModoAsignar = () => {
         if (!fichasUI.modoAsignar && !fichasUI.modoInverso) {
-            // off → asignar
             fichasUI.modoAsignar = true;
         } else if (fichasUI.modoAsignar && !fichasUI.modoInverso) {
-            // asignar → inverso
             fichasUI.modoAsignar = false;
             fichasUI.modoInverso = true;
             fichasUI.tagsAsignar.clear();
             fichasUI.grupoAsignar = null;
         } else {
-            // inverso → off
             fichasUI.modoInverso = false;
             fichasUI.grupoAsignar = null;
         }
         sincronizarVista();
     };
 
-    // Al hacer click en una ficha en modo asignar
     window._fichaAsignarTagClick = async (nombreGrupo) => {
         const tags = [...fichasUI.tagsAsignar];
         if (!tags.length) return;
@@ -230,7 +218,6 @@ window.abrirFicha = (nombreGrupo) => {
             );
 
             if (tieneTag) {
-                // Desasignar sin confirmación
                 const nuevosTags = (g.tags||[]).filter(t =>
                     (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
                 );
@@ -240,7 +227,6 @@ window.abrirFicha = (nombreGrupo) => {
                     if (pts > 0) await borrarPTDeTag(nombreGrupo, tag);
                 }
             } else {
-                // Asignar
                 const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
                 const nuevosTags = [...(g.tags||[]), tagNorm];
                 await guardarTagsGrupo(g.id, nuevosTags);
@@ -251,11 +237,10 @@ window.abrirFicha = (nombreGrupo) => {
         _renderTagListOnly();
     };
 
-    // Al hacer click en un tag del sidebar en modo asignar → toggle ese tag en el Set
     const _originalToggleTag = window._fichaToggleTag;
     window._fichaToggleTag = async (tag) => {
         if (fichasUI.modoInverso) {
-            if (!fichasUI.grupoAsignar) return; // need to select a group first
+            if (!fichasUI.grupoAsignar) return; 
             const g = gruposGlobal.find(x => x.nombre_refinado === fichasUI.grupoAsignar);
             if (!g) return;
             const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
@@ -263,7 +248,6 @@ window.abrirFicha = (nombreGrupo) => {
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
             if (tieneTag) {
-                // Desasignar sin confirmar
                 const nuevosTags = (g.tags||[]).filter(t =>
                     (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
                 );
@@ -276,7 +260,6 @@ window.abrirFicha = (nombreGrupo) => {
                 const nuevosTags = [...(g.tags||[]), tagNorm];
                 await guardarTagsGrupo(g.id, nuevosTags);
             }
-            // Small delay ensures gruposGlobal memory update propagates to both renders
             await Promise.resolve();
             _renderTagListOnly();
             renderCatalogo(postersDelHilo);
@@ -290,21 +273,16 @@ window.abrirFicha = (nombreGrupo) => {
         }
     };
 
-    // Botón "Asignar alias de grupo nombre"
     window._fichaAsignarAliasesGrupo = async () => {
-        if (!confirm('¿Asignar alias de grupo nombre a todos los grupos?\n\nSe creará o reasignará el alias con el mismo nombre del grupo para cada grupo que no lo tenga.')) return;
+        if (!confirm('¿Asignar alias de grupo nombre a todos los grupos?')) return;
         const res = await asignarAliasesDeGrupoNombre();
         alert(`✅ Aliases asignados\nCreados: ${res.creados}\nReasignados: ${res.reasignados}`);
         await sincronizarVista();
     };
 
-    // ── Upload de imagen ─────────────────────────────────────
-    // _fichasAbrirUpload: abre siempre, nunca cierra.
-    // renderUploadPanel tiene lógica toggle (cierra si ya está abierto con el mismo grupo),
-    // así que limpiamos dataset.grupo antes de llamarla para forzar siempre el render.
     window._fichasAbrirUpload = (nombreGrupo) => {
         const panel = document.getElementById('fichas-upload-panel');
-        if (panel) panel.dataset.grupo = ''; // evitar toggle-cierre
+        if (panel) panel.dataset.grupo = ''; 
         renderUploadPanel(nombreGrupo);
         setTimeout(() => {
             document.getElementById('fichas-upload-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -313,7 +291,6 @@ window.abrirFicha = (nombreGrupo) => {
 
     window._fichasCerrarUpload = () => cerrarUploadPanel();
 
-    // Modo inverso: click en ficha = seleccionar ese personaje
     window._fichaInversoClick = (nombreGrupo) => {
         fichasUI.grupoAsignar = fichasUI.grupoAsignar === nombreGrupo ? null : nombreGrupo;
         renderSidebar();
@@ -326,7 +303,7 @@ window.abrirFicha = (nombreGrupo) => {
         panel.dataset.tipo = tipo;
         const nombreGrupo = panel.dataset.grupo;
         if (!nombreGrupo) return;
-        panel.dataset.grupo = ''; // evitar toggle-cierre
+        panel.dataset.grupo = ''; 
         renderUploadPanel(nombreGrupo);
     };
 
@@ -349,11 +326,6 @@ window.abrirFicha = (nombreGrupo) => {
         const tipo = panel?.dataset.tipo || 'icon';
         if (!nombreGrupo) return;
 
-        // NO llamar renderUploadPanel aquí — tiene lógica toggle que cierra el
-        // panel si ya está abierto con el mismo grupo. Los nodos de progreso
-        // siempre existen dentro del panel renderizado, solo mostrarlos.
-        // Referencias lazy — el panel puede re-renderizarse durante la subida
-        // (cambio de tipo, reconexión), así que siempre buscamos el nodo actual.
         const prog = () => document.getElementById('fichas-upload-progress');
         const fill = () => document.getElementById('fichas-prog-fill');
         const msg  = () => document.getElementById('fichas-prog-msg');
@@ -384,13 +356,9 @@ window.abrirFicha = (nombreGrupo) => {
         }
     }
 
-    // Partial render: only update the tag list UL (preserves input focus)
     function _renderTagListOnly() {
         const ul = document.getElementById('sidebar-tag-list');
         if (!ul) { renderSidebar(); return; }
-        // Rebuild tag entries with current state
-        const { buildTagIndex } = window._fichasLogicExports || {};
-        // Use gruposGlobal directly
         const tagMap = {};
         gruposGlobal.forEach(g => {
             (g.tags||[]).forEach(t => {
@@ -411,7 +379,6 @@ window.abrirFicha = (nombreGrupo) => {
             const grupoTieneTag = grupoSel && (grupoSel.tags||[]).some(t =>
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
-            const cero = cnt === 0;
             const click = `onclick="window._fichaToggleTag('${tag.replace(/'/g,"\'")}')"`; 
             const estilo = fichasUI.modoInverso && grupoSel
                 ? grupoTieneTag ? 'color:var(--green);font-weight:700;' : ''
@@ -438,59 +405,6 @@ window.abrirFicha = (nombreGrupo) => {
         postersDelHilo = val === 'todos' ? null : await getPosterNamesDelHilo(val);
         sincronizarVista();
     };
-}
-
-// ── Reconexión automática al volver a la pestaña ──────────────
-// Los navegadores throttlean conexiones en pestañas inactivas.
-// Al recuperar visibilidad: verificar sesión y recargar datos si es necesario.
-function _initVisibilityReconnect() {
-    let _lastVisible = Date.now();
-    let _reconectando = false;
-
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            _lastVisible = Date.now();
-            return;
-        }
-        if (_reconectando) return;
-        _reconectando = true;
-
-        const awayMs = Date.now() - _lastVisible;
-
-        try {
-            // 1. Verificar sesión en memoria — no llamar ninguna API de auth aquí
-            //    para no competir con el lock interno de Supabase.
-            if (!bnhAuth.estaLogueado()) {
-                window.location.reload();
-                return;
-            }
-
-            // 2. Si estuvo fuera más de 3s, recargar datos
-            if (awayMs >= 3000) {
-                // Pequeña espera para que el lock de auth se libere antes de queries
-                await new Promise(r => setTimeout(r, 200));
-                await Promise.all([cargarTodo(), cargarFusiones()]);
-                // Limpiar cache de equipación — datos recién recargados
-                window._equipCache = {};
-                cerrarUploadPanel();
-                sincronizarVista();
-                const toastEl = document.getElementById('fichas-toast');
-                if (toastEl) {
-                    toastEl.textContent = '🔄 Reconectado';
-                    toastEl.className = 'toast-ok';
-                    toastEl.style.display = 'block';
-                    setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 2000);
-                }
-            }
-        } catch (e) {
-            console.warn('[Fichas] Error en reconexión:', e);
-        } finally {
-            _reconectando = false;
-        }
-    });
-
-    // Nota: NO agregar listener 'focus' — compite con visibilitychange
-    // por el lock de auth de Supabase y causa AbortError.
 }
 
 init().catch(console.error);
