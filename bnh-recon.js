@@ -1,5 +1,5 @@
 // ============================================================
-// bnh-recon.js — Reconexión con Watchdog (3s) y Auto-Rescate
+// bnh-recon.js — Reconexión Ultra Agresiva (1.5s) + Auto-Rescate
 // Colocar en la RAÍZ del proyecto.
 // ============================================================
 
@@ -67,7 +67,6 @@ function _salvarDatosEnPeligro() {
             return;
         }
 
-        // Recolectar todos los inputs y textareas
         const inputs = overlay.querySelectorAll('textarea, input');
         const state = {};
         inputs.forEach(el => {
@@ -92,7 +91,7 @@ let _instanciada = false;
 export function initRecon({
     supabaseClient,
     onReconectar,
-    umbralMs = 3000
+    umbralMs = 3000 // Esto ahora solo dicta cuánto tiempo fuera de la pestaña activa el reconector
 }) {
     if (_instanciada) return;
     _instanciada = true;
@@ -124,21 +123,22 @@ export function initRecon({
         _setDotState('reconnecting');
 
         try {
-            await new Promise(r => setTimeout(r, 600));
+            // 1. Pausa mínima para despertar la tarjeta de red (bajado de 600ms a 400ms)
+            await new Promise(r => setTimeout(r, 400));
 
             if (!navigator.onLine) {
                 _setDotState('offline');
                 return;
             }
 
-            // ⚡ TIMEOUT ESTRICTO DE 3 SEGUNDOS
+            // 2. TIMEOUT ULTRA AGRESIVO (1.5 Segundos)
             await Promise.race([
                 (async () => {
                     const { data: { session }, error: authErr } = await supabaseClient.auth.getSession();
                     if (authErr || !session) throw new Error('SESION_INVALIDA');
                     if (typeof onReconectar === 'function') await onReconectar();
                 })(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_RED')), 3000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_RED')), 1500))
             ]);
 
             _setDotState('online');
@@ -152,8 +152,7 @@ export function initRecon({
             }
 
         } catch (error) {
-            console.warn('[bnh-recon] Red zombie detectada (timeout 3s). Rescatando datos y recargando...');
-            // Rescatamos los textos y disparamos el F5
+            console.warn('[bnh-recon] Timeout agresivo (1.5s). Disparando reload de emergencia...');
             _salvarDatosEnPeligro();
             window.location.reload();
         } finally {
