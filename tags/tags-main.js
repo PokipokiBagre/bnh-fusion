@@ -27,6 +27,51 @@ function _saveCurrentState() {
     const tagDetalleAbierto = (detalleEl && detalleEl.style.display !== 'none')
         ? (document.getElementById('detalle-nombre-inp')?.value || null)
         : null;
+
+    // ── Detectar qué modal inline de catálogo está abierto ────
+    let catModal = null;
+    const inlineModal = document.getElementById('cat-inline-modal');
+    if (inlineModal && inlineModal.innerHTML.trim() !== '') {
+        // Modal "Nuevo tag"
+        const ntNombre = document.getElementById('nt-nombre');
+        if (ntNombre !== null) {
+            // Capturar personajes seleccionados (data-sel="1")
+            const pjsSel = [];
+            document.querySelectorAll('#nt-pj-grid [data-sel="1"]').forEach(div => {
+                pjsSel.push(div.dataset.id);
+            });
+            catModal = {
+                tipo:   'nuevo',
+                nombre: ntNombre.value || '',
+                desc:   document.getElementById('nt-desc')?.value || '',
+                pjsSel,
+            };
+        }
+        // Modal "Editar tag inline"
+        const ciNombre = document.getElementById('ci-nombre');
+        if (ciNombre !== null) {
+            catModal = {
+                tipo:   'editar',
+                tagKey: ciNombre.value.replace(/^#/, ''),
+                nombre: ciNombre.value || '',
+                desc:   document.getElementById('ci-desc')?.value || '',
+            };
+        }
+    }
+
+    // ── Detectar si el panel IA de descripciones está abierto ──
+    let aiPanel = null;
+    const aiBackdrop = document.getElementById('ai-panel-backdrop');
+    if (aiBackdrop) {
+        // Capturar tags seleccionados (checkboxes marcados)
+        const tagsSel = [];
+        aiBackdrop.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+            if (cb.dataset.tag) tagsSel.push(cb.dataset.tag);
+        });
+        const promptExtra = document.getElementById('ai-prompt-extra')?.value || '';
+        aiPanel = { tagsSel, promptExtra };
+    }
+
     salvarRescate({
         tabActual:        tagsState.tabActual,
         pjSeleccionado:   tagsState.pjSeleccionado,
@@ -34,6 +79,8 @@ function _saveCurrentState() {
         filtroEstado:     tagsState.filtroEstado,
         busquedaCat:      tagsState.busquedaCat,
         tagDetalleAbierto,
+        catModal,
+        aiPanel,
     });
 }
 
@@ -126,6 +173,70 @@ window.onload = async () => {
                 const tagDetalleAbierto = extra.tagDetalleAbierto;
                 if (tagDetalleAbierto && window._tagsVerDetalle) {
                     setTimeout(() => window._tagsVerDetalle(tagDetalleAbierto), 80);
+                }
+
+                // E. Reabrir modal inline de catálogo (Nuevo tag / Editar tag)
+                const cm = extra.catModal;
+                if (cm) {
+                    // Asegurarnos de estar en la tab catálogo
+                    if (tab !== 'catalogo') renderTab('catalogo');
+                    setTimeout(() => {
+                        if (cm.tipo === 'nuevo' && window._catNuevoTag) {
+                            window._catNuevoTag();
+                            // Restaurar texto después de que el modal inyecte el DOM
+                            setTimeout(() => {
+                                const ntNombre = document.getElementById('nt-nombre');
+                                const ntDesc   = document.getElementById('nt-desc');
+                                if (ntNombre) { ntNombre.value = cm.nombre; ntNombre.dispatchEvent(new Event('input', { bubbles: true })); }
+                                if (ntDesc)   { ntDesc.value   = cm.desc;   ntDesc.dispatchEvent(new Event('input', { bubbles: true })); }
+                                // Restaurar personajes seleccionados
+                                if (cm.pjsSel?.length) {
+                                    cm.pjsSel.forEach(id => {
+                                        const div = document.getElementById('nt-pj-' + id);
+                                        if (div) {
+                                            div.dataset.sel     = '1';
+                                            div.style.outline   = '2px solid var(--green)';
+                                            div.style.opacity   = '1';
+                                        }
+                                    });
+                                }
+                            }, 120);
+                        } else if (cm.tipo === 'editar' && window._catEditarInline) {
+                            window._catEditarInline(cm.tagKey);
+                            setTimeout(() => {
+                                const ciNombre = document.getElementById('ci-nombre');
+                                const ciDesc   = document.getElementById('ci-desc');
+                                if (ciNombre) { ciNombre.value = cm.nombre; ciNombre.dispatchEvent(new Event('input', { bubbles: true })); }
+                                if (ciDesc)   { ciDesc.value   = cm.desc;   ciDesc.dispatchEvent(new Event('input', { bubbles: true })); }
+                            }, 120);
+                        }
+                    }, 150);
+                }
+
+                // F. Reabrir panel IA de descripciones si estaba abierto
+                const ap = extra.aiPanel;
+                if (ap && window._tagsAI) {
+                    setTimeout(() => {
+                        window._tagsAI.open();
+                        setTimeout(() => {
+                            // Restaurar prompt extra
+                            const promptEl = document.getElementById('ai-prompt-extra');
+                            if (promptEl && ap.promptExtra) {
+                                promptEl.value = ap.promptExtra;
+                                promptEl.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                            // Restaurar checkboxes de tags seleccionados
+                            if (ap.tagsSel?.length) {
+                                ap.tagsSel.forEach(tag => {
+                                    const cb = document.querySelector(`#ai-tags-list input[type="checkbox"][data-tag="${CSS.escape(tag)}"]`);
+                                    if (cb && !cb.checked) {
+                                        cb.checked = true;
+                                        cb.dispatchEvent(new Event('change', { bubbles: true }));
+                                    }
+                                });
+                            }
+                        }, 200);
+                    }, 200);
                 }
             },
         });
