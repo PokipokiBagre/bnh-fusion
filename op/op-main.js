@@ -3,6 +3,7 @@
 // ============================================================
 import { bnhAuth, supabase } from '../bnh-auth.js';
 import { opState, STORAGE_URL } from './op-state.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
 import {
     cargarPerfil, guardarPerfil, cargarConversaciones,
     crearConversacion, eliminarConversacion, limpiarConversacion,
@@ -180,66 +181,79 @@ async function _selConv(id) {
 }
 
 // ── Reconexión automática al volver a la pestaña ──────────────
-// Los navegadores throttlean websockets en pestañas inactivas.
-// Al recuperar visibilidad: recargar sesión, mensajes nuevos y re-suscribir.
+// Usa bnh-recon para uniformidad con el resto del sistema.
+// El estado de la conv ya viaja en la URL (?conv=), por lo que
+// el reload de emergencia la restaura automáticamente.
+// Lo único que necesitamos salvar explícitamente es el texto
+// que el OP estaba escribiendo en el input.
 function _initVisibilityReconnect() {
-    let _lastVisible = Date.now();
-    let _reconectando = false;
 
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            _lastVisible = Date.now();
-            return;
-        }
-        if (_reconectando) return;
-        _reconectando = true;
+    // ── Salvar: texto del input + tab activa ──────────────────
+    function _saveOPState() {
+        salvarRescate({
+            opTab:      opState.tab,
+            opMsgInput: document.getElementById('op-msg-input')?.value || '',
+        });
+    }
 
-        const awayMs = Date.now() - _lastVisible;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) _saveOPState();
+    });
+    window.addEventListener('pagehide', () => _saveOPState(), { once: false });
 
-        try {
-            // 1. Verificar sesión en memoria
-            if (!bnhAuth.estaLogueado()) {
-                window.location.reload();
-                return;
+    // ── Restaurar: texto del input + tab ──────────────────────
+    // Se llama aquí (no en initOP) para que ocurra tras montar el input.
+    restaurarRescate({
+        toastElId: 'op-toast',
+        maxEsperas: 60,
+        onRestaurado: (saved) => {
+            const extra = saved?.extra || {};
+
+            // Restaurar tab activa
+            if (extra.opTab && extra.opTab !== 'chat') {
+                _renderTab(extra.opTab);
             }
 
-
-
-            // 2. Restaurar perfil si se perdió
-            if (!opState.perfil) {
-                opState.perfil = await cargarPerfil(user.id);
+            // Restaurar texto del input (con retry porque el DOM puede tardar)
+            if (extra.opMsgInput) {
+                const ta = document.getElementById('op-msg-input');
+                if (ta) {
+                    ta.value = extra.opMsgInput;
+                    // Ajustar altura como lo hace el oninput nativo
+                    ta.style.height = 'auto';
+                    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             }
+        },
+    });
 
-            // 3. Al reconectar, recargar la página manteniendo la conv activa en la URL.
-            //    El cliente de Supabase queda en estado zombie post-inactividad y las
-            //    queries fallan silenciosamente. Un reload limpio lo resuelve igual que
-            //    el F5 manual, pero preserva la conv gracias a ?conv= en la URL.
-            if (awayMs >= 3000) {
-                window.location.reload();
-                return;
-            }
+    // ── initRecon: dot de estado + reconexión agresiva ────────
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs:       3000,
 
-            // Si estuvo fuera menos de 3s, solo re-suscribir el websocket
-            await new Promise(r => setTimeout(r, 200));
+        // Path rápido (< 1.5s): solo re-suscribir el canal realtime
+        onReconectar: async () => {
             if (opState.realtimeSub) {
                 try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
                 opState.realtimeSub = null;
             }
-            opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
-                if (opState.mensajes.some(m => m.id === msg.id)) return;
-                opState.mensajes.push(msg);
-                if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
-            });
-            toast('🔄 Reconectado', 'ok');
-        } catch (e) {
-            console.warn('[OP] Error en reconexión:', e);
-        } finally {
-            _reconectando = false;
-        }
-    });
+            if (opState.convActual) {
+                opState.mensajes = await cargarMensajes(opState.convActual);
+                renderMensajes();
+                opState.realtimeSub = suscribirMensajes(opState.convActual, msg => {
+                    if (opState.mensajes.some(m => m.id === msg.id)) return;
+                    opState.mensajes.push(msg);
+                    if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
+                });
+            }
+        },
 
-    // Nota: NO agregar listener 'focus' — compite con visibilitychange
-    // por el lock de auth de Supabase y causa AbortError.
+        // Path de emergencia (timeout > 1.5s): salvar texto y recargar
+        // La conv se recupera por ?conv= en la URL automáticamente.
+        onEmergencia: () => _saveOPState(),
+    });
 }
 
 // ── Tabs ──────────────────────────────────────────────────────
