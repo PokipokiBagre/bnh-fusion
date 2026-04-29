@@ -1,5 +1,5 @@
 // ============================================================
-// bnh-recon.js — Reconexión Profunda (Deep Wake-Up)
+// bnh-recon.js — Reconexión con Watchdog Anti-Cuelgues
 // Colocar en la RAÍZ del proyecto.
 // ============================================================
 
@@ -47,7 +47,7 @@ function _setDotState(state) {
 let _instanciada = false;
 
 export function initRecon({
-    supabaseClient, // CRÍTICO: Necesario para reactivar el motor de red
+    supabaseClient,
     onReconectar,
     umbralMs = 3000
 }) {
@@ -84,34 +84,30 @@ export function initRecon({
         _setDotState('reconnecting');
 
         try {
-            // 1. PAUSA DE DESPERTAR
-            // Le damos al sistema operativo tiempo para reactivar los sockets tras salir del modo reposo.
-            await new Promise(r => setTimeout(r, 600));
+            // 1. Pausa de gracia para que la red física despierte
+            await new Promise(r => setTimeout(r, 800));
 
             if (!navigator.onLine) {
                 _setDotState('offline');
                 return;
             }
 
-            // 2. DESFIBRILADOR DE SESIÓN
-            // Esto es lo que soluciona los botones de guardar que no hacen nada.
-            // Obliga a Supabase a limpiar su cola interna y validar que el token sigue vivo.
-            const { data: { session }, error: authErr } = await supabaseClient.auth.getSession();
+            // 2. TIMEOUT ESTRICTO (Watchdog) de 7 segundos
+            // Usamos Promise.race: El primero que termine (Supabase o el Timer) gana.
+            await Promise.race([
+                // Proceso normal de reconexión
+                (async () => {
+                    const { data: { session }, error: authErr } = await supabaseClient.auth.getSession();
+                    if (authErr || !session) throw new Error('SESION_INVALIDA');
+                    if (typeof onReconectar === 'function') await onReconectar();
+                })(),
+                // Temporizador asesino: si pasan 7000ms, lanza error
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_RED')), 7000))
+            ]);
 
-            if (authErr || !session) {
-                console.warn('[bnh-recon] Sesión muerta tras suspensión. Forzando recarga.');
-                window.location.reload(); 
-                return;
-            }
-
-            // 3. RECARGA DE DATOS SEGURA
-            if (typeof onReconectar === 'function') {
-                await onReconectar();
-            }
-
+            // Si llega aquí, significa que todo cargó rápido y bien
             _setDotState('online');
             
-            // Mostrar toast si existe
             const toastEl = document.getElementById('fichas-toast');
             if (toastEl) {
                 toastEl.textContent = '🔄 Sistema restaurado';
@@ -121,9 +117,9 @@ export function initRecon({
             }
 
         } catch (error) {
-            console.error('[bnh-recon] Falla catastrófica en red. Recargando página para evitar cuelgues...', error);
-            // 4. MEDIDA EXTREMA
-            // Si hubo un error irrecuperable en red, hacemos el F5 automático que querías.
+            console.warn('[bnh-recon] Falla de red o timeout detectado. Recargando página para limpiar caché...', error.message);
+            // 3. LA SOLUCIÓN DEFINITIVA: 
+            // Si hubo timeout (tardó más de 7 seg) o la sesión murió, hacemos el reload automático.
             window.location.reload();
         } finally {
             _reconectando = false;
