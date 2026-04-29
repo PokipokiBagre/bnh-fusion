@@ -59,71 +59,71 @@ async function init() {
 sincronizarVista();
     bnhPort.init().catch(console.error);
 
-    // ⚡ SISTEMA DE AUTO-RESCATE DE DATOS V2 (Universal)
+// ⚡ SISTEMA DE AUTO-RESCATE V3 (Inyector Persistente)
     setTimeout(() => {
-        const rescateStr = sessionStorage.getItem('bnh_rescate_v2');
+        const rescateStr = sessionStorage.getItem('bnh_rescate_v3');
         if (rescateStr) {
-            sessionStorage.removeItem('bnh_rescate_v2'); // Consumir el rescate
+            sessionStorage.removeItem('bnh_rescate_v3');
             try {
                 const rescate = JSON.parse(rescateStr);
-                // Restauramos solo si el cuelgue ocurrió hace menos de 10 minutos
                 if (Date.now() - rescate.timestamp < 10 * 60 * 1000) {
                     
-                    // --- A. Restaurar Catálogo ---
-                    if (rescate.catalog) {
-                        if (rescate.catalog.search && window._fichaNombreSearch) {
-                            const searchInp = document.getElementById('nombre-buscar-inp');
-                            if (searchInp) searchInp.value = rescate.catalog.search;
-                            window._fichaNombreSearch(rescate.catalog.search);
-                        }
-                        if (rescate.catalog.tags && rescate.catalog.tags.length > 0 && window._fichaToggleTag) {
-                            rescate.catalog.tags.forEach(tag => window._fichaToggleTag(tag));
+                    // A. Restaurar Catálogo (Tags)
+                    if (rescate.uiState.activeTags && window._fichaToggleTag) {
+                        rescate.uiState.activeTags.forEach(tag => window._fichaToggleTag(tag));
+                    }
+
+                    // B. Reabrir Modales
+                    if (rescate.uiState.modal) {
+                        window.abrirFicha(rescate.uiState.modal.charName);
+                        if (rescate.uiState.modal.type === 'lore') {
+                            window.abrirEditarLore(rescate.uiState.modal.charName);
+                        } else if (rescate.uiState.modal.type === 'op') {
+                            window.abrirPanelOP(rescate.uiState.modal.charName, rescate.uiState.modal.activeTab);
                         }
                     }
 
-                    // --- B. Restaurar Modal ---
-                    if (rescate.modal) {
-                        window.abrirFicha(rescate.modal.charName); // Fondo
+                    // C. Inyector Persistente: Busca inputs cada 50ms por 2 segundos
+                    let intentos = 0;
+                    const inyector = setInterval(() => {
+                        intentos++;
+                        if (intentos > 40) { clearInterval(inyector); return; }
                         
-                        if (rescate.modal.type === 'lore') {
-                            window.abrirEditarLore(rescate.modal.charName);
-                        } else if (rescate.modal.type === 'op') {
-                            // Le pasamos el activeTab al panel OP para que abra la pestaña correcta
-                            window.abrirPanelOP(rescate.modal.charName, rescate.modal.activeTab);
-                        }
-
-                        // Esperar a que el modal se dibuje e inyectar valores
-                        setTimeout(() => {
-                            Object.keys(rescate.modal.data).forEach(id => {
-                                const el = document.getElementById(id);
-                                if (el) {
-                                    if (el.type === 'checkbox' || el.type === 'radio') {
-                                        el.checked = rescate.modal.data[id];
-                                    } else {
-                                        el.value = rescate.modal.data[id];
+                        Object.keys(rescate.globalData).forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) {
+                                if (el.type === 'checkbox' || el.type === 'radio') {
+                                    if (el.checked !== rescate.globalData[id]) {
+                                        el.checked = rescate.globalData[id];
+                                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                                    }
+                                } else {
+                                    if (el.value !== rescate.globalData[id]) {
+                                        el.value = rescate.globalData[id];
+                                        el.dispatchEvent(new Event('input', { bubbles: true })); // Dispara búsquedas y cálculos
                                     }
                                 }
-                            });
-                            
-                            const opBody = document.getElementById('op-body');
-                            if (opBody) {
-                                const alerta = document.createElement('div');
-                                alerta.style.cssText = 'background:#d5f5e3; border:1px solid #27ae60; color:#1e8449; padding:6px; border-radius:6px; font-size:0.82em; font-weight:700; text-align:center; margin-bottom:12px; transition: opacity 0.5s;';
-                                alerta.innerHTML = '✅ Datos recuperados.';
-                                opBody.insertBefore(alerta, opBody.firstChild);
-                                
-                                // Desaparece suavemente después de 3 segundos
-                                setTimeout(() => {
-                                    alerta.style.opacity = '0';
-                                    setTimeout(() => alerta.remove(), 500);
-                                }, 3000);
                             }
-                        }, 150);
-                    }
+                        });
+
+                        // Dibujar cartel verde (solo una vez)
+                        const opBody = document.getElementById('op-body');
+                        if (opBody && !document.getElementById('alerta-rescate')) {
+                            const alerta = document.createElement('div');
+                            alerta.id = 'alerta-rescate';
+                            alerta.style.cssText = 'background:#d5f5e3; border:1px solid #27ae60; color:#1e8449; padding:6px; border-radius:6px; font-size:0.82em; font-weight:700; text-align:center; margin-bottom:12px; transition: opacity 0.5s;';
+                            alerta.innerHTML = '✅ Datos recuperados.';
+                            opBody.insertBefore(alerta, opBody.firstChild);
+                            setTimeout(() => {
+                                alerta.style.opacity = '0';
+                                setTimeout(() => alerta.remove(), 500);
+                            }, 3000);
+                        }
+                    }, 50);
                 }
             } catch (e) { console.error('Error restaurando datos:', e); }
         }
-    }, 500);
+    }, 100);
     
     window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
