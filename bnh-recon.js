@@ -15,22 +15,81 @@
 //       umbralMs:  3000,   // opcional — tiempo mínimo fuera para reconectar (default 3s)
 //       toastId:   'fichas-toast',  // opcional — id del elemento toast de la página
 //   });
-//
-// ── POR QUÉ ESTO EXISTE ───────────────────────────────────────
-// Los navegadores modernos "congelan" pestañas en background:
-//   - Chrome/Edge: throttling de timers a 1 req/min tras ~5 min
-//   - Safari: suspende JavaScript completamente al ocultar la pestaña
-//   - Firefox: reduce frecuencia de tasks background agresivamente
-//
-// Consecuencia: el cliente Supabase (que usa fetch + WebSocket) pierde
-// la sesión o queda con tokens expirados. Al volver, las queries fallan
-// silenciosamente con "JWT expired" o simplemente no responden.
-//
-// La solución es escuchar `visibilitychange` y al recuperar visibilidad:
-//   1. Esperar un tick para que el lock interno de Supabase Auth se libere
-//   2. Recargar los datos (cargarTodo, cargarFusiones, etc.)
-//   3. Re-renderizar la vista actual
 // ============================================================
+
+// ── Indicador de conexión ─────────────────────────────────────
+// Se inyecta un pequeño punto de color junto al badge de sesión.
+// Verde = conectado, Amarillo = reconectando, Rojo = sin conexión.
+
+const DOT_ID = 'bnh-conn-dot';
+
+function _getOrCreateDot() {
+    let dot = document.getElementById(DOT_ID);
+    if (!dot) {
+        dot = document.createElement('div');
+        dot.id = DOT_ID;
+        dot.title = 'Estado de conexión';
+        dot.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 9px;
+            border-radius: 20px;
+            font-size: 0.72em;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+            border: 1.5px solid transparent;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            cursor: default;
+            user-select: none;
+            height: 36px;
+            box-sizing: border-box;
+        `;
+        // Insertar antes del badge de sesión
+        const badge = document.getElementById('bnh-session-badge');
+        if (badge?.parentNode) {
+            badge.parentNode.insertBefore(dot, badge);
+        } else {
+            // Fallback: añadir al final del header-top
+            const headerTop = document.querySelector('.header-top');
+            if (headerTop) headerTop.appendChild(dot);
+        }
+    }
+    return dot;
+}
+
+function _setDotState(state) {
+    const dot = _getOrCreateDot();
+    if (!dot) return;
+
+    const estados = {
+        online: {
+            html:   '● Online',
+            bg:     'rgba(39,174,96,0.10)',
+            border: '#27ae60',
+            color:  '#1e8449',
+        },
+        reconnecting: {
+            html:   '◌ Reconectando…',
+            bg:     'rgba(243,156,18,0.12)',
+            border: '#f39c12',
+            color:  '#b7770d',
+        },
+        offline: {
+            html:   '● Sin conexión',
+            bg:     'rgba(231,76,60,0.10)',
+            border: '#e74c3c',
+            color:  '#c0392b',
+        },
+    };
+
+    const s = estados[state] || estados.online;
+    dot.innerHTML   = s.html;
+    dot.style.background   = s.bg;
+    dot.style.borderColor  = s.border;
+    dot.style.color        = s.color;
+}
 
 // ── Utilidad interna: toast genérico ──────────────────────────
 function _mostrarToast(toastId, msg, claseOk = 'toast-ok') {
@@ -59,7 +118,6 @@ let _instanciada = false;
  * @param {string}  [opts.toastId]                  ID del elemento <div id="..."> para el toast.
  * @param {boolean} [opts.mostrarToast=true]         Si mostrar el toast "🔄 Reconectado".
  * @param {() => boolean} [opts.estaLogueado]        Función que retorna si hay sesión activa.
- *                                                   Si retorna false, se hace reload completo.
  */
 export function initRecon({
     onReconectar,
@@ -76,65 +134,67 @@ export function initRecon({
         return;
     }
 
+    // Mostrar online al arrancar
+    _setDotState('online');
+
+    // Detectar offline/online del navegador
+    window.addEventListener('offline', () => _setDotState('offline'));
+    window.addEventListener('online',  () => _setDotState('online'));
+
     let _lastVisible  = Date.now();
     let _reconectando = false;
 
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
-            // Registrar cuándo se fue
             _lastVisible = Date.now();
             return;
         }
 
-        // Volvió a primer plano
         if (_reconectando) return;
         _reconectando = true;
 
         const awayMs = Date.now() - _lastVisible;
 
         try {
-            // ── 1. Verificar sesión ──────────────────────────────
-            // Si hay función de verificación y la sesión expiró → reload completo.
-            // NO llamamos APIs de auth aquí — solo chequeamos el estado en memoria
-            // para evitar competir con el lock interno de Supabase.
+            // 1. Verificar sesión
             if (typeof estaLogueado === 'function' && !estaLogueado()) {
                 window.location.reload();
                 return;
             }
 
-            // ── 2. Umbral de tiempo ──────────────────────────────
-            // Si el usuario solo cambió de pestaña por menos de umbralMs, no hacer nada.
-            if (awayMs < umbralMs) return;
+            // 2. Si estuvo fuera menos del umbral, solo confirmar que sigue online
+            if (awayMs < umbralMs) {
+                _setDotState(navigator.onLine ? 'online' : 'offline');
+                return;
+            }
 
-            // ── 3. Pequeña espera ────────────────────────────────
-            // Dar tiempo al lock de auth de Supabase para liberarse antes de queries.
+            // 3. Reconectando — mostrar estado amarillo
+            _setDotState('reconnecting');
+
+            // 4. Espera para liberar lock de auth de Supabase
             await new Promise(r => setTimeout(r, 200));
 
-            // ── 4. Recargar datos y re-renderizar ────────────────
+            // 5. Recargar datos y re-renderizar
             await onReconectar();
 
-            // ── 5. Toast de confirmación ─────────────────────────
+            // 6. Volver a verde
+            _setDotState('online');
+
             if (mostrarToast) {
                 _mostrarToast(toastId, '🔄 Reconectado');
             }
 
         } catch (e) {
             console.warn('[bnh-recon] Error al reconectar:', e.message || e);
-            // No relanzar — el fallo silencioso es preferible a romper la UI
+            _setDotState('offline');
         } finally {
             _reconectando = false;
         }
     });
-
-    // ── Nota técnica ─────────────────────────────────────────
-    // NO escuchamos 'focus' en window porque compite con visibilitychange
-    // por el lock de auth de Supabase y genera AbortError en Safari.
-    // 'visibilitychange' es suficiente y más confiable entre navegadores.
 }
 
 /**
- * Reinicia el módulo (útil para testing o si la página se reutiliza como SPA).
- * En uso normal no hace falta llamarlo.
+ * Reinicia el módulo (útil para testing o páginas SPA reutilizadas).
  */
 export function resetRecon() {
     _instanciada = false;
