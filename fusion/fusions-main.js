@@ -1,6 +1,7 @@
 // fusions/fusions-main.js
 import { bnhAuth, supabase } from '../bnh-auth.js';
 import { bnhPort } from '../bnh-port-principal.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
 import {
     fusionsState, setPersonajes, setPtGlobales, setFusionesActivas, setRegistroFusiones,
     personajes, ptGlobales, fusionesActivas, STORAGE_URL, 
@@ -16,6 +17,27 @@ import { cargarOpciones, guardarOpciones, opcionesState } from './fusions-option
 import { cargarFusiones, activarFusion, terminarFusion } from '../bnh-fusion.js';
 
 export let esAdmin = false;
+
+// ─── Captura de estado para rescate ────────────────────────────
+function _saveCurrentState() {
+    // Resultado calculado: serializable salvo por las referencias a objetos de opciones
+    // Guardamos los campos clave que permiten reconstruir la vista
+    const r = fusionsState.resultadoCalculado;
+    salvarRescate({
+        tabActual:       fusionsState.tabActual,
+        pjA:             fusionsState.pjA,
+        pjB:             fusionsState.pjB,
+        d100:            fusionsState.d100,
+        filtroRol:       fusionsState.filtroRol,
+        filtroEstado:    fusionsState.filtroEstado,
+        modoTagLocal:    fusionsState.modoTagLocal,
+        tagFusionNombre: fusionsState.tagFusionNombre,
+        // Stats editadas manualmente en el resultado
+        statsEditadas:   fusionsState.statsEditadas,
+        // Si había un resultado visible lo guardamos completo para poder re-renderizarlo
+        resultadoCalculado: r ? JSON.parse(JSON.stringify(r)) : null,
+    });
+}
 
 // ─── Init ──────────────────────────────────────────────────────
 window.onload = async () => {
@@ -82,6 +104,91 @@ window.onload = async () => {
     document.getElementById('interfaz-fusiones').classList.remove('oculto');
 
     _exponerGlobales();
+
+    // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) _saveCurrentState();
+    });
+    window.addEventListener('pagehide', () => _saveCurrentState(), { once: false });
+
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    restaurarRescate({
+        toastElId: 'toast-msg',
+        maxEsperas: 60,
+        onRestaurado: (saved) => {
+            const extra = saved?.extra || {};
+
+            // A. Sincronizar filtros al estado JS
+            if (extra.filtroRol)    fusionsState.filtroRol    = extra.filtroRol;
+            if (extra.filtroEstado) fusionsState.filtroEstado = extra.filtroEstado;
+
+            // B. Restaurar personajes seleccionados y resultado
+            if (extra.pjA) fusionsState.pjA = extra.pjA;
+            if (extra.pjB) fusionsState.pjB = extra.pjB;
+            if (extra.d100 !== undefined && extra.d100 !== null) fusionsState.d100 = extra.d100;
+            if (extra.modoTagLocal)    fusionsState.modoTagLocal    = extra.modoTagLocal;
+            if (extra.tagFusionNombre) fusionsState.tagFusionNombre = extra.tagFusionNombre;
+            if (extra.statsEditadas)   fusionsState.statsEditadas   = extra.statsEditadas;
+
+            // C. Navegar a la tab correcta
+            const tab = extra.tabActual || 'simulador';
+            _renderTab(tab);
+
+            // D. Re-renderizar resultado si había uno calculado
+            if (extra.resultadoCalculado) {
+                fusionsState.resultadoCalculado = extra.resultadoCalculado;
+                renderResultado(fusionsState.resultadoCalculado);
+                // Restaurar modo tag y nombre de tag en el DOM (los inputs se montan con renderResultado)
+                setTimeout(() => {
+                    if (extra.modoTagLocal && extra.modoTagLocal !== 'ninguno') {
+                        window._fusionTagModeChange?.(extra.modoTagLocal);
+                    }
+                    const tagInp = document.getElementById('inp-tag-fusion');
+                    if (tagInp && extra.tagFusionNombre) {
+                        tagInp.value = extra.tagFusionNombre;
+                    }
+                    // Restaurar stats editadas en los inputs del resultado
+                    const se = extra.statsEditadas || {};
+                    ['pot','agi','ctl'].forEach(stat => {
+                        if (se[stat] !== null && se[stat] !== undefined) {
+                            const el = document.getElementById(`edit-${stat}`);
+                            if (el) el.value = se[stat];
+                        }
+                    });
+                }, 100);
+            }
+
+            // E. Recalcular compatibilidad para que la barra D100 sea correcta
+            _recalcCompatibilidad();
+        },
+    });
+
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs:       3000,
+        onReconectar: async () => {
+            await _refrescarTodo();
+            _renderTab(fusionsState.tabActual);
+            // Si había resultado calculado, re-renderizarlo también
+            if (fusionsState.resultadoCalculado) {
+                renderResultado(fusionsState.resultadoCalculado);
+            }
+        },
+        onEmergencia: () => _saveCurrentState(),
+    });
+
+    // ── BFCACHE ───────────────────────────────────────────────────
+    window.addEventListener('pageshow', async (e) => {
+        if (!e.persisted) return;
+        try {
+            await _refrescarTodo();
+            _renderTab(fusionsState.tabActual);
+        } catch(err) {
+            console.error('[fusions] pageshow refresh error:', err);
+        }
+    });
+
     _renderTab('simulador');
 };
 
