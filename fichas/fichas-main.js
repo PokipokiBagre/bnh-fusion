@@ -59,47 +59,72 @@ async function init() {
 sincronizarVista();
     bnhPort.init().catch(console.error);
 
-    // ⚡ SISTEMA DE AUTO-RESCATE DE DATOS
+    // ⚡ SISTEMA DE AUTO-RESCATE DE DATOS V2 (Universal)
     setTimeout(() => {
-        const rescateStr = sessionStorage.getItem('bnh_rescate');
+        const rescateStr = sessionStorage.getItem('bnh_rescate_v2');
         if (rescateStr) {
-            sessionStorage.removeItem('bnh_rescate'); // Lo borramos para que no salte siempre
+            sessionStorage.removeItem('bnh_rescate_v2'); // Consumir el rescate
             try {
                 const rescate = JSON.parse(rescateStr);
                 // Restauramos solo si el cuelgue ocurrió hace menos de 10 minutos
                 if (Date.now() - rescate.timestamp < 10 * 60 * 1000) {
                     
-                    // Abrimos la ficha de fondo
-                    window.abrirFicha(rescate.charName);
-                    
-                    // Abrimos el modal que tenías abierto
-                    if (rescate.modalType === 'lore') {
-                        window.abrirEditarLore(rescate.charName);
-                    } else if (rescate.modalType === 'op') {
-                        window.abrirPanelOP(rescate.charName);
+                    // --- A. Restaurar Catálogo ---
+                    if (rescate.catalog) {
+                        if (rescate.catalog.search && window._fichaNombreSearch) {
+                            const searchInp = document.getElementById('nombre-buscar-inp');
+                            if (searchInp) searchInp.value = rescate.catalog.search;
+                            window._fichaNombreSearch(rescate.catalog.search);
+                        }
+                        if (rescate.catalog.tags && rescate.catalog.tags.length > 0 && window._fichaToggleTag) {
+                            rescate.catalog.tags.forEach(tag => window._fichaToggleTag(tag));
+                        }
                     }
 
-                    // Esperamos 150ms a que el modal termine de dibujarse e inyectamos todo el texto
-                    setTimeout(() => {
-                        Object.keys(rescate.data).forEach(id => {
-                            const el = document.getElementById(id);
-                            if (el) el.value = rescate.data[id];
-                        });
+                    // --- B. Restaurar Modal ---
+                    if (rescate.modal) {
+                        window.abrirFicha(rescate.modal.charName); // Fondo
                         
-                        // Ponemos un aviso visual para que sepas que se salvaron
-                        const opBody = document.getElementById('op-body');
-                        if (opBody) {
-                            const alerta = document.createElement('div');
-                            alerta.style.cssText = 'background:#fdf2f2; border:1px solid #e74c3c; color:#c0392b; padding:8px; border-radius:6px; font-size:0.85em; font-weight:700; text-align:center; margin-bottom:12px;';
-                            alerta.innerHTML = '⚠️ Desconexión de red detectada.<br>Tus datos no guardados han sido rescatados automáticamente. Por favor, revisa y guarda ahora.';
-                            opBody.insertBefore(alerta, opBody.firstChild);
+                        if (rescate.modal.type === 'lore') {
+                            window.abrirEditarLore(rescate.modal.charName);
+                        } else if (rescate.modal.type === 'op') {
+                            // Le pasamos el activeTab al panel OP para que abra la pestaña correcta
+                            window.abrirPanelOP(rescate.modal.charName, rescate.modal.activeTab);
                         }
-                    }, 150);
+
+                        // Esperar a que el modal se dibuje e inyectar valores
+                        setTimeout(() => {
+                            Object.keys(rescate.modal.data).forEach(id => {
+                                const el = document.getElementById(id);
+                                if (el) {
+                                    if (el.type === 'checkbox' || el.type === 'radio') {
+                                        el.checked = rescate.modal.data[id];
+                                    } else {
+                                        el.value = rescate.modal.data[id];
+                                    }
+                                }
+                            });
+                            
+                            const opBody = document.getElementById('op-body');
+                            if (opBody) {
+                                const alerta = document.createElement('div');
+                                alerta.style.cssText = 'background:#d5f5e3; border:1px solid #27ae60; color:#1e8449; padding:6px; border-radius:6px; font-size:0.82em; font-weight:700; text-align:center; margin-bottom:12px; transition: opacity 0.5s;';
+                                alerta.innerHTML = '✅ Datos recuperados.';
+                                opBody.insertBefore(alerta, opBody.firstChild);
+                                
+                                // Desaparece suavemente después de 3 segundos
+                                setTimeout(() => {
+                                    alerta.style.opacity = '0';
+                                    setTimeout(() => alerta.remove(), 500);
+                                }, 3000);
+                            }
+                        }, 150);
+                    }
                 }
             } catch (e) { console.error('Error restaurando datos:', e); }
         }
     }, 500);
-
+    
     window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
         const ficha  = params.get('ficha');
