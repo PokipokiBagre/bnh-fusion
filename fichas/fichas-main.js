@@ -60,12 +60,11 @@ async function init() {
     bnhPort.init().catch(console.error);
 
     // ── RESTAURAR RESCATE ────────────────────────────────────────
-    // Debe llamarse DESPUÉS de sincronizarVista() y bnhPort.init()
-    // para que los elementos del DOM (modal OP, Panel OP) ya estén
-    // montados o en proceso de montarse cuando el inyector los busque.
     restaurarRescate({
         toastElId:  'fichas-toast',
-        maxEsperas: 60,  // 60 × 50ms = 3s de ventana para elementos diferidos
+        // 80 reintentos × 50ms = 4s de ventana para elementos diferidos
+        // (cubre el await getEquipacionPJ dentro de abrirPanelOP)
+        maxEsperas: 80,
         onRestaurado(state) {
             // ── A. Restaurar tags activos del sidebar ──────────────
             if (state.uiState?.activeTags?.length && window._fichaToggleTag) {
@@ -75,20 +74,25 @@ async function init() {
             // ── B. Reabrir modal si estaba abierto ─────────────────
             if (state.uiState?.modal) {
                 const { type, charName, activeTab } = state.uiState.modal;
-                // Primero navegar a la ficha (si no estamos ya en ella)
-                if (charName && window.abrirFicha) window.abrirFicha(charName);
-                // Luego abrir el modal correcto
-                if (type === 'lore' && window.abrirEditarLore) {
-                    window.abrirEditarLore(charName);
-                } else if (type === 'op' && window.abrirPanelOP) {
-                    window.abrirPanelOP(charName, activeTab ?? 0);
-                }
-            }
 
-            // ── C. Datos extra específicos de fichas ───────────────
-            // (reservado para futuras ampliaciones de onEmergencia)
-            if (state.extra?.tabActiva) {
-                // Ejemplo: restaurar tab del panel OP si se amplía onEmergencia
+                // Navegar a la ficha primero si hace falta
+                if (charName && window.abrirFicha) window.abrirFicha(charName);
+
+                if (type === 'lore' && window.abrirEditarLore) {
+                    // Modal de lore: síncrono, el inyector genérico lo cubre.
+                    window.abrirEditarLore(charName);
+
+                } else if (type === 'op' && window.abrirPanelOP) {
+                    // abrirPanelOP es ASYNC (await getEquipacionPJ antes de pintar).
+                    // Esperamos a que resuelva y LUEGO inyectamos los valores,
+                    // porque para entonces el inyector genérico ya habrá terminado
+                    // sus reintentos sin haber encontrado los inputs del modal.
+                    window.abrirPanelOP(charName, activeTab ?? 0).then(() => {
+                        // Esperar los setTimeout internos del modal (máx 60ms)
+                        // más un margen de seguridad antes de inyectar.
+                        setTimeout(() => _inyectarEnModal(state.globalData), 120);
+                    });
+                }
             }
         },
     });
@@ -124,13 +128,64 @@ async function init() {
             cerrarUploadPanel();
             sincronizarVista();
         },
-        // Antes de cualquier reload de emergencia, guardamos el estado
-        // completo de la página incluyendo la tab/vista actual
         onEmergencia: () => salvarRescate({
-            tabActiva: fichasUI.vistaActual,
+            tabActiva:    fichasUI.vistaActual,
             seleccionado: fichasUI.seleccionado,
         }),
     });
+}
+
+// ─────────────────────────────────────────────────────────────
+// INYECTOR DE MODAL
+// Llamado después de que abrirPanelOP resuelve su Promise.
+// Busca cada input dentro del overlay por ID y restaura su valor.
+// Solo actúa dentro de #op-overlay para no pisar otros elementos.
+// ─────────────────────────────────────────────────────────────
+function _inyectarEnModal(globalData) {
+    const overlay = document.getElementById('op-overlay');
+    if (!overlay || !globalData) return;
+
+    let inyectados = 0;
+    Object.entries(globalData).forEach(([id, valor]) => {
+        // CSS.escape por si el id tiene caracteres especiales (ej: op-pv_actual-delta-1)
+        const el = overlay.querySelector(`#${CSS.escape(id)}`);
+        if (!el) return;
+
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            if (el.checked !== valor) {
+                el.checked = valor;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                inyectados++;
+            }
+        } else if (el.value !== String(valor)) {
+            el.value = String(valor);
+            el.dispatchEvent(new Event('input',  { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            inyectados++;
+        }
+    });
+
+    if (inyectados > 0) {
+        // Banner verde dentro del modal para confirmar la restauración
+        const opBody = document.getElementById('op-body');
+        if (opBody && !document.getElementById('alerta-rescate')) {
+            const alerta = document.createElement('div');
+            alerta.id = 'alerta-rescate';
+            alerta.style.cssText = [
+                'background:#d5f5e3', 'border:1px solid #27ae60', 'color:#1e8449',
+                'padding:6px 10px', 'border-radius:6px', 'font-size:0.82em',
+                'font-weight:700', 'text-align:center', 'margin-bottom:10px',
+                'transition:opacity 0.5s',
+            ].join(';');
+            alerta.textContent = `♻️ ${inyectados} campo(s) recuperado(s) tras reconexión`;
+            opBody.insertBefore(alerta, opBody.firstChild);
+            setTimeout(() => {
+                alerta.style.opacity = '0';
+                setTimeout(() => alerta.remove(), 500);
+            }, 3000);
+        }
+        console.info(`[fichas-main] Modal OP: ${inyectados} campos restaurados.`);
+    }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -413,9 +468,9 @@ function exponerGlobales() {
             entries = entries.filter(([t]) => t.toLowerCase().includes(q));
         }
         ul.innerHTML = entries.map(([tag, cnt]) => {
-            const activo      = fichasUI.tagsFiltro.includes(tag);
+            const activo       = fichasUI.tagsFiltro.includes(tag);
             const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);
-            const grupoSel    = fichasUI.modoInverso && fichasUI.grupoAsignar
+            const grupoSel     = fichasUI.modoInverso && fichasUI.grupoAsignar
                 ? gruposGlobal.find(g => g.nombre_refinado === fichasUI.grupoAsignar) : null;
             const grupoTieneTag = grupoSel && (grupoSel.tags||[]).some(t =>
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
