@@ -26,21 +26,44 @@ function _detectarModalAbierto() {
     const numFormsEl = document.getElementById('mf-num-forms');
     if (numFormsEl) {
         const N = parseInt(numFormsEl.value) || 4;
-        // Detectar prefix: buscar el primer mf-nombre con cualquier prefix
         const primerNombre = modal.querySelector('[id^="mf-nombre-"]');
         const prefix = primerNombre ? primerNombre.id.replace('mf-nombre-', '').replace(/\d+$/, '') : 'mm';
         const esPropuesta = prefix === 'mp';
-        return { tipo: 'multiple', N, prefix, esPropuesta };
+
+        // ── Capturar req/cond extras por formulario ───────────
+        // Para cada formulario registramos cuántas filas de req y cond tiene,
+        // de modo que al restaurar podamos crearlas antes de inyectar valores.
+        const formsMeta = {};
+        for (let i = 0; i < N; i++) {
+            const fid = `${prefix}${i}`;
+            // Contar inputs de tag que existen (siempre hay al menos el índice 0)
+            const reqCount  = modal.querySelectorAll(`[id^="mf-rtag-${fid}-"]`).length;
+            const condCount = modal.querySelectorAll(`[id^="mf-ctag-${fid}-"]`).length;
+            formsMeta[fid] = { reqCount, condCount };
+        }
+
+        return { tipo: 'multiple', N, prefix, esPropuesta, formsMeta };
     }
 
     // ¿Es el formulario simple? Tiene fm-nombre
     const fmNombre = document.getElementById('fm-nombre');
     if (fmNombre) {
         const fmId = document.getElementById('fm-id')?.value || '';
-        return { tipo: 'simple', medallaId: fmId };
+        // Contar filas extras de req/cond (el formulario simple usa req-tag-N y cond-tag-N)
+        const reqCount  = modal.querySelectorAll('[id^="req-tag-"]').length;
+        const condCount = modal.querySelectorAll('[id^="cond-tag-"]').length;
+        return { tipo: 'simple', medallaId: fmId, reqCount, condCount };
     }
 
     return null;
+}
+
+// ── Guardar estado completo (modal + tab) ─────────────────────
+function _saveCurrentState() {
+    salvarRescate({
+        tabActual: medallaState.tabActual,
+        modal:     _detectarModalAbierto(),
+    });
 }
 
 window.onload = async () => {
@@ -70,6 +93,12 @@ window.onload = async () => {
     _exponerGlobales();
     _renderTab(medallaState.tabActual);
 
+    // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) _saveCurrentState();
+    });
+    window.addEventListener('pagehide', () => _saveCurrentState(), { once: false });
+
     // ── RESTAURAR RESCATE ────────────────────────────────────────
     restaurarRescate({
         toastElId:  'toast-msg',
@@ -85,36 +114,69 @@ window.onload = async () => {
             if (!modal) return;
 
             if (modal.tipo === 'multiple') {
-                // Reabrir el formulario múltiple con el mismo N y tipo
                 renderFormsMultiple(modal.esPropuesta, modal.N);
-                // Inyectar los campos (son estáticos una vez renderizados)
+
                 setTimeout(() => {
-                    Object.entries(state.globalData || {}).forEach(([id, val]) => {
-                        const el = document.getElementById(id);
-                        if (!el || el.value === String(val)) return;
-                        el.value = String(val);
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    const formsMeta = modal.formsMeta || {};
+
+                    // 1. Para cada formulario, crear las filas de req/cond extras
+                    //    que no existen en el HTML inicial.
+                    //    El formulario inicial ya tiene req índice 0 y 0 conds.
+                    Object.entries(formsMeta).forEach(([fid, meta]) => {
+                        // Req: el HTML inicial tiene 1 fila (índice 0); añadir las restantes
+                        for (let r = 1; r < meta.reqCount; r++) {
+                            window._mfAddReq?.(fid);
+                        }
+                        // Cond: el HTML inicial tiene 0 filas; añadir todas
+                        for (let c = 0; c < meta.condCount; c++) {
+                            window._mfAddCond?.(fid);
+                        }
                     });
+
+                    // 2. Ahora que todos los elementos existen, inyectar los valores
+                    //    (un tick extra para que el DOM de las nuevas filas esté listo)
+                    setTimeout(() => {
+                        Object.entries(state.globalData || {}).forEach(([id, val]) => {
+                            const el = document.getElementById(id);
+                            if (!el || el.value === String(val)) return;
+                            el.value = String(val);
+                            el.dispatchEvent(new Event('input',  { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                    }, 60);
                 }, 120);
 
             } else if (modal.tipo === 'simple') {
-                // Reabrir formulario simple (nueva o edición)
                 if (modal.medallaId) {
                     const med = medallas.find(m => String(m.id) === String(modal.medallaId));
                     renderFormMedalla(med || null);
                 } else {
                     renderFormMedalla(null);
                 }
-                // Los campos de req/cond dinámicos necesitan un tick tras el render
+
                 setTimeout(() => {
-                    Object.entries(state.globalData || {}).forEach(([id, val]) => {
-                        const el = document.getElementById(id);
-                        if (!el || el.value === String(val)) return;
-                        el.value = String(val);
-                        el.dispatchEvent(new Event('input', { bubbles: true }));
-                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                    });
+                    // 1. Crear filas extras de req/cond
+                    //    El formulario simple inicial tiene 1 req (índice 1 por _fm_reqCount)
+                    //    y los conds que vienen del objeto medalla ya están.
+                    //    Creamos solo las filas que faltan respecto al snapshot.
+                    const reqs  = modal.reqCount  || 0;
+                    const conds = modal.condCount  || 0;
+                    const reqsActuales  = document.querySelectorAll('[id^="req-tag-"]').length;
+                    const condsActuales = document.querySelectorAll('[id^="cond-tag-"]').length;
+
+                    for (let r = reqsActuales; r < reqs; r++)   window._medAddReq?.();
+                    for (let c = condsActuales; c < conds; c++) window._medAddCond?.();
+
+                    // 2. Inyectar valores
+                    setTimeout(() => {
+                        Object.entries(state.globalData || {}).forEach(([id, val]) => {
+                            const el = document.getElementById(id);
+                            if (!el || el.value === String(val)) return;
+                            el.value = String(val);
+                            el.dispatchEvent(new Event('input',  { bubbles: true }));
+                            el.dispatchEvent(new Event('change', { bubbles: true }));
+                        });
+                    }, 60);
                 }, 120);
             }
         },
@@ -129,13 +191,7 @@ window.onload = async () => {
             initMarkup({ grupos, medallas });
             _renderTab(medallaState.tabActual);
         },
-        onEmergencia: () => {
-            const modal = _detectarModalAbierto();
-            salvarRescate({
-                tabActual: medallaState.tabActual,
-                modal,
-            });
-        },
+        onEmergencia: () => _saveCurrentState(),
     });
     const params = new URLSearchParams(window.location.search);
     const mQuery = params.get('medalla');
