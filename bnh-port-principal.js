@@ -15,6 +15,7 @@ import {
     hidratarPlaylist, videoPiP,
     toast,
 } from './bnh-port-ui.js';
+import { mountMarkupAC } from './op-markup.js';
 
 const BUCKET = 'imagenes-bnh';
 const FOLDER = 'op-chat';
@@ -46,9 +47,9 @@ export const bnhPort = {
         (todos || []).forEach(p => { portState.perfiles[p.id] = p; });
         portState.perfiles[perfil.id] = perfil;
 
-        // Autocomplete data
+        // Autocomplete data — cargar tags también para que el AC de @Personaje@ funcione
         const [{ data: grupos }, { data: medallas }] = await Promise.all([
-            supabase.from('personajes_refinados').select('nombre_refinado').order('nombre_refinado'),
+            supabase.from('personajes_refinados').select('nombre_refinado, tags').order('nombre_refinado'),
             supabase.from('medallas_catalogo').select('nombre').order('nombre'),
         ]);
         portState.grupos   = grupos   || [];
@@ -62,6 +63,13 @@ export const bnhPort = {
         // Abrir por defecto
         portState.abierto = true;
         renderPanel();
+
+        // ── Montar autocomplete markup en el textarea del port ────
+        // mountMarkupAC (de op-markup.js) lee opState.grupos/medallas;
+        // sincronizamos portState → opState para reutilizarla sin duplicar código.
+        _syncOpState();
+        const portTA = document.getElementById('bnh-port-input');
+        if (portTA) mountMarkupAC(portTA);
     },
 };
 
@@ -351,6 +359,21 @@ async function _subirAvatar(file, userId) {
 }
 
 // ─────────────────────────────────────────────────────────────
+// SYNC portState → opState (para reutilizar mountMarkupAC)
+// ─────────────────────────────────────────────────────────────
+async function _syncOpState() {
+    // op-markup.js lee opState.grupos y opState.medallas — lo importamos
+    // de op-state.js y lo sincronizamos una sola vez.
+    try {
+        const { opState } = await import('./op/op-state.js');
+        opState.grupos   = portState.grupos;
+        opState.medallas = portState.medallas;
+    } catch (_) {
+        // Si no está disponible (otras páginas), no importa
+    }
+}
+
+// ─────────────────────────────────────────────────────────────
 // RECONEXIÓN AUTOMÁTICA
 // ─────────────────────────────────────────────────────────────
 function _initVisibilityReconnect() {
@@ -389,7 +412,14 @@ function _exponerGlobales() {
 
     window._bnhPortToggle = () => {
         portState.abierto = !portState.abierto;
-        if (portState.abierto) { renderPanel(); }
+        if (portState.abierto) {
+            renderPanel();
+            // Re-montar el AC en el nuevo textarea tras renderPanel
+            requestAnimationFrame(() => {
+                const ta = document.getElementById('bnh-port-input');
+                if (ta) mountMarkupAC(ta);
+            });
+        }
         else { document.getElementById('bnh-port-panel')?.remove(); }
     };
 

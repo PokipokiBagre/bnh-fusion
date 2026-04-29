@@ -241,10 +241,45 @@ function _renderLink(link_url) {
 const _URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
 function _renderMarkupBasico(texto) {
-    return esc(texto)
-        .replace(/@([^@\n]+)@/g,  '<strong style="color:#c39bd3;background:rgba(108,52,131,0.18);padding:0 4px;border-radius:3px;">@$1@</strong>')
-        .replace(/#([^\s#\n]+)/g,  '<span style="color:#5dade2;">#$1</span>')
-        .replace(/!([^!\n]+)!/g,   '<span style="color:#e74c3c;font-weight:700;">⚔ $1</span>');
+    if (!texto) return '';
+    // ── Tokenizer idéntico a renderMsgMarkup de op-markup.js ──────
+    // Evita que los regexes se apliquen sobre HTML ya generado.
+    const STORAGE = window._STORAGE_URL || '';
+
+    const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n)/g);
+
+    return partes.map(p => {
+        if (!p) return '';
+        if (p === '\n') return '<br>';
+
+        // @Personaje@ — con miniatura inline
+        if (/^@[^@]+@$/.test(p)) {
+            const nombre = p.slice(1, -1);
+            const norm   = nombre.toLowerCase()
+                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+                .replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
+                .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+            const imgSrc = STORAGE ? `${STORAGE}/imgpersonajes/${norm}icon.png` : '';
+            const imgTag = imgSrc
+                ? `<img src="${esc(imgSrc)}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:2px;" onerror="this.style.display='none'">`
+                : '';
+            return `<strong style="color:#c39bd3;background:rgba(108,52,131,0.18);padding:0 4px 0 3px;border-radius:3px;display:inline-flex;align-items:center;gap:1px;">${imgTag}@${esc(nombre)}@</strong>`;
+        }
+
+        // #Tag
+        if (/^#/.test(p)) {
+            return `<span style="color:#5dade2;">#${esc(p.slice(1))}</span>`;
+        }
+
+        // !Medalla!
+        if (/^![^!]+!$/.test(p)) {
+            return `<span style="color:#e74c3c;font-weight:700;">⚔ ${esc(p.slice(1, -1))}</span>`;
+        }
+
+        // Texto plano
+        return esc(p);
+    }).join('');
 }
 
 function _renderContenidoConLinks(msg) {
