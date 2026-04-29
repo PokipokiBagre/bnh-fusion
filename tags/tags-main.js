@@ -19,6 +19,24 @@ async function _refreshMarkup() {
     initMarkup({ grupos: state.grupos, medallas: state.medallasCat });
 }
 
+// ── Captura del estado completo para rescate ──────────────────
+// Centraliza todos los datos que deben sobrevivir un reload.
+// Usada tanto en onEmergencia como en el guardado automático.
+function _saveCurrentState() {
+    const detalleEl = document.getElementById('tag-detalle-modal');
+    const tagDetalleAbierto = (detalleEl && detalleEl.style.display !== 'none')
+        ? (document.getElementById('detalle-nombre-inp')?.value || null)
+        : null;
+    salvarRescate({
+        tabActual:        tagsState.tabActual,
+        pjSeleccionado:   tagsState.pjSeleccionado,
+        filtroRol:        tagsState.filtroRol,
+        filtroEstado:     tagsState.filtroEstado,
+        busquedaCat:      tagsState.busquedaCat,
+        tagDetalleAbierto,
+    });
+}
+
 window.onload = async () => {
     const fav = document.getElementById('dynamic-favicon');
     if (fav) fav.href = `${STORAGE_URL}/imginterfaz/icon.png?v=${Date.now()}`;
@@ -43,63 +61,71 @@ window.onload = async () => {
     document.getElementById('pantalla-carga').classList.add('oculto');
     document.getElementById('interfaz-tags').classList.remove('oculto');
 
-    // ⚡ NUEVO: Leer la URL para ver si venimos desde un click del Markup
+    // ⚡ Leer la URL para ver si venimos desde un click del Markup
     const urlParams = new URLSearchParams(window.location.search);
     const tagParam = urlParams.get('tag');
 
     if (tagParam) {
         // Si hay tag en la URL, forzamos abrir la pestaña Catálogo
-        if (typeof window._tagsTab === 'function') {
-            window._tagsTab('catalogo'); 
-        } else if (typeof renderTab === 'function') {
-            renderTab('catalogo'); 
-        }
-        
-        // Esperamos un instante a que el DOM del catálogo se dibuje y abrimos el detalle
+        renderTab('catalogo');
         setTimeout(() => {
             if (window._tagsVerDetalle) window._tagsVerDetalle(tagParam);
         }, 50);
     } else {
         // Si no hay tag, iniciamos en progresión por defecto
-        if (typeof renderTab === 'function') renderTab('progresion');
+        renderTab('progresion');
     }
 
     if (typeof _exponerGlobales === 'function') _exponerGlobales();
 
-    // Inicializar el módulo de IA (solo visible para admins — el botón
-    // se inyecta automáticamente cada vez que se renderiza el catálogo)
+    // Inicializar el módulo de IA (solo visible para admins)
     if (tagsState.esAdmin) initTagsAI();
+
+    // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
+    // FIX: salvarRescate en visibilitychange (hide) garantiza que haya
+    // datos que restaurar aunque el reload sea por navegación normal
+    // y no por el path de emergencia de bnh-recon.
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) _saveCurrentState();
+    });
+
+    // FIX: pagehide cubre el caso de navegación directa (forward/back sin bfcache)
+    window.addEventListener('pagehide', () => _saveCurrentState(), { once: false });
 
     // ── RESTAURAR RESCATE ────────────────────────────────────────
     // Solo restauramos si NO venimos de un link con ?tag= en la URL
-    // (en ese caso la URL ya manda la navegación).
     if (!tagParam) {
         restaurarRescate({
             toastElId: 'toast-msg',
             maxEsperas: 60,
-            onRestaurado(state) {
-                const extra = state?.extra || {};
 
-                // A. Filtros y buscadores (los inputs genéricos ya los restauró
-                //    el inyector automático; aquí sincronizamos el estado JS)
+            // FIX: onRestaurado es async para poder esperar la carga
+            // del inventario ANTES de renderizar la tab final.
+            onRestaurado: async (saved) => {
+                const extra = saved?.extra || {};
+
+                // A. Sincronizar filtros y búsqueda al estado JS
                 if (extra.filtroRol)    tagsState.filtroRol    = extra.filtroRol;
                 if (extra.filtroEstado) tagsState.filtroEstado = extra.filtroEstado;
                 if (extra.busquedaCat)  tagsState.busquedaCat  = extra.busquedaCat;
 
-                // B. PJ seleccionado: recargar inventario y re-renderizar
-                const pjSel = extra.pjSeleccionado;
-                if (pjSel && window._tagsSelPJ) {
-                    window._tagsSelPJ(pjSel);   // async, renderiza al terminar
-                }
-
-                // C. Tab activa (renderiza después de seleccionar PJ para no solapar)
+                // B. Navegar a la tab correcta primero (muestra algo inmediato)
                 const tab = extra.tabActual || 'progresion';
                 renderTab(tab);
 
+                // C. Cargar el PJ seleccionado y ESPERAR su inventario antes
+                //    de renderizar progresión — evita el estado vacío intermedio.
+                const pjSel = extra.pjSeleccionado;
+                if (pjSel && window._tagsSelPJ) {
+                    await window._tagsSelPJ(pjSel);
+                    // Si la tab activa es progresión, forzar re-render con inventario cargado
+                    if (tab === 'progresion') renderTab('progresion');
+                }
+
                 // D. Reabrir modal de detalle de tag si estaba abierto
-                const tagDetallAbierto = extra.tagDetalleAbierto;
-                if (tagDetallAbierto && window._tagsVerDetalle) {
-                    setTimeout(() => window._tagsVerDetalle(tagDetallAbierto), 80);
+                const tagDetalleAbierto = extra.tagDetalleAbierto;
+                if (tagDetalleAbierto && window._tagsVerDetalle) {
+                    setTimeout(() => window._tagsVerDetalle(tagDetalleAbierto), 80);
                 }
             },
         });
@@ -109,27 +135,39 @@ window.onload = async () => {
     initRecon({
         supabaseClient: (await import('../bnh-auth.js')).supabase,
         umbralMs:       3000,
+
+        // Path rápido (< 1.5s): recargar datos y re-renderizar in-place
         onReconectar: async () => {
             await cargarTodo();
             await _refreshMarkup();
+            // FIX: recargar también el inventario del PJ activo para que
+            // los canjes recientes aparezcan sin necesidad de recargar página
+            if (tagsState.pjSeleccionado) {
+                await cargarInventarioPJ(tagsState.pjSeleccionado);
+            }
             renderTab(tagsState.tabActual);
         },
-        onEmergencia: () => {
-            // Detectar si el modal de detalle de tag está abierto
-            const detalleEl = document.getElementById('tag-detalle-modal');
-            const tagDetalleAbierto = (detalleEl && detalleEl.style.display !== 'none')
-                ? (document.getElementById('detalle-nombre-inp')?.value || null)
-                : null;
 
-            salvarRescate({
-                tabActual:        tagsState.tabActual,
-                pjSeleccionado:   tagsState.pjSeleccionado,
-                filtroRol:        tagsState.filtroRol,
-                filtroEstado:     tagsState.filtroEstado,
-                busquedaCat:      tagsState.busquedaCat,
-                tagDetalleAbierto,
-            });
-        },
+        // Path de emergencia (timeout): guardar y recargar
+        onEmergencia: () => _saveCurrentState(),
+    });
+
+    // ── BFCACHE: pageshow con persisted=true ──────────────────────
+    // FIX: cuando el browser restaura la página desde la caché de
+    // navegación (back/forward) window.onload NO vuelve a ejecutar.
+    // pageshow sí se ejecuta y podemos forzar una recarga de datos.
+    window.addEventListener('pageshow', async (e) => {
+        if (!e.persisted) return; // solo bfcache
+        try {
+            await cargarTodo();
+            await _refreshMarkup();
+            if (tagsState.pjSeleccionado) {
+                await cargarInventarioPJ(tagsState.pjSeleccionado);
+            }
+            renderTab(tagsState.tabActual);
+        } catch(err) {
+            console.error('[tags] pageshow refresh error:', err);
+        }
     });
 };
 
@@ -245,13 +283,11 @@ function _exponerGlobales() {
     window._tagsBuscarCat = (v) => { tagsState.busquedaCat = v; renderCatalogo(); };
 
     // ── Buscador de medallas accesibles: filtrado in-place sin re-render ─────
-    // Opera directamente sobre el DOM existente → el input nunca pierde el foco,
-    // no hay salto de scroll y no se destruye ningún nodo del árbol.
     window._tagsBuscarMedallasAcc = (v) => {
         tagsState.busquedaMedallasAcc = v;
         const q = v.trim().toLowerCase();
         const grid = document.getElementById('medallas-acc-grid');
-        if (!grid) return; // Si el grid no existe aún, ignorar
+        if (!grid) return;
 
         let visibles = 0;
         grid.querySelectorAll('.medalla-acc-card').forEach(card => {
@@ -262,7 +298,6 @@ function _exponerGlobales() {
             if (mostrar) visibles++;
         });
 
-        // Actualiza el contador del encabezado sin tocar nada más del DOM
         const titulo = document.getElementById('medallas-acc-titulo');
         if (titulo) titulo.textContent = `Medallas Accesibles (${visibles})`;
     };
@@ -272,7 +307,6 @@ function _exponerGlobales() {
         const labels = { stat_pot:'+1 POT', stat_agi:'+1 AGI', stat_ctl:'+1 CTL' };
         if (!confirm(`¿Proponer gastar 50 PT de ${tag} para obtener ${labels[tipo]}?`)) return;
         
-        // Enviar con esAdmin para indicar si descuenta de inmediato o no
         const res = await enviarSolicitud(pj, tag, tipo, 50, {}, tagsState.esAdmin);
         if (res.ok) {
             toast(`✅ Solicitud enviada. PT restantes en ${tag}: ${res.nueva}`, 'ok');
@@ -541,57 +575,48 @@ function _exponerGlobales() {
         const condsInitial = isEdit ? (medToEdit.efectos_condicionales || []) : [];
 
         modal.innerHTML = `
-        <div style="background:white;border-radius:12px;max-width:700px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);overflow:hidden;border:2px solid #e67e22;">
-            <div style="background:#e67e22;color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
-                <b style="font-family:'Cinzel',serif;">🏅 ${isEdit ? 'Editar Propuesta Medalla' : 'Proponer Medalla'} — ${pj}</b>
+        <div style="background:white;border-radius:12px;max-width:700px;width:95%;box-shadow:0 8px 32px rgba(0,0,0,0.25);overflow:hidden;">
+            <div style="background:var(--orange,#e67e22);color:white;padding:14px 20px;display:flex;justify-content:space-between;align-items:center;">
+                <b style="font-family:'Cinzel',serif;">${isEdit?'✏️ Editar Medalla':'🏅 Proponer Medalla (−75 PT de '+tag+')'} — ${pj}</b>
                 <button onclick="document.getElementById('modal-proponer-medalla-tags').remove()" style="background:rgba(255,255,255,0.2);border:none;color:white;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:1.1em;">×</button>
             </div>
-            <div style="padding:20px;display:flex;flex-direction:column;gap:14px;">
-                <p style="font-size:0.82em;color:#888;margin:0;">Propuesta para <b>${pj}</b>. El OP la revisará antes de aprobarla.<br>${isEdit ? 'Estás editando tu solicitud sin gastar PT adicionales.' : `Al confirmar se gastarán <b>75 PT de ${tag}</b>.`}</p>
-
-                <div style="display:grid;grid-template-columns:1fr 120px;gap:12px;">
+            <div style="padding:16px;display:flex;flex-direction:column;gap:12px;">
+                <div>
+                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">NOMBRE DE LA MEDALLA *</label>
+                    <input class="inp" id="mprop-nombre" value="${isEdit?(medToEdit.nombre||''):''}" placeholder="Nombre de la medalla…" style="width:100%;box-sizing:border-box;" autocomplete="off">
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                     <div>
-                        <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">NOMBRE *</label>
-                        <input id="mprop-nombre" class="inp" placeholder="Nombre de la medalla…" value="${isEdit ? esc(medToEdit.nombre) : ''}">
+                        <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">COSTO CTL</label>
+                        <input class="inp" id="mprop-ctl" type="number" value="${isEdit?(medToEdit.costo_ctl||1):1}" min="1" style="width:100%;box-sizing:border-box;">
                     </div>
                     <div>
-                        <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">COSTO CTL *</label>
-                        <input id="mprop-ctl" class="inp" type="number" min="1" max="20" value="${isEdit ? medToEdit.costo_ctl : 1}">
+                        <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">TIPO</label>
+                        <select class="inp" id="mprop-tipo" style="width:100%;box-sizing:border-box;">
+                            <option value="activa" ${isEdit&&medToEdit.tipo==='activa'?'selected':''}>Activa</option>
+                            <option value="pasiva" ${isEdit&&medToEdit.tipo==='pasiva'?'selected':''}>Pasiva</option>
+                            <option value="especial" ${isEdit&&medToEdit.tipo==='especial'?'selected':''}>Especial</option>
+                        </select>
                     </div>
                 </div>
-
                 <div>
-                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">TIPO</label>
-                    <select id="mprop-tipo" class="inp" style="max-width:180px;">
-                        <option value="activa" ${isEdit && medToEdit.tipo==='activa'?'selected':''}>⚡ Activa</option>
-                        <option value="pasiva" ${isEdit && medToEdit.tipo==='pasiva'?'selected':''}>🛡 Pasiva</option>
-                    </select>
+                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">EFECTO / DESCRIPCIÓN *</label>
+                    <textarea class="inp" id="mprop-efecto" rows="3" placeholder="Describe el efecto de la medalla…"
+                        style="width:100%;box-sizing:border-box;resize:vertical;"
+                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${isEdit?(medToEdit.efecto_desc||''):''}</textarea>
                 </div>
-
                 <div>
-                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">
-                        EFECTO BASE
-                        <span style="font-size:0.85em;color:#aaa;font-weight:400;">(@Personaje@ #Tag !Medalla! — Tab para autocompletar)</span>
-                    </label>
-                    <textarea id="mprop-efecto" class="inp" rows="3"
-                        placeholder="Describe el efecto… @Personaje@ #Tag !Medalla!"
-                        onmouseenter="if(window._initMarkupTA)window._initMarkupTA(this)">${isEdit ? esc(medToEdit.efecto_desc) : ''}</textarea>
-                </div>
-
-                <div>
-                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">REQUISITOS (TAGS)</label>
-                    <div style="font-size:0.72em;color:#aaa;margin-bottom:6px;">El PJ debe tener el tag con los PT mínimos. Escribe # para sugerencias.</div>
+                    <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">REQUISITOS BASE</label>
+                    <div style="font-size:0.72em;color:#aaa;margin-bottom:6px;">La medalla aparece cuando el PJ cumple todos los requisitos.</div>
                     <div id="mprop-reqs"></div>
                     <button onclick="window._mpropAddReq()" class="btn btn-outline btn-sm" style="margin-top:4px;">+ Añadir requisito</button>
                 </div>
-
                 <div>
                     <label style="font-size:0.72em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:3px;">EFECTOS CONDICIONALES</label>
                     <div style="font-size:0.72em;color:#aaa;margin-bottom:6px;">Se activan si el PJ cumple tag + PT al equipar.</div>
                     <div id="mprop-conds"></div>
                     <button onclick="window._mpropAddCond()" class="btn btn-outline btn-sm" style="margin-top:4px;">+ Añadir efecto condicional</button>
                 </div>
-
                 <div style="display:flex;gap:8px;margin-top:4px;">
                     <button onclick="window._tagsConfirmarMedalla('${pj.replace(/'/g,"\\'")}','${tag.replace(/'/g,"\\'")}',document.getElementById('modal-proponer-medalla-tags'), ${reqIdToEdit})"
                         style="padding:8px 16px;background:#e67e22;border:none;border-radius:6px;color:white;cursor:pointer;font-weight:600;">${isEdit ? '💾 Guardar Cambios' : '🏅 Proponer y canjear'}</button>
@@ -726,6 +751,7 @@ function _exponerGlobales() {
         if (!g) return;
         
         const nuevosTags = [...new Set([...(g.tags||[]), tagNorm])];
+
         const { error } = await supabase.from('personajes_refinados')
             .update({ tags: nuevosTags }).eq('id', grupoId);
             
@@ -845,36 +871,31 @@ function _exponerGlobales() {
         }
     };
 
-window._tagsEliminar = async (tag, count) => {
-    // Primer mensaje (eliminar del catálogo y de los perfiles)
-    const msg1 = count > 0 
-        ? `Se va a eliminar el tag ${tag}. Esta acción quitará el tag de los ${count} personajes que lo tienen equipado. ¿Continuar?`
-        : `¿Seguro que deseas eliminar el tag ${tag}?`;
-    
-    if (!confirm(msg1)) return;
+    window._tagsEliminar = async (tag, count) => {
+        const msg1 = count > 0 
+            ? `Se va a eliminar el tag ${tag}. Esta acción quitará el tag de los ${count} personajes que lo tienen equipado. ¿Continuar?`
+            : `¿Seguro que deseas eliminar el tag ${tag}?`;
+        
+        if (!confirm(msg1)) return;
 
-    // ⚡ Segundo mensaje (¿Qué hacemos con los PT?)
-    const borrarPuntos = confirm(`¿Borrar también los PT (puntos) asociados al tag ${tag} de todos los personajes?\n\nSi cancelas, el tag se borrará pero los personajes conservarán sus puntos de forma "huérfana".`);
+        const borrarPuntos = confirm(`¿Borrar también los PT (puntos) asociados al tag ${tag} de todos los personajes?\n\nSi cancelas, el tag se borrará pero los personajes conservarán sus puntos de forma "huérfana".`);
 
-    // Bloquear botones temporalmente si lo deseas
-    const btn = document.activeElement;
-    if (btn) btn.disabled = true;
+        const btn = document.activeElement;
+        if (btn) btn.disabled = true;
 
-    // Ejecutar el borrado pasando la decisión del OP
-    const res = await deleteTag(tag, borrarPuntos); 
-    
-    if (res.ok) {
-        toast('🗑️ Tag eliminado');
-        await cargarTodo();
-        await _refreshMarkup();
-        // Si tienes una función para redibujar, llámala (e.g. renderCatalogo())
-        if (typeof renderCatalogo === 'function') renderCatalogo();
-    } else {
-        toast('❌ ' + res.msg, 'error');
-    }
-    
-    if (btn) btn.disabled = false;
-};
+        const res = await deleteTag(tag, borrarPuntos); 
+        
+        if (res.ok) {
+            toast('🗑️ Tag eliminado');
+            await cargarTodo();
+            await _refreshMarkup();
+            if (typeof renderCatalogo === 'function') renderCatalogo();
+        } else {
+            toast('❌ ' + res.msg, 'error');
+        }
+        
+        if (btn) btn.disabled = false;
+    };
 
     window._tagsDescargar = (orden) => {
         const tagMapa = {};
