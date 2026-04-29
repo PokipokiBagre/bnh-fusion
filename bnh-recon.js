@@ -44,43 +44,63 @@ function _setDotState(state) {
     dot.style.color       = s.color;
 }
 
-// ⚡ PROTOCOLO DE EMERGENCIA: Salvar datos antes de recargar
+// ⚡ PROTOCOLO DE EMERGENCIA V2: Salvar TODO el estado
 function _salvarDatosEnPeligro() {
     try {
+        const stateToSave = { timestamp: Date.now(), modal: null, catalog: {} };
+
+        // 1. Salvar estado del Catálogo
+        const searchInp = document.getElementById('nombre-buscar-inp');
+        if (searchInp) stateToSave.catalog.search = searchInp.value;
+
+        // Extraer los tags que están activos en el sidebar
+        const activeTags = Array.from(document.querySelectorAll('#sidebar-tag-list li.active .tag-link'))
+                               .map(el => el.textContent.trim());
+        stateToSave.catalog.tags = activeTags;
+
+        // 2. Salvar estado del Modal (OP o Lore)
         const overlay = document.getElementById('op-overlay');
-        if (!overlay || overlay.style.display === 'none') return;
+        if (overlay && overlay.style.display !== 'none') {
+            const titleEl = overlay.querySelector('.op-modal-title');
+            const titleText = titleEl ? titleEl.textContent : '';
 
-        const titleEl = overlay.querySelector('.op-modal-title');
-        if (!titleEl) return;
-        const titleText = titleEl.textContent || '';
+            let modalType = null;
+            let charName = null;
+            let activeTab = 0;
 
-        let modalType = null;
-        let charName = null;
+            if (titleText.includes('Editar Lore')) {
+                modalType = 'lore';
+                charName = titleText.replace('📝 ', '').replace(' — Editar Lore', '').trim();
+            } else if (titleText.includes('⚙️')) {
+                modalType = 'op';
+                charName = titleText.replace('⚙️ ', '').trim();
+                
+                // Detectar qué pestaña (Stats, Tags, Grupo) estaba abierta
+                const activeTabEl = overlay.querySelector('.op-tab.active');
+                if (activeTabEl && activeTabEl.id) {
+                    activeTab = parseInt(activeTabEl.id.replace('op-tab-', '')) || 0;
+                }
+            }
 
-        if (titleText.includes('Editar Lore')) {
-            modalType = 'lore';
-            charName = titleText.replace('📝 ', '').replace(' — Editar Lore', '').trim();
-        } else if (titleText.includes('⚙️')) {
-            modalType = 'op';
-            charName = titleText.replace('⚙️ ', '').trim();
-        } else {
-            return;
+            if (modalType) {
+                // Aspirar todos los inputs, textareas y selects
+                const inputs = overlay.querySelectorAll('textarea, input, select');
+                const data = {};
+                inputs.forEach(el => {
+                    if (el.id && el.type !== 'file' && el.type !== 'submit') {
+                        if (el.type === 'checkbox' || el.type === 'radio') {
+                            data[el.id] = el.checked;
+                        } else {
+                            data[el.id] = el.value;
+                        }
+                    }
+                });
+                stateToSave.modal = { type: modalType, charName, data, activeTab };
+            }
         }
 
-        const inputs = overlay.querySelectorAll('textarea, input');
-        const state = {};
-        inputs.forEach(el => {
-            if (el.id) state[el.id] = el.value;
-        });
-
-        if (Object.keys(state).length > 0) {
-            sessionStorage.setItem('bnh_rescate', JSON.stringify({
-                charName,
-                modalType,
-                data: state,
-                timestamp: Date.now()
-            }));
-        }
+        // Usamos una nueva key en sessionStorage para evitar conflictos
+        sessionStorage.setItem('bnh_rescate_v2', JSON.stringify(stateToSave));
     } catch (e) {
         console.error('[bnh-recon] Error salvando datos de emergencia:', e);
     }
