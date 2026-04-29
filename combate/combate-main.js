@@ -19,6 +19,96 @@ import { guardarStatsGrupo } from '../fichas/fichas-data.js';
 import { proyectarFicha }    from '../fichas/fichas-logic.js';
 import { cargarFusiones }    from '../bnh-fusion.js';
 import { aplicarDeltas }     from '../bnh-pac.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+
+// ── Serializar / Deserializar estado de combate ───────────────
+// Solo se guardan los datos que NO se pueden reconstruir desde la BD:
+// deltas en vuelo, PV actuales manuales, tags/PTs modificados en combate,
+// medallas activas, dados, tab abierta, slot activo y el registro.
+
+function _serializarCombate() {
+    const serSlot = slot => {
+        if (!slot) return null;
+        return {
+            nombre:          slot.nombre,
+            pvActualManual:  slot._pvActualManual,
+            tags:            [...slot.tags],
+            pts:             { ...slot.pts },
+            medallas:        slot.medallas.map(m => m.id),
+            dados:           { ...slot.dados },
+            tabActiva:       slot._tabActiva || 'stats',
+            d:               { ...slot._d },
+            // Bases manuales (por si el usuario las editó en combate)
+            potBase:         slot._pj.pot,
+            agiBase:         slot._pj.agi,
+            ctlBase:         slot._pj.ctl,
+        };
+    };
+    return {
+        equipoA:           combateState.equipoA.map(serSlot),
+        equipoB:           combateState.equipoB.map(serSlot),
+        slotActivoEquipo:  combateState.slotActivoEquipo,
+        slotActivoIdx:     combateState.slotActivoIdx,
+        poolFiltros:       { ...combateState.poolFiltros },
+        poolDestino:       combateState._poolDestino || 'A',
+        registro:          combateState.registro.map(e => ({
+            nombre:  e.nombre,
+            cambios: e.cambios.map(c => ({ etiqueta: c.etiqueta })),
+            _t:      e._t,
+        })),
+    };
+}
+
+function _restaurarCombate(snap) {
+    if (!snap) return;
+
+    // Restaurar filtros y destino de pool (no dependen de PJs cargados)
+    if (snap.poolFiltros)  Object.assign(combateState.poolFiltros, snap.poolFiltros);
+    if (snap.poolDestino)  combateState._poolDestino = snap.poolDestino;
+
+    // Restaurar registro
+    if (Array.isArray(snap.registro)) {
+        combateState.registro = snap.registro;
+    }
+
+    // Restaurar slots: reutilizamos crearSlot con el PJ de BD y luego
+    // sobreescribimos con los valores en vuelo guardados.
+    const restaurarEquipo = (letra, snapSlots) => {
+        (snapSlots || []).forEach((ss, idx) => {
+            if (!ss) return;
+            const pj = todosLosPJs.find(p => (p.nombre_refinado || p.nombre) === ss.nombre);
+            if (!pj) return;
+
+            const medEquip = (ss.medallas || [])
+                .map(id => todasLasMedallas.find(m => String(m.id) === String(id)))
+                .filter(Boolean);
+
+            const slot = crearSlot(pj, medEquip);
+
+            // Sobreescribir con valores en vuelo
+            slot._pvActualManual = ss.pvActualManual ?? null;
+            slot.tags            = ss.tags   || slot.tags;
+            slot.pts             = ss.pts    || slot.pts;
+            slot.dados           = ss.dados  || {};
+            slot._tabActiva      = ss.tabActiva || 'stats';
+            if (ss.d) Object.assign(slot._d, ss.d);
+            // Bases manuales editadas en combate
+            if (ss.potBase !== undefined) slot._pj.pot = ss.potBase;
+            if (ss.agiBase !== undefined) slot._pj.agi = ss.agiBase;
+            if (ss.ctlBase !== undefined) slot._pj.ctl = ss.ctlBase;
+
+            recalcSlot(slot);
+            combateState[`equipo${letra}`][idx] = slot;
+        });
+    };
+
+    restaurarEquipo('A', snap.equipoA);
+    restaurarEquipo('B', snap.equipoB);
+
+    // Slot activo
+    combateState.slotActivoEquipo = snap.slotActivoEquipo ?? null;
+    combateState.slotActivoIdx    = snap.slotActivoIdx    ?? null;
+}
 
 // ── Init ──────────────────────────────────────────────────────
 window.onload = async () => {
@@ -104,7 +194,88 @@ window.onload = async () => {
     document.getElementById('interfaz-combate')?.classList?.remove('oculto');
     renderCombate();
 
-    // ── Fix markup links: bnh-markup.js genera rutas relativas como fichas/index.html
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    // Ejecutar DESPUÉS de renderCombate() (el DOM base ya existe)
+    // y DESPUÉS de que los PJs estén cargados (todosLosPJs ya tiene datos).
+    restaurarRescate({
+        toastElId: 'toast-msg',
+        // No usamos los inputs genéricos (no hay IDs estáticos en combate),
+        // solo el callback para reconstruir el estado desde snap.extra.
+        onRestaurado(state) {
+            const snap = state?.extra?.combate;
+            if (!snap) return;
+            _restaurarCombate(snap);
+            refrescarTodo();
+            // Reabrir el panel de detalle del slot que estaba activo
+            if (combateState.slotActivoEquipo !== null && combateState.slotActivoIdx !== null) {
+                renderSlotDetalle(combateState.slotActivoEquipo, combateState.slotActivoIdx);
+            }
+        },
+    });
+
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs:       3000,
+        onReconectar: async () => {
+            // Recargar datos de BD sin tocar el estado en vuelo del combate
+            await cargarFusiones();
+            const [
+                { data: pjData  },
+                { data: ptData  },
+                { data: medData },
+                { data: invData },
+                { data: catData },
+                { data: optsData},
+                { data: banData },
+            ] = await Promise.all([
+                supabase.from('personajes_refinados').select('*').order('nombre_refinado'),
+                supabase.from('puntos_tag').select('personaje_nombre, tag, cantidad'),
+                supabase.from('medallas_catalogo').select('*').eq('propuesta', false).order('nombre'),
+                supabase.from('medallas_inventario').select('personaje_nombre, medalla_id').eq('equipada', true),
+                supabase.from('tags_catalogo').select('nombre').order('nombre'),
+                supabase.from('opciones_fusion').select('*').eq('id', 1).maybeSingle(),
+                supabase.from('tags_catalogo').select('nombre').eq('baneado', true),
+            ]);
+            setTodasLasMedallas(medData || []);
+            setCatalogoTagsArr((catData || [])
+                .map(t => t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).sort());
+            const ptMap = {};
+            (ptData || []).forEach(row => {
+                if (!ptMap[row.personaje_nombre]) ptMap[row.personaje_nombre] = {};
+                const tag = row.tag.startsWith('#') ? row.tag : '#' + row.tag;
+                ptMap[row.personaje_nombre][tag] = row.cantidad;
+            });
+            setTodosLosPTs(ptMap);
+            const medById = {};
+            (medData || []).forEach(m => { medById[m.id] = m; });
+            const invMap = {};
+            (invData || []).forEach(row => {
+                const med = medById[row.medalla_id];
+                if (!med) return;
+                if (!invMap[row.personaje_nombre]) invMap[row.personaje_nombre] = [];
+                invMap[row.personaje_nombre].push(med);
+            });
+            setInventarios(invMap);
+            const opcionesFusion = optsData || {};
+            const bannedTags = (banData || []).map(t =>
+                (t.nombre.startsWith('#') ? t.nombre : '#' + t.nombre).toLowerCase());
+            const pjsProyectados = (pjData || []).map(pj => {
+                try {
+                    const proyectado = proyectarFicha(pj, pjData || [], ptMap, opcionesFusion, bannedTags) || pj;
+                    proyectado.gOriginal = pj;
+                    return proyectado;
+                } catch { return pj; }
+            });
+            setTodosLosPJs(pjsProyectados);
+            // Recalcular slots activos con datos frescos (sin perder deltas en vuelo)
+            ['A','B'].forEach(eq => {
+                combateState[`equipo${eq}`].forEach(slot => { if (slot) recalcSlot(slot); });
+            });
+            refrescarTodo();
+        },
+        onEmergencia: () => salvarRescate({ combate: _serializarCombate() }),
+    });
     // Desde /combate/ eso resuelve a /combate/fichas/ en vez de /fichas/
     // Interceptamos y corregimos con la ruta absoluta correcta.
     document.addEventListener('click', e => {
