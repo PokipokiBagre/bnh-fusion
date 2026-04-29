@@ -23,8 +23,10 @@ export function renderMsgMarkup(texto) {
         // @Personaje@
         if (/^@[^@]+@$/.test(p)) {
             const nombre = p.slice(1, -1);
-            const url = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
-            return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;background:#f5eeff;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid #c39bd3;">@${esc(nombre)}@</a>`;
+            const norm   = _norm(nombre);
+            const imgSrc = `${STORAGE_URL}/imgpersonajes/${norm}icon.png`;
+            const url    = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
+            return `<a href="${url}" target="_blank" style="color:#6c3483;font-weight:700;background:#f5eeff;padding:1px 6px 1px 4px;border-radius:4px;text-decoration:none;border:1px solid #c39bd3;display:inline-flex;align-items:center;gap:3px;"><img src="${esc(imgSrc)}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;" onerror="this.style.display='none'">@${esc(nombre)}@</a>`;
         }
 
         // #Tag
