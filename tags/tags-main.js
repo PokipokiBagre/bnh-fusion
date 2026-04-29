@@ -12,6 +12,7 @@ import {
 import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, renderTagDetalle, toast } from './tags-ui.js';
 import { initMarkup } from '../bnh-markup.js';
 import { initTagsAI } from './tags-ai.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
 
 async function _refreshMarkup() {
     const state = await import('./tags-state.js');
@@ -68,6 +69,68 @@ window.onload = async () => {
     // Inicializar el módulo de IA (solo visible para admins — el botón
     // se inyecta automáticamente cada vez que se renderiza el catálogo)
     if (tagsState.esAdmin) initTagsAI();
+
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    // Solo restauramos si NO venimos de un link con ?tag= en la URL
+    // (en ese caso la URL ya manda la navegación).
+    if (!tagParam) {
+        restaurarRescate({
+            toastElId: 'toast-msg',
+            maxEsperas: 60,
+            onRestaurado(state) {
+                const extra = state?.extra || {};
+
+                // A. Filtros y buscadores (los inputs genéricos ya los restauró
+                //    el inyector automático; aquí sincronizamos el estado JS)
+                if (extra.filtroRol)    tagsState.filtroRol    = extra.filtroRol;
+                if (extra.filtroEstado) tagsState.filtroEstado = extra.filtroEstado;
+                if (extra.busquedaCat)  tagsState.busquedaCat  = extra.busquedaCat;
+
+                // B. PJ seleccionado: recargar inventario y re-renderizar
+                const pjSel = extra.pjSeleccionado;
+                if (pjSel && window._tagsSelPJ) {
+                    window._tagsSelPJ(pjSel);   // async, renderiza al terminar
+                }
+
+                // C. Tab activa (renderiza después de seleccionar PJ para no solapar)
+                const tab = extra.tabActual || 'progresion';
+                renderTab(tab);
+
+                // D. Reabrir modal de detalle de tag si estaba abierto
+                const tagDetallAbierto = extra.tagDetalleAbierto;
+                if (tagDetallAbierto && window._tagsVerDetalle) {
+                    setTimeout(() => window._tagsVerDetalle(tagDetallAbierto), 80);
+                }
+            },
+        });
+    }
+
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
+    initRecon({
+        supabaseClient: (await import('../bnh-auth.js')).supabase,
+        umbralMs:       3000,
+        onReconectar: async () => {
+            await cargarTodo();
+            await _refreshMarkup();
+            renderTab(tagsState.tabActual);
+        },
+        onEmergencia: () => {
+            // Detectar si el modal de detalle de tag está abierto
+            const detalleEl = document.getElementById('tag-detalle-modal');
+            const tagDetalleAbierto = (detalleEl && detalleEl.style.display !== 'none')
+                ? (document.getElementById('detalle-nombre-inp')?.value || null)
+                : null;
+
+            salvarRescate({
+                tabActual:        tagsState.tabActual,
+                pjSeleccionado:   tagsState.pjSeleccionado,
+                filtroRol:        tagsState.filtroRol,
+                filtroEstado:     tagsState.filtroEstado,
+                busquedaCat:      tagsState.busquedaCat,
+                tagDetalleAbierto,
+            });
+        },
+    });
 };
 
 function renderTab(tab) {
