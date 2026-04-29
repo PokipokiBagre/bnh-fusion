@@ -1,5 +1,5 @@
 // ============================================================
-// fichas-main.js — Versión Corregida (Deep Wake-Up)
+// fichas-main.js
 // ============================================================
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import { fichasUI, gruposGlobal, ptGlobal } from './fichas-state.js';
@@ -12,10 +12,10 @@ import { guardarTagsGrupo, borrarPTDeTag, asignarAliasesDeGrupoNombre } from './
 import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
 import { bnhPort } from '../bnh-port-principal.js';
 import { setSupabaseRef } from '../bnh-pac.js';
-import { initRecon } from '../bnh-recon.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
 
-let postersDelHilo = null;
-let _scrollCatalogo = 0; 
+let postersDelHilo  = null;
+let _scrollCatalogo = 0;
 
 async function init() {
     setSupabaseRef(supabase);
@@ -42,7 +42,7 @@ async function init() {
     exponerGlobalesOP();
     exponerGlobales();
 
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams  = new URLSearchParams(window.location.search);
     const fichaParam = urlParams.get('ficha');
     if (fichaParam) {
         const decoded = decodeURIComponent(fichaParam);
@@ -56,75 +56,44 @@ async function init() {
         }
     }
 
-sincronizarVista();
+    sincronizarVista();
     bnhPort.init().catch(console.error);
 
-// ⚡ SISTEMA DE AUTO-RESCATE V3 (Inyector Persistente)
-    setTimeout(() => {
-        const rescateStr = sessionStorage.getItem('bnh_rescate_v3');
-        if (rescateStr) {
-            sessionStorage.removeItem('bnh_rescate_v3');
-            try {
-                const rescate = JSON.parse(rescateStr);
-                if (Date.now() - rescate.timestamp < 10 * 60 * 1000) {
-                    
-                    // A. Restaurar Catálogo (Tags)
-                    if (rescate.uiState.activeTags && window._fichaToggleTag) {
-                        rescate.uiState.activeTags.forEach(tag => window._fichaToggleTag(tag));
-                    }
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    // Debe llamarse DESPUÉS de sincronizarVista() y bnhPort.init()
+    // para que los elementos del DOM (modal OP, Panel OP) ya estén
+    // montados o en proceso de montarse cuando el inyector los busque.
+    restaurarRescate({
+        toastElId:  'fichas-toast',
+        maxEsperas: 60,  // 60 × 50ms = 3s de ventana para elementos diferidos
+        onRestaurado(state) {
+            // ── A. Restaurar tags activos del sidebar ──────────────
+            if (state.uiState?.activeTags?.length && window._fichaToggleTag) {
+                state.uiState.activeTags.forEach(tag => window._fichaToggleTag(tag));
+            }
 
-                    // B. Reabrir Modales
-                    if (rescate.uiState.modal) {
-                        window.abrirFicha(rescate.uiState.modal.charName);
-                        if (rescate.uiState.modal.type === 'lore') {
-                            window.abrirEditarLore(rescate.uiState.modal.charName);
-                        } else if (rescate.uiState.modal.type === 'op') {
-                            window.abrirPanelOP(rescate.uiState.modal.charName, rescate.uiState.modal.activeTab);
-                        }
-                    }
-
-                    // C. Inyector Persistente: Busca inputs cada 50ms por 2 segundos
-                    let intentos = 0;
-                    const inyector = setInterval(() => {
-                        intentos++;
-                        if (intentos > 40) { clearInterval(inyector); return; }
-                        
-                        Object.keys(rescate.globalData).forEach(id => {
-                            const el = document.getElementById(id);
-                            if (el) {
-                                if (el.type === 'checkbox' || el.type === 'radio') {
-                                    if (el.checked !== rescate.globalData[id]) {
-                                        el.checked = rescate.globalData[id];
-                                        el.dispatchEvent(new Event('change', { bubbles: true }));
-                                    }
-                                } else {
-                                    if (el.value !== rescate.globalData[id]) {
-                                        el.value = rescate.globalData[id];
-                                        el.dispatchEvent(new Event('input', { bubbles: true })); // Dispara búsquedas y cálculos
-                                    }
-                                }
-                            }
-                        });
-
-                        // Dibujar cartel verde (solo una vez)
-                        const opBody = document.getElementById('op-body');
-                        if (opBody && !document.getElementById('alerta-rescate')) {
-                            const alerta = document.createElement('div');
-                            alerta.id = 'alerta-rescate';
-                            alerta.style.cssText = 'background:#d5f5e3; border:1px solid #27ae60; color:#1e8449; padding:6px; border-radius:6px; font-size:0.82em; font-weight:700; text-align:center; margin-bottom:12px; transition: opacity 0.5s;';
-                            alerta.innerHTML = '✅ Datos recuperados.';
-                            opBody.insertBefore(alerta, opBody.firstChild);
-                            setTimeout(() => {
-                                alerta.style.opacity = '0';
-                                setTimeout(() => alerta.remove(), 500);
-                            }, 3000);
-                        }
-                    }, 50);
+            // ── B. Reabrir modal si estaba abierto ─────────────────
+            if (state.uiState?.modal) {
+                const { type, charName, activeTab } = state.uiState.modal;
+                // Primero navegar a la ficha (si no estamos ya en ella)
+                if (charName && window.abrirFicha) window.abrirFicha(charName);
+                // Luego abrir el modal correcto
+                if (type === 'lore' && window.abrirEditarLore) {
+                    window.abrirEditarLore(charName);
+                } else if (type === 'op' && window.abrirPanelOP) {
+                    window.abrirPanelOP(charName, activeTab ?? 0);
                 }
-            } catch (e) { console.error('Error restaurando datos:', e); }
-        }
-    }, 100);
-    
+            }
+
+            // ── C. Datos extra específicos de fichas ───────────────
+            // (reservado para futuras ampliaciones de onEmergencia)
+            if (state.extra?.tabActiva) {
+                // Ejemplo: restaurar tab del panel OP si se amplía onEmergencia
+            }
+        },
+    });
+
+    // ── POPSTATE ─────────────────────────────────────────────────
     window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
         const ficha  = params.get('ficha');
@@ -134,7 +103,7 @@ sincronizarVista();
                 x.nombre_refinado.toLowerCase() === ficha.toLowerCase() ||
                 x.nombre_refinado.toLowerCase().replace(/ /g,'_') === ficha.toLowerCase().replace(/ /g,'_')
             );
-            fichasUI.vistaActual  = g ? 'detalle' : 'catalogo';
+            fichasUI.vistaActual  = g ? 'detalle'  : 'catalogo';
             fichasUI.seleccionado = g ? g.nombre_refinado : null;
             sincronizarVista();
         } else {
@@ -145,28 +114,38 @@ sincronizarVista();
         }
     });
 
-    // ⚡ NUEVA RECONEXIÓN PROFUNDA
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
     initRecon({
         supabaseClient: supabase,
-        umbralMs: 3000,
+        umbralMs:       3000,
         onReconectar: async () => {
             await Promise.all([cargarTodo(), cargarFusiones()]);
             window._equipCache = {};
             cerrarUploadPanel();
             sincronizarVista();
-        }
+        },
+        // Antes de cualquier reload de emergencia, guardamos el estado
+        // completo de la página incluyendo la tab/vista actual
+        onEmergencia: () => salvarRescate({
+            tabActiva: fichasUI.vistaActual,
+            seleccionado: fichasUI.seleccionado,
+        }),
     });
 }
 
+// ─────────────────────────────────────────────────────────────
+// SINCRONIZAR VISTA
+// ─────────────────────────────────────────────────────────────
+
 function sincronizarVista() {
     if (fichasUI.vistaActual === 'detalle' && fichasUI.seleccionado) {
-        document.getElementById('fichas-layout').style.display = 'none';
+        document.getElementById('fichas-layout').style.display      = 'none';
         document.getElementById('fichas-detalle-wrap').style.display = 'block';
-        window.scrollTo(0, 0); 
+        window.scrollTo(0, 0);
         const _gDet = gruposGlobal.find(x => x.nombre_refinado === fichasUI.seleccionado);
         if (_gDet) renderDetalle(_gDet).catch(console.error);
     } else {
-        document.getElementById('fichas-layout').style.display = 'grid';
+        document.getElementById('fichas-layout').style.display      = 'grid';
         document.getElementById('fichas-detalle-wrap').style.display = 'none';
         renderSidebar();
         renderActiveTagsBar();
@@ -175,6 +154,10 @@ function sincronizarVista() {
 }
 
 window._equipCache = window._equipCache || {};
+
+// ─────────────────────────────────────────────────────────────
+// GLOBALES
+// ─────────────────────────────────────────────────────────────
 
 function exponerGlobales() {
     window.abrirFicha = (nombreGrupo) => {
@@ -197,10 +180,10 @@ function exponerGlobales() {
         requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
     };
 
-    window.abrirPanelOP         = abrirPanelOP;
-    window.abrirCrearGrupo      = abrirCrearGrupo;
-    window.abrirGestorAliases   = abrirGestorAliases;
-    window.abrirEditarLore      = abrirEditarLore;
+    window.abrirPanelOP       = abrirPanelOP;
+    window.abrirCrearGrupo    = abrirCrearGrupo;
+    window.abrirGestorAliases = abrirGestorAliases;
+    window.abrirEditarLore    = abrirEditarLore;
 
     window.sincronizarVista = async () => {
         await Promise.all([cargarTodo(), cargarFusiones()]);
@@ -221,7 +204,7 @@ function exponerGlobales() {
     };
 
     window._fichaToggleTagYVolver = (tag) => {
-        fichasUI.vistaActual = 'catalogo';
+        fichasUI.vistaActual  = 'catalogo';
         fichasUI.seleccionado = null;
         if (!fichasUI.tagsFiltro.includes(tag)) fichasUI.tagsFiltro.push(tag);
         sincronizarVista();
@@ -247,7 +230,7 @@ function exponerGlobales() {
 
     window._fichaTagSearch = (v) => {
         fichasUI.tagBusqueda = v;
-        _renderTagListOnly(); 
+        _renderTagListOnly();
     };
 
     window._fichaModoAsignar = () => {
@@ -259,7 +242,7 @@ function exponerGlobales() {
             fichasUI.tagsAsignar.clear();
             fichasUI.grupoAsignar = null;
         } else {
-            fichasUI.modoInverso = false;
+            fichasUI.modoInverso  = false;
             fichasUI.grupoAsignar = null;
         }
         sincronizarVista();
@@ -275,7 +258,6 @@ function exponerGlobales() {
             const tieneTag = (g.tags||[]).some(t =>
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
-
             if (tieneTag) {
                 const nuevosTags = (g.tags||[]).filter(t =>
                     (t.startsWith('#')?t:'#'+t).toLowerCase() !== tag.toLowerCase()
@@ -299,10 +281,10 @@ function exponerGlobales() {
     const _originalToggleTag = window._fichaToggleTag;
     window._fichaToggleTag = async (tag) => {
         if (fichasUI.modoInverso) {
-            if (!fichasUI.grupoAsignar) return; 
+            if (!fichasUI.grupoAsignar) return;
             const g = gruposGlobal.find(x => x.nombre_refinado === fichasUI.grupoAsignar);
             if (!g) return;
-            const tagNorm = tag.startsWith('#') ? tag : '#' + tag;
+            const tagNorm  = tag.startsWith('#') ? tag : '#' + tag;
             const tieneTag = (g.tags||[]).some(t =>
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
@@ -312,7 +294,7 @@ function exponerGlobales() {
                 );
                 const res = await guardarTagsGrupo(g.id, nuevosTags);
                 if (res.ok) {
-                    const pts = (ptGlobal[fichasUI.grupoAsignar]||{})[tag]||0;
+                    const pts = (ptGlobal[fichasUI.grupoAsignar]||{})[tag] || 0;
                     if (pts > 0) await borrarPTDeTag(fichasUI.grupoAsignar, tag);
                 }
             } else {
@@ -341,7 +323,7 @@ function exponerGlobales() {
 
     window._fichasAbrirUpload = (nombreGrupo) => {
         const panel = document.getElementById('fichas-upload-panel');
-        if (panel) panel.dataset.grupo = ''; 
+        if (panel) panel.dataset.grupo = '';
         renderUploadPanel(nombreGrupo);
         setTimeout(() => {
             document.getElementById('fichas-upload-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -359,10 +341,10 @@ function exponerGlobales() {
     window._fichasSetTipo = (tipo) => {
         const panel = document.getElementById('fichas-upload-panel');
         if (!panel || panel.style.display === 'none') return;
-        panel.dataset.tipo = tipo;
-        const nombreGrupo = panel.dataset.grupo;
+        panel.dataset.tipo    = tipo;
+        const nombreGrupo     = panel.dataset.grupo;
         if (!nombreGrupo) return;
-        panel.dataset.grupo = ''; 
+        panel.dataset.grupo   = '';
         renderUploadPanel(nombreGrupo);
     };
 
@@ -380,9 +362,9 @@ function exponerGlobales() {
     };
 
     async function _ejecutarSubidaFicha(file) {
-        const panel = document.getElementById('fichas-upload-panel');
+        const panel       = document.getElementById('fichas-upload-panel');
         const nombreGrupo = panel?.dataset.grupo;
-        const tipo = panel?.dataset.tipo || 'icon';
+        const tipo        = panel?.dataset.tipo || 'icon';
         if (!nombreGrupo) return;
 
         const prog = () => document.getElementById('fichas-upload-progress');
@@ -390,13 +372,13 @@ function exponerGlobales() {
         const msg  = () => document.getElementById('fichas-prog-msg');
 
         const p = prog(); if (p) p.style.display = 'block';
-        const f = fill(); if (f) f.style.width = '0%';
-        const m = msg();  if (m) { m.textContent = 'Preparando…'; m.style.color = ''; }
+        const f = fill(); if (f) f.style.width   = '0%';
+        const m = msg();  if (m) { m.textContent  = 'Preparando…'; m.style.color = ''; }
 
         try {
             const url = await subirImagenGrupo(file, nombreGrupo, tipo, (pct, txt) => {
-                const f2 = fill(); if (f2) f2.style.width = pct + '%';
-                const m2 = msg();  if (m2) m2.textContent = txt;
+                const f2 = fill(); if (f2) f2.style.width   = pct + '%';
+                const m2 = msg();  if (m2) m2.textContent   = txt;
             });
             const preview = document.getElementById('upload-preview-img');
             if (preview) preview.src = url;
@@ -410,7 +392,7 @@ function exponerGlobales() {
             }, 800);
         } catch(e) {
             const m4 = msg();  if (m4) { m4.textContent = '❌ ' + e.message; m4.style.color = 'var(--red)'; }
-            const f4 = fill(); if (f4) f4.style.width = '0%';
+            const f4 = fill(); if (f4) f4.style.width   = '0%';
             setTimeout(() => { const p4 = prog(); if (p4) p4.style.display = 'none'; }, 3500);
         }
     }
@@ -431,14 +413,14 @@ function exponerGlobales() {
             entries = entries.filter(([t]) => t.toLowerCase().includes(q));
         }
         ul.innerHTML = entries.map(([tag, cnt]) => {
-            const activo = fichasUI.tagsFiltro.includes(tag);
+            const activo      = fichasUI.tagsFiltro.includes(tag);
             const esTagAsignar = fichasUI.modoAsignar && fichasUI.tagsAsignar.has(tag);
-            const grupoSel = fichasUI.modoInverso && fichasUI.grupoAsignar
+            const grupoSel    = fichasUI.modoInverso && fichasUI.grupoAsignar
                 ? gruposGlobal.find(g => g.nombre_refinado === fichasUI.grupoAsignar) : null;
             const grupoTieneTag = grupoSel && (grupoSel.tags||[]).some(t =>
                 (t.startsWith('#')?t:'#'+t).toLowerCase() === tag.toLowerCase()
             );
-            const click = `onclick="window._fichaToggleTag('${tag.replace(/'/g,"\'")}')"`; 
+            const click  = `onclick="window._fichaToggleTag('${tag.replace(/'/g,"\'")}')"`; 
             const estilo = fichasUI.modoInverso && grupoSel
                 ? grupoTieneTag ? 'color:var(--green);font-weight:700;' : ''
                 : (esTagAsignar || activo) ? 'color:var(--red);font-weight:700;' : '';
