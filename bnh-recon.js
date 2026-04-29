@@ -1,5 +1,5 @@
 // ============================================================
-// bnh-recon.js — Reconexión automática al volver a la pestaña
+// bnh-recon.js — Reconexión Profunda (Deep Wake-Up)
 // Colocar en la RAÍZ del proyecto.
 // ============================================================
 
@@ -8,7 +8,6 @@ const DOT_ID = 'bnh-conn-dot';
 function _getOrCreateDot() {
     let dot = document.getElementById(DOT_ID);
     if (dot) return dot;
-
     dot = document.createElement('div');
     dot.id = DOT_ID;
     dot.title = 'Estado de conexión';
@@ -21,13 +20,11 @@ function _getOrCreateDot() {
         'white-space:nowrap', 'cursor:default', 'user-select:none',
         'height:36px', 'box-sizing:border-box',
     ].join(';');
-
-    const badge     = document.getElementById('bnh-session-badge');
+    const badge = document.getElementById('bnh-session-badge');
     const headerTop = document.querySelector('.header-top');
-    if (badge?.parentNode)  badge.parentNode.insertBefore(dot, badge);
-    else if (headerTop)     headerTop.appendChild(dot);
-    else                    document.body.appendChild(dot);
-
+    if (badge?.parentNode) badge.parentNode.insertBefore(dot, badge);
+    else if (headerTop) headerTop.appendChild(dot);
+    else document.body.appendChild(dot);
     return dot;
 }
 
@@ -35,7 +32,6 @@ function _setDotState(state) {
     if (!document.body) { setTimeout(() => _setDotState(state), 50); return; }
     const dot = _getOrCreateDot();
     if (!dot) return;
-
     const S = {
         online:       { html: '● Online',         bg: 'rgba(39,174,96,0.10)',  border: '#27ae60', color: '#1e8449' },
         reconnecting: { html: '◌ Reconectando…',  bg: 'rgba(243,156,18,0.12)', border: '#f39c12', color: '#b7770d' },
@@ -48,34 +44,21 @@ function _setDotState(state) {
     dot.style.color       = s.color;
 }
 
-function _mostrarToast(toastId, msg) {
-    const el = toastId ? document.getElementById(toastId) : null;
-    if (!el) return;
-    el.textContent   = msg;
-    el.className     = 'toast-ok';
-    el.style.display = 'block';
-    clearTimeout(el._toastTimer);
-    el._toastTimer = setTimeout(() => { el.className = ''; el.style.display = 'none'; }, 2500);
-}
-
 let _instanciada = false;
 
 export function initRecon({
+    supabaseClient, // CRÍTICO: Necesario para reactivar el motor de red
     onReconectar,
-    umbralMs      = 3000,
-    toastId       = null,
-    mostrarToast  = true,
-    estaLogueado  = null,
-} = {}) {
+    umbralMs = 3000
+}) {
     if (_instanciada) return;
     _instanciada = true;
 
-    if (typeof onReconectar !== 'function') {
-        console.warn('[bnh-recon] Se requiere onReconectar como función async.');
+    if (!supabaseClient) {
+        console.error('[bnh-recon] Falta el cliente de Supabase.');
         return;
     }
 
-    // Mostrar "online" cuando el DOM esté listo
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => setTimeout(() => _setDotState('online'), 50), { once: true });
     } else {
@@ -83,11 +66,10 @@ export function initRecon({
     }
 
     window.addEventListener('offline', () => _setDotState('offline'));
-    window.addEventListener('online',  () => _setDotState('online'));
+    window.addEventListener('online', () => _setDotState('online'));
 
-    let _lastVisible  = Date.now();
+    let _lastVisible = Date.now();
     let _reconectando = false;
-    let _watchdogTimer = null;
 
     document.addEventListener('visibilitychange', async () => {
         if (document.hidden) {
@@ -95,45 +77,56 @@ export function initRecon({
             return;
         }
 
-        if (_reconectando) return;
-        _reconectando = true;
-
-        // Watchdog: máximo 30s en "reconectando", luego forzar reset
-        _watchdogTimer = setTimeout(() => {
-            _reconectando = false;
-            _setDotState(navigator.onLine ? 'online' : 'offline');
-        }, 30_000);
-
         const awayMs = Date.now() - _lastVisible;
+        if (_reconectando || awayMs < umbralMs) return;
+
+        _reconectando = true;
+        _setDotState('reconnecting');
 
         try {
-            if (typeof estaLogueado === 'function' && !estaLogueado()) {
-                window.location.reload();
+            // 1. PAUSA DE DESPERTAR
+            // Le damos al sistema operativo tiempo para reactivar los sockets tras salir del modo reposo.
+            await new Promise(r => setTimeout(r, 600));
+
+            if (!navigator.onLine) {
+                _setDotState('offline');
                 return;
             }
 
-            if (awayMs < umbralMs) {
-                _setDotState(navigator.onLine ? 'online' : 'offline');
+            // 2. DESFIBRILADOR DE SESIÓN
+            // Esto es lo que soluciona los botones de guardar que no hacen nada.
+            // Obliga a Supabase a limpiar su cola interna y validar que el token sigue vivo.
+            const { data: { session }, error: authErr } = await supabaseClient.auth.getSession();
+
+            if (authErr || !session) {
+                console.warn('[bnh-recon] Sesión muerta tras suspensión. Forzando recarga.');
+                window.location.reload(); 
                 return;
             }
 
-            _setDotState('reconnecting');
-            await new Promise(r => setTimeout(r, 200));
-            await onReconectar();
+            // 3. RECARGA DE DATOS SEGURA
+            if (typeof onReconectar === 'function') {
+                await onReconectar();
+            }
+
             _setDotState('online');
-            if (mostrarToast) _mostrarToast(toastId, '🔄 Reconectado');
-
-        } catch (e) {
-            console.warn('[bnh-recon] Error al reconectar:', e.message || e);
-            _setDotState(navigator.onLine ? 'online' : 'offline');
-        } finally {
-            clearTimeout(_watchdogTimer);
-            _reconectando = false;
-            // Garantía: si por alguna razón quedó en "Reconectando", corregir
-            const dot = document.getElementById(DOT_ID);
-            if (dot?.innerHTML?.includes('Reconectando')) {
-                _setDotState(navigator.onLine ? 'online' : 'offline');
+            
+            // Mostrar toast si existe
+            const toastEl = document.getElementById('fichas-toast');
+            if (toastEl) {
+                toastEl.textContent = '🔄 Sistema restaurado';
+                toastEl.className = 'toast-ok';
+                toastEl.style.display = 'block';
+                setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 2500);
             }
+
+        } catch (error) {
+            console.error('[bnh-recon] Falla catastrófica en red. Recargando página para evitar cuelgues...', error);
+            // 4. MEDIDA EXTREMA
+            // Si hubo un error irrecuperable en red, hacemos el F5 automático que querías.
+            window.location.reload();
+        } finally {
+            _reconectando = false;
         }
     });
 }
