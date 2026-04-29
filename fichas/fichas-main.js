@@ -56,15 +56,49 @@ async function init() {
         }
     }
 
-    sincronizarVista();
+sincronizarVista();
     bnhPort.init().catch(console.error);
 
+    // ⚡ SISTEMA DE AUTO-RESCATE DE DATOS
     setTimeout(() => {
-        if (fichasUI.vistaActual === 'catalogo') {
-            const inp = document.getElementById('nombre-buscar-inp');
-            if (inp) inp.focus();
+        const rescateStr = sessionStorage.getItem('bnh_rescate');
+        if (rescateStr) {
+            sessionStorage.removeItem('bnh_rescate'); // Lo borramos para que no salte siempre
+            try {
+                const rescate = JSON.parse(rescateStr);
+                // Restauramos solo si el cuelgue ocurrió hace menos de 10 minutos
+                if (Date.now() - rescate.timestamp < 10 * 60 * 1000) {
+                    
+                    // Abrimos la ficha de fondo
+                    window.abrirFicha(rescate.charName);
+                    
+                    // Abrimos el modal que tenías abierto
+                    if (rescate.modalType === 'lore') {
+                        window.abrirEditarLore(rescate.charName);
+                    } else if (rescate.modalType === 'op') {
+                        window.abrirPanelOP(rescate.charName);
+                    }
+
+                    // Esperamos 150ms a que el modal termine de dibujarse e inyectamos todo el texto
+                    setTimeout(() => {
+                        Object.keys(rescate.data).forEach(id => {
+                            const el = document.getElementById(id);
+                            if (el) el.value = rescate.data[id];
+                        });
+                        
+                        // Ponemos un aviso visual para que sepas que se salvaron
+                        const opBody = document.getElementById('op-body');
+                        if (opBody) {
+                            const alerta = document.createElement('div');
+                            alerta.style.cssText = 'background:#fdf2f2; border:1px solid #e74c3c; color:#c0392b; padding:8px; border-radius:6px; font-size:0.85em; font-weight:700; text-align:center; margin-bottom:12px;';
+                            alerta.innerHTML = '⚠️ Desconexión de red detectada.<br>Tus datos no guardados han sido rescatados automáticamente. Por favor, revisa y guarda ahora.';
+                            opBody.insertBefore(alerta, opBody.firstChild);
+                        }
+                    }, 150);
+                }
+            } catch (e) { console.error('Error restaurando datos:', e); }
         }
-    }, 150);
+    }, 500);
 
     window.addEventListener('popstate', () => {
         const params = new URLSearchParams(window.location.search);
