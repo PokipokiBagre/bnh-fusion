@@ -79,8 +79,13 @@ async function init() {
                 if (charName && window.abrirFicha) window.abrirFicha(charName);
 
                 if (type === 'lore' && window.abrirEditarLore) {
-                    // Modal de lore: síncrono, el inyector genérico lo cubre.
+                    // abrirEditarLore es síncrono: pinta el HTML al instante,
+                    // pero restaurarRescate ya agotó sus reintentos antes de
+                    // llegar aquí. Hay que inyectar manualmente como con OP.
                     window.abrirEditarLore(charName);
+                    // initMarkupTextarea (autocomplete) corre en un setTimeout
+                    // interno de ~0ms; damos 120ms de margen igual que con OP.
+                    setTimeout(() => _inyectarEnModal(state.globalData), 120);
 
                 } else if (type === 'op' && window.abrirPanelOP) {
                     // abrirPanelOP es ASYNC (await getEquipacionPJ antes de pintar).
