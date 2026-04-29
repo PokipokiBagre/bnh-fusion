@@ -1,5 +1,5 @@
 // ============================================================
-// bnh-recon.js — Reconexión con Watchdog Anti-Cuelgues
+// bnh-recon.js — Reconexión con Watchdog (3s) y Auto-Rescate
 // Colocar en la RAÍZ del proyecto.
 // ============================================================
 
@@ -44,6 +44,49 @@ function _setDotState(state) {
     dot.style.color       = s.color;
 }
 
+// ⚡ PROTOCOLO DE EMERGENCIA: Salvar datos antes de recargar
+function _salvarDatosEnPeligro() {
+    try {
+        const overlay = document.getElementById('op-overlay');
+        if (!overlay || overlay.style.display === 'none') return;
+
+        const titleEl = overlay.querySelector('.op-modal-title');
+        if (!titleEl) return;
+        const titleText = titleEl.textContent || '';
+
+        let modalType = null;
+        let charName = null;
+
+        if (titleText.includes('Editar Lore')) {
+            modalType = 'lore';
+            charName = titleText.replace('📝 ', '').replace(' — Editar Lore', '').trim();
+        } else if (titleText.includes('⚙️')) {
+            modalType = 'op';
+            charName = titleText.replace('⚙️ ', '').trim();
+        } else {
+            return;
+        }
+
+        // Recolectar todos los inputs y textareas
+        const inputs = overlay.querySelectorAll('textarea, input');
+        const state = {};
+        inputs.forEach(el => {
+            if (el.id) state[el.id] = el.value;
+        });
+
+        if (Object.keys(state).length > 0) {
+            sessionStorage.setItem('bnh_rescate', JSON.stringify({
+                charName,
+                modalType,
+                data: state,
+                timestamp: Date.now()
+            }));
+        }
+    } catch (e) {
+        console.error('[bnh-recon] Error salvando datos de emergencia:', e);
+    }
+}
+
 let _instanciada = false;
 
 export function initRecon({
@@ -54,10 +97,7 @@ export function initRecon({
     if (_instanciada) return;
     _instanciada = true;
 
-    if (!supabaseClient) {
-        console.error('[bnh-recon] Falta el cliente de Supabase.');
-        return;
-    }
+    if (!supabaseClient) return;
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => setTimeout(() => _setDotState('online'), 50), { once: true });
@@ -84,28 +124,23 @@ export function initRecon({
         _setDotState('reconnecting');
 
         try {
-            // 1. Pausa de gracia para que la red física despierte
-            await new Promise(r => setTimeout(r, 800));
+            await new Promise(r => setTimeout(r, 600));
 
             if (!navigator.onLine) {
                 _setDotState('offline');
                 return;
             }
 
-            // 2. TIMEOUT ESTRICTO (Watchdog) de 7 segundos
-            // Usamos Promise.race: El primero que termine (Supabase o el Timer) gana.
+            // ⚡ TIMEOUT ESTRICTO DE 3 SEGUNDOS
             await Promise.race([
-                // Proceso normal de reconexión
                 (async () => {
                     const { data: { session }, error: authErr } = await supabaseClient.auth.getSession();
                     if (authErr || !session) throw new Error('SESION_INVALIDA');
                     if (typeof onReconectar === 'function') await onReconectar();
                 })(),
-                // Temporizador asesino: si pasan 7000ms, lanza error
-                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_RED')), 7000))
+                new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT_RED')), 3000))
             ]);
 
-            // Si llega aquí, significa que todo cargó rápido y bien
             _setDotState('online');
             
             const toastEl = document.getElementById('fichas-toast');
@@ -117,9 +152,9 @@ export function initRecon({
             }
 
         } catch (error) {
-            console.warn('[bnh-recon] Falla de red o timeout detectado. Recargando página para limpiar caché...', error.message);
-            // 3. LA SOLUCIÓN DEFINITIVA: 
-            // Si hubo timeout (tardó más de 7 seg) o la sesión murió, hacemos el reload automático.
+            console.warn('[bnh-recon] Red zombie detectada (timeout 3s). Rescatando datos y recargando...');
+            // Rescatamos los textos y disparamos el F5
+            _salvarDatosEnPeligro();
             window.location.reload();
         } finally {
             _reconectando = false;
