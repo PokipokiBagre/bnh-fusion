@@ -3,6 +3,7 @@
 // ============================================================
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import { bnhPort } from '../bnh-port-principal.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
 import {
     hilosState, postsState, rankingState,
     ptTagState, estadoUI, selPostsState, mapaAliasAGrupo
@@ -48,6 +49,19 @@ function ir(vista) {
     if (vista === 'timeline') renderTimeline();
     if (vista === 'ranking')  renderRanking();
     if (vista === 'hilos')    renderHilos();
+}
+
+// ── Guardar estado para rescate ───────────────────────────────
+function _saveCurrentState() {
+    salvarRescate({
+        vistaActual:    estadoUI.vistaActual,
+        filtroRol:      selPostsState.filtroRol,
+        filtroEstado:   selPostsState.filtroEstado,
+        pjBusqueda:     document.getElementById('hist-buscar-pj')?.value || '',
+        selActivo:      selPostsState.activo,
+        // Set no es serializable directamente — convertir a array
+        postsSel:       [...selPostsState.postsSel],
+    });
 }
 
 // Init
@@ -111,6 +125,73 @@ async function init() {
     }
 
     _sync();
+
+    // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) _saveCurrentState();
+    });
+    window.addEventListener('pagehide', () => _saveCurrentState(), { once: false });
+
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    restaurarRescate({
+        toastElId:  'toast-msg',
+        maxEsperas: 60,
+        onRestaurado: (saved) => {
+            const extra = saved?.extra || {};
+
+            // A. Restaurar filtros del panel de selección
+            if (extra.filtroRol)    selPostsState.filtroRol    = extra.filtroRol;
+            if (extra.filtroEstado) selPostsState.filtroEstado = extra.filtroEstado;
+
+            // B. Restaurar modo selección y posts seleccionados
+            if (extra.selActivo) {
+                selPostsState.activo = true;
+                if (Array.isArray(extra.postsSel) && extra.postsSel.length) {
+                    extra.postsSel.forEach(no => selPostsState.postsSel.add(Number(no)));
+                }
+            }
+
+            // C. Restaurar búsqueda de PJ (el input puede no existir aún,
+            //    el filtrado en vivo se aplica al montar el panel)
+            if (extra.pjBusqueda) {
+                const inp = document.getElementById('hist-buscar-pj');
+                if (inp) {
+                    inp.value = extra.pjBusqueda;
+                    window._histBuscarPJ?.(extra.pjBusqueda);
+                }
+            }
+
+            // D. Navegar a la vista guardada
+            const vista = extra.vistaActual || 'timeline';
+            _sync();
+            ir(vista);
+        },
+    });
+
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs:       3000,
+        onReconectar: async () => {
+            await cargarHilos();
+            if (estadoUI.hiloActivo) await cargarHiloActivo();
+            _sync();
+            ir(estadoUI.vistaActual);
+        },
+        onEmergencia: () => _saveCurrentState(),
+    });
+
+    // ── BFCACHE ───────────────────────────────────────────────────
+    window.addEventListener('pageshow', async (e) => {
+        if (!e.persisted) return;
+        try {
+            await cargarHilos();
+            if (estadoUI.hiloActivo) await cargarHiloActivo();
+            _sync();
+            ir(estadoUI.vistaActual);
+        } catch(err) { console.error('[hist] pageshow refresh error:', err); }
+    });
+
     ir('timeline');
 }
 
