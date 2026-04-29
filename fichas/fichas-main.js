@@ -13,6 +13,7 @@ import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
 import { bnhPort } from '../bnh-port-principal.js';
 import { getEquipacionPJ, setSupabaseRef, calcCTLUsado, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { supabase } from '../bnh-auth.js';
+import { initRecon } from '../bnh-recon.js';
 
 let postersDelHilo = null;
 let _scrollCatalogo = 0; // guarda posición de scroll al entrar al detalle
@@ -77,7 +78,6 @@ async function init() {
         const params = new URLSearchParams(window.location.search);
         const ficha  = params.get('ficha');
         if (ficha) {
-            // Guardar scroll actual antes de ir al detalle (por si navegan con el botón adelante)
             _scrollCatalogo = window.scrollY || document.documentElement.scrollTop;
             const g = gruposGlobal.find(x =>
                 x.nombre_refinado.toLowerCase() === ficha.toLowerCase() ||
@@ -90,12 +90,29 @@ async function init() {
             fichasUI.vistaActual  = 'catalogo';
             fichasUI.seleccionado = null;
             sincronizarVista();
-            // Restaurar scroll al volver con el botón atrás
             requestAnimationFrame(() => window.scrollTo(0, _scrollCatalogo));
         }
     });
 
-    _initVisibilityReconnect();
+    // Reconexión automática al volver a la pestaña
+    initRecon({
+        onReconectar: async () => {
+            await Promise.all([cargarTodo(), cargarFusiones()]);
+            window._equipCache = {};
+            cerrarUploadPanel();
+            try {
+                const { supabase: sb } = await import('../bnh-auth.js');
+                const { data: med } = await sb.from('medallas_catalogo')
+                    .select('nombre').eq('propuesta', false).order('nombre');
+                initMarkup({ grupos: gruposGlobal, medallas: med || [] });
+            } catch(e) { initMarkup({ grupos: gruposGlobal }); }
+            sincronizarVista();
+        },
+        umbralMs:     3000,
+        toastId:      'fichas-toast',
+        mostrarToast: true,
+        estaLogueado: () => bnhAuth.estaLogueado(),
+    });
 }
 
 function sincronizarVista() {
@@ -436,59 +453,6 @@ window.abrirFicha = (nombreGrupo) => {
         postersDelHilo = val === 'todos' ? null : await getPosterNamesDelHilo(val);
         sincronizarVista();
     };
-}
-
-// ── Reconexión automática al volver a la pestaña ──────────────
-// Los navegadores throttlean conexiones en pestañas inactivas.
-// Al recuperar visibilidad: verificar sesión y recargar datos si es necesario.
-function _initVisibilityReconnect() {
-    let _lastVisible = Date.now();
-    let _reconectando = false;
-
-    document.addEventListener('visibilitychange', async () => {
-        if (document.hidden) {
-            _lastVisible = Date.now();
-            return;
-        }
-        if (_reconectando) return;
-        _reconectando = true;
-
-        const awayMs = Date.now() - _lastVisible;
-
-        try {
-            // 1. Verificar sesión en memoria — no llamar ninguna API de auth aquí
-            //    para no competir con el lock interno de Supabase.
-            if (!bnhAuth.estaLogueado()) {
-                window.location.reload();
-                return;
-            }
-
-            // 2. Si estuvo fuera más de 3s, recargar datos
-            if (awayMs >= 3000) {
-                // Pequeña espera para que el lock de auth se libere antes de queries
-                await new Promise(r => setTimeout(r, 200));
-                await Promise.all([cargarTodo(), cargarFusiones()]);
-                // Limpiar cache de equipación — datos recién recargados
-                window._equipCache = {};
-                cerrarUploadPanel();
-                sincronizarVista();
-                const toastEl = document.getElementById('fichas-toast');
-                if (toastEl) {
-                    toastEl.textContent = '🔄 Reconectado';
-                    toastEl.className = 'toast-ok';
-                    toastEl.style.display = 'block';
-                    setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 2000);
-                }
-            }
-        } catch (e) {
-            console.warn('[Fichas] Error en reconexión:', e);
-        } finally {
-            _reconectando = false;
-        }
-    });
-
-    // Nota: NO agregar listener 'focus' — compite con visibilitychange
-    // por el lock de auth de Supabase y causa AbortError.
 }
 
 init().catch(console.error);
