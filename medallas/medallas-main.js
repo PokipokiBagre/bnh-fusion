@@ -15,6 +15,33 @@ import { initMarkup } from '../bnh-markup.js';
 import { setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { initTags } from '../bnh-tags.js';
 import './medallas-ai.js';
+import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+
+// ── Detectar qué modal está abierto y serializarlo ────────────
+function _detectarModalAbierto() {
+    const modal = document.getElementById('medalla-modal');
+    if (!modal || modal.style.display === 'none' || !modal.innerHTML.trim()) return null;
+
+    // ¿Es el formulario múltiple? Tiene el input mf-num-forms
+    const numFormsEl = document.getElementById('mf-num-forms');
+    if (numFormsEl) {
+        const N = parseInt(numFormsEl.value) || 4;
+        // Detectar prefix: buscar el primer mf-nombre con cualquier prefix
+        const primerNombre = modal.querySelector('[id^="mf-nombre-"]');
+        const prefix = primerNombre ? primerNombre.id.replace('mf-nombre-', '').replace(/\d+$/, '') : 'mm';
+        const esPropuesta = prefix === 'mp';
+        return { tipo: 'multiple', N, prefix, esPropuesta };
+    }
+
+    // ¿Es el formulario simple? Tiene fm-nombre
+    const fmNombre = document.getElementById('fm-nombre');
+    if (fmNombre) {
+        const fmId = document.getElementById('fm-id')?.value || '';
+        return { tipo: 'simple', medallaId: fmId };
+    }
+
+    return null;
+}
 
 window.onload = async () => {
     const fav = document.getElementById('dynamic-favicon');
@@ -43,7 +70,73 @@ window.onload = async () => {
     _exponerGlobales();
     _renderTab(medallaState.tabActual);
 
-    // Leer la URL para abrir medallas por parámetro
+    // ── RESTAURAR RESCATE ────────────────────────────────────────
+    restaurarRescate({
+        toastElId:  'toast-msg',
+        maxEsperas: 80,
+        onRestaurado(state) {
+            const extra = state?.extra || {};
+
+            // A. Restaurar tab activa
+            if (extra.tabActual) _renderTab(extra.tabActual);
+
+            // B. Reabrir modal si estaba abierto
+            const modal = extra.modal;
+            if (!modal) return;
+
+            if (modal.tipo === 'multiple') {
+                // Reabrir el formulario múltiple con el mismo N y tipo
+                renderFormsMultiple(modal.esPropuesta, modal.N);
+                // Inyectar los campos (son estáticos una vez renderizados)
+                setTimeout(() => {
+                    Object.entries(state.globalData || {}).forEach(([id, val]) => {
+                        const el = document.getElementById(id);
+                        if (!el || el.value === String(val)) return;
+                        el.value = String(val);
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                }, 120);
+
+            } else if (modal.tipo === 'simple') {
+                // Reabrir formulario simple (nueva o edición)
+                if (modal.medallaId) {
+                    const med = medallas.find(m => String(m.id) === String(modal.medallaId));
+                    renderFormMedalla(med || null);
+                } else {
+                    renderFormMedalla(null);
+                }
+                // Los campos de req/cond dinámicos necesitan un tick tras el render
+                setTimeout(() => {
+                    Object.entries(state.globalData || {}).forEach(([id, val]) => {
+                        const el = document.getElementById(id);
+                        if (!el || el.value === String(val)) return;
+                        el.value = String(val);
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                    });
+                }, 120);
+            }
+        },
+    });
+
+    // ── RECONEXIÓN PROFUNDA ───────────────────────────────────────
+    initRecon({
+        supabaseClient: supabase,
+        umbralMs:       3000,
+        onReconectar: async () => {
+            await Promise.all([ initTags(), cargarTodo() ]);
+            initMarkup({ grupos, medallas });
+            _renderTab(medallaState.tabActual);
+        },
+        onEmergencia: () => {
+            const modal = _detectarModalAbierto();
+            salvarRescate({
+                tabActual: medallaState.tabActual,
+                modal,
+            });
+        },
+    });
     const params = new URLSearchParams(window.location.search);
     const mQuery = params.get('medalla');
     if (mQuery) {
