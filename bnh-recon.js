@@ -44,66 +44,102 @@ function _setDotState(state) {
     dot.style.color       = s.color;
 }
 
-// ⚡ PROTOCOLO DE EMERGENCIA V2: Salvar TODO el estado
-function _salvarDatosEnPeligro() {
+// ⚡ PROTOCOLO DE EMERGENCIA V3: Aspiradora Global
+function _salvarDatosEnPeligroV3() {
     try {
-        const stateToSave = { timestamp: Date.now(), modal: null, catalog: {} };
+        const stateToSave = { timestamp: Date.now(), globalData: {}, uiState: {} };
 
-        // 1. Salvar estado del Catálogo
-        const searchInp = document.getElementById('nombre-buscar-inp');
-        if (searchInp) stateToSave.catalog.search = searchInp.value;
+        // 1. Guardar TODO input, textarea y select con ID (¡incluye el chat OP y los deltas!)
+        document.querySelectorAll('input[id], textarea[id], select[id]').forEach(el => {
+            if (el.type !== 'file' && el.type !== 'submit' && el.type !== 'button') {
+                if (el.type === 'checkbox' || el.type === 'radio') {
+                    stateToSave.globalData[el.id] = el.checked;
+                } else if (el.value !== '') {
+                    stateToSave.globalData[el.id] = el.value;
+                }
+            }
+        });
 
-        // Extraer los tags que están activos en el sidebar
-        const activeTags = Array.from(document.querySelectorAll('#sidebar-tag-list li.active .tag-link'))
-                               .map(el => el.textContent.trim());
-        stateToSave.catalog.tags = activeTags;
+        // 2. Guardar tags activos en el sidebar
+        stateToSave.uiState.activeTags = Array.from(document.querySelectorAll('#sidebar-tag-list li.active .tag-link')).map(el => el.textContent.trim());
 
-        // 2. Salvar estado del Modal (OP o Lore)
+        // 3. Modales abiertos
         const overlay = document.getElementById('op-overlay');
         if (overlay && overlay.style.display !== 'none') {
             const titleEl = overlay.querySelector('.op-modal-title');
             const titleText = titleEl ? titleEl.textContent : '';
-
-            let modalType = null;
-            let charName = null;
             let activeTab = 0;
-
+            const activeTabEl = overlay.querySelector('.op-tab.active');
+            if (activeTabEl && activeTabEl.id) activeTab = parseInt(activeTabEl.id.replace('op-tab-', '')) || 0;
+            
             if (titleText.includes('Editar Lore')) {
-                modalType = 'lore';
-                charName = titleText.replace('📝 ', '').replace(' — Editar Lore', '').trim();
+                stateToSave.uiState.modal = { type: 'lore', charName: titleText.replace('📝 ', '').replace(' — Editar Lore', '').trim() };
             } else if (titleText.includes('⚙️')) {
-                modalType = 'op';
-                charName = titleText.replace('⚙️ ', '').trim();
-                
-                // Detectar qué pestaña (Stats, Tags, Grupo) estaba abierta
-                const activeTabEl = overlay.querySelector('.op-tab.active');
-                if (activeTabEl && activeTabEl.id) {
-                    activeTab = parseInt(activeTabEl.id.replace('op-tab-', '')) || 0;
-                }
-            }
-
-            if (modalType) {
-                // Aspirar todos los inputs, textareas y selects
-                const inputs = overlay.querySelectorAll('textarea, input, select');
-                const data = {};
-                inputs.forEach(el => {
-                    if (el.id && el.type !== 'file' && el.type !== 'submit') {
-                        if (el.type === 'checkbox' || el.type === 'radio') {
-                            data[el.id] = el.checked;
-                        } else {
-                            data[el.id] = el.value;
-                        }
-                    }
-                });
-                stateToSave.modal = { type: modalType, charName, data, activeTab };
+                stateToSave.uiState.modal = { type: 'op', charName: titleText.replace('⚙️ ', '').trim(), activeTab };
             }
         }
 
-        // Usamos una nueva key en sessionStorage para evitar conflictos
-        sessionStorage.setItem('bnh_rescate_v2', JSON.stringify(stateToSave));
-    } catch (e) {
-        console.error('[bnh-recon] Error salvando datos de emergencia:', e);
-    }
+        sessionStorage.setItem('bnh_rescate_v3', JSON.stringify(stateToSave));
+    } catch (e) { console.error('Error salvando datos:', e); }
+}
+
+// ── Reconexión automática al volver a la pestaña (Ultra Agresiva 50ms) ──────────────
+function _initVisibilityReconnect() {
+    let _lastVisible = Date.now();
+    let _reconectando = false;
+
+    document.addEventListener('visibilitychange', async () => {
+        if (document.hidden) {
+            _lastVisible = Date.now();
+            return;
+        }
+        if (_reconectando) return;
+        _reconectando = true;
+
+        const awayMs = Date.now() - _lastVisible;
+
+        try {
+            if (!bnhAuth.estaLogueado()) {
+                window.location.reload();
+                return;
+            }
+
+            if (awayMs >= 3000) {
+                // 1. Pausa mínima dictada: 50ms
+                await new Promise(r => setTimeout(r, 50));
+
+                if (!navigator.onLine) {
+                    _reconectando = false;
+                    return;
+                }
+
+                // 2. Timeout letal de 1.5s
+                await Promise.race([
+                    (async () => {
+                        await Promise.all([cargarTodo(), cargarFusiones()]);
+                        window._equipCache = {};
+                        cerrarUploadPanel();
+                        sincronizarVista();
+                    })(),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 1500))
+                ]);
+
+                const toastEl = document.getElementById('fichas-toast');
+                if (toastEl) {
+                    toastEl.textContent = '🔄 Reconectado';
+                    toastEl.className = 'toast-ok';
+                    toastEl.style.display = 'block';
+                    setTimeout(() => { toastEl.className = ''; toastEl.style.display = 'none'; }, 2000);
+                }
+            }
+        } catch (e) {
+            console.warn('[Fichas] Red Zombie detectada. Salvando datos y recargando...', e);
+            _salvarDatosEnPeligroV3();
+            window.location.reload();
+        } finally {
+            _reconectando = false;
+        }
+    });
 }
 
 let _instanciada = false;
