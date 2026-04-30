@@ -717,6 +717,8 @@ export function renderCatalogo() {
             </div>
             <button class="btn btn-sm" style="background:#6c3483;color:white;border-color:#6c3483;"
                 onclick="window._catCombinarTags()">🔀 Combinar</button>
+            <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;"
+                onclick="window._tagsAI.open([...window._catMultiSel])">✨ IA — Descripciones</button>
             <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
             <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
         </div>` : '';
