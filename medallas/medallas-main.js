@@ -16,6 +16,7 @@ import { setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
 import { initTags } from '../bnh-tags.js';
 import './medallas-ai.js';
 import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+import { initScroll } from '../bnh-scroll.js';
 
 // ── Detectar qué modal está abierto y serializarlo ────────────
 function _detectarModalAbierto() {
@@ -92,6 +93,7 @@ window.onload = async () => {
     
     _exponerGlobales();
     _renderTab(medallaState.tabActual);
+    initScroll();
 
     // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
     document.addEventListener('visibilitychange', () => {
