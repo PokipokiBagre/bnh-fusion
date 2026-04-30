@@ -1053,7 +1053,6 @@ window._catToggleCheck = (tag, checked) => {
     // Si el panel IA está abierto, re-renderizar con la selección actualizada
     window._tagsAI?.refreshInline();
 };
-};
 
 window._catEliminarSeleccionados = async () => {
     const count = window._catMultiSel.size;
