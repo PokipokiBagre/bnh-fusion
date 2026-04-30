@@ -721,6 +721,7 @@ export function renderCatalogo() {
                 onclick="window._catCombinarTags()">🔀 Combinar</button>
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;"
                 onclick="window._tagsAI.openInline()">✨ IA — Descripciones</button>
+            <button class="btn btn-sm btn-outline" onclick="window._catDeseleccionar()">☐ Deseleccionar</button>
             <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
             <button class="btn btn-sm" style="background:#7d5a00;color:white;border-color:#7d5a00;"
                 onclick="window._catBorrarDescripciones()">✂️ Borrar desc.</button>
@@ -1042,9 +1043,7 @@ window._catCancelMulti = () => {
     if (toolbar) toolbar.style.display = 'none';
     const btn = document.getElementById('btn-cat-multi');
     if (btn) btn.style.display = '';
-    // Cerrar panel IA inline si estaba abierto
     document.getElementById('ai-inline-panel')?.remove();
-    // Limpiar cualquier modal residual de versiones anteriores
     document.getElementById('ai-panel-root')?.remove();
 };
 
@@ -1052,7 +1051,6 @@ window._catToggleCheck = (tag, checked) => {
     if (checked) window._catMultiSel.add(tag);
     else         window._catMultiSel.delete(tag);
     _catUpdateCount();
-    // Si el panel IA está abierto, re-renderizar con la selección actualizada
     window._tagsAI?.refreshInline();
 };
 
@@ -1074,6 +1072,14 @@ window._catEliminarSeleccionados = async () => {
     window._catMultiActivo = false;
     window._catMultiSel    = new Set();
     await _recargarCatalogo();
+};
+
+window._catDeseleccionar = () => {
+    window._catMultiSel.clear();
+    document.querySelectorAll('.cat-card-check input[type=checkbox]').forEach(cb => { cb.checked = false; });
+    document.querySelectorAll('[data-cat-card]').forEach(el => { el.style.outline = ''; el.style.background = ''; });
+    _catUpdateCount();
+    window._tagsAI?.refreshInline();
 };
 
 window._catBorrarDescripciones = async () => {
@@ -1166,19 +1172,14 @@ window._catEjecutarCombinar = async () => {
     const { renameTag, deleteTag } = await import('./tags-data.js');
 
     try {
-        // 1. Renombrar el primer tag al nuevo nombre (transfiere PJ + PT)
         const r = await renameTag(tagsOrigen[0], nuevoTag);
         if (!r.ok) throw new Error(r.msg);
 
-        // 2. Para cada tag adicional: renombrar también al nuevo nombre
-        //    renameTag suma los PT si el destino ya existe
         for (let i = 1; i < tagsOrigen.length; i++) {
             const r2 = await renameTag(tagsOrigen[i], nuevoTag);
             if (!r2.ok) throw new Error(r2.msg);
         }
 
-        // 3. Los tags originales ya no existen tras renameTag (se borraron del catálogo)
-        //    pero si quedaron entradas huérfanas, limpiar con deleteTag sin borrar PT
         for (const tagOrigen of tagsOrigen) {
             await deleteTag(tagOrigen, false);
         }
