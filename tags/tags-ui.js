@@ -722,6 +722,8 @@ export function renderCatalogo() {
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;"
                 onclick="window._tagsAI.openInline()">✨ IA — Descripciones</button>
             <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
+            <button class="btn btn-sm" style="background:#7d5a00;color:white;border-color:#7d5a00;"
+                onclick="window._catBorrarDescripciones()">✂️ Borrar desc.</button>
             <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
         </div>` : '';
 
@@ -1053,6 +1055,7 @@ window._catToggleCheck = (tag, checked) => {
     // Si el panel IA está abierto, re-renderizar con la selección actualizada
     window._tagsAI?.refreshInline();
 };
+};
 
 window._catEliminarSeleccionados = async () => {
     const count = window._catMultiSel.size;
@@ -1069,6 +1072,29 @@ window._catEliminarSeleccionados = async () => {
     } else {
         toast(`🗑️ ${count} tag${count!==1?'s':''} eliminado${count!==1?'s':''}`, 'ok');
     }
+    window._catMultiActivo = false;
+    window._catMultiSel    = new Set();
+    await _recargarCatalogo();
+};
+
+window._catBorrarDescripciones = async () => {
+    const count = window._catMultiSel.size;
+    if (!count) { toast('⚠️ Nada seleccionado', 'info'); return; }
+    if (!confirm(`¿Borrar la descripción de ${count} tag${count!==1?'s':''}?\nEl tag en sí no se elimina, solo su texto descriptivo.`)) return;
+
+    const { guardarDescripcionTag } = await import('./tags-data.js');
+    const tags = [...window._catMultiSel];
+    toast('⏳ Borrando descripciones…', 'info');
+
+    let ok = 0;
+    for (const tag of tags) {
+        const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+        const res = await guardarDescripcionTag(tagKey, '');
+        if (res.ok) ok++;
+        else toast(`Error en ${tag}: ${res.msg}`, 'error');
+    }
+
+    toast(`✂️ ${ok} descripción${ok!==1?'es':''} borrada${ok!==1?'s':''}`, 'ok');
     window._catMultiActivo = false;
     window._catMultiSel    = new Set();
     await _recargarCatalogo();
