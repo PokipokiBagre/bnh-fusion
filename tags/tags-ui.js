@@ -1032,6 +1032,9 @@ window._catToggleCheck = (tag, checked) => {
     if (checked) window._catMultiSel.add(tag);
     else         window._catMultiSel.delete(tag);
     _catUpdateCount();
+    // Si el panel IA está abierto, re-renderizar con la selección actualizada
+    window._tagsAI?.refreshInline();
+};
 };
 
 window._catEliminarSeleccionados = async () => {
