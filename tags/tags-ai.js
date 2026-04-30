@@ -49,68 +49,62 @@ function _pjsDeTag(tag) {
 
 // ── Renderizar el panel inline ────────────────────────────────────────────────
 function _renderInlinePanel(tagsSel) {
-    // Eliminar panel anterior si existe
+    // El panel va FUERA de la toolbar sticky, justo debajo de ella
     document.getElementById('ai-inline-panel')?.remove();
 
     const tagsSelArr = [...tagsSel];
     const tagMapa    = _buildTagList();
 
-    // Para cada tag seleccionado: armar fila con descripción actual y personajes
-    const rows = tagsSelArr.map(tag => {
+    // Chips compactos de los tags seleccionados (no tarjetas grandes)
+    const chips = tagsSelArr.map(tag => {
         const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
         const desc   = _descActual(tagKey);
-        const pjs    = _pjsDeTag(tag);
         const count  = tagMapa[tag.startsWith('#') ? tag : '#'+tag] || 0;
-        return `
-        <div style="border:1px solid var(--gray-200);border-radius:8px;padding:10px 12px;background:white;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
-                <span style="font-weight:700;color:var(--blue);font-size:0.88em;">${_esc(tag)}</span>
-                <span style="font-size:0.7em;color:var(--gray-500);">${count} PJ${count!==1?'s':''}</span>
-                ${desc ? '<span style="font-size:0.68em;color:var(--green);font-weight:600;">✓ desc. actual</span>' : '<span style="font-size:0.68em;color:var(--gray-400);">Sin descripción</span>'}
-            </div>
-            ${desc ? `<div style="font-size:0.72em;color:var(--gray-500);font-style:italic;margin-bottom:4px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;">"${_esc(desc)}"</div>` : ''}
-            ${pjs.length ? `<div style="font-size:0.7em;color:var(--gray-600);">PJs: ${pjs.slice(0,8).map(n=>`<b>${_esc(n)}</b>`).join(', ')}${pjs.length>8?` …+${pjs.length-8}`:''}</div>` : ''}
-        </div>`;
+        return `<span style="display:inline-flex;align-items:center;gap:4px;background:white;border:1.5px solid var(--green);
+            border-radius:20px;padding:2px 10px;font-size:0.8em;font-weight:600;color:var(--blue);">
+            ${_esc(tag.startsWith('#')?tag:'#'+tag)}
+            <span style="color:var(--gray-400);font-weight:400;">${count}</span>
+            ${desc ? '<span style="color:var(--green);font-size:0.85em;">✓</span>' : ''}
+        </span>`;
     }).join('');
 
     const panel = document.createElement('div');
     panel.id = 'ai-inline-panel';
-    panel.style.cssText = 'width:100%;margin-top:12px;border-top:1px solid var(--green);padding-top:12px;display:flex;flex-direction:column;gap:10px;';
+    panel.style.cssText = 'background:var(--green-pale);border:1.5px solid var(--green);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:10px;';
 
     panel.innerHTML = `
-        <!-- Tags seleccionados (resumen) -->
-        <div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;">
-            ${rows}
+        <!-- Tags seleccionados como chips -->
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <span style="font-size:0.75em;font-weight:700;color:var(--gray-600);">Tags:</span>
+            ${chips}
         </div>
 
-        <!-- Contexto adicional -->
-        <div>
-            <label style="font-size:0.78em;font-weight:700;color:var(--gray-700);display:block;margin-bottom:4px;">
-                Contexto / instrucciones para la IA
-            </label>
-            <textarea id="ai-prompt-extra" class="inp" rows="2"
-                style="font-family:monospace;font-size:0.82em;resize:vertical;width:100%;box-sizing:border-box;"
-                placeholder="Ej: #Marzanna es un Quirk de congelación. #Tightlandia es el parque de @All_Tight@."></textarea>
+        <!-- Contexto + botones en una fila -->
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <textarea id="ai-prompt-extra" class="inp" rows="2"
+                    style="font-family:monospace;font-size:0.82em;resize:none;width:100%;box-sizing:border-box;"
+                    placeholder="Contexto: #Marzanna es un Quirk de congelación. @All_Tight@ tiene #Tightlandia..."></textarea>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;padding-bottom:2px;">
+                <button id="ai-gen-btn" class="btn btn-green btn-sm" onclick="window._tagsAI.generar()">
+                    ✨ Generar
+                </button>
+                <button id="ai-opt-btn" class="btn btn-sm" style="background:#1a4a80;color:white;border-color:#1a4a80;"
+                    onclick="window._tagsAI.optimizar()">
+                    🔍 Optimizar
+                </button>
+                <span id="ai-status" style="font-size:0.75em;color:var(--gray-500);align-self:center;"></span>
+            </div>
         </div>
 
-        <!-- Botones de acción -->
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button id="ai-gen-btn" class="btn btn-green btn-sm" onclick="window._tagsAI.generar()" style="min-width:160px;">
-                ✨ Generar descripciones
-            </button>
-            <button id="ai-opt-btn" class="btn btn-sm" style="background:#1a4a80;color:white;border-color:#1a4a80;"
-                onclick="window._tagsAI.optimizar()" title="Segunda pasada: añade @Personajes@ y #Tags con criterio de representación">
-                🔍 Optimizar markup
-            </button>
-            <span id="ai-status" style="font-size:0.78em;color:var(--gray-500);"></span>
-        </div>
-
-        <!-- Resultados -->
-        <div id="ai-results-area" style="display:none;flex-direction:column;gap:8px;"></div>
+        <!-- Resultados (inicialmente ocultos) -->
+        <div id="ai-results-area" style="display:none;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
     `;
 
+    // Insertar DESPUÉS de la toolbar, no dentro
     const toolbar = document.getElementById('cat-multi-toolbar');
-    if (toolbar) toolbar.appendChild(panel);
+    if (toolbar) toolbar.insertAdjacentElement('afterend', panel);
 }
 
 // ── Estado ───────────────────────────────────────────────────────────────────
