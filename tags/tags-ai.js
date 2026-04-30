@@ -98,7 +98,7 @@ function _renderInlinePanel(tagsSel) {
             <button id="ai-gen-btn" class="btn btn-green btn-sm" onclick="window._tagsAI.generar()" style="min-width:160px;">
                 ✨ Generar descripciones
             </button>
-            <button id="ai-opt-btn" class="btn btn-sm" style="background:#1a4a80;color:white;border-color:#1a4a80;display:none;"
+            <button id="ai-opt-btn" class="btn btn-sm" style="background:#1a4a80;color:white;border-color:#1a4a80;"
                 onclick="window._tagsAI.optimizar()" title="Segunda pasada: añade @Personajes@ y #Tags con criterio de representación">
                 🔍 Optimizar markup
             </button>
@@ -123,6 +123,14 @@ window._tagsAI = {
         _renderInlinePanel(tags);
     },
 
+    // Re-renderiza el resumen de tags si el panel ya está abierto (llamado desde _catToggleCheck)
+    refreshInline() {
+        if (!document.getElementById('ai-inline-panel')) return;
+        const tags = [...(window._catMultiSel || [])];
+        if (!tags.length) { document.getElementById('ai-inline-panel')?.remove(); return; }
+        _renderInlinePanel(tags);
+    },
+
     // Cierra el panel inline
     closeInline() {
         document.getElementById('ai-inline-panel')?.remove();
@@ -143,14 +151,12 @@ window._tagsAI = {
 
         const promptExtra = document.getElementById('ai-prompt-extra')?.value.trim() || '';
         const btn         = document.getElementById('ai-gen-btn');
-        const optBtn      = document.getElementById('ai-opt-btn');
         const status      = document.getElementById('ai-status');
         const resultsArea = document.getElementById('ai-results-area');
 
         if (btn)    { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
         if (status) status.textContent = 'Conectando con Gemini...';
         if (resultsArea) { resultsArea.style.display = 'none'; resultsArea.innerHTML = ''; }
-        if (optBtn) optBtn.style.display = 'none';
 
         const tagMapa = _buildTagList();
 
@@ -263,7 +269,6 @@ ${tagsInfo}`;
             }
 
             // Mostrar botón Optimizar ahora que hay resultados
-            if (optBtn) optBtn.style.display = '';
 
         } catch(err) {
             if (status) status.textContent = '';
