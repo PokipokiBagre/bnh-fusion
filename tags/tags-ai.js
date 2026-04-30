@@ -49,13 +49,12 @@ function _pjsDeTag(tag) {
 
 // ── Renderizar el panel inline ────────────────────────────────────────────────
 function _renderInlinePanel(tagsSel) {
-    // El panel va FUERA de la toolbar sticky, justo debajo de ella
     document.getElementById('ai-inline-panel')?.remove();
 
     const tagsSelArr = [...tagsSel];
     const tagMapa    = _buildTagList();
 
-    // Chips compactos de los tags seleccionados (no tarjetas grandes)
+    // Chips compactos de los tags seleccionados
     const chips = tagsSelArr.map(tag => {
         const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
         const desc   = _descActual(tagKey);
@@ -70,10 +69,10 @@ function _renderInlinePanel(tagsSel) {
 
     const panel = document.createElement('div');
     panel.id = 'ai-inline-panel';
-    panel.style.cssText = 'background:var(--green-pale);border:1.5px solid var(--green);border-top:none;border-radius:0 0 var(--radius) var(--radius);padding:12px 14px;display:flex;flex-direction:column;gap:10px;';
+    panel.style.cssText = 'width:100%;margin-top:10px;padding-top:10px;border-top:1px solid rgba(0,150,0,0.25);display:flex;flex-direction:column;gap:10px;';
 
     panel.innerHTML = `
-        <!-- Tags seleccionados como chips -->
+        <!-- Tags como chips -->
         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
             <span style="font-size:0.75em;font-weight:700;color:var(--gray-600);">Tags:</span>
             ${chips}
@@ -98,13 +97,13 @@ function _renderInlinePanel(tagsSel) {
             </div>
         </div>
 
-        <!-- Resultados (inicialmente ocultos) -->
+        <!-- Resultados -->
         <div id="ai-results-area" style="display:none;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;"></div>
     `;
 
-    // Insertar DESPUÉS de la toolbar, no dentro
+    // Insertar DENTRO de la toolbar para que el sticky los agrupe
     const toolbar = document.getElementById('cat-multi-toolbar');
-    if (toolbar) toolbar.insertAdjacentElement('afterend', panel);
+    if (toolbar) toolbar.appendChild(panel);
 }
 
 // ── Estado ───────────────────────────────────────────────────────────────────
