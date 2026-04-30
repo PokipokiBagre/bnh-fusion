@@ -17,7 +17,8 @@ export const tagsState = {
     busquedaMedallasAcc: '',
     esAdmin:        false,
     filtroRol:      '#Jugador',     
-    filtroEstado:   '#Activo',      
+    filtroEstado:   '#Activo',
+    ordenCat:       'az',           // 'az' | 'n'
 };
 
 export let grupos        = [];   
