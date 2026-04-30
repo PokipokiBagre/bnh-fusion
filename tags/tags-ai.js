@@ -348,27 +348,21 @@ ${tagsInfo}`;
             .map(([k,v]) => `"#${k}": "${v.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`)
             .join(',\n');
 
-        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada de markup Y longitud.
+        const promptOpt = `Tienes estas descripciones de tags de un RPG. Mejóralas activamente.
 
-FILOSOFÍA: Un tag es una definición de concepto, no una historia. La descripción explica QUÉ ES el tag.
-Los personajes son secundarios — solo se incluyen si ilustran algo que la definición sola no transmite.
+FILOSOFÍA: Un tag es una definición de concepto, no una historia. Explica QUÉ ES el tag y qué implica tenerlo.
+Los personajes son secundarios — solo si ilustran algo que la definición sola no transmite.
 
-${promptExtra ? `INSTRUCCIÓN EDITORIAL DEL OP — PRIORIDAD MÁXIMA, aplícala antes que cualquier otra regla:\n${promptExtra}\n\nSi pide añadir un personaje con @arrobas@, hazlo. Si pide quitar algo, quítalo. Si pide cambiar el texto, cámbialo.\n` : ''}
-
-TAREA:
-1. Donde aparezca un nombre de personaje en texto plano, envuélvelo en @arrobas@: @Maxwell@.
-2. Donde aparezca el nombre de un tag sin # (ej: "Eldritch"), añade el #: #Eldritch.
-3. Si el texto ya tiene markup correcto, déjalo.
-4. LONGITUD — recorta si es necesario:
-   · Sin @arrobas@: máximo UNA oración, 18 palabras. Resúmelo centrándote en la definición del concepto.
-   · Con @arrobas@: máximo DOS oraciones cortas, 30 palabras en total.
-   · NUNCA más de 2 personajes por descripción.
-5. Si la descripción es una lista de personajes haciendo algo (narrativa), reescríbela como definición del concepto.
-
-CRITERIO — cuándo incluir personajes:
-- Si el tag tiene 1-2 personajes → incluirlos, ilustran bien el concepto.
-- Si el tag tiene 3+ personajes → incluir personajes SOLO si aportan a la definición. Si el concepto ya es claro solo, quita los @arrobas@ y deja una definición limpia.
-- NUNCA listes personajes para "rellenar" si la definición ya es completa.
+${promptExtra ? `INSTRUCCIÓN EDITORIAL DEL OP — PRIORIDAD MÁXIMA, aplícala antes que cualquier otra regla:\n${promptExtra}\n\nSi pide añadir un personaje, hazlo. Si pide quitar algo, quítalo. Si pide cambiar el texto, cámbialo.\n` : ''}TAREAS (aplica TODAS aunque no haya instrucción del OP):
+1. Si la descripción es narrativa ("X e Y hacen Z con el tag"), reescríbela como definición del concepto.
+2. Añade @arrobas@ a nombres de personajes en texto plano.
+3. Añade # a nombres de tags sin # (ej: "Eldritch" → #Eldritch).
+4. Ajusta personajes según representación:
+   - 1-2 personajes en el tag → menciónalos si aportan a la definición.
+   - 3+ personajes → @arrobas@ SOLO si el personaje ilustra algo concreto. Si no aportan, quítalos y deja definición limpia.
+   - NUNCA más de 2 @arrobas@ por descripción.
+5. Longitud: sin @arrobas@: máximo 18 palabras. Con @arrobas@: máximo 30 palabras en dos oraciones.
+6. Si la descripción ya es perfecta (definición limpia, markup correcto, longitud adecuada), devuélvela igual.
 
 PERSONAJES POR TAG:
 ${tagsConPjs}
@@ -379,7 +373,7 @@ ${todosLosPJs}
 TODOS LOS TAGS DISPONIBLES:
 ${todosLosTags}
 
-DESCRIPCIONES A OPTIMIZAR:
+DESCRIPCIONES A MEJORAR:
 {
 ${descInput}
 }
