@@ -13,6 +13,7 @@ import { renderProgresion, renderCatalogo, renderEstadisticas, renderBaneados, r
 import { initMarkup } from '../bnh-markup.js';
 import { initTagsAI } from './tags-ai.js';
 import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+import { initScroll } from '../bnh-scroll.js';
 
 async function _refreshMarkup() {
     const state = await import('./tags-state.js');
@@ -127,6 +128,7 @@ window.onload = async () => {
 
     // Inicializar el módulo de IA (solo visible para admins)
     if (tagsState.esAdmin) initTagsAI();
+    initScroll();
 
     // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
     // FIX: salvarRescate en visibilitychange (hide) garantiza que haya
