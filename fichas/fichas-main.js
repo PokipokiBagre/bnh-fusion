@@ -13,6 +13,7 @@ import { initMarkup, initMarkupTextarea } from './fichas-markup.js';
 import { bnhPort } from '../bnh-port-principal.js';
 import { setSupabaseRef } from '../bnh-pac.js';
 import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+import { initScroll } from '../bnh-scroll.js';
 
 let postersDelHilo  = null;
 let _scrollCatalogo = 0;
@@ -58,6 +59,7 @@ async function init() {
 
     sincronizarVista();
     bnhPort.init().catch(console.error);
+    initScroll({ scrollEl: '.app-main' });
 
     // ── RESTAURAR RESCATE ────────────────────────────────────────
     restaurarRescate({
