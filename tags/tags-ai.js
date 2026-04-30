@@ -297,7 +297,7 @@ ${tagsInfo}`;
         const btn         = document.getElementById('ai-opt-btn');
         const status      = document.getElementById('ai-status');
         const promptExtra = document.getElementById('ai-prompt-extra')?.value.trim() || '';
-        if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizando...'; }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Mejorando...'; }
 
         // Prioridad 1: textareas de resultados generados
         const descActuales = {};
@@ -321,7 +321,7 @@ ${tagsInfo}`;
 
         if (!Object.keys(descActuales).length) {
             toast('Los tags seleccionados no tienen descripción aún. Usa "Generar" primero.', 'error');
-            if (btn) { btn.disabled = false; btn.textContent = '🔍 Optimizar markup'; }
+            if (btn) { btn.disabled = false; btn.textContent = '✦ Mejorar'; }
             return;
         }
 
@@ -348,23 +348,26 @@ ${tagsInfo}`;
             .map(([k,v]) => `"#${k}": "${v.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`)
             .join(',\n');
 
-        const promptOpt = `Tienes estas descripciones de tags de un RPG. Mejóralas activamente.
+        const promptOpt = `Tienes descripciones de tags de un RPG. Para cada una, haz lo siguiente EN ORDEN:
 
-FILOSOFÍA: Un tag es una definición de concepto, no una historia. Explica QUÉ ES el tag y qué implica tenerlo.
-Los personajes son secundarios — solo si ilustran algo que la definición sola no transmite.
+${promptExtra ? `INSTRUCCIÓN DEL OP — PRIORIDAD ABSOLUTA antes de todo lo demás:\n${promptExtra}\n` : ''}
+PASO 1 — PERSONAJES OBLIGATORIO:
+Consulta la lista "PERSONAJES POR TAG" de abajo. Para cada tag:
+- Si tiene 1-2 personajes y NINGUNO aparece en la descripción con @arrobas@: añade el más representativo con @arrobas@ en una segunda oración.
+- Si tiene 3+ personajes y ninguno aparece: añade 1 solo si ilustra algo concreto que la descripción no dice. Si la definición ya es completa sin personajes, déjala sin @arrobas@.
+- Si tiene 3+ personajes y YA hay @arrobas@: verifica que no sean más de 2. Si son más, elimina los menos representativos.
+- Si tiene 0 personajes: sin @arrobas@.
 
-${promptExtra ? `INSTRUCCIÓN EDITORIAL DEL OP — PRIORIDAD MÁXIMA, aplícala antes que cualquier otra regla:\n${promptExtra}\n\nSi pide añadir un personaje, hazlo. Si pide quitar algo, quítalo. Si pide cambiar el texto, cámbialo.\n` : ''}TAREAS (aplica TODAS aunque no haya instrucción del OP):
-1. Si la descripción es narrativa ("X e Y hacen Z con el tag"), reescríbela como definición del concepto.
-2. Añade @arrobas@ a nombres de personajes en texto plano.
-3. Añade # a nombres de tags sin # (ej: "Eldritch" → #Eldritch).
-4. Ajusta personajes según representación:
-   - 1-2 personajes en el tag → menciónalos si aportan a la definición.
-   - 3+ personajes → @arrobas@ SOLO si el personaje ilustra algo concreto. Si no aportan, quítalos y deja definición limpia.
-   - NUNCA más de 2 @arrobas@ por descripción.
-5. Longitud: sin @arrobas@: máximo 18 palabras. Con @arrobas@: máximo 30 palabras en dos oraciones.
-6. Si la descripción ya es perfecta (definición limpia, markup correcto, longitud adecuada), devuélvela igual.
+PASO 2 — MARKUP DE TAGS:
+Añade # a nombres de tags que aparezcan sin él (ej: "Catastrófico" → #Catastrófico). Ignora palabras comunes.
 
-PERSONAJES POR TAG:
+PASO 3 — CALIDAD DE DEFINICIÓN:
+Si la descripción suena a historia ("X e Y hacen Z") en vez de definición ("este tag significa..."), reescríbela como concepto.
+
+PASO 4 — LONGITUD:
+Sin @arrobas@: máximo 18 palabras. Con @arrobas@: máximo 30 palabras en dos oraciones.
+
+PERSONAJES POR TAG (ÚSALOS PARA EL PASO 1):
 ${tagsConPjs}
 
 TODOS LOS PERSONAJES DISPONIBLES:
@@ -373,7 +376,7 @@ ${todosLosPJs}
 TODOS LOS TAGS DISPONIBLES:
 ${todosLosTags}
 
-DESCRIPCIONES A MEJORAR:
+DESCRIPCIONES:
 {
 ${descInput}
 }
@@ -445,7 +448,7 @@ Devuelve SOLO un JSON con exactamente las mismas claves (#tagKey), sin markdown,
             if (status) status.textContent = '';
             console.error('[tags-ai] optimizar:', err);
         } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '🔍 Optimizar markup'; }
+            if (btn) { btn.disabled = false; btn.textContent = '✦ Mejorar'; }
         }
     },
 
