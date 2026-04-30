@@ -242,9 +242,10 @@ const _URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
 function _renderMarkupBasico(texto) {
     if (!texto) return '';
-    // ── Tokenizer idéntico a renderMsgMarkup de op-markup.js ──────
-    // Evita que los regexes se apliquen sobre HTML ya generado.
     const STORAGE = window._STORAGE_URL || '';
+    // BASE: raíz del proyecto — funciona desde cualquier subcarpeta
+    const BASE = window.location.origin
+        + window.location.pathname.split('/').slice(0, -2).join('/') + '/';
 
     const partes = texto.split(/(@[^@\n]+?@|#[^\s#\n]+|![^!\n]+?!|\n)/g);
 
@@ -252,7 +253,7 @@ function _renderMarkupBasico(texto) {
         if (!p) return '';
         if (p === '\n') return '<br>';
 
-        // @Personaje@ — con miniatura inline
+        // @Personaje@ — miniatura + link a ficha
         if (/^@[^@]+@$/.test(p)) {
             const nombre = p.slice(1, -1);
             const norm   = nombre.toLowerCase()
@@ -261,20 +262,25 @@ function _renderMarkupBasico(texto) {
                 .replace(/[úùüû]/g,'u').replace(/ñ/g,'n')
                 .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
             const imgSrc = STORAGE ? `${STORAGE}/imgpersonajes/${norm}icon.png` : '';
+            const url    = `${BASE}fichas/index.html?ficha=${encodeURIComponent(nombre)}`;
             const imgTag = imgSrc
                 ? `<img src="${esc(imgSrc)}" style="width:14px;height:14px;border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:2px;" onerror="this.style.display='none'">`
                 : '';
-            return `<strong style="color:#c39bd3;background:rgba(108,52,131,0.18);padding:0 4px 0 3px;border-radius:3px;display:inline-flex;align-items:center;gap:1px;">${imgTag}@${esc(nombre)}@</strong>`;
+            return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="color:#c39bd3;font-weight:700;background:rgba(108,52,131,0.18);padding:0 4px 0 3px;border-radius:3px;text-decoration:none;display:inline-flex;align-items:center;gap:1px;">${imgTag}@${esc(nombre)}@</a>`;
         }
 
-        // #Tag
+        // #Tag — link a tags
         if (/^#/.test(p)) {
-            return `<span style="color:#5dade2;">#${esc(p.slice(1))}</span>`;
+            const tag = p.slice(1);
+            const url = `${BASE}tags/index.html?tag=${encodeURIComponent(p)}`;
+            return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="color:#5dade2;text-decoration:none;">#${esc(tag)}</a>`;
         }
 
-        // !Medalla!
+        // !Medalla! — link a medallas
         if (/^![^!]+!$/.test(p)) {
-            return `<span style="color:#e74c3c;font-weight:700;">⚔ ${esc(p.slice(1, -1))}</span>`;
+            const nombre = p.slice(1, -1);
+            const url    = `${BASE}medallas/index.html?medalla=${encodeURIComponent(nombre)}`;
+            return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" style="color:#e74c3c;font-weight:700;text-decoration:none;">⚔ ${esc(nombre)}</a>`;
         }
 
         // Texto plano
