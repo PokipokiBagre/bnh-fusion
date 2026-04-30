@@ -39,7 +39,8 @@ export function renderMsgMarkup(texto) {
         // !Medalla!
         if (/^![^!]+!$/.test(p)) {
             const nombre = p.slice(1, -1);
-            return `<span style="color:#c0392b;font-weight:700;background:#fdecea;padding:1px 6px;border-radius:4px;border:1px solid rgba(192,57,43,0.3);">⚔ ${esc(nombre)}</span>`;
+            const url    = `${BASE}medallas/index.html?medalla=${encodeURIComponent(nombre)}`;
+            return `<a href="${url}" target="_blank" style="color:#c0392b;font-weight:700;background:#fdecea;padding:1px 6px;border-radius:4px;text-decoration:none;border:1px solid rgba(192,57,43,0.3);">⚔ ${esc(nombre)}</a>`;
         }
 
         // Texto plano — escapar HTML
