@@ -718,7 +718,7 @@ export function renderCatalogo() {
             <button class="btn btn-sm" style="background:#6c3483;color:white;border-color:#6c3483;"
                 onclick="window._catCombinarTags()">🔀 Combinar</button>
             <button class="btn btn-sm" style="background:linear-gradient(135deg,#1a1a2e,#6c3483);color:white;border-color:#6c3483;"
-                onclick="window._tagsAI.open([...window._catMultiSel])">✨ IA — Descripciones</button>
+                onclick="window._tagsAI.openInline()">✨ IA — Descripciones</button>
             <button class="btn btn-red btn-sm" onclick="window._catEliminarSeleccionados()">🗑️ Eliminar</button>
             <button class="btn btn-outline btn-sm" onclick="window._catCancelMulti()">✕ Cancelar</button>
         </div>` : '';
@@ -1022,6 +1022,10 @@ window._catCancelMulti = () => {
     if (toolbar) toolbar.style.display = 'none';
     const btn = document.getElementById('btn-cat-multi');
     if (btn) btn.style.display = '';
+    // Cerrar panel IA inline si estaba abierto
+    document.getElementById('ai-inline-panel')?.remove();
+    // Limpiar cualquier modal residual de versiones anteriores
+    document.getElementById('ai-panel-root')?.remove();
 };
 
 window._catToggleCheck = (tag, checked) => {
