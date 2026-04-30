@@ -4,6 +4,7 @@
 import { bnhAuth, currentConfig, supabase } from '../bnh-auth.js';
 import { bnhPort } from '../bnh-port-principal.js';
 import { initRecon, salvarRescate, restaurarRescate } from '../bnh-recon.js';
+import { initScroll } from '../bnh-scroll.js';
 import {
     hilosState, postsState, rankingState,
     ptTagState, estadoUI, selPostsState, mapaAliasAGrupo
@@ -193,9 +194,8 @@ async function init() {
     });
 
     ir('timeline');
+    initScroll();
 }
-
-// Seleccionar hilo
 window.seleccionarHilo = async function(board, threadId) {
     const hilo = hilosState.find(h => h.board === board && h.thread_id == threadId);
     if (!hilo) return;
