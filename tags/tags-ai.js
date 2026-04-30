@@ -338,27 +338,29 @@ ${tagsInfo}`;
             .map(([k,v]) => `"#${k}": "${v.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`)
             .join(',\n');
 
-        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada de markup:
+        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada de markup Y longitud:
 
 TAREA:
 1. Donde aparezca un nombre de personaje en texto plano, envuélvelo en @arrobas@: @Maxwell@.
 2. Donde aparezca el nombre de un tag sin # (ej: "Eldritch"), añade el #: #Eldritch.
-3. NO cambies el sentido, el tono ni la longitud. Solo añade/corrige markup.
-4. Si el texto ya tiene markup correcto, déjalo.
+3. Si el texto ya tiene markup correcto, déjalo.
+4. LONGITUD — recorta si es necesario:
+   · Sin @arrobas@: máximo UNA oración, 18 palabras. Si el texto es más largo, resúmelo.
+   · Con @arrobas@: máximo DOS oraciones cortas, 30 palabras en total. Si es más largo, resúmelo.
+   · NUNCA menciones más de 2 personajes por descripción.
 
 CRITERIO DE REPRESENTACIÓN PARA PERSONAJES:
 - Si un tag tiene de 1 a 3 personajes → menciónalos TODOS con @arrobas@.
-- Si un tag tiene 4+ personajes → menciona como máximo 2 que ilustren bien el tag. Elige los más representativos o interesantes — no los primeros de la lista.
-- NUNCA menciones más de 2 personajes por descripción.
-- Si la descripción ya menciona personajes correctamente, solo añade @arrobas@ donde falten.
+- Si un tag tiene 4+ personajes → menciona como máximo 2 que ilustren bien el tag. Elige los más representativos — no los primeros de la lista.
+- Si la descripción ya menciona personajes, reduce a 2 máximo y añade @arrobas@ donde falten.
 
-PERSONAJES POR TAG (usa esto para decidir quién mencionar o verificar @arrobas@):
+PERSONAJES POR TAG (usa esto para decidir quién mencionar):
 ${tagsConPjs}
 
-TODOS LOS PERSONAJES DISPONIBLES (para reconocer nombres y envolver en @arrobas@):
+TODOS LOS PERSONAJES DISPONIBLES:
 ${todosLosPJs}
 
-TODOS LOS TAGS DISPONIBLES (para añadir # donde corresponda):
+TODOS LOS TAGS DISPONIBLES:
 ${todosLosTags}
 
 DESCRIPCIONES A OPTIMIZAR:
