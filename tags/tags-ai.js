@@ -177,23 +177,39 @@ window._tagsAI = {
 REGLAS DE FORMATO:
 ${MARKUP_RULES}
 
+QUÉ ES UNA DESCRIPCIÓN DE TAG:
+Un tag es una característica, habilidad, rasgo o concepto que define a un personaje.
+La descripción es una DEFINICIÓN del concepto en el universo, no una historia ni un relato.
+Piensa en ello como la entrada de un glosario técnico-narrativo: explica QUÉ ES el tag
+y qué implica tenerlo, en una o dos frases. NO cuentes qué hacen los personajes con él.
+
+BUENOS EJEMPLOS (el tono correcto):
+- #Bestial: "Libera el instinto primitivo: fuerza bruta, reflejos animales y una presencia que intimida antes de actuar."
+- #Analítico: "Procesa información con precisión quirúrgica, descomponiendo problemas complejos en partes manejables."
+- #Eldritch: "Poder que desafía la comprensión, con implicaciones cósmicas y efectos que rozan lo #Catastrófico."
+- #Trauma (con personaje): "Una cicatriz del pasado que puede ser fuente de poder o debilidad. En @Kagae@ se manifiesta como combustible para su #Secreto."
+
+MALOS EJEMPLOS (el tono incorrecto — NUNCA así):
+- "La capacidad de #Adaptación permite a @La_Creatura@, @Netorashi@ y @Wallaby@ superar cualquier obstáculo." ← cuenta una historia, no define el tag
+- "El elemento líquido fluye con @Catfish@, @Valeria@ y @Vincent@, otorgando control." ← lista de personajes, no es una definición
+
 INSTRUCCIONES:
 - Devuelve SOLO un objeto JSON válido. Sin markdown, sin texto extra.
 - Formato: { "#NombreTag": "descripción", ... }
-- Tono: narrativo, evocador, como glosario de rol. Puede ser irónico si el tag lo pide.
+- PRIMERO define el concepto. Los personajes son opcionales y secundarios.
 - LONGITUD ESTRICTA:
-  · Sin @arrobas@: UNA oración, máximo 18 palabras.
-  · Con @arrobas@: máximo DOS oraciones cortas (30 palabras en total).
-- REGLA DE REPRESENTACIÓN (para decidir si mencionar a un personaje con @arrobas@):
-  · Si el tag tiene de 1 a 3 personajes: mencionarlos TODOS con @arrobas@.
-  · Si el tag tiene 4+ personajes: menciona solo 1-2 que sean representativos o interesantes para el tag. NO menciones siempre los mismos — varía según qué personaje ilustra mejor ese tag en particular.
-  · NUNCA menciones más de 2 personajes por descripción.
-- Si hay descripción actual, reescríbela respetando estas reglas (acórtala si es necesario).
+  · Sin @arrobas@: UNA oración, máximo 18 palabras. Define el concepto directamente.
+  · Con @arrobas@: DOS oraciones cortas máximo (30 palabras total). Primera: definición. Segunda (opcional): un personaje que lo ejemplifica de forma interesante.
+- CUÁNDO incluir personajes (@arrobas@):
+  · Si el tag tiene 1-2 personajes: incluirlos siempre, ilustran bien el concepto.
+  · Si el tag tiene 3+ personajes: incluir personajes SOLO si aportan algo a la definición — si el concepto es claro solo, déjalo sin @arrobas@. NUNCA listes más de 2 personajes.
+  · NUNCA uses personajes para "rellenar" si la definición ya es completa por sí sola.
 - Varía la posición de #OtroTag en la oración — no siempre al final.
+- Si hay descripción actual que ya sigue este estilo, respétala o mejórala levemente.
 
-${promptExtra ? `CONTEXTO DEL OP:\n${promptExtra}\n` : ''}
+${promptExtra ? `CONTEXTO DEL OP (información adicional sobre el universo):\n${promptExtra}\n` : ''}
 
-CATÁLOGO COMPLETO (para referenciar otros tags):
+CATÁLOGO COMPLETO (para referenciar otros tags con #):
 ${todosLosTags}
 
 TAGS A DESCRIBIR:
@@ -331,23 +347,27 @@ ${tagsInfo}`;
             .map(([k,v]) => `"#${k}": "${v.replace(/\\/g,'\\\\').replace(/"/g,'\\"')}"`)
             .join(',\n');
 
-        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada de markup Y longitud:
+        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada de markup Y longitud.
+
+FILOSOFÍA: Un tag es una definición de concepto, no una historia. La descripción explica QUÉ ES el tag.
+Los personajes son secundarios — solo se incluyen si ilustran algo que la definición sola no transmite.
 
 TAREA:
 1. Donde aparezca un nombre de personaje en texto plano, envuélvelo en @arrobas@: @Maxwell@.
 2. Donde aparezca el nombre de un tag sin # (ej: "Eldritch"), añade el #: #Eldritch.
 3. Si el texto ya tiene markup correcto, déjalo.
 4. LONGITUD — recorta si es necesario:
-   · Sin @arrobas@: máximo UNA oración, 18 palabras. Si el texto es más largo, resúmelo.
-   · Con @arrobas@: máximo DOS oraciones cortas, 30 palabras en total. Si es más largo, resúmelo.
-   · NUNCA menciones más de 2 personajes por descripción.
+   · Sin @arrobas@: máximo UNA oración, 18 palabras. Resúmelo centrándote en la definición del concepto.
+   · Con @arrobas@: máximo DOS oraciones cortas, 30 palabras en total.
+   · NUNCA más de 2 personajes por descripción.
+5. Si la descripción es una lista de personajes haciendo algo (narrativa), reescríbela como definición del concepto.
 
-CRITERIO DE REPRESENTACIÓN PARA PERSONAJES:
-- Si un tag tiene de 1 a 3 personajes → menciónalos TODOS con @arrobas@.
-- Si un tag tiene 4+ personajes → menciona como máximo 2 que ilustren bien el tag. Elige los más representativos — no los primeros de la lista.
-- Si la descripción ya menciona personajes, reduce a 2 máximo y añade @arrobas@ donde falten.
+CRITERIO — cuándo incluir personajes:
+- Si el tag tiene 1-2 personajes → incluirlos, ilustran bien el concepto.
+- Si el tag tiene 3+ personajes → incluir personajes SOLO si aportan a la definición. Si el concepto ya es claro solo, quita los @arrobas@ y deja una definición limpia.
+- NUNCA listes personajes para "rellenar" si la definición ya es completa.
 
-PERSONAJES POR TAG (usa esto para decidir quién mencionar):
+PERSONAJES POR TAG:
 ${tagsConPjs}
 
 TODOS LOS PERSONAJES DISPONIBLES:
