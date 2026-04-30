@@ -289,17 +289,28 @@ ${tagsInfo}`;
         const status = document.getElementById('ai-status');
         if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizando...'; }
 
-        // Recoger descripciones actuales de los textareas
+        // Prioridad 1: textareas de resultados generados
         const descActuales = {};
         document.querySelectorAll('[id^="ai-desc-"]').forEach(ta => {
             const tagKey = ta.id.replace('ai-desc-','');
             const card   = document.getElementById(`ai-res-card-${tagKey}`);
             if (card?.style.opacity === '0.35') return;
-            descActuales[tagKey] = ta.value.trim();
+            const val = ta.value.trim();
+            if (val) descActuales[tagKey] = val;
         });
 
+        // Prioridad 2: si no hay resultados generados, usar descripciones actuales del catálogo
         if (!Object.keys(descActuales).length) {
-            toast('No hay descripciones para optimizar.', 'error');
+            const tagsSel = [...(window._catMultiSel || [])];
+            tagsSel.forEach(tag => {
+                const tagKey = tag.startsWith('#') ? tag.slice(1) : tag;
+                const desc   = _descActual(tagKey);
+                if (desc) descActuales[tagKey] = desc;
+            });
+        }
+
+        if (!Object.keys(descActuales).length) {
+            toast('Los tags seleccionados no tienen descripción aún. Usa "Generar" primero.', 'error');
             if (btn) { btn.disabled = false; btn.textContent = '🔍 Optimizar markup'; }
             return;
         }
@@ -369,11 +380,51 @@ Devuelve SOLO un JSON con exactamente las mismas claves (#tagKey), sin markdown,
             const parsed = JSON.parse(clean);
 
             let actualizados = 0;
-            Object.entries(parsed).forEach(([tagKey, desc]) => {
-                const key = tagKey.startsWith('#') ? tagKey.slice(1) : tagKey;
-                const ta  = document.getElementById(`ai-desc-${_esc(key)}`);
-                if (ta && desc) { ta.value = String(desc); actualizados++; }
-            });
+            const tagsKeys = Object.keys(parsed);
+
+            // Si ya hay textareas de resultados, actualizar directamente
+            const hayTextareas = document.querySelectorAll('[id^="ai-desc-"]').length > 0;
+            if (hayTextareas) {
+                tagsKeys.forEach(tagKey => {
+                    const key = tagKey.startsWith('#') ? tagKey.slice(1) : tagKey;
+                    const ta  = document.getElementById(`ai-desc-${_esc(key)}`);
+                    if (ta && parsed[tagKey]) { ta.value = String(parsed[tagKey]); actualizados++; }
+                });
+            } else {
+                // No había textareas — mostrar resultados como tarjetas editables
+                const resultsArea = document.getElementById('ai-results-area');
+                const resultCards = tagsKeys.map(tag => {
+                    const tagKey  = tag.startsWith('#') ? tag.slice(1) : tag;
+                    const safeKey = _esc(tagKey);
+                    const antes   = descActuales[tagKey] || '';
+                    const desc    = parsed[tag] || '';
+                    if (desc) actualizados++;
+                    return `
+                    <div id="ai-res-card-${safeKey}" style="border:1.5px solid var(--gray-200);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;">
+                            <span style="font-weight:700;color:var(--blue);font-size:0.88em;">#${safeKey}</span>
+                            <div style="display:flex;gap:5px;">
+                                <button class="btn btn-sm btn-green" onclick="window._tagsAI.guardarUno('${safeKey}')" style="padding:3px 8px;font-size:0.76em;">Guardar</button>
+                                <button class="btn btn-sm btn-outline" onclick="document.getElementById('ai-res-card-${safeKey}').style.opacity='0.35'" style="padding:3px 8px;font-size:0.76em;">✕</button>
+                            </div>
+                        </div>
+                        ${antes ? `<div style="font-size:0.72em;color:var(--gray-400);font-style:italic;padding:3px 7px;background:var(--gray-50);border-radius:4px;border-left:2px solid var(--gray-300);"><b>Anterior:</b> ${_esc(antes)}</div>` : ''}
+                        <textarea id="ai-desc-${safeKey}" class="inp" rows="2" style="font-family:monospace;font-size:0.82em;resize:vertical;">${_esc(desc)}</textarea>
+                    </div>`;
+                }).join('');
+
+                if (resultsArea) {
+                    resultsArea.style.display = 'flex';
+                    resultsArea.innerHTML = `
+                        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+                            <b style="font-size:0.88em;color:var(--gray-800);">Revisa antes de guardar:</b>
+                            <button id="ai-guardar-todos-btn" class="btn btn-green btn-sm">💾 Guardar todos</button>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:6px;">${resultCards}</div>`;
+                    document.getElementById('ai-guardar-todos-btn')
+                        .addEventListener('click', () => window._tagsAI.guardarTodos(tagsKeys));
+                }
+            }
 
             if (status) status.textContent = `${actualizados} optimizada${actualizados!==1?'s':''}`;
             toast(`✨ ${actualizados} descripción${actualizados!==1?'es':''} optimizada${actualizados!==1?'s':''}`, 'ok');
