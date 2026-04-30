@@ -130,6 +130,48 @@ window.onload = async () => {
     if (tagsState.esAdmin) initTagsAI();
     initScroll();
 
+    // ── Botón flotante de selección múltiple (visible solo en tab catálogo) ──
+    const btnFloat = document.createElement('button');
+    btnFloat.id    = 'btn-multi-float';
+    btnFloat.title = 'Selección múltiple';
+    btnFloat.textContent = '☑';
+    btnFloat.style.cssText = `
+        position:fixed;right:62px;bottom:72px;z-index:8999;
+        width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;
+        font-size:1.1em;line-height:1;display:none;align-items:center;justify-content:center;
+        background:rgba(26,74,128,0.88);color:white;
+        box-shadow:0 2px 8px rgba(0,0,0,0.22);
+        backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+        transition:transform 0.15s,background 0.15s;
+    `;
+    btnFloat.onmouseover = () => { btnFloat.style.transform = 'scale(1.12)'; btnFloat.style.background = '#1a4a80'; };
+    btnFloat.onmouseout  = () => { btnFloat.style.transform = ''; btnFloat.style.background = 'rgba(26,74,128,0.88)'; };
+    btnFloat.onclick     = () => {
+        if (window._catMultiActivo) {
+            window._catCancelMulti?.();
+            btnFloat.style.background = 'rgba(26,74,128,0.88)';
+            btnFloat.title = 'Selección múltiple';
+        } else {
+            window._catIniciarMulti?.();
+            btnFloat.style.background = '#27ae60';
+            btnFloat.title = 'Cancelar selección';
+        }
+    };
+    document.body.appendChild(btnFloat);
+
+    // Mostrar solo cuando la tab activa es catálogo
+    const _origRenderTab = window._tagsTab;
+    window._tagsTab = (tab) => {
+        _origRenderTab?.(tab);
+        btnFloat.style.display = tab === 'catalogo' ? 'flex' : 'none';
+        if (tab !== 'catalogo') {
+            btnFloat.style.background = 'rgba(26,74,128,0.88)';
+            btnFloat.title = 'Selección múltiple';
+        }
+    };
+    // Estado inicial
+    btnFloat.style.display = tagsState.tabActual === 'catalogo' ? 'flex' : 'none';
+
     // ── GUARDAR ESTADO AL SALIR / CAMBIAR PESTAÑA ────────────────
     // FIX: salvarRescate en visibilitychange (hide) garantiza que haya
     // datos que restaurar aunque el reload sea por navegación normal
