@@ -42,7 +42,9 @@ function _buildTagList() {
 }
 
 // ── Render del panel ─────────────────────────────────────────────────────────
-function _renderPanel() {
+function _renderPanel(tagsPresel = null) {
+    const esModoPresel = Array.isArray(tagsPresel) && tagsPresel.length > 0;
+
     const tagMapa = _buildTagList();
     const allTags = Object.entries(tagMapa)
         .filter(([tag]) => {
@@ -58,12 +60,14 @@ function _renderPanel() {
         const descActual = _descActual(tagKey);
         const safeTag    = _esc(tag);
         const safeKey    = _esc(tagKey);
+        const preChecked = esModoPresel && tagsPresel.some(t => t.toLowerCase() === tag.toLowerCase());
         return `
         <label class="ai-tag-row" data-tag="${safeTag}" style="
             display:flex;align-items:flex-start;gap:10px;padding:10px 12px;
             border-bottom:1px solid var(--gray-100);cursor:pointer;transition:background .12s;
         " onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
             <input type="checkbox" data-tag="${safeTag}" data-key="${safeKey}" class="ai-tag-chk"
+                ${preChecked ? 'checked' : ''}
                 style="margin-top:3px;width:15px;height:15px;cursor:pointer;accent-color:var(--green);flex-shrink:0;"
                 onchange="window._tagsAI.toggleTag('${safeTag}', this.checked)">
             <div style="flex:1;min-width:0;">
@@ -78,6 +82,25 @@ function _renderPanel() {
             </div>
         </label>`;
     }).join('');
+
+    // Banner de preselección (modo selección múltiple)
+    const bannerPresel = esModoPresel ? `
+        <div style="background:var(--green-pale);border:1.5px solid var(--green);border-radius:var(--radius,8px);
+            padding:10px 14px;font-size:0.84em;color:var(--green-dark);display:flex;align-items:center;gap:8px;">
+            <span style="font-size:1.1em;">☑️</span>
+            <span><b>${tagsPresel.length} tags</b> preseleccionados desde la selección múltiple.
+                Puedes ajustar la selección debajo si lo necesitas.</span>
+        </div>` : '';
+
+    // Lista colapsada por defecto en modo presel
+    const listaStyle = esModoPresel
+        ? 'display:none;'
+        : '';
+    const toggleListaBtn = esModoPresel ? `
+        <button class="btn btn-outline btn-sm" style="font-size:0.78em;margin-bottom:4px;"
+            onclick="const l=document.getElementById('ai-lista-wrap');l.style.display=l.style.display==='none'?'block':'none';this.textContent=l.style.display==='none'?'▼ Ver/editar selección':'▲ Ocultar selección';">
+            ▼ Ver/editar selección
+        </button>` : '';
 
     const html = `
     <div id="ai-panel-backdrop" style="
@@ -108,26 +131,32 @@ function _renderPanel() {
 
             <div style="padding:18px;display:flex;flex-direction:column;gap:14px;">
 
-                <input id="ai-tag-search" class="inp" placeholder="Filtrar tags..."
-                    oninput="window._tagsAI.filtrar(this.value)" style="font-size:0.85em;">
+                ${bannerPresel}
 
-                <div style="border:1.5px solid var(--gray-200);border-radius:var(--radius,8px);max-height:260px;overflow-y:auto;">
-                    <div style="
-                        display:flex;align-items:center;justify-content:space-between;
-                        padding:8px 12px;background:var(--gray-50);
-                        border-bottom:1px solid var(--gray-200);font-size:0.8em;
-                    ">
-                        <span id="ai-sel-count" style="color:var(--gray-600);">0 tags seleccionados</span>
-                        <div style="display:flex;gap:8px;">
-                            <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
-                                onclick="window._tagsAI.seleccionarTodos(true)">Todos</button>
-                            <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
-                                onclick="window._tagsAI.seleccionarTodos(false)">Ninguno</button>
-                            <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
-                                onclick="window._tagsAI.seleccionarSinDesc()">Sin desc.</button>
+                ${toggleListaBtn}
+
+                <div id="ai-lista-wrap" style="${listaStyle}">
+                    <input id="ai-tag-search" class="inp" placeholder="Filtrar tags..."
+                        oninput="window._tagsAI.filtrar(this.value)" style="font-size:0.85em;margin-bottom:8px;">
+
+                    <div style="border:1.5px solid var(--gray-200);border-radius:var(--radius,8px);max-height:260px;overflow-y:auto;">
+                        <div style="
+                            display:flex;align-items:center;justify-content:space-between;
+                            padding:8px 12px;background:var(--gray-50);
+                            border-bottom:1px solid var(--gray-200);font-size:0.8em;
+                        ">
+                            <span id="ai-sel-count" style="color:var(--gray-600);">${esModoPresel ? tagsPresel.length : 0} tags seleccionados</span>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
+                                    onclick="window._tagsAI.seleccionarTodos(true)">Todos</button>
+                                <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
+                                    onclick="window._tagsAI.seleccionarTodos(false)">Ninguno</button>
+                                <button class="btn btn-sm btn-outline" style="padding:3px 8px;font-size:0.75em;"
+                                    onclick="window._tagsAI.seleccionarSinDesc()">Sin desc.</button>
+                            </div>
                         </div>
+                        <div id="ai-tags-list">${tagRows}</div>
                     </div>
-                    <div id="ai-tags-list">${tagRows}</div>
                 </div>
 
                 <div>
@@ -163,7 +192,8 @@ function _renderPanel() {
 }
 
 // ── Estado ───────────────────────────────────────────────────────────────────
-let _selectedTags = new Set();
+let _selectedTags  = new Set();
+let _preselMode    = false; // true cuando viene de selección múltiple
 
 function _updateCount() {
     const el = document.getElementById('ai-sel-count');
@@ -174,15 +204,17 @@ function _updateCount() {
 // ── API pública: window._tagsAI ──────────────────────────────────────────────
 window._tagsAI = {
 
-    open() {
-        _selectedTags = new Set();
-        _renderPanel();
+    open(tagsPresel) {
+        _preselMode   = Array.isArray(tagsPresel) && tagsPresel.length > 0;
+        _selectedTags = _preselMode ? new Set(tagsPresel) : new Set();
+        _renderPanel(_preselMode ? tagsPresel : null);
     },
 
     close() {
         const root = document.getElementById('ai-panel-root');
         if (root) root.innerHTML = '';
         _selectedTags = new Set();
+        _preselMode   = false;
     },
 
     toggleTag(tag, checked) {
@@ -261,19 +293,13 @@ INSTRUCCIONES:
 - Devuelve SOLO un objeto JSON valido, sin texto adicional ni bloques markdown.
 - Formato exacto: { "#NombreTag": "descripcion", ... }
 - Claves = nombres exactos de los tags tal como aparecen abajo (con #).
-- Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol escrita por alguien que conoce el universo. No es un manual tecnico; puede ser vago, sugerente o incluso un poco ironico si el tag lo pide. 
-- LONGITUD — regla estricta en dos casos:     
-· Si la descripcion NO menciona ningun personaje con @arrobas@: maximo UNA oracion corta y directa. Sin subordinadas largas, sin listas. Ejemplos de lo que se busca: "Implica afinidad con maquinaria y tecnologia, creacion y mejora de dispositivos." / "Caracteriza a quienes compensan la falta de intelecto con suerte inverosimil y poderes ilogicos que funcionan."     
-· Si la descripcion SI menciona uno o mas personajes con @arrobas@: puedes extenderte hasta DOS oraciones para incluir al personaje y su relacion con el tag. No mas. 
-- NOMBRES DE PERSONAJE: si el OP menciona un nombre en el contexto, usalo EXACTAMENTE como fue escrito, solo envuelto en @arrobas@. No añadas nada al nombre. - Si hay descripcion actual, puedes reescribirla respetando estas reglas de longitud. 
-- POSICION DE TAGS REFERENCIADOS (#OtroTag) — regla de variedad obligatoria:     
-· NO coloques siempre el #Tag al final de la oracion. Eso suena formulaico.     
-· Variedad de estructuras permitidas (usa distintas para distintos tags del mismo lote):         
-· Al inicio: "#Eldritch y #Conceptual moldean a quienes..."         
-· En el medio: "Habilidades que desafian la comprension, a veces rozando lo #Eldritch, sin patron claro."         
-· Varios seguidos: "...con rasgos #Bestial, #Anatomico y #Mutacion entrelazados."         
-· Al final (solo ocasionalmente, no como regla): "...un poder que escapa a la logica #Catastrofico."     
-· Si el OP pide añadir o quitar tags de descripciones, distribuyelos de forma IRREGULAR a lo largo del lote, no siempre en la misma posicion.
+- Tono: narrativo, suelto, evocador. Como si fuera la entrada de un glosario de rol. Puede ser vago, sugerente o un poco ironico si el tag lo pide.
+- LONGITUD — regla estricta:     
+  · Sin @arrobas@: UNA sola oracion, maxima 18 palabras. Directa, sin subordinadas. Ejemplo: "Implica afinidad con maquinaria y tecnologia, creacion y mejora de dispositivos."  
+  · Con @arrobas@: maximo DOS oraciones cortas (no mas de 30 palabras en total). Primera: que hace el tag. Segunda: el personaje y su relacion con el. NADA MAS.
+- NOMBRES DE PERSONAJE: usa el nombre exactamente como aparece, envuelto en @arrobas@. No añadas nada al nombre.
+- Si hay descripcion actual, reescribela siguiendo estas reglas de longitud (acortala si es necesario).
+- POSICION DE TAGS REFERENCIADOS (#OtroTag): varía la posicion — al inicio, en el medio, o al final de la oracion. No uses siempre la misma posicion.
 
 ${promptExtra ? `CONTEXTO DEL OP (extrae nombres de personajes tal cual y marcalos con @arrobas@, sin modificarlos):\n${promptExtra}\n` : ''}
 
@@ -365,9 +391,15 @@ ${todosLosTags}`;
                 resultsArea.innerHTML = `
                     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
                         <b style="font-size:0.9em;color:var(--gray-800);">Revisa las descripciones antes de guardar:</b>
-                        <button id="ai-guardar-todos-btn" class="btn btn-green" style="font-size:0.85em;">
-                            Guardar todos
-                        </button>
+                        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                            <button id="ai-optimizar-btn" class="btn btn-sm" style="background:#1a4a80;color:white;border-color:#1a4a80;font-size:0.82em;"
+                                onclick="window._tagsAI.optimizar()" title="Segunda pasada: añade @Personajes@ y #Tags donde corresponda">
+                                ✨ Optimizar markup
+                            </button>
+                            <button id="ai-guardar-todos-btn" class="btn btn-green" style="font-size:0.85em;">
+                                Guardar todos
+                            </button>
+                        </div>
                     </div>
                     <div style="display:flex;flex-direction:column;gap:8px;">${resultCards}</div>`;
 
@@ -435,6 +467,82 @@ ${todosLosTags}`;
         }
 
         if (btnAll) { btnAll.disabled = false; btnAll.textContent = 'Guardar todos'; }
+    },
+
+    // ── Segunda pasada: insertar @Personajes@ y #Tags en las descripciones generadas ──
+    async optimizar() {
+        const btn = document.getElementById('ai-optimizar-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizando...'; }
+
+        // Recoger las descripciones actuales de los textareas de resultados
+        const descActuales = {};
+        document.querySelectorAll('[id^="ai-desc-"]').forEach(ta => {
+            const tagKey = ta.id.replace('ai-desc-', '');
+            const card   = document.getElementById(`ai-res-card-${tagKey}`);
+            if (card?.style.opacity === '0.35') return; // ignorar descartadas
+            descActuales[tagKey] = ta.value.trim();
+        });
+
+        if (!Object.keys(descActuales).length) {
+            toast('No hay descripciones para optimizar.', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = '✨ Optimizar markup'; }
+            return;
+        }
+
+        // Construir contexto de personajes y tags disponibles
+        const tagMapa = _buildTagList();
+        const todosLosTagsStr = Object.keys(tagMapa)
+            .filter(t => { const e = catalogoTags.find(c => ('#'+(c.nombre.startsWith('#')?c.nombre.slice(1):c.nombre)).toLowerCase()===t.toLowerCase()); return !e?.baneado; })
+            .join(', ');
+        const todosLosPJsStr = grupos.map(g => g.nombre_refinado).join(', ');
+
+        const descInput = Object.entries(descActuales)
+            .map(([k, v]) => `"#${k}": "${v.replace(/"/g,'\\"')}"`)
+            .join(',\n');
+
+        const promptOpt = `Tienes estas descripciones de tags de un RPG. Haz una segunda pasada:
+1. Donde aparezca un nombre de personaje en texto plano (ej: "Maxwell", "Elisa"), envuélvelo en @arrobas@: @Maxwell@.
+2. Donde aparezca el nombre de un tag sin # (ej: "Eldritch", "Catastrófico"), añade el # delante: #Eldritch.
+3. NO cambies el sentido ni la longitud del texto. Solo añade el markup donde falta.
+4. Si el texto ya tiene @arrobas@ o # correctamente aplicados, déjalos como están.
+
+PERSONAJES DISPONIBLES (nombres exactos, pueden aparecer en las descripciones):
+${todosLosPJsStr}
+
+TAGS DISPONIBLES (para añadir # donde corresponda):
+${todosLosTagsStr}
+
+DESCRIPCIONES A OPTIMIZAR:
+{
+${descInput}
+}
+
+Devuelve SOLO un JSON con exactamente las mismas claves, sin markdown, sin texto extra.`;
+
+        try {
+            const { data, error } = await supabase.functions.invoke('bnh-ai-injector', {
+                body: { prompt: promptOpt, contextoAdicional: 'BNH-FUSION RPG. Optimización de markup.' },
+            });
+            if (error) throw new Error(error.message);
+            if (!data?.resultado) throw new Error('Sin resultado.');
+
+            const clean = data.resultado.replace(/^```json\s*/i,'').replace(/^```\s*/,'').replace(/\s*```$/,'').trim();
+            const parsed = JSON.parse(clean);
+
+            let actualizados = 0;
+            Object.entries(parsed).forEach(([tagKey, desc]) => {
+                const key = tagKey.startsWith('#') ? tagKey.slice(1) : tagKey;
+                const ta  = document.getElementById(`ai-desc-${_esc(key)}`);
+                if (ta && desc) { ta.value = desc; actualizados++; }
+            });
+
+            toast(`✨ ${actualizados} descripcion${actualizados!==1?'es':''} optimizada${actualizados!==1?'s':''}`, 'ok');
+        } catch(err) {
+            toast('Error al optimizar: ' + (err.message || err), 'error');
+            console.error('[tags-ai] optimizar:', err);
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '✨ Optimizar markup'; }
+        }
     },
 };
 
