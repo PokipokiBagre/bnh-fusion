@@ -15,7 +15,7 @@ import {
     hidratarPlaylist, videoPiP,
     toast,
 } from './bnh-port-ui.js';
-import { mountMarkupAC } from './op-markup.js';
+import { mountMarkupAC } from './op/op-markup.js';
 
 const BUCKET = 'imagenes-bnh';
 const FOLDER = 'op-chat';
