@@ -701,7 +701,9 @@ export function renderCatalogo() {
             };
         })
         .filter(e => !e.baneado)
-        .sort((a,b) => b.count-a.count || a.tag.localeCompare(b.tag));
+        .sort(tagsState.ordenCat === 'n'
+            ? (a,b) => b.count - a.count || a.tag.localeCompare(b.tag)
+            : (a,b) => a.tag.localeCompare(b.tag));
 
     if (tagsState.busquedaCat) {
         const q = tagsState.busquedaCat.toLowerCase();
@@ -775,6 +777,17 @@ export function renderCatalogo() {
                 style="max-width:360px;">
             
             <button class="btn btn-outline btn-sm" onclick="window._tagsCopiarTextoTags()">📋 Copiar lista</button>
+
+            <div style="display:flex;gap:0;border:1.5px solid var(--gray-300);border-radius:var(--radius,8px);overflow:hidden;">
+                <button class="btn btn-sm" onclick="window._catOrdenar('az')" id="btn-orden-az"
+                    style="${tagsState.ordenCat==='az'?'background:var(--blue);color:white;border-color:var(--blue);':'background:white;color:var(--gray-600);border:none;'}font-weight:700;border-radius:0;padding:4px 10px;">
+                    Az
+                </button>
+                <button class="btn btn-sm" onclick="window._catOrdenar('n')" id="btn-orden-n"
+                    style="${tagsState.ordenCat==='n'?'background:var(--blue);color:white;border-color:var(--blue);':'background:white;color:var(--gray-600);border:none;'}font-weight:700;border-radius:0;border-left:1.5px solid var(--gray-300);padding:4px 10px;">
+                    N°
+                </button>
+            </div>
 
             <span class="cat-count" style="color:var(--gray-500);font-size:0.85em;">${entradas.length} tags</span>
             ${tagsState.esAdmin ? `
@@ -1013,6 +1026,11 @@ window._catIniciarMulti = () => {
     _catUpdateCount();
 };
 
+window._catOrdenar = (orden) => {
+    tagsState.ordenCat = orden;
+    renderCatalogo();
+};
+
 window._catCancelMulti = () => {
     window._catMultiActivo = false;
     window._catMultiSel    = new Set();
@@ -1034,6 +1052,7 @@ window._catToggleCheck = (tag, checked) => {
     _catUpdateCount();
     // Si el panel IA está abierto, re-renderizar con la selección actualizada
     window._tagsAI?.refreshInline();
+};
 };
 
 window._catEliminarSeleccionados = async () => {
@@ -1115,61 +1134,29 @@ window._catEjecutarCombinar = async () => {
 
     const nombreRaw = document.getElementById('comb-nombre')?.value.trim();
     if (!nombreRaw) { const m=document.getElementById('comb-msg'); if(m) m.textContent='El nombre es obligatorio.'; return; }
-    const nuevoTag  = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
+    const nuevoTag = nombreRaw.startsWith('#') ? nombreRaw : '#' + nombreRaw;
 
     const msgEl = document.getElementById('comb-msg');
     if (msgEl) msgEl.textContent = '⏳ Procesando…';
 
-    const { supabase } = await import('../bnh-auth.js');
+    const { renameTag, deleteTag } = await import('./tags-data.js');
 
     try {
-        const { data: pjs } = await supabase.from('personajes_refinados').select('id, nombre_refinado, tags');
+        // 1. Renombrar el primer tag al nuevo nombre (transfiere PJ + PT)
+        const r = await renameTag(tagsOrigen[0], nuevoTag);
+        if (!r.ok) throw new Error(r.msg);
 
-        for (const pj of (pjs || [])) {
-            const tagsActuales = (pj.tags || []).map(t => (t.startsWith('#') ? t : '#' + t));
-            const tieneAlguno = tagsOrigen.some(to => tagsActuales.some(ta => ta.toLowerCase() === to.toLowerCase()));
-            if (!tieneAlguno) continue;
-
-            const nuevosTags = [
-                ...tagsActuales.filter(ta => !tagsOrigen.some(to => to.toLowerCase() === ta.toLowerCase())),
-                nuevoTag,
-            ].filter((v, i, a) => a.findIndex(x => x.toLowerCase() === v.toLowerCase()) === i);
-
-            await supabase.from('personajes_refinados').update({ tags: nuevosTags }).eq('id', pj.id);
-
-            let ptTotal = 0;
-            for (const tagOrigen of tagsOrigen) {
-                const { data: ptRow } = await supabase.from('puntos_tag')
-                    .select('cantidad').eq('personaje_nombre', pj.nombre_refinado)
-                    .ilike('tag', tagOrigen).maybeSingle();
-                ptTotal += ptRow?.cantidad || 0;
-            }
-
-            if (ptTotal > 0) {
-                const { data: ptExist } = await supabase.from('puntos_tag')
-                    .select('cantidad').eq('personaje_nombre', pj.nombre_refinado)
-                    .ilike('tag', nuevoTag).maybeSingle();
-                const ptFinal = (ptExist?.cantidad || 0) + ptTotal;
-                await supabase.from('puntos_tag').upsert(
-                    { personaje_nombre: pj.nombre_refinado, tag: nuevoTag, cantidad: ptFinal, actualizado_en: new Date().toISOString() },
-                    { onConflict: 'personaje_nombre,tag' }
-                );
-            }
+        // 2. Para cada tag adicional: renombrar también al nuevo nombre
+        //    renameTag suma los PT si el destino ya existe
+        for (let i = 1; i < tagsOrigen.length; i++) {
+            const r2 = await renameTag(tagsOrigen[i], nuevoTag);
+            if (!r2.ok) throw new Error(r2.msg);
         }
 
-        // Crear el nuevo tag en el catálogo
-        await supabase.from('tags_catalogo').upsert(
-            { nombre: nuevoTag, descripcion: '' },
-            { onConflict: 'nombre' }
-        );
-
+        // 3. Los tags originales ya no existen tras renameTag (se borraron del catálogo)
+        //    pero si quedaron entradas huérfanas, limpiar con deleteTag sin borrar PT
         for (const tagOrigen of tagsOrigen) {
-            await supabase.from('puntos_tag').delete().ilike('tag', tagOrigen);
-            await supabase.from('log_puntos_tag').delete().ilike('tag', tagOrigen);
-            const keyConHash  = tagOrigen.startsWith('#') ? tagOrigen : '#' + tagOrigen;
-            const keySinHash  = tagOrigen.startsWith('#') ? tagOrigen.slice(1) : tagOrigen;
-            await supabase.from('tags_catalogo').delete().eq('nombre', keyConHash);
-            await supabase.from('tags_catalogo').delete().eq('nombre', keySinHash);
+            await deleteTag(tagOrigen, false);
         }
 
         document.getElementById('cat-inline-modal').innerHTML = '';
