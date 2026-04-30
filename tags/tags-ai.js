@@ -207,7 +207,7 @@ INSTRUCCIONES:
 - Varía la posición de #OtroTag en la oración — no siempre al final.
 - Si hay descripción actual que ya sigue este estilo, respétala o mejórala levemente.
 
-${promptExtra ? `CONTEXTO DEL OP (información adicional sobre el universo):\n${promptExtra}\n` : ''}
+${promptExtra ? `INSTRUCCIÓN EDITORIAL DEL OP — PRIORIDAD MÁXIMA, aplícala a los tags indicados:\n${promptExtra}\n\nSi la instrucción pide añadir, quitar o cambiar algo en la descripción, hazlo. Si pide añadir un personaje, añádelo. Si pide quitar algo, quítalo.\n` : ''}
 
 CATÁLOGO COMPLETO (para referenciar otros tags con #):
 ${todosLosTags}
@@ -294,8 +294,9 @@ ${tagsInfo}`;
 
     // ── Optimizar: segunda pasada con criterio de representación 30-70% ────────
     async optimizar() {
-        const btn    = document.getElementById('ai-opt-btn');
-        const status = document.getElementById('ai-status');
+        const btn         = document.getElementById('ai-opt-btn');
+        const status      = document.getElementById('ai-status');
+        const promptExtra = document.getElementById('ai-prompt-extra')?.value.trim() || '';
         if (btn) { btn.disabled = true; btn.textContent = '⏳ Optimizando...'; }
 
         // Prioridad 1: textareas de resultados generados
@@ -351,6 +352,8 @@ ${tagsInfo}`;
 
 FILOSOFÍA: Un tag es una definición de concepto, no una historia. La descripción explica QUÉ ES el tag.
 Los personajes son secundarios — solo se incluyen si ilustran algo que la definición sola no transmite.
+
+${promptExtra ? `INSTRUCCIÓN EDITORIAL DEL OP — PRIORIDAD MÁXIMA, aplícala antes que cualquier otra regla:\n${promptExtra}\n\nSi pide añadir un personaje con @arrobas@, hazlo. Si pide quitar algo, quítalo. Si pide cambiar el texto, cámbialo.\n` : ''}
 
 TAREA:
 1. Donde aparezca un nombre de personaje en texto plano, envuélvelo en @arrobas@: @Maxwell@.
