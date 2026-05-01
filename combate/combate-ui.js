@@ -588,11 +588,61 @@ export function renderSlotDetalle(eq, idx) {
         ${_tabBtn('stats',   '📊 Stats')}
         ${_tabBtn('tags',    '🏷 Tags y PT')}
         ${_tabBtn('medallas','🎖 Medallas' + (slot.medallas.length ? ` (${slot.medallas.length})` : ''))}
+        ${_tabBtn('as',      '⚔️ AS')}
     </div>
+    // ══ TAB: AS (ATAQUE SIMPLE) ═════════════════════════════════
+    const cambiosPorTurno = Math.max(1, slot.cambios || 1); // mínimo 1 siempre
+    const maxAS = Math.max(1, Math.floor(cambiosPorTurno / 2)); // mitad de cambios, mín 1
+    const dadoAS = slot._dadoAS || 10;
+    const pot    = slot.pot || 0;
+
+    const tabAS = `
+<div style="display:flex;flex-direction:column;gap:10px;">
+    <!-- Info rápida -->
+    <div style="background:#fef9f0;border:1px solid #f0d9b0;border-radius:8px;padding:8px 12px;font-size:0.8em;color:#7d4a00;">
+        <b>Cambios/turno:</b> ${cambiosPorTurno} &nbsp;·&nbsp;
+        <b>AS máximos:</b> ${maxAS} (mitad de cambios, mín 1) &nbsp;·&nbsp;
+        <b>POT:</b> ${pot}
+        <div style="margin-top:4px;color:#a04000;">Fórmula: <b>POT × 1d(dado)</b> → daño total</div>
+    </div>
+
+    <!-- Selector de dado -->
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <span style="font-size:0.82em;font-weight:700;color:#555;">Dado:</span>
+        ${[4,6,8,10,12,20,100].map(d => `
+            <button style="padding:4px 10px;border-radius:6px;font-weight:700;font-size:0.82em;cursor:pointer;
+                border:1.5px solid ${dadoAS===d?col:'#ccc'};
+                background:${dadoAS===d?col:'white'};
+                color:${dadoAS===d?'white':'#555'};"
+                onclick="window._combateSetDadoAS('${eq}',${idx},${d})">d${d}</button>`
+        ).join('')}
+    </div>
+
+    <!-- Botones de ataque -->
+    <div style="display:flex;flex-direction:column;gap:6px;">
+        ${Array.from({length: maxAS}, (_, i) => i + 1).map(n => `
+        <div style="display:flex;align-items:center;gap:8px;background:#f8f9fa;border-radius:8px;padding:7px 10px;border:1.5px solid #e9ecef;">
+            <span style="font-size:0.8em;font-weight:700;color:${col};min-width:28px;">AS ${n}</span>
+            <button style="padding:5px 14px;border-radius:6px;font-weight:800;font-size:0.85em;cursor:pointer;
+                background:${col};color:white;border:none;flex-shrink:0;"
+                onclick="window._combateAtaqueSimple('${eq}',${idx},${n})">
+                🎲 Tirar
+            </button>
+            <span id="cb-as-result-${eq}-${idx}-${n}" style="font-size:0.85em;color:#555;flex:1;">—</span>
+        </div>`).join('')}
+    </div>
+
+    <!-- Historial de ataques de esta sesión -->
+    <div id="cb-as-log-${eq}-${idx}" style="font-size:0.75em;color:#888;max-height:120px;overflow-y:auto;border-top:1px solid #eee;padding-top:6px;">
+        <span style="color:#bbb;">Los ataques aparecerán aquí…</span>
+    </div>
+</div>`;
+
     <div style="padding:12px;">
         ${tab==='stats'    ? tabStats    : ''}
         ${tab==='tags'     ? tabTags     : ''}
         ${tab==='medallas' ? tabMedallas : ''}
+        ${tab==='as'       ? tabAS       : ''}
     </div>
 </div>`;
     // Inicializar navegación por flechas si estamos en la tab Stats
@@ -767,6 +817,50 @@ window._combateSetTab = (eq, idx, tabId) => {
     if (!slot) return;
     slot._tabActiva = tabId;
     renderSlotDetalle(eq, idx);
+};
+
+// ── Ataque Simple (AS) ────────────────────────────────────────
+window._combateSetDadoAS = (eq, idx, dado) => {
+    const slot = combateState[`equipo${eq}`]?.[idx];
+    if (!slot) return;
+    slot._dadoAS = dado;
+    renderSlotDetalle(eq, idx);
+};
+
+window._combateAtaqueSimple = (eq, idx, numAS) => {
+    const slot = combateState[`equipo${eq}`]?.[idx];
+    if (!slot) return;
+
+    const dado = slot._dadoAS || 10;
+    const pot  = slot.pot || 0;
+
+    // Tirar el dado
+    const roll = Math.floor(Math.random() * dado) + 1;
+    const daño = pot * roll;
+
+    // Mostrar resultado en la UI
+    const resEl = document.getElementById(`cb-as-result-${eq}-${idx}-${numAS}`);
+    if (resEl) {
+        resEl.innerHTML = `<b style="color:#e74c3c;">${pot} × ${roll} (d${dado})</b> = <b style="font-size:1.1em;">${daño}</b> de daño`;
+    }
+
+    // Añadir al log del slot
+    const logEl = document.getElementById(`cb-as-log-${eq}-${idx}`);
+    if (logEl) {
+        const entry = document.createElement('div');
+        entry.style.cssText = 'padding:2px 0;border-bottom:1px solid #f0f0f0;';
+        entry.innerHTML = `<span style="color:#888;">AS${numAS}</span> · ${slot.nombre}: <b>${pot}×${roll}(d${dado}) = ${daño}</b>`;
+        if (logEl.firstChild?.tagName !== 'DIV') logEl.innerHTML = '';
+        logEl.insertBefore(entry, logEl.firstChild);
+    }
+
+    // Añadir al registro global
+    combateState.registro.push({
+        nombre:  slot.nombre,
+        cambios: [{ etiqueta: `AS${numAS}: ${pot}×${roll}(d${dado})=${daño}` }],
+        _t: Date.now(),
+    });
+    refrescarRegistro();
 };
 
 export function refrescarPool()     { const w=$('combate-pool-wrap');    if(w) w.innerHTML=renderPool(); }
