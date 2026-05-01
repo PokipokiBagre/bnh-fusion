@@ -236,7 +236,7 @@ export function renderProgresion() {
     }
 
     wrap.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;">
+        <div style="display:grid;grid-template-columns:1fr 280px;gap:20px;align-items:start;" class="progresion-grid">
             <div style="display:flex;flex-direction:column;gap:16px;">
                 <div class="card">
                     <div class="card-title">Personaje</div>
@@ -1260,7 +1260,7 @@ export function renderEstadisticas() {
     const barMax    = comunes[0]?.count || 1;
 
     wrap.innerHTML = `
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;" class="estadisticas-grid">
             <div style="display:flex;flex-direction:column;gap:16px;">
                 <div class="stats-banner">
                     <div class="stat-box"><div class="num">${totalTagsUnicos}</div><div class="lbl">Tags únicos</div></div>
