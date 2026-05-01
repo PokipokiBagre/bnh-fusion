@@ -50,11 +50,13 @@ const _origOpTab = window._opTab;
 
 // Definir _opFileInput globalmente de inmediato (antes de initOP)
 // para que el botón del HTML pueda llamarla aunque initOP no haya terminado.
+// _fileSelectorActive: compartido entre el menú y _initVisibilityReconnect
+// Se declara aquí para que _opFileInputDirect pueda setearlo también.
+let _fileSelectorActive = false;
+
 window._opFileInput = () => {
-    // En móvil, ofrecer las dos opciones: galería web o cámara/archivo local
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-        // Mostrar mini-menú de opciones
         const menu = document.createElement('div');
         menu.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
             background:#1a1a2e;border:1.5px solid rgba(192,57,43,0.5);border-radius:12px;
@@ -62,24 +64,53 @@ window._opFileInput = () => {
             min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,0.6);`;
         menu.innerHTML = `
             <div style="font-size:0.78em;color:rgba(255,255,255,0.45);text-align:center;margin-bottom:2px;">Adjuntar imagen</div>
+            <button id="_op-cam-opt" style="padding:10px;background:rgba(39,174,96,0.35);border:1px solid rgba(39,174,96,0.6);
+                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
+                📷 Cámara trasera
+            </button>
+            <button id="_op-camf-opt" style="padding:10px;background:rgba(39,174,96,0.2);border:1px solid rgba(39,174,96,0.4);
+                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
+                🤳 Cámara frontal
+            </button>
+            <button id="_op-file-opt" style="padding:10px;background:rgba(108,52,131,0.4);border:1px solid rgba(108,52,131,0.6);
+                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
+                🖼 Galería / Archivos
+            </button>
             <button id="_op-url-opt" style="padding:10px;background:rgba(26,74,128,0.4);border:1px solid rgba(26,74,128,0.6);
                 border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
                 🔗 Pegar URL de imagen
             </button>
-            <button id="_op-file-opt" style="padding:10px;background:rgba(108,52,131,0.4);border:1px solid rgba(108,52,131,0.6);
-                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
-                📁 Seleccionar archivo
-            </button>
-            <button onclick="this.closest('div').remove()"
+            <button onclick="this.closest('div[style]').remove()"
                 style="padding:6px;background:rgba(192,57,43,0.25);border:1px solid rgba(192,57,43,0.4);
                 border-radius:8px;color:rgba(255,255,255,0.6);font-size:0.82em;cursor:pointer;">Cancelar</button>`;
         document.body.appendChild(menu);
 
+        // Cerrar al tocar fuera
+        setTimeout(() => {
+            const _closeMenu = (e) => { if (!menu.contains(e.target)) { menu.remove(); document.removeEventListener('touchstart', _closeMenu); } };
+            document.addEventListener('touchstart', _closeMenu);
+        }, 100);
+
+        // 📷 Cámara trasera — abre la cámara directamente SIN gestor de archivos
+        menu.querySelector('#_op-cam-opt').onclick = () => {
+            menu.remove();
+            _opFileInputDirect({ capture: 'environment', accept: 'image/*' });
+        };
+        // 🤳 Cámara frontal
+        menu.querySelector('#_op-camf-opt').onclick = () => {
+            menu.remove();
+            _opFileInputDirect({ capture: 'user', accept: 'image/*' });
+        };
+        // 🖼 Galería / selector normal
+        menu.querySelector('#_op-file-opt').onclick = () => {
+            menu.remove();
+            _opFileInputDirect();
+        };
+        // 🔗 URL
         menu.querySelector('#_op-url-opt').onclick = () => {
             menu.remove();
             const url = prompt('Pega la URL de la imagen:');
             if (url?.trim()) {
-                // Enviar como mensaje con la URL — se renderizará como embed
                 const ta = document.getElementById('op-msg-input');
                 if (ta) {
                     ta.value = (ta.value ? ta.value + '\n' : '') + url.trim();
@@ -88,20 +119,20 @@ window._opFileInput = () => {
                 }
             }
         };
-        menu.querySelector('#_op-file-opt').onclick = () => {
-            menu.remove();
-            _opFileInputDirect();
-        };
         return;
     }
     _opFileInputDirect();
 };
 
-function _opFileInputDirect() {
+// opts: { capture?: 'environment'|'user', accept?: string }
+function _opFileInputDirect(opts = {}) {
+    // Marcar flag ANTES de abrir el picker para que visibilitychange lo vea
+    _fileSelectorActive = true;
     const input = document.createElement('input');
     input.type     = 'file';
-    input.multiple = true;
-    input.accept   = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
+    input.multiple = !opts.capture; // múltiple solo si no es cámara
+    input.accept   = opts.accept || 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
+    if (opts.capture) input.capture = opts.capture;
     input.style.display = 'none';
     input.onchange = () => {
         const files = Array.from(input.files || []);
@@ -272,33 +303,17 @@ function _initVisibilityReconnect() {
         } catch(_) {}
     }
 
-    // ── Detectar vuelta de selector de archivos en móvil ─────
-    // En móvil, salir a seleccionar archivos oculta la página (visibilitychange → hidden)
-    // y al volver dispara visibilitychange → visible.
-    // Si hay archivos en el input en ese momento, hacer reconexión suave en lugar de recargar.
-    let _fileSelectorActive = false;
-
-    // Marcar cuando se abre el file input nativo
-    const _origFileInput = window._opFileInput;
-    window._opFileInput = (...args) => {
-        _fileSelectorActive = true;
-        // Reset cuando el focus vuelve a la ventana (el file picker se cerró)
-        const _onFocus = () => {
-            setTimeout(() => { _fileSelectorActive = false; }, 2000);
-            window.removeEventListener('focus', _onFocus);
-        };
-        window.addEventListener('focus', _onFocus);
-        _origFileInput?.(...args);
-    };
+    // ── Reconexión al volver a la pestaña / de un file picker ──
+    // _fileSelectorActive se define en el scope del módulo (junto a _opFileInputDirect)
+    // para que el picker la active incluso antes de que _initVisibilityReconnect corra.
+    // Aquí solo leemos / reseteamos esa variable externa.
 
     document.addEventListener('visibilitychange', async () => {
         if (!document.hidden) {
-            // La página vuelve a ser visible
-            if (_fileSelectorActive) {
-                // Venimos del selector de archivos → reconexión suave, no recargar
-                _fileSelectorActive = false;
-                await _reconectarSuave();
-            }
+            // La página volvió a primer plano — siempre reconectar
+            // (cubre: volver del selector de archivos, volver de otra app, volver de otra pestaña)
+            _fileSelectorActive = false;
+            await _reconectarSuave();
         }
     });
 
@@ -332,8 +347,6 @@ function _initVisibilityReconnect() {
         umbralMs: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 30000 : 3000,
 
         onReconectar: async () => {
-            // Si venimos del selector de archivos, ya manejamos esto arriba
-            if (_fileSelectorActive) return;
             await _reconectarSuave();
         },
 
