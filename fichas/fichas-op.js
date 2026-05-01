@@ -34,7 +34,7 @@ function abrirModal(titulo, html) {
     // Siempre reasignar onclick para que cerrar-al-hacer-click-fuera funcione
     ov.onclick = e => { if (e.target===ov) cerrarModal(); };
     ov.innerHTML = `
-    <div class="op-modal">
+    <div class="op-modal" style="max-width:900px;width:92vw;">
         <div class="op-modal-header">
             <span class="op-modal-title">${titulo}</span>
             <button class="op-modal-close" onclick="window._cerrarOP()">×</button>
@@ -90,9 +90,9 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
         </div>
 
         <!-- ── GRID 2 COLUMNAS ── -->
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; align-items:start;">
 
-            <!-- COL IZQUIERDA: POT · AGI · CTL -->
+            <!-- COL IZQUIERDA: POT · AGI · CTL + Salud + PV Act Δ -->
             <div style="display:flex; flex-direction:column; gap:5px;">
                 <div style="font-size:0.62em;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">
                     Stats principales · <span style="color:var(--fp);">Base = stat nativo · Δ = operador encadenado</span>
@@ -118,39 +118,6 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
                         <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;">
                             <span style="font-size:0.58em;color:var(--fp);">Δ${n}</span>
                             <input id="op-${s}-delta-${n}" type="text" value="${g['delta_'+s+'_'+n]||'0'}" placeholder="0"
-                                style="width:100%;text-align:center;border:1px solid #ccc;border-radius:4px;padding:1px;color:var(--fp);font-weight:bold;font-size:0.82em;"
-                                oninput="window._opStatsLive()">
-                        </div>`).join('')}
-                    </div>
-                </div>`).join('')}
-            </div>
-
-            <!-- COL DERECHA: PV Máx · Camb/T · CTL Usd · Salud · PV Act Δ -->
-            <div style="display:flex;flex-direction:column;gap:5px;">
-                <div style="font-size:0.62em;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">
-                    Derivados · <span style="color:var(--green-dark);">Se calculan solos, solo ajusta los Δ</span>
-                </div>
-
-                ${[
-                    { id:'pv',        lbl:'PV Máx',  base:'Auto',          color:'var(--gray-200)' },
-                    { id:'cambios',   lbl:'Camb/T',  base:'Auto',          color:'var(--gray-200)' },
-                    { id:'ctl_usado', lbl:'CTL Usd', base:ctlEquipacion,   color:'var(--gray-200)' },
-                ].map(s => `
-                <div style="background:var(--gray-50);padding:6px 8px;border-radius:6px;border:1px solid ${s.color};">
-                    <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
-                        <div style="min-width:44px;font-size:0.72em;font-weight:800;color:var(--gray-600);line-height:1.1;">${s.lbl}</div>
-                        <div style="background:#e9ecef;border-radius:4px;padding:1px 6px;font-size:0.78em;color:#666;white-space:nowrap;">${s.base}</div>
-                        <div style="flex:1;">
-                            <span style="font-size:0.58em;color:var(--gray-500);">Nota</span>
-                            <input id="op-${s.id}-nota" type="text" value="${g['nota_'+s.id]||''}" placeholder="Origen..."
-                                style="width:100%;border:1px solid #ccc;border-radius:4px;padding:2px;font-size:0.82em;">
-                        </div>
-                    </div>
-                    <div style="display:flex;gap:3px;">
-                        ${[1,2,3,4,5].map(n => `
-                        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;">
-                            <span style="font-size:0.58em;color:var(--fp);">Δ${n}</span>
-                            <input id="op-${s.id}-delta-${n}" type="text" value="${g['delta_'+s.id+'_'+n]||'0'}" placeholder="0"
                                 style="width:100%;text-align:center;border:1px solid #ccc;border-radius:4px;padding:1px;color:var(--fp);font-weight:bold;font-size:0.82em;"
                                 oninput="window._opStatsLive()">
                         </div>`).join('')}
@@ -184,16 +151,59 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
                         </div>`).join('')}
                     </div>
                 </div>
+            </div>
 
-                <!-- Utilidades + Guardar -->
-                <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:6px 8px;background:#fef9f0;border:1px solid #f0d9b0;border-radius:6px;margin-top:2px;">
-                    <button class="op-btn op-btn-gray" style="font-size:0.72em;padding:3px 8px;" onclick="window._opBorrarDelta1()">✕ Δ1</button>
-                    <button class="op-btn op-btn-gray" style="font-size:0.72em;padding:3px 8px;" onclick="window._opBorrarTodosDeltas()">✕✕ Todos Δ</button>
-                    <button class="op-btn" style="font-size:0.72em;padding:3px 8px;background:#1a4a80;color:white;border-color:#1a4a80;"
-                        onclick="window._opIgualarPVMax('${g.nombre_refinado.replace(/'/g,"\\'")}')">💚 Igualar PV</button>
-                    <button class="op-btn op-btn-green" style="margin-left:auto;"
-                        onclick="window._opGuardarStats('${g.nombre_refinado.replace(/'/g,"\\'")}')">💾 Guardar</button>
-                    <div id="msg-stats" class="op-msg" style="width:100%;"></div>
+            <!-- COL DERECHA: PV Máx · Camb/T · CTL Usd · Utilidades · Guardar -->
+            <div style="display:flex;flex-direction:column;gap:5px;">
+                <div style="font-size:0.62em;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px;">
+                    Derivados · <span style="color:var(--green-dark);">Se calculan solos, solo ajusta los Δ</span>
+                </div>
+
+                ${[
+                    { id:'pv',        lbl:'PV Máx',  base:'Auto',          color:'var(--gray-200)' },
+                    { id:'cambios',   lbl:'Camb/T',  base:'Auto',          color:'var(--gray-200)' },
+                    { id:'ctl_usado', lbl:'CTL Usd', base:ctlEquipacion,   color:'var(--gray-200)' },
+                ].map(s => `
+                <div style="background:var(--gray-50);padding:6px 8px;border-radius:6px;border:1px solid ${s.color};">
+                    <div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;">
+                        <div style="min-width:44px;font-size:0.72em;font-weight:800;color:var(--gray-600);line-height:1.1;">${s.lbl}</div>
+                        <div style="background:#e9ecef;border-radius:4px;padding:1px 6px;font-size:0.78em;color:#666;white-space:nowrap;">${s.base}</div>
+                        <div style="flex:1;">
+                            <span style="font-size:0.58em;color:var(--gray-500);">Nota</span>
+                            <input id="op-${s.id}-nota" type="text" value="${g['nota_'+s.id]||''}" placeholder="Origen..."
+                                style="width:100%;border:1px solid #ccc;border-radius:4px;padding:2px;font-size:0.82em;">
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:3px;">
+                        ${[1,2,3,4,5].map(n => `
+                        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:0;">
+                            <span style="font-size:0.58em;color:var(--fp);">Δ${n}</span>
+                            <input id="op-${s.id}-delta-${n}" type="text" value="${g['delta_'+s.id+'_'+n]||'0'}" placeholder="0"
+                                style="width:100%;text-align:center;border:1px solid #ccc;border-radius:4px;padding:1px;color:var(--fp);font-weight:bold;font-size:0.82em;"
+                                oninput="window._opStatsLive()">
+                        </div>`).join('')}
+                    </div>
+                </div>`).join('')}
+
+                <!-- Spacer -->
+                <div style="flex:1;min-height:8px;"></div>
+
+                <!-- Utilidades -->
+                <div style="padding:8px;background:#fef9f0;border:1px solid #f0d9b0;border-radius:6px;">
+                    <div style="font-size:0.65em;font-weight:700;color:#a04000;margin-bottom:5px;">🔧 Utilidades</div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;">
+                        <button class="op-btn op-btn-gray" style="font-size:0.72em;padding:3px 8px;" onclick="window._opBorrarDelta1()">✕ Δ1</button>
+                        <button class="op-btn op-btn-gray" style="font-size:0.72em;padding:3px 8px;" onclick="window._opBorrarTodosDeltas()">✕✕ Todos Δ</button>
+                        <button class="op-btn" style="font-size:0.72em;padding:3px 8px;background:#1a4a80;color:white;border-color:#1a4a80;"
+                            onclick="window._opIgualarPVMax('${g.nombre_refinado.replace(/'/g,"\\'")}')">💚 Igualar PV</button>
+                    </div>
+                </div>
+
+                <!-- Guardar -->
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <button class="op-btn op-btn-green" style="flex:1;justify-content:center;padding:8px 14px;"
+                        onclick="window._opGuardarStats('${g.nombre_refinado.replace(/'/g,"\\'")}')">💾 Guardar Stats</button>
+                    <div id="msg-stats" class="op-msg" style="flex:1;margin:0;"></div>
                 </div>
             </div>
         </div>
