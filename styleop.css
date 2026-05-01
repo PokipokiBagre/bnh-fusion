@@ -61,7 +61,7 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
 /* Mensajes */
 .op-messages-list { flex:1; overflow-y:auto; overflow-x:hidden; padding:20px; display:flex; flex-direction:column; gap:4px; scroll-behavior:smooth; }
 .op-date-sep { text-align:center; font-size:0.7em; font-weight:700; color:var(--gray-500); background:var(--gray-200); padding:3px 12px; border-radius:20px; margin:8px auto; width:fit-content; letter-spacing:.5px; text-transform:uppercase; }
-.op-msg { display:flex; max-width:70%; min-width:0; width:70%; }
+.op-msg { display:flex; max-width:70%; min-width:0; }
 .op-msg.propio { align-self:flex-end; margin-left:auto; }
 .op-msg.ajeno  { align-self:flex-start; }
 .op-msg-bubble { background:var(--white); border-radius:var(--radius-lg); padding:9px 14px; border:1.5px solid var(--gray-200); box-shadow:var(--shadow-sm); position:relative; overflow:hidden; min-width:0; max-width:100%; word-break:break-word; }
@@ -196,7 +196,7 @@ body { font-family:'Inter',sans-serif; background:var(--gray-100); color:var(--g
     .op-panel-title  { font-size:0.85em; }
 
     /* Mensajes ocupan todo el ancho */
-    .op-msg { max-width:88%; width:88%; }
+    .op-msg { max-width:88%; }
 
     /* Input area — extra padding para barra de navegación del sistema */
     .op-input-area {
