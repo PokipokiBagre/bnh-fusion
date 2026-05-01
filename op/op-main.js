@@ -51,6 +51,53 @@ const _origOpTab = window._opTab;
 // Definir _opFileInput globalmente de inmediato (antes de initOP)
 // para que el botón del HTML pueda llamarla aunque initOP no haya terminado.
 window._opFileInput = () => {
+    // En móvil, ofrecer las dos opciones: galería web o cámara/archivo local
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+    if (isMobile) {
+        // Mostrar mini-menú de opciones
+        const menu = document.createElement('div');
+        menu.style.cssText = `position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+            background:#1a1a2e;border:1.5px solid rgba(192,57,43,0.5);border-radius:12px;
+            padding:14px;z-index:99999;display:flex;flex-direction:column;gap:10px;
+            min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,0.6);`;
+        menu.innerHTML = `
+            <div style="font-size:0.78em;color:rgba(255,255,255,0.45);text-align:center;margin-bottom:2px;">Adjuntar imagen</div>
+            <button id="_op-url-opt" style="padding:10px;background:rgba(26,74,128,0.4);border:1px solid rgba(26,74,128,0.6);
+                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
+                🔗 Pegar URL de imagen
+            </button>
+            <button id="_op-file-opt" style="padding:10px;background:rgba(108,52,131,0.4);border:1px solid rgba(108,52,131,0.6);
+                border-radius:8px;color:white;font-size:0.88em;cursor:pointer;">
+                📁 Seleccionar archivo
+            </button>
+            <button onclick="this.closest('div').remove()"
+                style="padding:6px;background:rgba(192,57,43,0.25);border:1px solid rgba(192,57,43,0.4);
+                border-radius:8px;color:rgba(255,255,255,0.6);font-size:0.82em;cursor:pointer;">Cancelar</button>`;
+        document.body.appendChild(menu);
+
+        menu.querySelector('#_op-url-opt').onclick = () => {
+            menu.remove();
+            const url = prompt('Pega la URL de la imagen:');
+            if (url?.trim()) {
+                // Enviar como mensaje con la URL — se renderizará como embed
+                const ta = document.getElementById('op-msg-input');
+                if (ta) {
+                    ta.value = (ta.value ? ta.value + '\n' : '') + url.trim();
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    ta.focus();
+                }
+            }
+        };
+        menu.querySelector('#_op-file-opt').onclick = () => {
+            menu.remove();
+            _opFileInputDirect();
+        };
+        return;
+    }
+    _opFileInputDirect();
+};
+
+function _opFileInputDirect() {
     const input = document.createElement('input');
     input.type     = 'file';
     input.multiple = true;
@@ -405,7 +452,20 @@ window._opLimpiarPendientes = () => {
 async function _enviar() {
     if (!opState.convActual || !opState.perfil) return;
     const ta        = $('op-msg-input');
-    const contenido = ta?.value.trim() || '';
+    let contenido = ta?.value.trim() || '';
+
+    // Si hay cita pendiente, prefijarla al contenido
+    const citaId = window._opCitaPendienteId;
+    if (citaId) {
+        const msgCitado = opState.mensajes.find(m => String(m.id) === String(citaId));
+        if (msgCitado) {
+            const textoResumen = (msgCitado.contenido || '').slice(0, 80).replace(/\n/g,' ');
+            const prefix = `> ${msgCitado.autor_nombre}: ${textoResumen}\n`;
+            contenido = prefix + (contenido ? contenido : '');
+        }
+        window._opCitaPendienteId = null;
+        $('op-cita-bar')?.remove();
+    }
 
     // Imagen/video de galería pendiente
     if (_pendingImgId !== null) {
@@ -514,6 +574,35 @@ function _exponerGlobales() {
     window._opTab        = t => _renderTab(t);
     window._opSelConv    = async id => { await _selConv(id); renderConvList(); };
     window._opEnviar     = _enviar;
+
+    // ── Citar mensaje ───────────────────────────────────────────
+    window._opCitaPendienteId = null;
+    window._opCitar = (msgId) => {
+        const msg = opState.mensajes.find(m => String(m.id) === String(msgId));
+        if (!msg) return;
+        window._opCitaPendienteId = msgId;
+
+        // Barra de cita visual encima del input
+        $('op-cita-bar')?.remove();
+        const bar = document.createElement('div');
+        bar.id = 'op-cita-bar';
+        bar.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px;
+            background:rgba(108,52,131,0.18);border-top:2px solid rgba(108,52,131,0.5);
+            font-size:0.78em;color:rgba(255,255,255,0.7);flex-shrink:0;`;
+        const preview = (msg.contenido || '').slice(0, 60).replace(/\n/g,' ') || '📎 adjunto';
+        bar.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            ↩ <b style="color:rgba(200,150,255,0.9);">${msg.autor_nombre}</b>: ${preview}…
+        </span>
+        <button onclick="window._opCancelarCita()"
+            style="background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;font-size:1.1em;padding:0 4px;">✕</button>`;
+        const inputArea = document.querySelector('.op-input-area');
+        if (inputArea) inputArea.insertAdjacentElement('beforebegin', bar);
+        $('op-msg-input')?.focus();
+    };
+    window._opCancelarCita = () => {
+        window._opCitaPendienteId = null;
+        $('op-cita-bar')?.remove();
+    };
     window._opGetPerfil  = () => opState.perfil;
 
     window._opNuevaConv = async () => {
