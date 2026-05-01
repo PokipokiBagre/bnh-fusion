@@ -70,41 +70,65 @@ function _idbOpen() {
 
 async function _idbSaveFiles(files) {
     const db = await _idbOpen();
-    const tx = db.transaction(_IDB_STORE, 'readwrite');
-    const st = tx.objectStore(_IDB_STORE);
-    // Limpiar primero
-    await new Promise(r => { const cl = st.clear(); cl.onsuccess = r; cl.onerror = r; });
-    for (const file of files) {
-        await new Promise((r, j) => {
-            const req = st.add({ name: file.name, type: file.type, blob: file });
-            req.onsuccess = r; req.onerror = j;
-        });
-    }
-    db.close();
+    // Esperar tx.oncomplete garantiza flush a disco antes del reload
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction(_IDB_STORE, 'readwrite');
+        const st = tx.objectStore(_IDB_STORE);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror    = e  => { db.close(); reject(e.target.error); };
+        tx.onabort    = e  => { db.close(); reject(new Error('IDB tx aborted')); };
+        st.clear();
+        for (const file of files) {
+            st.add({ name: file.name, type: file.type, blob: file });
+        }
+    });
 }
 
-async function _idbLoadFiles() {
+// Lee y borra en una sola transacción readwrite — sin race condition
+async function _idbLoadAndClear() {
     try {
         const db = await _idbOpen();
-        const tx = db.transaction(_IDB_STORE, 'readonly');
-        const st = tx.objectStore(_IDB_STORE);
-        const all = await new Promise((res, rej) => {
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(_IDB_STORE, 'readwrite');
+            const st = tx.objectStore(_IDB_STORE);
+            let rows = [];
+            tx.oncomplete = () => { db.close(); resolve(rows.map(r => new File([r.blob], r.name, { type: r.type }))); };
+            tx.onerror    = e  => { db.close(); reject(e.target.error); };
             const req = st.getAll();
-            req.onsuccess = e => res(e.target.result);
-            req.onerror   = e => rej(e.target.error);
+            req.onsuccess = e => { rows = e.target.result || []; st.clear(); };
         });
-        db.close();
-        return (all || []).map(r => new File([r.blob], r.name, { type: r.type }));
     } catch { return []; }
 }
 
-async function _idbClear() {
-    try {
-        const db = await _idbOpen();
-        const tx = db.transaction(_IDB_STORE, 'readwrite');
-        tx.objectStore(_IDB_STORE).clear();
-        db.close();
-    } catch {}
+// ── Recuperar archivos de IndexedDB al arrancar ──────────────
+async function _recuperarArchivosPendientesIDB() {
+    const files = await _idbLoadAndClear();
+    if (!files.length) return;
+
+    // Restaurar texto del input si había
+    const textoGuardado = sessionStorage.getItem('op-reload-texto');
+    if (textoGuardado) {
+        sessionStorage.removeItem('op-reload-texto');
+        const ta = document.getElementById('op-msg-input');
+        if (ta) {
+            ta.value = textoGuardado;
+            ta.style.height = 'auto';
+            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+        }
+    }
+
+    _agregarArchivosPendientes(files, 'file');
+
+    setTimeout(() => {
+        const n = files.length;
+        const el = document.getElementById('op-toast');
+        if (el) {
+            el.textContent = `✅ ${n} archivo${n > 1 ? 's' : ''} recuperado${n > 1 ? 's' : ''} — listo para enviar`;
+            el.className = 'op-toast op-toast-ok';
+            clearTimeout(el._t);
+            el._t = setTimeout(() => el.className = 'op-toast', 4000);
+        }
+    }, 800);
 }
 
 // ── Botón 📎 — selector con recarga limpia en móvil ──────────
