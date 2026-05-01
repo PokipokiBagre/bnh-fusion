@@ -599,6 +599,17 @@ export function renderSlotDetalle(eq, idx) {
                 color:${dadoAS===d?'white':'#555'};"
                 onclick="window._combateSetDadoAS('${eq}',${idx},${d})">d${d}</button>`
         ).join('')}
+        <span style="font-size:0.82em;color:#aaa;">|</span>
+        <span style="font-size:0.82em;font-weight:700;color:#555;">d</span>
+        <input type="number" min="2" max="10000"
+            id="cb-dado-custom-${eq}-${idx}"
+            placeholder="custom"
+            value="${![4,6,8,10,12,20,100].includes(dadoAS) ? dadoAS : ''}"
+            style="width:60px;padding:3px 6px;border:1.5px solid ${![4,6,8,10,12,20,100].includes(dadoAS)?col:'#ccc'};
+                border-radius:6px;font-size:0.82em;font-weight:700;text-align:center;
+                color:${![4,6,8,10,12,20,100].includes(dadoAS)?col:'#555'};outline:none;"
+            onchange="(v=>{ if(v>=2) window._combateSetDadoAS('${eq}',${idx},v); })(parseInt(this.value))"
+            onkeydown="if(event.key==='Enter'){ const v=parseInt(this.value); if(v>=2) window._combateSetDadoAS('${eq}',${idx},v); }">
     </div>
 
     <!-- Botones de ataque -->
@@ -824,6 +835,11 @@ window._combateSetDadoAS = (eq, idx, dado) => {
     const slot = combateState[`equipo${eq}`]?.[idx];
     if (!slot) return;
     slot._dadoAS = dado;
+    // Si es un preset, limpiar el input custom antes de re-renderizar
+    if ([4,6,8,10,12,20,100].includes(dado)) {
+        const inp = document.getElementById(`cb-dado-custom-${eq}-${idx}`);
+        if (inp) inp.value = '';
+    }
     renderSlotDetalle(eq, idx);
 };
 
