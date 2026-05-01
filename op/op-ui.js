@@ -247,15 +247,19 @@ function _renderContenidoConLinks(msg) {
     const texto = msg.contenido;
     if (!texto) return '';
 
-    // ── Detectar bloque de cita (línea "> Autor: texto") ────────
-    const citaMatch = texto.match(/^> (.+?): (.*)\n?([\s\S]*)$/);
+    // ── Detectar bloque de cita (línea "> [id] Autor: texto") ────────
+    // Soporta formato nuevo "> [123] Autor: texto" y legacy "> Autor: texto"
+    const citaMatch = texto.match(/^> (?:\[(\d+)\] )?(.+?): (.*)\n?([\s\S]*)$/);
     if (citaMatch) {
-        const [, citaAutor, citaTexto, resto] = citaMatch;
+        const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
+        const scrollFn = citaMsgId
+            ? `(function(){const el=document.querySelector('.op-msg[data-id="${citaMsgId}"]');if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.transition='background 0.3s';el.style.background='rgba(108,52,131,0.18)';setTimeout(()=>el.style.background='',1200);}else{const wrap=document.getElementById('op-messages-list');if(wrap)wrap.scrollTop=0;}})()`
+            : `(function(){const wrap=document.getElementById('op-messages-list');if(wrap)wrap.scrollTop=0;})()`;
         const citaHTML = `
         <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.12);
             border-radius:0 6px 6px 0;padding:4px 8px;margin-bottom:4px;
             font-size:0.82em;color:rgba(255,255,255,0.55);overflow:hidden;cursor:pointer;"
-            onclick="(function(){const el=document.querySelector('.op-msg[data-id]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'})})()">
+            onclick="${scrollFn}">
             <span style="font-weight:700;color:#9b59b6;">${esc(citaAutor)}</span>: 
             <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
         </div>`;
