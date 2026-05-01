@@ -459,8 +459,15 @@ async function _enviar() {
     if (citaId) {
         const msgCitado = opState.mensajes.find(m => String(m.id) === String(citaId));
         if (msgCitado) {
-            const textoResumen = (msgCitado.contenido || '').slice(0, 80).replace(/\n/g,' ');
-            const prefix = `> ${msgCitado.autor_nombre}: ${textoResumen}\n`;
+            let citaPreview = '';
+            if (msgCitado.contenido) {
+                const lineas = msgCitado.contenido.split('\n').filter(l => !l.startsWith('> '));
+                citaPreview = lineas.join(' ').slice(0, 80);
+            } else if (msgCitado.imagen_path) citaPreview = '📷 imagen';
+            else if (msgCitado.video_path)   citaPreview = '🎬 video';
+            else if (msgCitado.audio_path)   citaPreview = '🎵 audio';
+            else                             citaPreview = '📎 adjunto';
+            const prefix = `> ${msgCitado.autor_nombre}: ${citaPreview}\n`;
             contenido = prefix + (contenido ? contenido : '');
         }
         window._opCitaPendienteId = null;
@@ -582,6 +589,22 @@ function _exponerGlobales() {
         if (!msg) return;
         window._opCitaPendienteId = msgId;
 
+        // Determinar preview del contenido citado (texto, o descripción del adjunto)
+        let preview = '';
+        if (msg.contenido) {
+            // Si empieza con "> " es una cita anidada — mostrar solo la última línea no-cita
+            const lineas = msg.contenido.split('\n').filter(l => !l.startsWith('> '));
+            preview = lineas.join(' ').slice(0, 60);
+        } else if (msg.imagen_path) {
+            preview = '📷 imagen';
+        } else if (msg.video_path) {
+            preview = '🎬 video';
+        } else if (msg.audio_path) {
+            preview = '🎵 audio';
+        } else {
+            preview = '📎 adjunto';
+        }
+
         // Barra de cita visual encima del input
         $('op-cita-bar')?.remove();
         const bar = document.createElement('div');
@@ -589,12 +612,13 @@ function _exponerGlobales() {
         bar.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px;
             background:rgba(108,52,131,0.18);border-top:2px solid rgba(108,52,131,0.5);
             font-size:0.78em;color:rgba(255,255,255,0.7);flex-shrink:0;`;
-        const preview = (msg.contenido || '').slice(0, 60).replace(/\n/g,' ') || '📎 adjunto';
-        bar.innerHTML = `<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-            ↩ <b style="color:rgba(200,150,255,0.9);">${msg.autor_nombre}</b>: ${preview}…
-        </span>
-        <button onclick="window._opCancelarCita()"
-            style="background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;font-size:1.1em;padding:0 4px;">✕</button>`;
+        bar.innerHTML = `<div style="width:3px;height:28px;background:#9b59b6;border-radius:2px;flex-shrink:0;"></div>
+            <div style="flex:1;overflow:hidden;">
+                <div style="font-weight:700;color:#c39bd3;font-size:0.85em;">${msg.autor_nombre}</div>
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.7;">${preview}</div>
+            </div>
+            <button onclick="window._opCancelarCita()"
+                style="background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;font-size:1.1em;padding:0 4px;">✕</button>`;
         const inputArea = document.querySelector('.op-input-area');
         if (inputArea) inputArea.insertAdjacentElement('beforebegin', bar);
         $('op-msg-input')?.focus();
