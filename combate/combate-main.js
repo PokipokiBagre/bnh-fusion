@@ -111,6 +111,118 @@ function _restaurarCombate(snap) {
 }
 
 // ── Init ──────────────────────────────────────────────────────
+// ── Botón Info flotante ───────────────────────────────────────
+function _initInfoBtn() {
+    if (document.getElementById('combate-info-btn')) return;
+
+    const INFO_HTML = `
+<div style="max-width:680px;font-size:0.88em;line-height:1.65;color:#212529;">
+    <h2 style="font-family:'Cinzel',serif;color:#1a4a80;border-bottom:2px solid #1a4a80;padding-bottom:6px;margin-bottom:14px;">
+        ⚔️ Guía de Combate BNH
+    </h2>
+
+    <h3 style="color:#7d3c00;margin:12px 0 6px;">📊 Stats base</h3>
+    <ul style="margin-left:16px;">
+        <li><b>POT (Potencia)</b> — Define el daño de los ataques. Fórmula AS: <code>POT × 1dX</code>.</li>
+        <li><b>AGI (Agilidad)</b> — Define acciones por turno. <b>Cambios/turno = ⌊AGI/4⌋</b> (mín 1).</li>
+        <li><b>CTL (Control)</b> — Define cuántas medallas puedes equipar. Suma de costos ≤ CTL.</li>
+    </ul>
+
+    <h3 style="color:#1a4a80;margin:12px 0 6px;">🎲 Ataque Simple (AS)</h3>
+    <ul style="margin-left:16px;">
+        <li>Fórmula: <b>POT × 1d(dado)</b> → daño total al enemigo.</li>
+        <li>Puedes hacer hasta <b>⌊Cambios/turno ÷ 2⌋ ataques simples por turno</b>. Siempre puedes hacer al menos 1.</li>
+        <li>El dado por defecto es d10 pero puedes cambiarlo en la tab AS.</li>
+        <li>Ejemplo: POT 20, d10 → tiras d10 = 7 → 20 × 7 = <b>140 de daño</b>.</li>
+    </ul>
+
+    <h3 style="color:#27ae60;margin:12px 0 6px;">💚 Puntos de Vida (PV)</h3>
+    <ul style="margin-left:16px;">
+        <li><code>PV = ⌊POT/4⌋ + ⌊AGI/4⌋ + ⌊CTL/4⌋ + Bono de Tier</code></li>
+        <li>Tier 1 (PAC 40–59): +5 · Tier 2 (60–79): +10 · Tier 3 (80–99): +15 · Tier 4 (100–149): +20 · Tier 5 (150+): +30</li>
+    </ul>
+
+    <h3 style="color:#8e44ad;margin:12px 0 6px;">🎖 Medallas y CTL</h3>
+    <ul style="margin-left:16px;">
+        <li>Cada medalla tiene un costo CTL. La suma de todas equipadas no puede superar tu CTL.</li>
+        <li>Se activan según el dado inicial d100 del combate:</li>
+    </ul>
+    <table style="width:100%;border-collapse:collapse;margin:6px 0 10px;font-size:0.85em;">
+        <tr style="background:#f0e6ff;"><th style="padding:4px 8px;text-align:left;border:1px solid #c39bd3;">d100</th><th style="padding:4px 8px;border:1px solid #c39bd3;">Slots activos</th></tr>
+        <tr><td style="padding:3px 8px;border:1px solid #ddd;">91–100</td><td style="padding:3px 8px;border:1px solid #ddd;">Todos los slots</td></tr>
+        <tr><td style="padding:3px 8px;border:1px solid #ddd;">71–90</td><td style="padding:3px 8px;border:1px solid #ddd;">Slots 1, 2, 3 y 4</td></tr>
+        <tr><td style="padding:3px 8px;border:1px solid #ddd;">41–70</td><td style="padding:3px 8px;border:1px solid #ddd;">Slots 1, 2 y 3</td></tr>
+        <tr><td style="padding:3px 8px;border:1px solid #ddd;">11–40</td><td style="padding:3px 8px;border:1px solid #ddd;">Slots 1 y 2</td></tr>
+        <tr><td style="padding:3px 8px;border:1px solid #ddd;">01–10</td><td style="padding:3px 8px;border:1px solid #ddd;">Solo Slot 1</td></tr>
+    </table>
+
+    <h3 style="color:#1e8449;margin:12px 0 6px;">🔄 Turnos y Acciones</h3>
+    <ul style="margin-left:16px;">
+        <li>En tu turno puedes usar tus <b>Cambios/turno</b> en acciones: atacar, usar medallas o hacer control.</li>
+        <li>Puedes distribuirlos libremente (todos en ataque, todos en medallas, mezcla).</li>
+        <li>Un <b>Ataque Simple</b> cuesta 2 cambios (pero siempre puedes hacer al menos 1 aunque tengas 0 o menos cambios).</li>
+    </ul>
+
+    <h3 style="color:#e67e22;margin:12px 0 6px;">⚡ PT y Progresión</h3>
+    <ul style="margin-left:16px;">
+        <li>Ganas PT al participar en hilos de rol. Cada post de interacción da +1 PT al tag correspondiente.</li>
+        <li>Con PT acumulados puedes evolucionar stats, desbloquear medallas o cambiar tags.</li>
+        <li><b>Regla de pureza:</b> los PT de canje deben pertenecer al mismo tag.</li>
+    </ul>
+
+    <hr style="border:none;border-top:1px solid #dee2e6;margin:16px 0;">
+    <p style="font-size:0.82em;color:#888;text-align:center;">BNH-Fusion Manual Técnico v5.0 · Los Deltas (Δ) modifican stats en combate sin alterar la BD.</p>
+</div>`;
+
+    // Botón flotante
+    const btn = document.createElement('button');
+    btn.id = 'combate-info-btn';
+    btn.title = 'Cómo funciona el combate';
+    btn.innerHTML = 'ℹ';
+    btn.style.cssText = `
+        position:fixed;right:62px;bottom:120px;z-index:8998;
+        width:36px;height:36px;border-radius:50%;border:none;cursor:pointer;
+        font-size:1.1em;line-height:1;
+        background:rgba(26,74,128,0.88);color:white;
+        box-shadow:0 2px 8px rgba(0,0,0,0.22);
+        backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+        transition:transform 0.15s,background 0.15s;
+    `;
+    btn.onmouseover = () => { btn.style.transform='scale(1.12)'; btn.style.background='#1a4a80'; };
+    btn.onmouseout  = () => { btn.style.transform=''; btn.style.background='rgba(26,74,128,0.88)'; };
+    btn.onclick = () => _toggleInfoPanel(INFO_HTML);
+    document.body.appendChild(btn);
+}
+
+function _toggleInfoPanel(html) {
+    let panel = document.getElementById('combate-info-panel');
+    if (panel) { panel.remove(); return; }
+
+    panel = document.createElement('div');
+    panel.id = 'combate-info-panel';
+    panel.style.cssText = `
+        position:fixed;right:16px;bottom:170px;z-index:8997;
+        width:min(700px,90vw);max-height:75vh;overflow-y:auto;
+        background:white;border-radius:12px;
+        box-shadow:0 8px 32px rgba(0,0,0,0.22);
+        padding:20px 22px;
+        border:1.5px solid #b0c4de;
+    `;
+    panel.innerHTML = html;
+
+    // Cerrar al click fuera
+    setTimeout(() => {
+        document.addEventListener('click', function _close(e) {
+            if (!panel.contains(e.target) && e.target.id !== 'combate-info-btn') {
+                panel.remove();
+                document.removeEventListener('click', _close);
+            }
+        });
+    }, 50);
+
+    document.body.appendChild(panel);
+}
+
 window.onload = async () => {
     const fav = document.getElementById('dynamic-favicon');
     if (fav) fav.href = `${STORAGE_URL}/imginterfaz/icon.png?v=${Date.now()}`;
@@ -193,6 +305,7 @@ window.onload = async () => {
     document.getElementById('pantalla-carga')?.style?.setProperty('display','none');
     document.getElementById('interfaz-combate')?.classList?.remove('oculto');
     renderCombate();
+    _initInfoBtn();
 
     // ── RESTAURAR RESCATE ────────────────────────────────────────
     // Ejecutar DESPUÉS de renderCombate() (el DOM base ya existe)
