@@ -594,4 +594,55 @@ textarea.inp { resize: vertical; min-height: 64px; }
 @media (max-width: 600px) {
     .app-main { padding: 14px 12px; }
     .res-stats-row { grid-template-columns: 1fr; }
+
+    /* ── Filtros: wrap para que no se desborden ── */
+    .char-pool-filters {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+    .char-pool-filters > div {
+        flex-wrap: wrap !important;
+        gap: 4px !important;
+    }
+
+    /* ── char-pool: scroll horizontal en móvil ── */
+    .char-pool {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+        gap: 6px !important;
+    }
+
+    /* ── VS panel en móvil: horizontal compacto ── */
+    .vs-panel {
+        flex-direction: row !important;
+        flex-wrap: wrap !important;
+        min-height: auto !important;
+        padding: 10px 0 !important;
+        gap: 10px !important;
+        justify-content: center !important;
+    }
+    .vs-orb { width: 44px; height: 44px; font-size: 0.7em; }
+    .d100-wrap { width: auto; min-width: 100px; }
+    .d100-input { width: 80px; font-size: 1.4em; }
+    .compat-bar-wrap { min-width: 120px; }
+
+    /* ── Botón Simular: fuera del vs-panel, ancho completo ── */
+    .btn-simular-wrap {
+        width: 100%;
+        padding: 0 0 4px;
+    }
+    .btn-simular-wrap .btn-fusion {
+        width: 100%;
+    }
+
+    /* ── Slot cards más compactas ── */
+    .slot-card { padding: 14px !important; }
+
+    /* ── Header más compacto ── */
+    .header-top { flex-wrap: wrap; gap: 8px; padding: 8px 0; }
+    .header-logo { font-size: 1.1em; }
+    .nav-tab { padding: 10px 12px; font-size: 0.82em; }
+
+    /* ── Resultado: stats en 1 col ── */
+    .res-stats-row { grid-template-columns: 1fr !important; }
 }
