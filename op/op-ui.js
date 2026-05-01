@@ -505,17 +505,18 @@ function _mountSwipeToReply(container) {
         bubble.style.transition = 'none';
         bubble.style.transform  = `translateX(${offset}px)`;
 
-        // Ícono de respuesta que aparece al arrastar
-        let icon = msgEl.querySelector('.op-swipe-reply-icon');
+        // Ícono de respuesta: va DENTRO de la burbuja para no romper el flex row del msg
+        let icon = bubble.querySelector('.op-swipe-reply-icon');
         if (!icon) {
             icon = document.createElement('div');
             icon.className = 'op-swipe-reply-icon';
             icon.textContent = '↩';
-            icon.style.cssText = `position:absolute;left:4px;top:50%;transform:translateY(-50%);
+            icon.style.cssText = `position:absolute;left:-22px;top:50%;transform:translateY(-50%);
                 font-size:1.1em;color:#9b59b6;opacity:0;transition:opacity 0.12s;
                 pointer-events:none;user-select:none;`;
-            msgEl.style.position = 'relative';
-            msgEl.insertBefore(icon, msgEl.firstChild);
+            // position:relative solo en la burbuja, no en el msg contenedor
+            bubble.style.position = 'relative';
+            bubble.insertBefore(icon, bubble.firstChild);
         }
         icon.style.opacity = offset >= ICON_SHOW ? '1' : '0';
     }, { passive: false });
@@ -534,7 +535,7 @@ function _mountSwipeToReply(container) {
         }
 
         // Ocultar ícono
-        const icon = msgEl.querySelector('.op-swipe-reply-icon');
+        const icon = bubble?.querySelector('.op-swipe-reply-icon');
         if (icon) icon.style.opacity = '0';
 
         // Disparar cita si superó el umbral
