@@ -695,43 +695,50 @@ function _exponerGlobales() {
         if (!msg) return;
         window._opCitaPendienteId = msgId;
 
-        // Determinar preview del contenido citado (texto, o descripción del adjunto)
+        // Determinar preview del contenido citado
         let preview = '';
         if (msg.contenido) {
-            // Si empieza con "> " es una cita anidada — mostrar solo la última línea no-cita
             const lineas = msg.contenido.split('\n').filter(l => !l.startsWith('> '));
             preview = lineas.join(' ').slice(0, 60);
-        } else if (msg.imagen_path) {
-            preview = '📷 imagen';
-        } else if (msg.video_path) {
-            preview = '🎬 video';
-        } else if (msg.audio_path) {
-            preview = '🎵 audio';
-        } else {
-            preview = '📎 adjunto';
-        }
+        } else if (msg.imagen_path) { preview = '📷 imagen'; }
+        else if (msg.video_path)    { preview = '🎬 video'; }
+        else if (msg.audio_path)    { preview = '🎵 audio'; }
+        else                        { preview = '📎 adjunto'; }
 
-        // Barra de cita visual encima del input
-        $('op-cita-bar')?.remove();
+        // Siempre eliminar bar anterior si existe
+        document.getElementById('op-cita-bar')?.remove();
+
         const bar = document.createElement('div');
         bar.id = 'op-cita-bar';
-        bar.style.cssText = `display:flex;align-items:center;gap:8px;padding:6px 12px;
-            background:rgba(108,52,131,0.18);border-top:2px solid rgba(108,52,131,0.5);
-            font-size:0.78em;color:rgba(255,255,255,0.7);flex-shrink:0;`;
-        bar.innerHTML = `<div style="width:3px;height:28px;background:#9b59b6;border-radius:2px;flex-shrink:0;"></div>
-            <div style="flex:1;overflow:hidden;">
-                <div style="font-weight:700;color:#c39bd3;font-size:0.85em;">${msg.autor_nombre}</div>
-                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.7;">${preview}</div>
+        bar.style.cssText = [
+            'display:flex', 'align-items:center', 'gap:8px', 'padding:6px 12px',
+            'background:rgba(108,52,131,0.12)',
+            'border-top:2px solid rgba(108,52,131,0.4)',
+            'border-bottom:1px solid rgba(108,52,131,0.15)',
+            'font-size:0.78em', 'flex-shrink:0',
+        ].join(';');
+        bar.innerHTML = `
+            <div style="width:3px;height:28px;background:#9b59b6;border-radius:2px;flex-shrink:0;"></div>
+            <div style="flex:1;overflow:hidden;min-width:0;">
+                <div style="font-weight:700;color:#7d3c98;font-size:0.85em;">${msg.autor_nombre}</div>
+                <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#4a3060;opacity:0.85;">${preview}</div>
             </div>
             <button onclick="window._opCancelarCita()"
-                style="background:none;border:none;color:rgba(255,255,255,0.45);cursor:pointer;font-size:1.1em;padding:0 4px;">✕</button>`;
+                style="background:none;border:none;color:rgba(108,52,131,0.5);cursor:pointer;font-size:1.1em;padding:0 4px;flex-shrink:0;">✕</button>`;
+
+        // Insertar DENTRO de op-input-area, antes de op-input-wrap — más robusto que beforebegin en el área
         const inputArea = document.querySelector('.op-input-area');
-        if (inputArea) inputArea.insertAdjacentElement('beforebegin', bar);
+        const inputWrap = document.getElementById('op-input-wrap');
+        if (inputArea && inputWrap) {
+            inputArea.insertBefore(bar, inputWrap);
+        } else if (inputArea) {
+            inputArea.prepend(bar);
+        }
         $('op-msg-input')?.focus();
     };
     window._opCancelarCita = () => {
         window._opCitaPendienteId = null;
-        $('op-cita-bar')?.remove();
+        document.getElementById('op-cita-bar')?.remove();
     };
     window._opGetPerfil  = () => opState.perfil;
 
