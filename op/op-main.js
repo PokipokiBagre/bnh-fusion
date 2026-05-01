@@ -248,42 +248,16 @@ function _initVisibilityReconnect() {
     });
     window.addEventListener('pagehide', () => _saveOPState(), { once: false });
 
-    // ── Restaurar: texto del input + tab ──────────────────────
-    // Se llama aquí (no en initOP) para que ocurra tras montar el input.
-    restaurarRescate({
-        toastElId: 'op-toast',
-        maxEsperas: 60,
-        onRestaurado: (saved) => {
-            const extra = saved?.extra || {};
-
-            // Restaurar tab activa
-            if (extra.opTab && extra.opTab !== 'chat') {
-                _renderTab(extra.opTab);
-            }
-
-            // Restaurar texto del input (con retry porque el DOM puede tardar)
-            if (extra.opMsgInput) {
-                const ta = document.getElementById('op-msg-input');
-                if (ta) {
-                    ta.value = extra.opMsgInput;
-                    // Ajustar altura como lo hace el oninput nativo
-                    ta.style.height = 'auto';
-                    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-                    ta.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-        },
-    });
-
-    // ── initRecon: dot de estado + reconexión agresiva ────────
-    initRecon({
-        supabaseClient: supabase,
-        umbralMs:       3000,
-
-        // Path rápido (< 1.5s): solo re-suscribir el canal realtime
-        onReconectar: async () => {
+    // ── Reconexión suave: sin recargar, solo refrescar auth + mensajes ──
+    async function _reconectarSuave() {
+        try {
+            // 1. Refrescar sesión de Supabase
+            await supabase.auth.refreshSession();
+        } catch(_) {}
+        try {
+            // 2. Reconectar canal realtime
             if (opState.realtimeSub) {
-                try { supabase.removeChannel(opState.realtimeSub); } catch (_) {}
+                try { supabase.removeChannel(opState.realtimeSub); } catch(_) {}
                 opState.realtimeSub = null;
             }
             if (opState.convActual) {
@@ -295,11 +269,84 @@ function _initVisibilityReconnect() {
                     if (msg.autor_id !== opState.perfil?.id) appendMensaje(msg);
                 });
             }
+        } catch(_) {}
+    }
+
+    // ── Detectar vuelta de selector de archivos en móvil ─────
+    // En móvil, salir a seleccionar archivos oculta la página (visibilitychange → hidden)
+    // y al volver dispara visibilitychange → visible.
+    // Si hay archivos en el input en ese momento, hacer reconexión suave en lugar de recargar.
+    let _fileSelectorActive = false;
+
+    // Marcar cuando se abre el file input nativo
+    const _origFileInput = window._opFileInput;
+    window._opFileInput = (...args) => {
+        _fileSelectorActive = true;
+        // Reset cuando el focus vuelve a la ventana (el file picker se cerró)
+        const _onFocus = () => {
+            setTimeout(() => { _fileSelectorActive = false; }, 2000);
+            window.removeEventListener('focus', _onFocus);
+        };
+        window.addEventListener('focus', _onFocus);
+        _origFileInput?.(...args);
+    };
+
+    document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden) {
+            // La página vuelve a ser visible
+            if (_fileSelectorActive) {
+                // Venimos del selector de archivos → reconexión suave, no recargar
+                _fileSelectorActive = false;
+                await _reconectarSuave();
+            }
+        }
+    });
+
+    // ── Restaurar: texto del input + tab ──────────────────────
+    restaurarRescate({
+        toastElId: 'op-toast',
+        maxEsperas: 60,
+        onRestaurado: (saved) => {
+            const extra = saved?.extra || {};
+
+            if (extra.opTab && extra.opTab !== 'chat') {
+                _renderTab(extra.opTab);
+            }
+
+            if (extra.opMsgInput) {
+                const ta = document.getElementById('op-msg-input');
+                if (ta) {
+                    ta.value = extra.opMsgInput;
+                    ta.style.height = 'auto';
+                    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            }
+        },
+    });
+
+    // ── initRecon: dot de estado + reconexión agresiva ────────
+    initRecon({
+        supabaseClient: supabase,
+        // Umbral más largo en móvil para no disparar la emergencia al seleccionar archivos
+        umbralMs: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 30000 : 3000,
+
+        onReconectar: async () => {
+            // Si venimos del selector de archivos, ya manejamos esto arriba
+            if (_fileSelectorActive) return;
+            await _reconectarSuave();
         },
 
-        // Path de emergencia (timeout > 1.5s): salvar texto y recargar
-        // La conv se recupera por ?conv= en la URL automáticamente.
-        onEmergencia: () => _saveOPState(),
+        onEmergencia: () => {
+            // Solo recargar si NO hay archivos pendientes (evita perderlos en móvil)
+            if (_pendingFiles.length > 0) {
+                // Reconexión suave en lugar de reload
+                _reconectarSuave();
+                return;
+            }
+            _saveOPState();
+            // El reload lo hace initRecon internamente
+        },
     });
 }
 
