@@ -424,7 +424,7 @@ export function renderBurbuja() {
         width:48px;height:48px;border-radius:50%;
         background:linear-gradient(135deg,#c0392b,#6c3483);
         box-shadow:0 4px 18px rgba(192,57,43,0.45);
-        cursor:pointer;z-index:89998;
+        cursor:pointer;z-index:89999;
         display:flex;align-items:center;justify-content:center;
         font-size:1.35em;user-select:none;
         transition:transform 0.18s,box-shadow 0.18s;
@@ -453,19 +453,20 @@ export function renderPanel() {
     const isMobile = window.innerWidth < 700;
 
     if (isMobile) {
-        // Móvil: panel centrado y más estrecho, deslizable desde abajo
+        // Móvil: panel centrado horizontalmente, más estrecho
+        // z-index 89997 → queda DEBAJO de la burbuja (89998) y el scroll (89999)
         const vw = window.innerWidth;
-        const panelW = Math.min(vw - 32, 360);
-        const leftOffset = Math.round((vw - panelW) / 2);
-        panel.style.cssText = `position:fixed;left:${leftOffset}px;bottom:0;width:${panelW}px;
+        const panelW = Math.min(vw - 24, 380);
+        const leftOff = Math.round((vw - panelW) / 2);
+        panel.style.cssText = `position:fixed;left:${leftOff}px;bottom:0;width:${panelW}px;
             height:55vh;max-height:55vh;
             background:#0d1117;border:none;
             border-top:2px solid rgba(192,57,43,0.45);
-            border-left:1.5px solid rgba(192,57,43,0.3);
-            border-right:1.5px solid rgba(192,57,43,0.3);
+            border-left:1.5px solid rgba(192,57,43,0.28);
+            border-right:1.5px solid rgba(192,57,43,0.28);
             border-radius:16px 16px 0 0;
             box-shadow:0 -8px 32px rgba(0,0,0,0.6);
-            z-index:89999;display:flex;flex-direction:column;
+            z-index:89997;display:flex;flex-direction:column;
             overflow:hidden;font-family:inherit;font-size:14px;
             color:rgba(255,255,255,0.88);`;
     } else {
@@ -1108,12 +1109,17 @@ function _initDrag(panel) {
     }, { passive: true });
     panel.addEventListener('touchmove', e => {
         if (!tDragging) return;
-        e.preventDefault(); // evita pull-to-refresh y scroll de página
+        e.preventDefault();   // evita pull-to-refresh del browser
         e.stopPropagation();
-        const dy  = ty0 - e.touches[0].clientY; // positivo = arrastrar hacia arriba = más alto
+        const dy  = ty0 - e.touches[0].clientY;
         const newH = Math.min(Math.max(h0 + dy, 200), window.innerHeight * 0.85);
         panel.style.height     = newH + 'px';
         panel.style.maxHeight  = newH + 'px';
+        // Recalcular left por si cambió el ancho de pantalla
+        const vw2 = window.innerWidth;
+        const pw2 = Math.min(vw2 - 24, 380);
+        panel.style.left  = Math.round((vw2 - pw2) / 2) + 'px';
+        panel.style.width = pw2 + 'px';
     }, { passive: false });
     document.addEventListener('touchend', () => { tDragging = false; });
 }
