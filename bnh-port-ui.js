@@ -292,6 +292,35 @@ function _renderContenidoConLinks(msg) {
     const texto = msg.contenido;
     if (!texto) return '';
 
+    // ── Bloque de cita "> [id] Autor: texto" ────────────────
+    const citaMatch = texto.match(/^> (?:\[(\d+)\] )?(.+?): (.*)\n?([\s\S]*)$/);
+    if (citaMatch) {
+        const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
+        const citaHTML = `<div style="border-left:2px solid rgba(108,52,131,0.7);
+            background:rgba(108,52,131,0.13);border-radius:0 5px 5px 0;
+            padding:3px 7px;margin-bottom:3px;font-size:0.78em;
+            color:rgba(255,255,255,0.5);overflow:hidden;cursor:pointer;"
+            data-cita-id="${esc(citaMsgId || '')}"
+            onclick="(function(el){
+                const id=el.dataset.citaId;
+                if(!id)return;
+                const wrap=document.getElementById('bnh-port-msgs');
+                const t=wrap&&wrap.querySelector('.bnh-port-msg[data-msg-id=\"'+id+'\"]');
+                if(t){t.scrollIntoView({behavior:'smooth',block:'center'});
+                    t.style.transition='background 0.3s';
+                    t.style.background='rgba(108,52,131,0.22)';
+                    setTimeout(()=>{t.style.background='';},1400);}
+            })(this)">
+            <span style="font-weight:700;color:#c39bd3;">${esc(citaAutor)}</span>: 
+            <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
+        </div>`;
+        const restoTrim = resto?.trim();
+        const restoHtml = restoTrim
+            ? `<div style="font-size:0.82em;line-height:1.45;word-break:break-word;">${_renderMarkupBasico(restoTrim)}</div>`
+            : '';
+        return citaHTML + restoHtml;
+    }
+
     // Si tiene video/audio adjunto, suprimir URLs del texto (ya tienen reproductor)
     if (msg.video_path || msg.audio_path) {
         const limpio = texto.replace(new RegExp(_URL_RE.source,'gi'), '').trim();
@@ -357,6 +386,12 @@ export function _htmlMensaje(msg, mismoGrupo) {
             ${_renderContenidoConLinks(msg)}
         </div>
         <div style="display:flex;align-items:center;gap:4px;${propio?'justify-content:flex-end;':''}">
+            <button onclick="window._bnhPortCitar(${msg.id})"
+                style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;
+                font-size:0.7em;padding:1px 4px;line-height:1;transition:color 0.15s;"
+                onmouseover="this.style.color='rgba(108,52,131,0.8)'"
+                onmouseout="this.style.color='rgba(255,255,255,0.2)'"
+                title="Citar">↩</button>
             ${propio ? `
             <button onclick="window._bnhPortEditarMsg(${msg.id})"
                 style="background:none;border:none;color:rgba(255,255,255,0.2);cursor:pointer;
@@ -385,19 +420,6 @@ export function _htmlMensaje(msg, mismoGrupo) {
 // ─────────────────────────────────────────────────────────────
 export function renderBurbuja() {
     if ($(ID_BUBBLE)) return;
-
-    // Inyectar CSS de ocultamiento móvil (una sola vez)
-    if (!document.getElementById('bnh-port-mobile-css')) {
-        const style = document.createElement('style');
-        style.id = 'bnh-port-mobile-css';
-        style.textContent = `
-            @media (max-width: 768px) {
-                #bnh-port-bubble,
-                #bnh-port-panel { display: none !important; }
-            }
-        `;
-        document.head.appendChild(style);
-    }
 
     const el = document.createElement('div');
     el.id = ID_BUBBLE;
@@ -666,6 +688,54 @@ export function switchTab(tab) {
 // ─────────────────────────────────────────────────────────────
 // REFRESH DE MENSAJES
 // ─────────────────────────────────────────────────────────────
+// ── Swipe-to-reply en el panel port (móvil, estilo WhatsApp) ─
+function _mountPortSwipeToReply(container) {
+    const THRESHOLD = 60, MAX_DRAG = 80, ICON_SHOW = 40;
+    container.addEventListener('touchstart', e => {
+        const el = e.target.closest('.bnh-port-msg');
+        if (!el) return;
+        el._swX = e.touches[0].clientX;
+        el._swY = e.touches[0].clientY;
+        el._swDone = false;
+    }, { passive: true });
+    container.addEventListener('touchmove', e => {
+        const el = e.target.closest('.bnh-port-msg');
+        if (!el || el._swX == null) return;
+        const dx = e.touches[0].clientX - el._swX;
+        const dy = e.touches[0].clientY - el._swY;
+        if (Math.abs(dy) > Math.abs(dx) || dx <= 0) return;
+        e.preventDefault();
+        const offset = Math.min(dx, MAX_DRAG);
+        const bubble = el.querySelector('[style*="border:1px solid"]');
+        if (bubble) { bubble.style.transition='none'; bubble.style.transform=`translateX(${offset}px)`; }
+        let icon = el.querySelector('.bp-swipe-icon');
+        if (!icon) {
+            icon = document.createElement('div');
+            icon.className = 'bp-swipe-icon';
+            icon.textContent = '↩';
+            icon.style.cssText = 'position:absolute;left:3px;top:50%;transform:translateY(-50%);font-size:1em;color:#9b59b6;opacity:0;transition:opacity 0.12s;pointer-events:none;user-select:none;';
+            el.style.position = 'relative';
+            el.insertBefore(icon, el.firstChild);
+        }
+        icon.style.opacity = offset >= ICON_SHOW ? '1' : '0';
+    }, { passive: false });
+    container.addEventListener('touchend', e => {
+        const el = e.target.closest('.bnh-port-msg');
+        if (!el || el._swX == null) return;
+        const dx = e.changedTouches[0].clientX - el._swX;
+        const bubble = el.querySelector('[style*="border:1px solid"]');
+        if (bubble) { bubble.style.transition='transform 0.2s ease'; bubble.style.transform='translateX(0)'; }
+        const icon = el.querySelector('.bp-swipe-icon');
+        if (icon) icon.style.opacity = '0';
+        if (dx >= THRESHOLD && !el._swDone) {
+            el._swDone = true;
+            const id = el.dataset.msgId;
+            if (id && window._bnhPortCitar) window._bnhPortCitar(Number(id));
+        }
+        el._swX = null; el._swY = null;
+    }, { passive: true });
+}
+
 export function refreshMsgs() {
     const wrap = $('bnh-port-msgs');
     if (!wrap) return;
@@ -699,6 +769,7 @@ export function refreshMsgs() {
     });
 
     wrap.innerHTML = html;
+    _mountPortSwipeToReply(wrap);
     wrap.scrollTop = wrap.scrollHeight;
 }
 
@@ -720,6 +791,7 @@ export function appendMsg(msg) {
     tmp.innerHTML = _htmlMensaje(msg, mismoGrupo);
     const node = tmp.firstElementChild;
     if (node) wrap.appendChild(node);
+    _mountPortSwipeToReply(wrap);
     wrap.scrollTop = wrap.scrollHeight;
 }
 
