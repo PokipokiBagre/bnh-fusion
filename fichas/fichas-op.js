@@ -3,7 +3,7 @@
 // ============================================================
 import { gruposGlobal, aliasesGlobal, ptGlobal, fichasUI, STORAGE_URL, norm } from './fichas-state.js';
 import { calcPVMax, calcTier, fmtTag } from './fichas-logic.js';
-import { getEquipacionPJ, calcCTLUsado, setSupabaseRef, invalidarCacheEquipacion } from '../bnh-pac.js';
+import { getEquipacionPJ, calcCTLUsado, setSupabaseRef, invalidarCacheEquipacion, aplicarDeltas } from '../bnh-pac.js';
 import {
     guardarStatsGrupo, guardarLoreGrupo, guardarTagsGrupo, borrarPTDeTag,
     renombrarGrupo, eliminarGrupo,
@@ -264,7 +264,10 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
     // Calcular barra live inicial
-    setTimeout(() => window._opStatsLive(), 60);
+    setTimeout(() => {
+        window._opFusionOpts = (await import('./fichas-data.js').then(m => m.opcionesFusion).catch(() => {})) || {};
+        window._opStatsLive();
+    }, 60);
 
     // Cambiar a la pestaña solicitada (si no es la 0)
     if (tabInicial > 0) {
@@ -938,60 +941,93 @@ export function exponerGlobalesOP() {
     };
 
     window._opStatsLive = () => {
-        // Leer bases actuales
+        // ── Leer bases ────────────────────────────────────────────
         const pot = parseInt(document.getElementById('op-pot-base')?.value) || 0;
         const agi = parseInt(document.getElementById('op-agi-base')?.value) || 0;
         const ctl = parseInt(document.getElementById('op-ctl-base')?.value) || 0;
 
-        // PAC y Tier base (sin deltas)
+        // ── Helper: leer array de deltas de un stat ───────────────
+        const readDeltas = (prefix) => [1,2,3,4,5].map(n =>
+            document.getElementById(`${prefix}-delta-${n}`)?.value || '0'
+        );
+
+        // ── PAC y Tier BASE (sin deltas, sin fusión) ──────────────
         const pacBase  = pot + agi + ctl;
         const tierBase = calcTier(pot, agi, ctl).tier;
         const pvBase   = calcPVMax(pot, agi, ctl);
 
-        // Leer deltas y aplicarlos para proyectados
-        const readDeltas = (stat) => [1,2,3,4,5].map(n =>
-            document.getElementById(`op-${stat}-delta-${n}`)?.value || '0'
-        );
-        const applyDeltas = (base, deltas) => {
-            let acc = base;
-            deltas.forEach(d => { acc = _applyOneDelta(acc, d); });
-            return acc;
-        };
-        const _applyOneDelta = (val, d) => {
-            const s = String(d).trim();
-            if (!s || s === '0') return val;
-            const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
-            const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
-            const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
-            const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
-            if (powM)  return Math.round(Math.pow(val, parseFloat(powM[1])));
-            if (multM) return Math.round(val * parseFloat(multM[1]));
-            if (divM)  return Math.round(val / parseFloat(divM[1]));
-            if (addM)  return Math.round(val + parseFloat(addM[1]));
-            return val;
-        };
+        // ── Stats PROYECTADOS (con deltas propios, sin fusión aún) ─
+        const potP = aplicarDeltas(pot, ...readDeltas('op-pot'));
+        const agiP = aplicarDeltas(agi, ...readDeltas('op-agi'));
+        const ctlP = aplicarDeltas(ctl, ...readDeltas('op-ctl'));
 
-        const potP = applyDeltas(pot, readDeltas('pot'));
-        const agiP = applyDeltas(agi, readDeltas('agi'));
-        const ctlP = applyDeltas(ctl, readDeltas('ctl'));
+        // PV proyectado = calcPVMax(statsProyectados) + deltas PV
+        const pvProjPre = calcPVMax(potP, agiP, ctlP);
+        const pvProj    = aplicarDeltas(pvProjPre, ...readDeltas('op-pv'));
 
-        const pacProj  = potP + agiP + ctlP;
-        const tierProj = calcTier(potP, agiP, ctlP).tier;
-        const pvProj   = calcPVMax(potP, agiP, ctlP);
+        // ── Fusión activa ─────────────────────────────────────────
+        // El nombre del grupo viene del título del modal
+        const titleEl = document.querySelector('.op-modal-title');
+        const titleText = titleEl?.textContent || '';
+        // El título es "⚙️ NombreGrupo"
+        const nombreGrupo = titleText.replace(/^⚙️\s*/, '').trim();
+        const f = nombreGrupo ? getFusionDe(nombreGrupo) : null;
 
+        let pacProj, tierProj, pvMaxProj;
+
+        if (f) {
+            // Hay fusión: combinar bases reales con el compañero
+            const compNombre  = f.pj_a === nombreGrupo ? f.pj_b : f.pj_a;
+            const compGrupo   = gruposGlobal.find(g => g.nombre_refinado === compNombre) || {};
+            const MULT        = f.rendimiento > 100 ? 1.5 : 1;
+
+            // Modo stats de las opciones (usa las mismas opciones que el lente)
+            const opts = (await Promise.resolve(null), window._opFusionOpts || {});
+            const modo = opts.modo_stats || 'suma';
+            const calcStat = (a, b) => {
+                if (modo === 'promedio') return Math.ceil((a + b) / 2);
+                if (modo === 'mayor')    return Math.max(a, b);
+                return a + b;
+            };
+
+            // Las bases del compañero (sin deltas)
+            const potC = compGrupo.pot || 0;
+            const agiC = compGrupo.agi || 0;
+            const ctlC = compGrupo.ctl || 0;
+
+            const potFRaw = Math.round(calcStat(pot, potC) * MULT);
+            const agiFRaw = Math.round(calcStat(agi, agiC) * MULT);
+            const ctlFRaw = Math.round(calcStat(ctl, ctlC) * MULT);
+
+            // Aplicar deltas propios sobre raw fusionado
+            const potF = aplicarDeltas(potFRaw, ...readDeltas('op-pot'));
+            const agiF = aplicarDeltas(agiFRaw, ...readDeltas('op-agi'));
+            const ctlF = aplicarDeltas(ctlFRaw, ...readDeltas('op-ctl'));
+
+            pacProj   = potF + agiF + ctlF;
+            tierProj  = calcTier(potF, agiF, ctlF).tier;
+            const pvFBase = calcPVMax(potF, agiF, ctlF);
+            pvMaxProj = aplicarDeltas(pvFBase, ...readDeltas('op-pv'));
+        } else {
+            pacProj   = potP + agiP + ctlP;
+            tierProj  = calcTier(potP, agiP, ctlP).tier;
+            pvMaxProj = pvProj;
+        }
+
+        // ── Actualizar barra ──────────────────────────────────────
         const tierColors = { 5:'#9b59b6', 4:'#f39c12', 3:'#8e44ad', 2:'#2980b9', 1:'#27ae60' };
-
         const set = (id, val, color) => {
             const el = document.getElementById(id);
             if (el) { el.textContent = val; if (color) el.style.color = color; }
         };
 
-        set('live-pac-base',  pacBase,              '#555');
-        set('live-pac-proj',  pacProj,              pacProj > pacBase ? 'var(--fp-dark)' : pacProj < pacBase ? '#c0392b' : 'var(--fp-dark)');
-        set('live-tier-base', `T${tierBase}`,       tierColors[tierBase]);
-        set('live-tier-proj', `T${tierProj}`,       tierColors[tierProj]);
-        set('live-pv-base',   pvBase,               '#555');
-        set('live-pv-proj',   pvProj,               pvProj > pvBase ? 'var(--fp-dark)' : pvProj < pvBase ? '#c0392b' : '#555');
+        const fusionSuffix = f ? ' ⚡' : '';
+        set('live-pac-base',  pacBase);
+        set('live-pac-proj',  pacProj + fusionSuffix,   pacProj > pacBase ? '#27ae60' : pacProj < pacBase ? '#c0392b' : 'var(--fp-dark)');
+        set('live-tier-base', `T${tierBase}`,           tierColors[tierBase]);
+        set('live-tier-proj', `T${tierProj}${fusionSuffix}`, tierColors[tierProj]);
+        set('live-pv-base',   pvBase);
+        set('live-pv-proj',   pvMaxProj + (f ? ' ⚡' : ''), pvMaxProj > pvBase ? '#27ae60' : pvMaxProj < pvBase ? '#c0392b' : '#555');
     };
 
     window._opGuardarStats = async (nombreGrupo) => {
