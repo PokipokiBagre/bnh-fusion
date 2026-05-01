@@ -432,17 +432,24 @@ export function renderPanel() {
     }
 
     const pos = cargarPos();
-    panel.style.cssText = `
-        position:fixed;
-        ${pos ? `left:${pos.x}px;top:${pos.y}px;` : 'right:80px;bottom:22px;'}
-        width:min(370px,96vw);height:min(560px,88vh);
-        background:#0d1117;
-        border:1.5px solid rgba(192,57,43,0.4);border-radius:16px;
-        box-shadow:0 12px 48px rgba(0,0,0,0.65);
-        z-index:89999;display:flex;flex-direction:column;
-        overflow:hidden;font-family:inherit;font-size:14px;
-        color:rgba(255,255,255,0.88);
-        resize:both;min-width:280px;min-height:300px;`;
+    const isMobile = window.innerWidth < 600;
+    panel.style.cssText = isMobile
+        ? `position:fixed;left:0;top:0;right:0;bottom:0;width:100%;height:100%;
+            background:#0d1117;border:none;border-radius:0;
+            box-shadow:0 12px 48px rgba(0,0,0,0.65);
+            z-index:89999;display:flex;flex-direction:column;
+            overflow:hidden;font-family:inherit;font-size:14px;
+            color:rgba(255,255,255,0.88);`
+        : `position:fixed;
+            ${pos ? `left:${pos.x}px;top:${pos.y}px;` : 'right:80px;bottom:22px;'}
+            width:min(370px,96vw);height:min(560px,88vh);
+            background:#0d1117;
+            border:1.5px solid rgba(192,57,43,0.4);border-radius:16px;
+            box-shadow:0 12px 48px rgba(0,0,0,0.65);
+            z-index:89999;display:flex;flex-direction:column;
+            overflow:hidden;font-family:inherit;font-size:14px;
+            color:rgba(255,255,255,0.88);
+            resize:both;min-width:280px;min-height:300px;`;
 
     panel.innerHTML = _htmlShell();
     _bindPasteEvent(panel);
@@ -988,6 +995,41 @@ function _initDrag(panel) {
     });
     document.addEventListener('mouseup', () => { dragging=false; });
 }
+
+// ── Swipe desde el borde derecho para abrir el panel en móvil ─
+(function _initSwipeGesture() {
+    // Solo en móvil/táctil
+    if (!('ontouchstart' in window)) return;
+
+    let startX = 0, startY = 0, tracking = false;
+    const EDGE_ZONE = 24; // px desde el borde derecho que activa el tracking
+    const MIN_SWIPE = 60; // desplazamiento horizontal mínimo para contar como swipe
+
+    document.addEventListener('touchstart', e => {
+        const t = e.touches[0];
+        if (window.innerWidth - t.clientX <= EDGE_ZONE) {
+            startX = t.clientX;
+            startY = t.clientY;
+            tracking = true;
+        } else {
+            tracking = false;
+        }
+    }, { passive: true });
+
+    document.addEventListener('touchend', e => {
+        if (!tracking) return;
+        tracking = false;
+        const t = e.changedTouches[0];
+        const dx = startX - t.clientX; // positivo = desliza hacia la izquierda
+        const dy = Math.abs(t.clientY - startY);
+        if (dx >= MIN_SWIPE && dy < dx * 0.7) {
+            // Swipe horizontal hacia la izquierda desde borde derecho → abrir panel
+            if (!window._bnhPortToggle) return;
+            const panel = document.getElementById('bnh-port-panel');
+            if (!panel) window._bnhPortToggle(); // abrir si está cerrado
+        }
+    }, { passive: true });
+})();
 
 function _makeDraggable(pip, bar) {
     let ox=0, oy=0, drag=false;
