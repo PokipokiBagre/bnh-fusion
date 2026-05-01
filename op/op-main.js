@@ -546,7 +546,7 @@ async function _enviar() {
             else if (msgCitado.video_path)   citaPreview = '🎬 video';
             else if (msgCitado.audio_path)   citaPreview = '🎵 audio';
             else                             citaPreview = '📎 adjunto';
-            const prefix = `> ${msgCitado.autor_nombre}: ${citaPreview}\n`;
+            const prefix = `> [${citaId}] ${msgCitado.autor_nombre}: ${citaPreview}\n`;
             contenido = prefix + (contenido ? contenido : '');
         }
         window._opCitaPendienteId = null;
