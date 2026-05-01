@@ -247,6 +247,23 @@ function _renderContenidoConLinks(msg) {
     const texto = msg.contenido;
     if (!texto) return '';
 
+    // ── Detectar bloque de cita (línea "> Autor: texto") ────────
+    const citaMatch = texto.match(/^> (.+?): (.+)\n([\s\S]*)$/);
+    if (citaMatch) {
+        const [, citaAutor, citaTexto, resto] = citaMatch;
+        const citaHTML = `
+        <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.12);
+            border-radius:0 6px 6px 0;padding:4px 8px;margin-bottom:4px;
+            font-size:0.82em;color:rgba(255,255,255,0.55);overflow:hidden;">
+            <span style="font-weight:700;color:rgba(200,150,255,0.8);">${esc(citaAutor)}</span>:
+            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${esc(citaTexto)}</span>
+        </div>`;
+        const restoHtml = resto?.trim()
+            ? `<div class="op-msg-texto">${renderMsgMarkup(resto.trim())}</div>`
+            : '';
+        return citaHTML + restoHtml;
+    }
+
     const URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
     // Si hay video o audio adjunto, suprimir URLs del texto (ya tienen su reproductor)
@@ -384,6 +401,7 @@ export function renderMensajes() {
         ${_renderContenidoConLinks(msg)}
         <div class="op-msg-meta">
             <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
+            <button class="op-msg-del" onclick="window._opCitar(${msg.id})" title="Responder">↩</button>
             ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
             <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
         </div>
@@ -434,6 +452,7 @@ ${!propio ? avatarHtml : ''}
     ${_renderContenidoConLinks(msg)}
     <div class="op-msg-meta">
         <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
+        <button class="op-msg-del" onclick="window._opCitar(${msg.id})" title="Responder">↩</button>
         ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
         <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
     </div>
