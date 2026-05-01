@@ -472,7 +472,10 @@ function _renderPendingPreview() {
         panel.style.cssText = `display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px;
             background:rgba(108,52,131,0.08);border-radius:10px;margin-bottom:6px;
             border:1.5px dashed rgba(108,52,131,0.35);align-items:flex-start;`;
-        wrap.insertAdjacentElement('beforebegin', panel);
+        // Insertar ANTES del contenedor .op-input-area (no dentro del wrap)
+        // para que aparezca por encima del área de input y no superponga el botón de enviar
+        const inputArea = wrap.closest('.op-input-area') || wrap.parentElement;
+        inputArea.insertAdjacentElement('beforebegin', panel);
     }
 
     panel.innerHTML = '';
