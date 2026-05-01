@@ -111,150 +111,35 @@ async function _idbClear() {
 window._opFileInput = () => {
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-        _opAbrirPickerConRecarga();
+        _opFileInputMovil();
         return;
     }
     _opFileInputDirect();
 };
 
-// Abre el selector nativo, guarda en IndexedDB, recarga la página
-function _opAbrirPickerConRecarga() {
-    // Mostrar aviso de lo que va a pasar
-    const aviso = document.createElement('div');
-    aviso.style.cssText = `
-        position:fixed;bottom:0;left:0;right:0;z-index:99999;
-        background:#111827;border-top:2px solid rgba(108,52,131,0.7);
-        border-radius:16px 16px 0 0;
-        padding:20px 18px 28px;
-        box-shadow:0 -8px 40px rgba(0,0,0,0.7);
-        display:flex;flex-direction:column;gap:14px;
-        transform:translateY(100%);
-        transition:transform 0.25s cubic-bezier(0.32,0.72,0,1);
-    `;
-    aviso.innerHTML = `
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span style="color:#e2d9f3;font-weight:700;font-size:0.95em;">📎 Adjuntar archivo</span>
-            <button id="_op-av-close" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.1em;cursor:pointer;">✕</button>
-        </div>
-        <div style="color:rgba(255,255,255,0.45);font-size:0.78em;line-height:1.5;
-            background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;">
-            ℹ️ Al seleccionar, la página se <strong style="color:#e2d9f3;">recargará automáticamente</strong>
-            para mantener la conexión estable. Tus archivos se recuperarán al instante.
-        </div>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-            <button id="_op-av-galeria" style="
-                padding:13px;border-radius:10px;border:1.5px solid rgba(108,52,131,0.7);
-                background:rgba(108,52,131,0.25);color:#e2d9f3;font-size:0.9em;font-weight:700;cursor:pointer;">
-                🖼 Elegir de galería
-            </button>
-            <button id="_op-av-cam" style="
-                padding:13px;border-radius:10px;border:1.5px solid rgba(39,174,96,0.6);
-                background:rgba(39,174,96,0.15);color:#a9dfbf;font-size:0.9em;font-weight:700;cursor:pointer;">
-                📷 Cámara trasera
-            </button>
-            <button id="_op-av-camf" style="
-                padding:13px;border-radius:10px;border:1.5px solid rgba(39,174,96,0.4);
-                background:rgba(39,174,96,0.08);color:#a9dfbf;font-size:0.9em;font-weight:700;cursor:pointer;">
-                🤳 Cámara frontal
-            </button>
-        </div>
-    `;
-    document.body.appendChild(aviso);
-    requestAnimationFrame(() => requestAnimationFrame(() => { aviso.style.transform = 'translateY(0)'; }));
+// Móvil: selector nativo directo → guarda en IndexedDB → recarga limpia
+function _opFileInputMovil() {
+    const input = document.createElement('input');
+    input.type    = 'file';
+    input.multiple = true;
+    input.accept  = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
+    input.style.display = 'none';
+    document.body.appendChild(input);
 
-    const closeAviso = () => {
-        aviso.style.transform = 'translateY(100%)';
-        setTimeout(() => aviso.remove(), 280);
+    input.onchange = async () => {
+        const files = Array.from(input.files || []);
+        input.remove();
+        if (!files.length) return;
+
+        const textoActual = document.getElementById('op-msg-input')?.value || '';
+        if (textoActual) sessionStorage.setItem('op-reload-texto', textoActual);
+
+        await _idbSaveFiles(files);
+        window.location.reload();
     };
 
-    aviso.querySelector('#_op-av-close').onclick = closeAviso;
-
-    // Cerrar al tocar fuera
-    setTimeout(() => {
-        const _out = e => { if (!aviso.contains(e.target)) { closeAviso(); document.removeEventListener('touchstart', _out); } };
-        document.addEventListener('touchstart', _out);
-    }, 300);
-
-    // Crear input oculto reutilizable
-    function _lanzarInput(opts = {}) {
-        closeAviso();
-        const input = document.createElement('input');
-        input.type    = 'file';
-        input.multiple = !opts.capture;
-        input.accept  = opts.accept || 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
-        if (opts.capture) input.capture = opts.capture;
-        input.style.display = 'none';
-        document.body.appendChild(input);
-
-        input.onchange = async () => {
-            const files = Array.from(input.files || []);
-            input.remove();
-            if (!files.length) return;
-
-            // Guardar texto del input para restaurarlo después del reload
-            const textoActual = document.getElementById('op-msg-input')?.value || '';
-            if (textoActual) sessionStorage.setItem('op-reload-texto', textoActual);
-
-            // Mostrar overlay de "guardando..."
-            const overlay = document.createElement('div');
-            overlay.style.cssText = `position:fixed;inset:0;z-index:999999;
-                background:rgba(10,10,20,0.92);display:flex;flex-direction:column;
-                align-items:center;justify-content:center;gap:16px;`;
-            overlay.innerHTML = `
-                <div style="font-size:2.5em;">💾</div>
-                <div style="color:#e2d9f3;font-size:0.95em;font-weight:700;">Guardando ${files.length} archivo${files.length > 1 ? 's' : ''}…</div>
-                <div style="color:rgba(255,255,255,0.4);font-size:0.78em;">Reconectando en un momento</div>
-            `;
-            document.body.appendChild(overlay);
-
-            await _idbSaveFiles(files);
-            // Pequeña pausa para que el overlay sea visible
-            setTimeout(() => window.location.reload(), 300);
-        };
-
-        input.click();
-    }
-
-    aviso.querySelector('#_op-av-galeria').onclick = () => _lanzarInput();
-    aviso.querySelector('#_op-av-cam').onclick    = () => _lanzarInput({ capture: 'environment', accept: 'image/*' });
-    aviso.querySelector('#_op-av-camf').onclick   = () => _lanzarInput({ capture: 'user',        accept: 'image/*' });
+    input.click();
 }
-
-// ── Recuperar archivos de IndexedDB al arrancar ───────────────
-async function _recuperarArchivosPendientesIDB() {
-    const files = await _idbLoadFiles();
-    if (!files.length) return;
-
-    await _idbClear(); // Limpiar para que no se repita en el siguiente reload
-
-    // Restaurar texto del input si había
-    const textoGuardado = sessionStorage.getItem('op-reload-texto');
-    if (textoGuardado) {
-        sessionStorage.removeItem('op-reload-texto');
-        const ta = document.getElementById('op-msg-input');
-        if (ta) {
-            ta.value = textoGuardado;
-            ta.style.height = 'auto';
-            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
-        }
-    }
-
-    _agregarArchivosPendientes(files, 'file');
-
-    // Toast de confirmación
-    setTimeout(() => {
-        const n = files.length;
-        const msg = `✅ ${n} archivo${n > 1 ? 's' : ''} recuperado${n > 1 ? 's' : ''} — listo para enviar`;
-        const el = document.getElementById('op-toast');
-        if (el) {
-            el.textContent = msg;
-            el.className = 'op-toast op-toast-ok';
-            clearTimeout(el._t);
-            el._t = setTimeout(() => el.className = 'op-toast', 4000);
-        }
-    }, 800);
-}
-
 // opts: { capture?: 'environment'|'user', accept?: string }
 function _opFileInputDirect(opts = {}) {
     // Marcar flag ANTES de abrir el picker para que visibilitychange lo vea
