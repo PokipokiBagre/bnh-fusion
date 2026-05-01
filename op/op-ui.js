@@ -253,13 +253,14 @@ function _renderContenidoConLinks(msg) {
     if (citaMatch) {
         const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
         const citaHTML = `
-        <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.12);
+        <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.08);
             border-radius:0 6px 6px 0;padding:4px 8px;margin-bottom:4px;
-            font-size:0.82em;color:rgba(255,255,255,0.55);overflow:hidden;cursor:pointer;"
+            font-size:0.82em;color:#4a3060;overflow:hidden;cursor:pointer;
+            white-space:nowrap;text-overflow:ellipsis;"
             data-cita-id="${citaMsgId || ''}"
             onclick="window._opScrollACita(this)">
-            <span style="font-weight:700;color:#9b59b6;">${esc(citaAutor)}</span>: 
-            <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
+            <span style="font-weight:700;color:#7d3c98;">${esc(citaAutor)}</span>: 
+            <span style="opacity:0.85;">${esc(citaTexto) || '📎 adjunto'}</span>
         </div>`;
         const restoTrimmed = resto?.trim();
         const restoHtml = restoTrimmed
