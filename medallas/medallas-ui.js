@@ -673,7 +673,7 @@ export function renderPersonaje() {
 
     let content = `
         ${controlesFiltroHtml}
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; align-items:start;">
+        <div id="pj-medallas-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px; align-items:start;">
             ${tarjetasHtml}
         </div>
     `;
