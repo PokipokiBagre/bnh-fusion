@@ -481,10 +481,21 @@ function _exponerGlobales() {
             // Al reabrir: resetear posición a la esquina por defecto (evita panel perdido por zoom)
             const panel = document.getElementById('bnh-port-panel');
             if (panel) {
-                panel.style.right  = '80px';
-                panel.style.bottom = '22px';
-                panel.style.left   = '';
-                panel.style.top    = '';
+                const isMobile = window.innerWidth < 700;
+                
+                if (!isMobile) {
+                    // Solo forzamos la esquina en escritorio
+                    panel.style.right  = '80px';
+                    panel.style.bottom = '22px';
+                    panel.style.left   = '';
+                    panel.style.top    = '';
+                } else {
+                    // En móvil nos aseguramos de que mantenga el centrado
+                    panel.style.left = '50%';
+                    panel.style.transform = 'translateX(-50%)';
+                    panel.style.right = 'auto';
+                }
+                
                 // Limpiar posición guardada para que no vuelva a la posición problemática
                 try { localStorage.removeItem('bnh_port_pos'); } catch(_) {}
             }
