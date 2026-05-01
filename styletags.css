@@ -116,4 +116,26 @@ body { font-family: 'Inter', sans-serif; background: var(--gray-100); color: var
 @media (max-width: 700px) {
     .app-main { padding: 14px 12px; }
     .stats-banner { gap: 8px; }
+
+    /* Progresión: sidebar pasa debajo en móvil */
+    .progresion-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .progresion-grid > div:last-child {
+        position: static !important;   /* quita sticky */
+    }
+
+    /* Estadísticas: columnas apiladas */
+    .estadisticas-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Char grid más compacto */
+    .char-grid { gap: 6px; }
+    .char-thumb { padding: 5px 8px 5px 5px; }
+    .char-thumb img { width: 30px; height: 30px; }
+    .char-thumb span { font-size: 0.75em; }
+
+    /* Botones de umbral: menores en móvil */
+    .thresh { font-size: 0.65em; padding: 2px 5px; }
 }
