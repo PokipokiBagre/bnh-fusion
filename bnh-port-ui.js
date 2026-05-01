@@ -293,30 +293,26 @@ function _renderContenidoConLinks(msg) {
     if (!texto) return '';
 
     // ── Bloque de cita "> [id] Autor: texto" ────────────────
-    const citaMatch = texto.match(/^> (?:\[(\d+)\] )?(.+?): (.*)\n?([\s\S]*)$/);
+    // Formato: primera línea comienza con "> "
+    const primeraLinea = texto.split('\n')[0];
+    const citaMatch = primeraLinea.match(/^> (?:\[(\d+)\] )?(.+?): (.*)$/);
     if (citaMatch) {
-        const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
-        const citaHTML = `<div style="border-left:2px solid rgba(108,52,131,0.7);
+        const [, citaMsgId, citaAutor, citaTexto] = citaMatch;
+        // El resto es el mensaje propio (sin la línea de cita)
+        const resto = texto.split('\n').slice(1).join('\n').trim();
+        const idAttr = esc(citaMsgId || '');
+        const citaHTML = `<div class="bp-cita-block" data-cita-id="${idAttr}"
+            onclick="window._bnhPortScrollACita(this)"
+            style="border-left:2px solid rgba(108,52,131,0.7);
             background:rgba(108,52,131,0.13);border-radius:0 5px 5px 0;
             padding:3px 7px;margin-bottom:3px;font-size:0.78em;
-            color:rgba(255,255,255,0.5);overflow:hidden;cursor:pointer;"
-            data-cita-id="${esc(citaMsgId || '')}"
-            onclick="(function(el){
-                const id=el.dataset.citaId;
-                if(!id)return;
-                const wrap=document.getElementById('bnh-port-msgs');
-                const t=wrap&&wrap.querySelector('.bnh-port-msg[data-msg-id=\"'+id+'\"]');
-                if(t){t.scrollIntoView({behavior:'smooth',block:'center'});
-                    t.style.transition='background 0.3s';
-                    t.style.background='rgba(108,52,131,0.22)';
-                    setTimeout(()=>{t.style.background='';},1400);}
-            })(this)">
+            color:rgba(255,255,255,0.5);overflow:hidden;cursor:pointer;
+            white-space:nowrap;text-overflow:ellipsis;">
             <span style="font-weight:700;color:#c39bd3;">${esc(citaAutor)}</span>: 
             <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
         </div>`;
-        const restoTrim = resto?.trim();
-        const restoHtml = restoTrim
-            ? `<div style="font-size:0.82em;line-height:1.45;word-break:break-word;">${_renderMarkupBasico(restoTrim)}</div>`
+        const restoHtml = resto
+            ? `<div style="font-size:0.82em;line-height:1.45;word-break:break-word;">${_renderMarkupBasico(resto)}</div>`
             : '';
         return citaHTML + restoHtml;
     }
@@ -454,15 +450,21 @@ export function renderPanel() {
     }
 
     const pos = cargarPos();
-    const isMobile = window.innerWidth < 600;
-    panel.style.cssText = isMobile
-        ? `position:fixed;left:0;top:0;right:0;bottom:0;width:100%;height:100%;
-            background:#0d1117;border:none;border-radius:0;
-            box-shadow:0 12px 48px rgba(0,0,0,0.65);
+    const isMobile = window.innerWidth < 700;
+
+    if (isMobile) {
+        // Móvil: panel deslizable desde abajo, ocupa la mitad inferior de la pantalla
+        panel.style.cssText = `position:fixed;left:0;bottom:0;right:0;
+            height:55vh;max-height:55vh;
+            background:#0d1117;border:none;
+            border-top:2px solid rgba(192,57,43,0.45);
+            border-radius:16px 16px 0 0;
+            box-shadow:0 -8px 32px rgba(0,0,0,0.6);
             z-index:89999;display:flex;flex-direction:column;
             overflow:hidden;font-family:inherit;font-size:14px;
-            color:rgba(255,255,255,0.88);`
-        : `position:fixed;
+            color:rgba(255,255,255,0.88);`;
+    } else {
+        panel.style.cssText = `position:fixed;
             ${pos ? `left:${pos.x}px;top:${pos.y}px;` : 'right:80px;bottom:22px;'}
             width:min(370px,96vw);height:min(560px,88vh);
             background:#0d1117;
@@ -472,20 +474,29 @@ export function renderPanel() {
             overflow:hidden;font-family:inherit;font-size:14px;
             color:rgba(255,255,255,0.88);
             resize:both;min-width:280px;min-height:300px;`;
+    }
 
-    panel.innerHTML = _htmlShell();
+    panel.innerHTML = _htmlShell(isMobile);
     _bindPasteEvent(panel);
     switchTab(portState.tab);
 }
 
-function _htmlShell() {
+function _htmlShell(isMobile = false) {
     const p     = portState.perfil;
     const avSrc = p?.avatar_path ? _imageUrl(p.avatar_path) : '';
+    // En móvil: barra de arrastre visual arriba, sin cursor move en el panel entero
+    const dragHandle = isMobile
+        ? `<div style="display:flex;justify-content:center;padding:6px 0 2px;flex-shrink:0;cursor:grab;"
+               id="bnh-port-drag-handle">
+               <div style="width:36px;height:4px;background:rgba(255,255,255,0.18);border-radius:2px;"></div>
+           </div>`
+        : '';
     return `
+    ${dragHandle}
     <div id="bnh-port-titlebar" style="display:flex;align-items:center;gap:7px;
-        padding:9px 11px 7px;background:rgba(192,57,43,0.1);
+        padding:${isMobile?'5px':'9px'} 11px ${isMobile?'4px':'7px'};background:rgba(192,57,43,0.1);
         border-bottom:1px solid rgba(255,255,255,0.06);
-        cursor:move;user-select:none;flex-shrink:0;">
+        ${isMobile?'':'cursor:move;'}user-select:none;flex-shrink:0;">
         <span style="font-size:0.95em;flex-shrink:0;">⚔</span>
         <span style="font-weight:700;font-size:0.78em;flex:1;color:rgba(255,255,255,0.45);letter-spacing:0.5px;">PANEL OP</span>
         ${p ? `<img src="${esc(avSrc)}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;
@@ -499,7 +510,7 @@ function _htmlShell() {
         ${['chat','galeria','perfil'].map(t => `
         <button data-tab="${t}" onclick="window._bnhPortTab('${t}')"
             style="flex:1;background:none;border:none;border-bottom:2px solid transparent;
-            color:rgba(255,255,255,0.38);cursor:pointer;padding:7px 4px;font-size:0.7em;
+            color:rgba(255,255,255,0.38);cursor:pointer;padding:${isMobile?'5px':'7px'} 4px;font-size:0.7em;
             font-weight:700;letter-spacing:0.3px;display:flex;align-items:center;
             justify-content:center;gap:3px;transition:0.15s;text-transform:uppercase;">
             ${t==='chat'?'💬':t==='galeria'?'🖼':'👤'} ${t}
@@ -877,6 +888,20 @@ export function showLightboxCarousel(urls, startIdx = 0) {
 
 export function verImagen(url) { showLightboxCarousel([url], 0); }
 
+// Scroll al mensaje citado dentro del panel
+window._bnhPortScrollACita = (el) => {
+    const id = el.dataset.citaId;
+    if (!id) return;
+    const wrap = document.getElementById('bnh-port-msgs');
+    const target = wrap && wrap.querySelector(`.bnh-port-msg[data-msg-id="${id}"]`);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.style.transition = 'background 0.3s';
+        target.style.background = 'rgba(108,52,131,0.22)';
+        setTimeout(() => { target.style.background = ''; }, 1400);
+    }
+};
+
 // ─────────────────────────────────────────────────────────────
 // MINI-PLAYER YOUTUBE (portado 1:1)
 // ─────────────────────────────────────────────────────────────
@@ -1066,6 +1091,23 @@ function _initDrag(panel) {
         guardarPos(x, y);
     });
     document.addEventListener('mouseup', () => { dragging=false; });
+
+    // Móvil: arrastrar el handle arriba/abajo para cambiar la altura del panel
+    let ty0 = 0, h0 = 0, tDragging = false;
+    panel.addEventListener('touchstart', e => {
+        if (!e.target.closest('#bnh-port-drag-handle')) return;
+        ty0 = e.touches[0].clientY;
+        h0  = panel.getBoundingClientRect().height;
+        tDragging = true;
+    }, { passive: true });
+    document.addEventListener('touchmove', e => {
+        if (!tDragging) return;
+        const dy  = ty0 - e.touches[0].clientY; // positivo = arrastrar hacia arriba = más alto
+        const newH = Math.min(Math.max(h0 + dy, 200), window.innerHeight * 0.85);
+        panel.style.height     = newH + 'px';
+        panel.style.maxHeight  = newH + 'px';
+    }, { passive: true });
+    document.addEventListener('touchend', () => { tDragging = false; });
 }
 
 // ── Swipe desde el borde derecho para abrir el panel en móvil ─
