@@ -1237,3 +1237,16 @@ function toast(msg, tipo = 'info') {
     el._t = setTimeout(() => el.className = 'op-toast', 3000);
 }
 window._opToast = toast;
+
+// ── Scroll al mensaje citado ──────────────────────────────────
+window._opScrollACita = (el) => {
+    const id = el.dataset.citaId;
+    if (!id) return;
+    const target = document.querySelector(`.op-msg[data-id="${id}"]`);
+    if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.style.transition = 'background 0.3s';
+        target.style.background = 'rgba(108,52,131,0.22)';
+        setTimeout(() => { target.style.background = ''; }, 1400);
+    }
+};
