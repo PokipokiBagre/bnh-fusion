@@ -24,12 +24,12 @@ export function renderSimulador() {
     <div class="card" style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
             <div class="card-title" style="margin:0;">Pool de Personajes</div>
-            <div style="display:flex; gap:6px; align-items:center;">
-                <div style="display:flex; gap:3px;">
+            <div class="char-pool-filters" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <div style="display:flex; gap:3px; flex-wrap:wrap;">
                     ${btnRol('todos', 'Todos')} ${btnRol('#Jugador', 'Jugador')} ${btnRol('#NPC', 'NPC')}
                 </div>
-                <div style="width:1px; height:16px; background:var(--gray-300); margin:0 4px;"></div>
-                <div style="display:flex; gap:3px;">
+                <div style="width:1px; height:16px; background:var(--gray-300); margin:0 4px; flex-shrink:0;"></div>
+                <div style="display:flex; gap:3px; flex-wrap:wrap;">
                     ${btnEst('todos', 'Todos')} ${btnEst('#Activo', 'Activo')} ${btnEst('#Inactivo', 'Inactivo')}
                 </div>
             </div>
@@ -42,10 +42,13 @@ export function renderSimulador() {
         </div>
     </div>
 
-    <div class="fusion-layout" style="margin-bottom:16px;">
+    <div class="fusion-layout" style="margin-bottom:8px;">
         <div id="slot-a" class="slot-card">${renderSlot('a')}</div>
         <div class="vs-panel" id="vs-panel-wrap">${renderVsPanel()}</div>
         <div id="slot-b" class="slot-card">${renderSlot('b')}</div>
+    </div>
+    <div class="btn-simular-wrap" style="margin-bottom:16px;">
+        <button class="btn btn-fusion btn-lg" style="width:100%;" onclick="window._fusionSimular()">⚡ Simular</button>
     </div>
 
     <div id="resultado-fusion" class="oculto"></div>
@@ -209,7 +212,8 @@ function renderVsPanel() {
         </div>
     </div>
 
-    <button class="btn btn-fusion btn-lg" style="width:100%;margin-top:4px;" onclick="window._fusionSimular()">⚡ Simular</button>`;
+`;
+    // Simular button is rendered outside via renderSimulador
 }
 
 // ── Actualizar el panel VS en-place (sin re-render total) ──────
