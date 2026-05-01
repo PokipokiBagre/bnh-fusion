@@ -415,6 +415,7 @@ export function renderMensajes() {
     });
 
     wrap.innerHTML = html;
+    _mountSwipeToReply(wrap);
     requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
 }
 
@@ -463,7 +464,91 @@ ${!propio ? avatarHtml : ''}
 </div>
 ${propio ? avatarHtml : ''}`;
     wrap.appendChild(div);
+    _mountSwipeToReply(wrap);
     wrap.scrollTop = wrap.scrollHeight;
+}
+
+// ── Swipe-to-reply (móvil, estilo WhatsApp) ───────────────────
+// Aplica a todos los .op-msg dentro del contenedor dado.
+// Umbral: 60 px hacia la derecha dispara _opCitar(id).
+function _mountSwipeToReply(container) {
+    const THRESHOLD   = 60;   // px necesarios para confirmar la cita
+    const MAX_DRAG    = 80;   // límite visual del desplazamiento
+    const ICON_SHOW   = 40;   // px a partir de los que aparece el ícono
+
+    container.addEventListener('touchstart', e => {
+        const msgEl = e.target.closest('.op-msg');
+        if (!msgEl) return;
+        // No interferir con scroll vertical — registrar punto de inicio
+        msgEl._swTouchX = e.touches[0].clientX;
+        msgEl._swTouchY = e.touches[0].clientY;
+        msgEl._swTriggered = false;
+    }, { passive: true });
+
+    container.addEventListener('touchmove', e => {
+        const msgEl = e.target.closest('.op-msg');
+        if (!msgEl || msgEl._swTouchX == null) return;
+
+        const dx = e.touches[0].clientX - msgEl._swTouchX;
+        const dy = e.touches[0].clientY - msgEl._swTouchY;
+
+        // Si el movimiento es más vertical que horizontal → ignorar (scroll normal)
+        if (Math.abs(dy) > Math.abs(dx)) return;
+
+        // Solo swipe hacia la derecha
+        if (dx <= 0) return;
+
+        e.preventDefault(); // bloquear scroll mientras se arrastra
+
+        const offset = Math.min(dx, MAX_DRAG);
+        const bubble = msgEl.querySelector('.op-msg-bubble');
+        if (!bubble) return;
+
+        bubble.style.transition = 'none';
+        bubble.style.transform  = `translateX(${offset}px)`;
+
+        // Ícono de respuesta que aparece al arrastar
+        let icon = msgEl.querySelector('.op-swipe-reply-icon');
+        if (!icon) {
+            icon = document.createElement('div');
+            icon.className = 'op-swipe-reply-icon';
+            icon.textContent = '↩';
+            icon.style.cssText = `position:absolute;left:4px;top:50%;transform:translateY(-50%);
+                font-size:1.1em;color:#9b59b6;opacity:0;transition:opacity 0.12s;
+                pointer-events:none;user-select:none;`;
+            msgEl.style.position = 'relative';
+            msgEl.insertBefore(icon, msgEl.firstChild);
+        }
+        icon.style.opacity = offset >= ICON_SHOW ? '1' : '0';
+    }, { passive: false });
+
+    container.addEventListener('touchend', e => {
+        const msgEl = e.target.closest('.op-msg');
+        if (!msgEl || msgEl._swTouchX == null) return;
+
+        const dx = e.changedTouches[0].clientX - msgEl._swTouchX;
+        const bubble = msgEl.querySelector('.op-msg-bubble');
+
+        // Animar de vuelta
+        if (bubble) {
+            bubble.style.transition = 'transform 0.2s ease';
+            bubble.style.transform  = 'translateX(0)';
+        }
+
+        // Ocultar ícono
+        const icon = msgEl.querySelector('.op-swipe-reply-icon');
+        if (icon) icon.style.opacity = '0';
+
+        // Disparar cita si superó el umbral
+        if (dx >= THRESHOLD && !msgEl._swTriggered) {
+            msgEl._swTriggered = true;
+            const id = msgEl.dataset.id;
+            if (id && window._opCitar) window._opCitar(Number(id));
+        }
+
+        msgEl._swTouchX = null;
+        msgEl._swTouchY = null;
+    }, { passive: true });
 }
 
 // ── Galería ───────────────────────────────────────────────────
