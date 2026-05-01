@@ -158,20 +158,37 @@ textarea.inp { resize: vertical; min-height: 70px; }
     .app-nav { padding: 0 8px; }
     .nav-tab { padding: 10px 12px; font-size: 0.8em; }
 
-    /* Ocultar sidebar de personajes y mostrar en columna */
-    /* El layout principal personaje: flex → column */
-    #vista-personaje > div[style*="display:flex"] {
+    /* ── CATÁLOGO: 1 columna en móvil ── */
+    #cat-grid {
+        grid-template-columns: 1fr !important;
+    }
+    /* Barra sticky del catálogo: apilar en columna */
+    #cat-sticky-bar > div { flex-direction: column !important; gap: 8px !important; }
+    #cat-sticky-bar > div > div { flex-direction: column !important; align-items: stretch !important; }
+
+    /* ── PERSONAJE: layout apilado ── */
+
+    /* Layout principal flex → columna */
+    #pj-main-layout {
         flex-direction: column !important;
+        gap: 12px !important;
     }
 
-    /* Panel de equipación: ancho completo, sin sticky */
+    /* Panel equipación: ancho completo, sin sticky, sin max-height */
     #pj-equip-panel {
         width: 100% !important;
+        min-width: 0 !important;
         position: static !important;
         max-height: none !important;
+        overflow: visible !important;
     }
 
-    /* Selector de personajes: scroll horizontal en móvil */
+    /* Grid de medallas en personaje → 1 columna */
+    #pj-medallas-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* Selector de personajes: scroll horizontal */
     .char-grid {
         display: flex !important;
         flex-wrap: nowrap !important;
@@ -179,6 +196,7 @@ textarea.inp { resize: vertical; min-height: 70px; }
         padding-bottom: 6px;
         gap: 6px !important;
         scrollbar-width: thin;
+        -webkit-overflow-scrolling: touch;
     }
     .char-thumb {
         flex-shrink: 0;
@@ -187,13 +205,11 @@ textarea.inp { resize: vertical; min-height: 70px; }
     .char-thumb img { width: 28px; height: 28px; }
     .char-thumb span { font-size: 0.72em; }
 
-    /* Stat boxes en fila */
-    .stat-box .num { font-size: 1.4em; }
+    /* Sticky del selector de PJ: z-index bajo para no tapar el panel */
+    #pj-selector-card { position: static !important; }
 
-    /* Catálogo: 1 columna en móvil */
-    #cat-grid {
-        grid-template-columns: 1fr !important;
-    }
+    /* Stat boxes */
+    .stat-box .num { font-size: 1.4em; }
 
     /* Modal más compacto */
     .modal-overlay { padding: 16px 10px; }
