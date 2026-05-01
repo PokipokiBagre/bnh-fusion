@@ -253,10 +253,7 @@ function _renderContenidoConLinks(msg) {
     if (citaMatch) {
         const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
         const citaHTML = `
-        <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.08);
-            border-radius:0 6px 6px 0;padding:4px 8px;margin-bottom:4px;
-            font-size:0.82em;color:#4a3060;overflow:hidden;cursor:pointer;
-            white-space:nowrap;text-overflow:ellipsis;"
+        <div class="op-cita-block"
             data-cita-id="${citaMsgId || ''}"
             onclick="window._opScrollACita(this)">
             <span style="font-weight:700;color:#7d3c98;">${esc(citaAutor)}</span>: 
