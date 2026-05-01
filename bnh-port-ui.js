@@ -453,12 +453,11 @@ export function renderPanel() {
     const isMobile = window.innerWidth < 700;
 
     if (isMobile) {
-        // Móvil: panel centrado horizontalmente, más estrecho
+        // Móvil: panel centrado horizontalmente con transform para máxima compatibilidad
         // z-index 89997 → queda DEBAJO de la burbuja (89998) y el scroll (89999)
-        const vw = window.innerWidth;
-        const panelW = Math.min(vw - 24, 380);
-        const leftOff = Math.round((vw - panelW) / 2);
-        panel.style.cssText = `position:fixed;left:${leftOff}px;bottom:0;width:${panelW}px;
+        panel.style.cssText = `position:fixed;left:50%;bottom:0;
+            transform:translateX(-50%);
+            width:min(calc(100vw - 24px), 380px);
             height:55vh;max-height:55vh;
             background:#0d1117;border:none;
             border-top:2px solid rgba(192,57,43,0.45);
@@ -1115,11 +1114,10 @@ function _initDrag(panel) {
         const newH = Math.min(Math.max(h0 + dy, 200), window.innerHeight * 0.85);
         panel.style.height     = newH + 'px';
         panel.style.maxHeight  = newH + 'px';
-        // Recalcular left por si cambió el ancho de pantalla
-        const vw2 = window.innerWidth;
-        const pw2 = Math.min(vw2 - 24, 380);
-        panel.style.left  = Math.round((vw2 - pw2) / 2) + 'px';
-        panel.style.width = pw2 + 'px';
+        // Mantener centrado con transform (no necesita recalcular left)
+        panel.style.left      = '50%';
+        panel.style.transform = 'translateX(-50%)';
+        panel.style.width     = `min(calc(100vw - 24px), 380px)`;
     }, { passive: false });
     document.addEventListener('touchend', () => { tDragging = false; });
 }
