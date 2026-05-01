@@ -54,275 +54,205 @@ const _origOpTab = window._opTab;
 // Se declara aquí para que _opFileInputDirect pueda setearlo también.
 let _fileSelectorActive = false;
 
+// ── IndexedDB para archivos pendientes entre reloads ─────────
+const _IDB_NAME    = 'op-pending-files';
+const _IDB_STORE   = 'files';
+const _IDB_VERSION = 1;
+
+function _idbOpen() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(_IDB_NAME, _IDB_VERSION);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(_IDB_STORE, { keyPath: 'id', autoIncrement: true });
+        req.onsuccess = e => res(e.target.result);
+        req.onerror   = e => rej(e.target.error);
+    });
+}
+
+async function _idbSaveFiles(files) {
+    const db = await _idbOpen();
+    const tx = db.transaction(_IDB_STORE, 'readwrite');
+    const st = tx.objectStore(_IDB_STORE);
+    // Limpiar primero
+    await new Promise(r => { const cl = st.clear(); cl.onsuccess = r; cl.onerror = r; });
+    for (const file of files) {
+        await new Promise((r, j) => {
+            const req = st.add({ name: file.name, type: file.type, blob: file });
+            req.onsuccess = r; req.onerror = j;
+        });
+    }
+    db.close();
+}
+
+async function _idbLoadFiles() {
+    try {
+        const db = await _idbOpen();
+        const tx = db.transaction(_IDB_STORE, 'readonly');
+        const st = tx.objectStore(_IDB_STORE);
+        const all = await new Promise((res, rej) => {
+            const req = st.getAll();
+            req.onsuccess = e => res(e.target.result);
+            req.onerror   = e => rej(e.target.error);
+        });
+        db.close();
+        return (all || []).map(r => new File([r.blob], r.name, { type: r.type }));
+    } catch { return []; }
+}
+
+async function _idbClear() {
+    try {
+        const db = await _idbOpen();
+        const tx = db.transaction(_IDB_STORE, 'readwrite');
+        tx.objectStore(_IDB_STORE).clear();
+        db.close();
+    } catch {}
+}
+
+// ── Botón 📎 — selector con recarga limpia en móvil ──────────
 window._opFileInput = () => {
     const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
     if (isMobile) {
-        _opAbrirPickerDiscord();
+        _opAbrirPickerConRecarga();
         return;
     }
     _opFileInputDirect();
 };
 
-// ── Discord-style photo picker (móvil) ───────────────────────
-function _opAbrirPickerDiscord() {
-    // Si ya está abierto, cerrarlo
-    const existing = document.getElementById('op-discord-picker');
-    if (existing) { existing.remove(); return; }
-
-    // Contenedor del panel deslizable desde abajo
-    const panel = document.createElement('div');
-    panel.id = 'op-discord-picker';
-    panel.style.cssText = `
+// Abre el selector nativo, guarda en IndexedDB, recarga la página
+function _opAbrirPickerConRecarga() {
+    // Mostrar aviso de lo que va a pasar
+    const aviso = document.createElement('div');
+    aviso.style.cssText = `
         position:fixed;bottom:0;left:0;right:0;z-index:99999;
-        background:#111827;border-top:2px solid rgba(108,52,131,0.6);
+        background:#111827;border-top:2px solid rgba(108,52,131,0.7);
         border-radius:16px 16px 0 0;
+        padding:20px 18px 28px;
         box-shadow:0 -8px 40px rgba(0,0,0,0.7);
-        display:flex;flex-direction:column;
-        max-height:60vh;
+        display:flex;flex-direction:column;gap:14px;
         transform:translateY(100%);
-        transition:transform 0.28s cubic-bezier(0.32,0.72,0,1);
+        transition:transform 0.25s cubic-bezier(0.32,0.72,0,1);
     `;
-
-    // Header con acciones rápidas y botón cerrar
-    const header = document.createElement('div');
-    header.style.cssText = `
-        display:flex;align-items:center;gap:10px;
-        padding:12px 14px 10px;
-        border-bottom:1px solid rgba(255,255,255,0.07);
-        flex-shrink:0;
-    `;
-    header.innerHTML = `
-        <div style="flex:1;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;">
-            <button id="_op-pk-all" style="
-                flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid rgba(108,52,131,0.7);
-                background:rgba(108,52,131,0.25);color:#e2d9f3;font-size:0.8em;font-weight:700;cursor:pointer;
-                white-space:nowrap;">🖼 Galería</button>
-            <button id="_op-pk-cam" style="
-                flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid rgba(39,174,96,0.7);
-                background:rgba(39,174,96,0.2);color:#a9dfbf;font-size:0.8em;font-weight:700;cursor:pointer;
-                white-space:nowrap;">📷 Cámara</button>
-            <button id="_op-pk-camf" style="
-                flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid rgba(39,174,96,0.4);
-                background:rgba(39,174,96,0.12);color:#a9dfbf;font-size:0.8em;font-weight:700;cursor:pointer;
-                white-space:nowrap;">🤳 Frontal</button>
-            <button id="_op-pk-url" style="
-                flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid rgba(26,74,128,0.7);
-                background:rgba(26,74,128,0.2);color:#aed6f1;font-size:0.8em;font-weight:700;cursor:pointer;
-                white-space:nowrap;">🔗 URL</button>
+    aviso.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="color:#e2d9f3;font-weight:700;font-size:0.95em;">📎 Adjuntar archivo</span>
+            <button id="_op-av-close" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:1.1em;cursor:pointer;">✕</button>
         </div>
-        <button id="_op-pk-close" style="
-            flex-shrink:0;width:32px;height:32px;border-radius:50%;border:none;
-            background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.6);
-            font-size:1em;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
-    `;
-    panel.appendChild(header);
-
-    // Área de selección múltiple con input oculto + zona de drop visual
-    const dropZone = document.createElement('div');
-    dropZone.style.cssText = `
-        flex:1;overflow-y:auto;padding:12px 14px;
-        display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
-        min-height:120px;
-    `;
-    dropZone.innerHTML = `
-        <div id="_op-pk-hint" style="
-            text-align:center;color:rgba(255,255,255,0.35);font-size:0.82em;line-height:1.6;">
-            <div style="font-size:2em;margin-bottom:6px;">📂</div>
-            Toca <strong style="color:rgba(108,52,131,0.9);">Galería</strong> para elegir fotos<br>
-            <span style="font-size:0.9em;">Puedes seleccionar varias a la vez</span>
+        <div style="color:rgba(255,255,255,0.45);font-size:0.78em;line-height:1.5;
+            background:rgba(255,255,255,0.04);border-radius:8px;padding:10px 12px;">
+            ℹ️ Al seleccionar, la página se <strong style="color:#e2d9f3;">recargará automáticamente</strong>
+            para mantener la conexión estable. Tus archivos se recuperarán al instante.
         </div>
-        <div id="_op-pk-thumbs" style="
-            display:flex;flex-wrap:wrap;gap:6px;width:100%;justify-content:flex-start;
-        "></div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+            <button id="_op-av-galeria" style="
+                padding:13px;border-radius:10px;border:1.5px solid rgba(108,52,131,0.7);
+                background:rgba(108,52,131,0.25);color:#e2d9f3;font-size:0.9em;font-weight:700;cursor:pointer;">
+                🖼 Elegir de galería
+            </button>
+            <button id="_op-av-cam" style="
+                padding:13px;border-radius:10px;border:1.5px solid rgba(39,174,96,0.6);
+                background:rgba(39,174,96,0.15);color:#a9dfbf;font-size:0.9em;font-weight:700;cursor:pointer;">
+                📷 Cámara trasera
+            </button>
+            <button id="_op-av-camf" style="
+                padding:13px;border-radius:10px;border:1.5px solid rgba(39,174,96,0.4);
+                background:rgba(39,174,96,0.08);color:#a9dfbf;font-size:0.9em;font-weight:700;cursor:pointer;">
+                🤳 Cámara frontal
+            </button>
+        </div>
     `;
-    panel.appendChild(dropZone);
+    document.body.appendChild(aviso);
+    requestAnimationFrame(() => requestAnimationFrame(() => { aviso.style.transform = 'translateY(0)'; }));
 
-    // Barra de envío (aparece cuando hay fotos seleccionadas)
-    const sendBar = document.createElement('div');
-    sendBar.id = '_op-pk-sendbar';
-    sendBar.style.cssText = `
-        display:none;padding:10px 14px;border-top:1px solid rgba(255,255,255,0.07);
-        flex-shrink:0;
-    `;
-    sendBar.innerHTML = `
-        <button id="_op-pk-confirm" style="
-            width:100%;padding:12px;border-radius:10px;border:none;
-            background:linear-gradient(135deg,#6c3483,#c0392b);
-            color:white;font-size:0.92em;font-weight:700;cursor:pointer;
-            letter-spacing:0.3px;">
-            ✓ Adjuntar seleccionadas (<span id="_op-pk-count">0</span>)
-        </button>
-    `;
-    panel.appendChild(sendBar);
-
-    document.body.appendChild(panel);
-
-    // Animar entrada
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => { panel.style.transform = 'translateY(0)'; });
-    });
-
-    // Input de archivos múltiples (reutilizable)
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.multiple = true;
-    fileInput.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
-    fileInput.style.display = 'none';
-    document.body.appendChild(fileInput);
-
-    // Estado local del picker
-    let _pickerFiles = []; // { file, url, id }
-
-    function _closePicker() {
-        panel.style.transform = 'translateY(100%)';
-        setTimeout(() => { panel.remove(); fileInput.remove(); }, 300);
-    }
-
-    function _updateThumbs() {
-        const thumbs = document.getElementById('_op-pk-thumbs');
-        const hint   = document.getElementById('_op-pk-hint');
-        const count  = document.getElementById('_op-pk-count');
-        if (!thumbs) return;
-
-        if (!_pickerFiles.length) {
-            hint.style.display = '';
-            thumbs.innerHTML = '';
-            sendBar.style.display = 'none';
-            return;
-        }
-
-        hint.style.display = 'none';
-        sendBar.style.display = '';
-        if (count) count.textContent = _pickerFiles.length;
-
-        thumbs.innerHTML = '';
-        _pickerFiles.forEach(entry => {
-            const isImg = isImage(entry.file);
-            const isVid = isVideo(entry.file);
-            const isAud = isAudio(entry.file);
-
-            const cell = document.createElement('div');
-            cell.style.cssText = `
-                position:relative;width:70px;height:70px;border-radius:8px;overflow:hidden;
-                border:2px solid rgba(108,52,131,0.5);flex-shrink:0;
-            `;
-
-            if (isImg) {
-                cell.innerHTML = `<img src="${entry.url}" style="width:100%;height:100%;object-fit:cover;">`;
-            } else if (isVid) {
-                cell.innerHTML = `<div style="width:100%;height:100%;background:#1a0505;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:1.8em;">🎬<span style="font-size:0.28em;color:#c0392b;font-weight:700;">VIDEO</span></div>`;
-            } else if (isAud) {
-                cell.innerHTML = `<div style="width:100%;height:100%;background:#050f1a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:1.8em;">🎵<span style="font-size:0.28em;color:#1a4a80;font-weight:700;">AUDIO</span></div>`;
-            } else {
-                cell.innerHTML = `<div style="width:100%;height:100%;background:#0d0d1a;display:flex;align-items:center;justify-content:center;font-size:2em;">📄</div>`;
-            }
-
-            // Botón quitar
-            const rm = document.createElement('button');
-            rm.style.cssText = `position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(192,57,43,0.9);border:none;color:white;font-size:0.6em;cursor:pointer;line-height:18px;text-align:center;padding:0;`;
-            rm.textContent = '✕';
-            rm.onclick = () => {
-                URL.revokeObjectURL(entry.url);
-                _pickerFiles = _pickerFiles.filter(f => f.id !== entry.id);
-                _updateThumbs();
-            };
-            cell.appendChild(rm);
-            thumbs.appendChild(cell);
-        });
-    }
-
-    function _addFiles(files) {
-        files.forEach(file => {
-            _pickerFiles.push({ file, url: URL.createObjectURL(file), id: Date.now() + Math.random() });
-        });
-        _updateThumbs();
-    }
-
-    // Botón Galería — selector múltiple nativo
-    panel.querySelector('#_op-pk-all').onclick = () => {
-        fileInput.removeAttribute('capture');
-        fileInput.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
-        fileInput.multiple = true;
-        _fileSelectorActive = true;
-        fileInput.onchange = () => {
-            const files = Array.from(fileInput.files || []);
-            if (files.length) _addFiles(files);
-            fileInput.value = '';
-        };
-        fileInput.click();
+    const closeAviso = () => {
+        aviso.style.transform = 'translateY(100%)';
+        setTimeout(() => aviso.remove(), 280);
     };
 
-    // Botón Cámara trasera
-    panel.querySelector('#_op-pk-cam').onclick = () => {
-        fileInput.accept = 'image/*';
-        fileInput.multiple = false;
-        fileInput.capture = 'environment';
-        _fileSelectorActive = true;
-        fileInput.onchange = () => {
-            const files = Array.from(fileInput.files || []);
-            if (files.length) _addFiles(files);
-            fileInput.value = '';
-            fileInput.removeAttribute('capture');
-            fileInput.multiple = true;
-        };
-        fileInput.click();
-    };
+    aviso.querySelector('#_op-av-close').onclick = closeAviso;
 
-    // Botón Cámara frontal
-    panel.querySelector('#_op-pk-camf').onclick = () => {
-        fileInput.accept = 'image/*';
-        fileInput.multiple = false;
-        fileInput.capture = 'user';
-        _fileSelectorActive = true;
-        fileInput.onchange = () => {
-            const files = Array.from(fileInput.files || []);
-            if (files.length) _addFiles(files);
-            fileInput.value = '';
-            fileInput.removeAttribute('capture');
-            fileInput.multiple = true;
-        };
-        fileInput.click();
-    };
-
-    // Botón URL
-    panel.querySelector('#_op-pk-url').onclick = () => {
-        _closePicker();
-        const url = prompt('Pega la URL de la imagen:');
-        if (url?.trim()) {
-            const ta = document.getElementById('op-msg-input');
-            if (ta) {
-                ta.value = (ta.value ? ta.value + '\n' : '') + url.trim();
-                ta.dispatchEvent(new Event('input', { bubbles: true }));
-                ta.focus();
-            }
-        }
-    };
-
-    // Botón cerrar
-    panel.querySelector('#_op-pk-close').onclick = () => {
-        _pickerFiles.forEach(f => URL.revokeObjectURL(f.url));
-        _closePicker();
-    };
-
-    // Botón confirmar
-    sendBar.querySelector('#_op-pk-confirm').onclick = () => {
-        if (!_pickerFiles.length) return;
-        const files = _pickerFiles.map(f => f.file);
-        _closePicker();
-        _agregarArchivosPendientes(files, 'file');
-    };
-
-    // Cerrar al tocar el overlay (fuera del panel)
+    // Cerrar al tocar fuera
     setTimeout(() => {
-        const _closeOnOutside = (e) => {
-            if (!panel.contains(e.target) && e.target.id !== 'op-discord-picker') {
-                _pickerFiles.forEach(f => URL.revokeObjectURL(f.url));
-                _closePicker();
-                document.removeEventListener('touchstart', _closeOnOutside);
-            }
-        };
-        document.addEventListener('touchstart', _closeOnOutside);
+        const _out = e => { if (!aviso.contains(e.target)) { closeAviso(); document.removeEventListener('touchstart', _out); } };
+        document.addEventListener('touchstart', _out);
     }, 300);
+
+    // Crear input oculto reutilizable
+    function _lanzarInput(opts = {}) {
+        closeAviso();
+        const input = document.createElement('input');
+        input.type    = 'file';
+        input.multiple = !opts.capture;
+        input.accept  = opts.accept || 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
+        if (opts.capture) input.capture = opts.capture;
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = async () => {
+            const files = Array.from(input.files || []);
+            input.remove();
+            if (!files.length) return;
+
+            // Guardar texto del input para restaurarlo después del reload
+            const textoActual = document.getElementById('op-msg-input')?.value || '';
+            if (textoActual) sessionStorage.setItem('op-reload-texto', textoActual);
+
+            // Mostrar overlay de "guardando..."
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `position:fixed;inset:0;z-index:999999;
+                background:rgba(10,10,20,0.92);display:flex;flex-direction:column;
+                align-items:center;justify-content:center;gap:16px;`;
+            overlay.innerHTML = `
+                <div style="font-size:2.5em;">💾</div>
+                <div style="color:#e2d9f3;font-size:0.95em;font-weight:700;">Guardando ${files.length} archivo${files.length > 1 ? 's' : ''}…</div>
+                <div style="color:rgba(255,255,255,0.4);font-size:0.78em;">Reconectando en un momento</div>
+            `;
+            document.body.appendChild(overlay);
+
+            await _idbSaveFiles(files);
+            // Pequeña pausa para que el overlay sea visible
+            setTimeout(() => window.location.reload(), 300);
+        };
+
+        input.click();
+    }
+
+    aviso.querySelector('#_op-av-galeria').onclick = () => _lanzarInput();
+    aviso.querySelector('#_op-av-cam').onclick    = () => _lanzarInput({ capture: 'environment', accept: 'image/*' });
+    aviso.querySelector('#_op-av-camf').onclick   = () => _lanzarInput({ capture: 'user',        accept: 'image/*' });
+}
+
+// ── Recuperar archivos de IndexedDB al arrancar ───────────────
+async function _recuperarArchivosPendientesIDB() {
+    const files = await _idbLoadFiles();
+    if (!files.length) return;
+
+    await _idbClear(); // Limpiar para que no se repita en el siguiente reload
+
+    // Restaurar texto del input si había
+    const textoGuardado = sessionStorage.getItem('op-reload-texto');
+    if (textoGuardado) {
+        sessionStorage.removeItem('op-reload-texto');
+        const ta = document.getElementById('op-msg-input');
+        if (ta) {
+            ta.value = textoGuardado;
+            ta.style.height = 'auto';
+            ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+        }
+    }
+
+    _agregarArchivosPendientes(files, 'file');
+
+    // Toast de confirmación
+    setTimeout(() => {
+        const n = files.length;
+        const msg = `✅ ${n} archivo${n > 1 ? 's' : ''} recuperado${n > 1 ? 's' : ''} — listo para enviar`;
+        const el = document.getElementById('op-toast');
+        if (el) {
+            el.textContent = msg;
+            el.className = 'op-toast op-toast-ok';
+            clearTimeout(el._t);
+            el._t = setTimeout(() => el.className = 'op-toast', 4000);
+        }
+    }, 800);
 }
 
 // opts: { capture?: 'environment'|'user', accept?: string }
@@ -398,6 +328,9 @@ export async function initOP() {
     _exponerGlobales();
     _mountInput();
     _initVisibilityReconnect();
+
+    // Recuperar archivos guardados en IndexedDB antes del reload
+    await _recuperarArchivosPendientesIDB();
 }
 
 // ── Conversaciones ────────────────────────────────────────────
