@@ -64,6 +64,27 @@ export const bnhPort = {
         portState.abierto = true;
         renderPanel();
 
+        // ── Recuperar archivos guardados en IDB (tras reload en móvil) ──
+        const idbFiles = await _idbLoadAndClear();
+        if (idbFiles.length) {
+            // Restaurar texto guardado
+            const textoGuardado = sessionStorage.getItem('bnh-port-reload-texto');
+            if (textoGuardado) {
+                sessionStorage.removeItem('bnh-port-reload-texto');
+                requestAnimationFrame(() => {
+                    const ta = document.getElementById('bnh-port-input');
+                    if (ta) {
+                        ta.value = textoGuardado;
+                        ta.style.height = 'auto';
+                        ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+                    }
+                });
+            }
+            idbFiles.forEach(f => window._bnhPortAddFile(f, 'file'));
+            const n = idbFiles.length;
+            toast(`✅ ${n} archivo${n>1?'s':''} recuperado${n>1?'s':''} — listo para enviar`, 'ok');
+        }
+
         // ── Montar autocomplete markup en el textarea del port ────
         // mountMarkupAC (de op-markup.js) lee opState.grupos/medallas;
         // sincronizamos portState → opState para reutilizarla sin duplicar código.
@@ -374,6 +395,45 @@ async function _syncOpState() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// INDEXEDDB — Persistencia de archivos pendientes en móvil
+// ─────────────────────────────────────────────────────────────
+const _IDB_NAME = 'bnh-port-pending', _IDB_STORE = 'files', _IDB_VER = 1;
+
+function _idbOpen() {
+    return new Promise((res, rej) => {
+        const req = indexedDB.open(_IDB_NAME, _IDB_VER);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(_IDB_STORE, { keyPath:'id', autoIncrement:true });
+        req.onsuccess = e => res(e.target.result);
+        req.onerror   = e => rej(e.target.error);
+    });
+}
+async function _idbSaveFiles(files) {
+    const db = await _idbOpen();
+    await new Promise((resolve, reject) => {
+        const tx = db.transaction(_IDB_STORE, 'readwrite');
+        const st = tx.objectStore(_IDB_STORE);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror    = e  => { db.close(); reject(e.target.error); };
+        st.clear();
+        for (const f of files) st.add({ name:f.name, type:f.type, blob:f });
+    });
+}
+async function _idbLoadAndClear() {
+    try {
+        const db = await _idbOpen();
+        return await new Promise((resolve, reject) => {
+            const tx = db.transaction(_IDB_STORE, 'readwrite');
+            const st = tx.objectStore(_IDB_STORE);
+            let rows = [];
+            tx.oncomplete = () => { db.close(); resolve(rows.map(r => new File([r.blob], r.name, { type:r.type }))); };
+            tx.onerror    = e  => { db.close(); reject(e.target.error); };
+            const req = st.getAll();
+            req.onsuccess = e => { rows = e.target.result || []; st.clear(); };
+        });
+    } catch { return []; }
+}
+
+// ─────────────────────────────────────────────────────────────
 // RECONEXIÓN AUTOMÁTICA
 // ─────────────────────────────────────────────────────────────
 function _initVisibilityReconnect() {
@@ -544,6 +604,27 @@ function _exponerGlobales() {
         }, 10);
     };
 
+    window._bnhPortCitar = (id) => {
+        const msg = portState.mensajes.find(m => m.id === id);
+        if (!msg) return;
+        const ta = document.getElementById('bnh-port-input');
+        if (!ta) return;
+        const autor = msg.autor_nombre || 'OP';
+        const preview = msg.contenido
+            ? msg.contenido.replace(/\n/g,' ').slice(0, 60) + (msg.contenido.length > 60 ? '…' : '')
+            : msg.imagen_path ? '📎 imagen'
+            : msg.video_path  ? '🎬 video'
+            : msg.audio_path  ? '🎵 audio'
+            : '📎 adjunto';
+        const cita = `> [${id}] ${autor}: ${preview}\n`;
+        // Insertar al principio del texto actual
+        ta.value = cita + ta.value;
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
+    };
+
     window._bnhPortEnviar    = _enviar;
     window._bnhPortLimpiarGalSel = () => {
         portState.pendingImgId = null;
@@ -557,14 +638,31 @@ function _exponerGlobales() {
     };
 
     window._bnhPortFileInput = () => {
+        const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
         const inp = document.createElement('input');
         inp.type = 'file'; inp.multiple = true;
         inp.accept = 'image/*,video/*,audio/*,.mp3,.ogg,.wav,.flac,.m4a,.aac,.opus,.gif';
         inp.style.display = 'none';
-        inp.onchange = () => {
-            Array.from(inp.files||[]).forEach(f => window._bnhPortAddFile(f,'file'));
-            inp.remove();
-        };
+
+        if (isMobile) {
+            inp.onchange = async () => {
+                const files = Array.from(inp.files || []);
+                inp.remove();
+                if (!files.length) return;
+                // Guardar texto del input si había
+                const ta = document.getElementById('bnh-port-input');
+                const texto = ta?.value || '';
+                if (texto) sessionStorage.setItem('bnh-port-reload-texto', texto);
+                await _idbSaveFiles(files);
+                window.location.reload();
+            };
+        } else {
+            inp.onchange = () => {
+                Array.from(inp.files || []).forEach(f => window._bnhPortAddFile(f, 'file'));
+                inp.remove();
+            };
+        }
+
         document.body.appendChild(inp);
         inp.click();
     };
