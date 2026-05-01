@@ -248,18 +248,20 @@ function _renderContenidoConLinks(msg) {
     if (!texto) return '';
 
     // ── Detectar bloque de cita (línea "> Autor: texto") ────────
-    const citaMatch = texto.match(/^> (.+?): (.+)\n([\s\S]*)$/);
+    const citaMatch = texto.match(/^> (.+?): (.*)\n?([\s\S]*)$/);
     if (citaMatch) {
         const [, citaAutor, citaTexto, resto] = citaMatch;
         const citaHTML = `
         <div style="border-left:3px solid rgba(108,52,131,0.6);background:rgba(108,52,131,0.12);
             border-radius:0 6px 6px 0;padding:4px 8px;margin-bottom:4px;
-            font-size:0.82em;color:rgba(255,255,255,0.55);overflow:hidden;">
-            <span style="font-weight:700;color:rgba(200,150,255,0.8);">${esc(citaAutor)}</span>:
-            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${esc(citaTexto)}</span>
+            font-size:0.82em;color:rgba(255,255,255,0.55);overflow:hidden;cursor:pointer;"
+            onclick="(function(){const el=document.querySelector('.op-msg[data-id]');if(el)el.scrollIntoView({behavior:'smooth',block:'center'})})()">
+            <span style="font-weight:700;color:#9b59b6;">${esc(citaAutor)}</span>: 
+            <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
         </div>`;
-        const restoHtml = resto?.trim()
-            ? `<div class="op-msg-texto">${renderMsgMarkup(resto.trim())}</div>`
+        const restoTrimmed = resto?.trim();
+        const restoHtml = restoTrimmed
+            ? `<div class="op-msg-texto">${renderMsgMarkup(restoTrimmed)}</div>`
             : '';
         return citaHTML + restoHtml;
     }
