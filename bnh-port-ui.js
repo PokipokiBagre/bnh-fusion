@@ -303,13 +303,13 @@ function _renderContenidoConLinks(msg) {
         const idAttr = esc(citaMsgId || '');
         const citaHTML = `<div class="bp-cita-block" data-cita-id="${idAttr}"
             onclick="window._bnhPortScrollACita(this)"
-            style="border-left:2px solid rgba(108,52,131,0.7);
-            background:rgba(108,52,131,0.13);border-radius:0 5px 5px 0;
+            style="border-left:2px solid rgba(156,89,182,0.8);
+            background:rgba(108,52,131,0.2);border-radius:0 5px 5px 0;
             padding:3px 7px;margin-bottom:3px;font-size:0.78em;
-            color:rgba(255,255,255,0.5);overflow:hidden;cursor:pointer;
-            white-space:nowrap;text-overflow:ellipsis;">
-            <span style="font-weight:700;color:#c39bd3;">${esc(citaAutor)}</span>: 
-            <span style="opacity:0.8;">${esc(citaTexto) || '📎 adjunto'}</span>
+            color:rgba(255,255,255,0.82);overflow:hidden;cursor:pointer;
+            white-space:nowrap;text-overflow:ellipsis;display:block;">
+            <span style="font-weight:700;color:#d7bde2;">${esc(citaAutor)}</span>: 
+            <span style="opacity:0.9;">${esc(citaTexto) || '📎 adjunto'}</span>
         </div>`;
         const restoHtml = resto
             ? `<div style="font-size:0.82em;line-height:1.45;word-break:break-word;">${_renderMarkupBasico(resto)}</div>`
@@ -424,7 +424,7 @@ export function renderBurbuja() {
         width:48px;height:48px;border-radius:50%;
         background:linear-gradient(135deg,#c0392b,#6c3483);
         box-shadow:0 4px 18px rgba(192,57,43,0.45);
-        cursor:pointer;z-index:89999;
+        cursor:pointer;z-index:89998;
         display:flex;align-items:center;justify-content:center;
         font-size:1.35em;user-select:none;
         transition:transform 0.18s,box-shadow 0.18s;
@@ -453,19 +453,14 @@ export function renderPanel() {
     const isMobile = window.innerWidth < 700;
 
     if (isMobile) {
-        // Móvil: panel centrado horizontalmente con transform para máxima compatibilidad
-        // z-index 89997 → queda DEBAJO de la burbuja (89998) y el scroll (89999)
-        panel.style.cssText = `position:fixed;left:50%;bottom:0;
-            transform:translateX(-50%);
-            width:min(calc(100vw - 24px), 380px);
+        // Móvil: panel deslizable desde abajo, ocupa la mitad inferior de la pantalla
+        panel.style.cssText = `position:fixed;left:0;bottom:0;right:0;
             height:55vh;max-height:55vh;
             background:#0d1117;border:none;
             border-top:2px solid rgba(192,57,43,0.45);
-            border-left:1.5px solid rgba(192,57,43,0.28);
-            border-right:1.5px solid rgba(192,57,43,0.28);
             border-radius:16px 16px 0 0;
             box-shadow:0 -8px 32px rgba(0,0,0,0.6);
-            z-index:89997;display:flex;flex-direction:column;
+            z-index:89999;display:flex;flex-direction:column;
             overflow:hidden;font-family:inherit;font-size:14px;
             color:rgba(255,255,255,0.88);`;
     } else {
@@ -1104,21 +1099,14 @@ function _initDrag(panel) {
         ty0 = e.touches[0].clientY;
         h0  = panel.getBoundingClientRect().height;
         tDragging = true;
-        e.stopPropagation();
     }, { passive: true });
-    panel.addEventListener('touchmove', e => {
+    document.addEventListener('touchmove', e => {
         if (!tDragging) return;
-        e.preventDefault();   // evita pull-to-refresh del browser
-        e.stopPropagation();
-        const dy  = ty0 - e.touches[0].clientY;
+        const dy  = ty0 - e.touches[0].clientY; // positivo = arrastrar hacia arriba = más alto
         const newH = Math.min(Math.max(h0 + dy, 200), window.innerHeight * 0.85);
         panel.style.height     = newH + 'px';
         panel.style.maxHeight  = newH + 'px';
-        // Mantener centrado con transform (no necesita recalcular left)
-        panel.style.left      = '50%';
-        panel.style.transform = 'translateX(-50%)';
-        panel.style.width     = `min(calc(100vw - 24px), 380px)`;
-    }, { passive: false });
+    }, { passive: true });
     document.addEventListener('touchend', () => { tDragging = false; });
 }
 
