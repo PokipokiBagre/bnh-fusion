@@ -453,11 +453,16 @@ export function renderPanel() {
     const isMobile = window.innerWidth < 700;
 
     if (isMobile) {
-        // Móvil: panel deslizable desde abajo, ocupa la mitad inferior de la pantalla
-        panel.style.cssText = `position:fixed;left:0;bottom:0;right:0;
+        // Móvil: panel centrado y más estrecho, deslizable desde abajo
+        const vw = window.innerWidth;
+        const panelW = Math.min(vw - 32, 360);
+        const leftOffset = Math.round((vw - panelW) / 2);
+        panel.style.cssText = `position:fixed;left:${leftOffset}px;bottom:0;width:${panelW}px;
             height:55vh;max-height:55vh;
             background:#0d1117;border:none;
             border-top:2px solid rgba(192,57,43,0.45);
+            border-left:1.5px solid rgba(192,57,43,0.3);
+            border-right:1.5px solid rgba(192,57,43,0.3);
             border-radius:16px 16px 0 0;
             box-shadow:0 -8px 32px rgba(0,0,0,0.6);
             z-index:89999;display:flex;flex-direction:column;
@@ -1099,14 +1104,17 @@ function _initDrag(panel) {
         ty0 = e.touches[0].clientY;
         h0  = panel.getBoundingClientRect().height;
         tDragging = true;
+        e.stopPropagation();
     }, { passive: true });
-    document.addEventListener('touchmove', e => {
+    panel.addEventListener('touchmove', e => {
         if (!tDragging) return;
+        e.preventDefault(); // evita pull-to-refresh y scroll de página
+        e.stopPropagation();
         const dy  = ty0 - e.touches[0].clientY; // positivo = arrastrar hacia arriba = más alto
         const newH = Math.min(Math.max(h0 + dy, 200), window.innerHeight * 0.85);
         panel.style.height     = newH + 'px';
         panel.style.maxHeight  = newH + 'px';
-    }, { passive: true });
+    }, { passive: false });
     document.addEventListener('touchend', () => { tDragging = false; });
 }
 
