@@ -60,9 +60,13 @@ export const bnhPort = {
         renderBurbuja();
         _exponerGlobales();
         _initVisibilityReconnect();
-        // Abrir por defecto
-        portState.abierto = true;
-        renderPanel();
+
+        // En móvil: cerrado por defecto. En escritorio: abierto.
+        const isMobile = window.innerWidth < 700;
+        if (!isMobile) {
+            portState.abierto = true;
+            renderPanel();
+        }
 
         // ── Recuperar archivos guardados en IDB (tras reload en móvil) ──
         const idbFiles = await _idbLoadAndClear();
