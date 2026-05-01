@@ -573,23 +573,6 @@ export function renderSlotDetalle(eq, idx) {
     </div>` : ''}
 </div>`;
 
-    wrap.style.display = 'block';
-    wrap.innerHTML = `
-<div style="background:white;border:2px solid ${col};border-radius:12px;overflow:hidden;">
-    <div style="background:${col};color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;">
-        <img src="${imgUrl}" onerror="this.src='${fallback}'"
-            style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.4);">
-        <span style="font-weight:800;font-size:0.92em;flex:1;">${esc(slot.nombre)}</span>
-        <button style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;
-            width:26px;height:26px;cursor:pointer;font-size:1em;"
-            onclick="window._combateToggleSlot('${eq}',${idx})">×</button>
-    </div>
-    <div style="display:flex;border-bottom:1.5px solid #e9ecef;background:#fafafa;">
-        ${_tabBtn('stats',   '📊 Stats')}
-        ${_tabBtn('tags',    '🏷 Tags y PT')}
-        ${_tabBtn('medallas','🎖 Medallas' + (slot.medallas.length ? ` (${slot.medallas.length})` : ''))}
-        ${_tabBtn('as',      '⚔️ AS')}
-    </div>
     // ══ TAB: AS (ATAQUE SIMPLE) ═════════════════════════════════
     const cambiosPorTurno = Math.max(1, slot.cambios || 1); // mínimo 1 siempre
     const maxAS = Math.max(1, Math.floor(cambiosPorTurno / 2)); // mitad de cambios, mín 1
@@ -638,6 +621,23 @@ export function renderSlotDetalle(eq, idx) {
     </div>
 </div>`;
 
+    wrap.style.display = 'block';
+    wrap.innerHTML = `
+<div style="background:white;border:2px solid ${col};border-radius:12px;overflow:hidden;">
+    <div style="background:${col};color:white;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+        <img src="${imgUrl}" onerror="this.src='${fallback}'"
+            style="width:36px;height:36px;border-radius:50%;object-fit:cover;object-position:top;border:2px solid rgba(255,255,255,0.4);">
+        <span style="font-weight:800;font-size:0.92em;flex:1;">${esc(slot.nombre)}</span>
+        <button style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:50%;
+            width:26px;height:26px;cursor:pointer;font-size:1em;"
+            onclick="window._combateToggleSlot('${eq}',${idx})">×</button>
+    </div>
+    <div style="display:flex;border-bottom:1.5px solid #e9ecef;background:#fafafa;">
+        ${_tabBtn('stats',   '📊 Stats')}
+        ${_tabBtn('tags',    '🏷 Tags y PT')}
+        ${_tabBtn('medallas','🎖 Medallas' + (slot.medallas.length ? ` (${slot.medallas.length})` : ''))}
+        ${_tabBtn('as',      '⚔️ AS')}
+    </div>
     <div style="padding:12px;">
         ${tab==='stats'    ? tabStats    : ''}
         ${tab==='tags'     ? tabTags     : ''}
