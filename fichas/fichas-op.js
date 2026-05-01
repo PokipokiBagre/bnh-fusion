@@ -75,6 +75,25 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
             <b>Delta (Δ)</b> = Operador matemático encadenado (ej: <code>+20</code>, <code>x1.5</code>, <code>/2</code>). Se aplican en orden: (((Base Δ1) Δ2) Δ3)…<br>
             <b>Nota</b> = Descripción general de los deltas del stat.
         </p>
+
+        <!-- ── BARRA LIVE HORIZONTAL ── -->
+        <div id="op-stats-live" style="
+            display:grid; grid-template-columns:repeat(6,1fr); gap:6px;
+            background:#f0f4f8; border:1.5px solid #b0c4de; border-radius:8px;
+            padding:8px 10px; margin-bottom:10px; font-size:0.78em;">
+            ${[
+                { id:'live-pac-base',  lbl:'PAC base',  color:'#555' },
+                { id:'live-pac-proj',  lbl:'PAC proy.', color:'var(--fp-dark)' },
+                { id:'live-tier-base', lbl:'Tier base',  color:'#555' },
+                { id:'live-tier-proj', lbl:'Tier proy.', color:'var(--fp-dark)' },
+                { id:'live-pv-base',   lbl:'PV Máx base', color:'#555' },
+                { id:'live-pv-proj',   lbl:'PV Máx proy.', color:'var(--fp-dark)' },
+            ].map(c => `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:1px;">
+                    <span style="font-size:0.7em;color:var(--gray-500);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;">${c.lbl}</span>
+                    <span id="${c.id}" style="font-weight:800;font-size:1.05em;color:${c.color};">—</span>
+                </div>`).join('')}
+        </div>
         
         <div style="display:flex; flex-direction:column; gap:8px;">
             ${['pot', 'agi', 'ctl'].map(s => `
@@ -83,7 +102,8 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
                     <div style="width:35px; font-weight:800; color:var(--fp-dark); text-transform:uppercase; font-size:0.9em;">${s.toUpperCase()}</div>
                     <div style="display:flex; flex-direction:column; gap:1px;">
                         <span style="font-size:0.62em; color:var(--gray-500);">Base</span>
-                        <input id="op-${s}-base" type="number" value="${g[s]||0}" style="width:60px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;">
+                        <input id="op-${s}-base" type="number" value="${g[s]||0}" style="width:60px; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px;"
+                            oninput="window._opStatsLive()">
                     </div>
                     <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
                         <span style="font-size:0.62em; color:var(--gray-500);">Nota / Origen</span>
@@ -95,7 +115,8 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
                     <div style="flex:1; display:flex; flex-direction:column; gap:1px;">
                         <span style="font-size:0.6em; color:var(--fp); text-align:center;">Δ${n}</span>
                         <input id="op-${s}-delta-${n}" type="text" value="${g['delta_'+s+'_'+n]||'0'}" placeholder="0"
-                            style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px 1px; color:var(--fp); font-weight:bold; font-size:0.85em;">
+                            style="width:100%; text-align:center; border:1px solid #ccc; border-radius:4px; padding:2px 1px; color:var(--fp); font-weight:bold; font-size:0.85em;"
+                            oninput="window._opStatsLive()">
                     </div>`).join('')}
                 </div>
             </div>
@@ -241,6 +262,9 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
     `;
 
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
+
+    // Calcular barra live inicial
+    setTimeout(() => window._opStatsLive(), 60);
 
     // Cambiar a la pestaña solicitada (si no es la 0)
     if (tabInicial > 0) {
@@ -911,6 +935,63 @@ export function exponerGlobalesOP() {
             setTimeout(() => { pvActEl.style.background = ''; }, 1200);
         }
         setMsg('msg-stats', `💚 PV Actual igualado a ${pvMax} — recuerda guardar`, true);
+    };
+
+    window._opStatsLive = () => {
+        // Leer bases actuales
+        const pot = parseInt(document.getElementById('op-pot-base')?.value) || 0;
+        const agi = parseInt(document.getElementById('op-agi-base')?.value) || 0;
+        const ctl = parseInt(document.getElementById('op-ctl-base')?.value) || 0;
+
+        // PAC y Tier base (sin deltas)
+        const pacBase  = pot + agi + ctl;
+        const tierBase = calcTier(pot, agi, ctl).tier;
+        const pvBase   = calcPVMax(pot, agi, ctl);
+
+        // Leer deltas y aplicarlos para proyectados
+        const readDeltas = (stat) => [1,2,3,4,5].map(n =>
+            document.getElementById(`op-${stat}-delta-${n}`)?.value || '0'
+        );
+        const applyDeltas = (base, deltas) => {
+            let acc = base;
+            deltas.forEach(d => { acc = _applyOneDelta(acc, d); });
+            return acc;
+        };
+        const _applyOneDelta = (val, d) => {
+            const s = String(d).trim();
+            if (!s || s === '0') return val;
+            const powM  = s.match(/^\^([+-]?\d+(?:\.\d+)?)$/);
+            const multM = s.match(/^[xX\*]([+-]?\d+(?:\.\d+)?)$/);
+            const divM  = s.match(/^\/([+-]?\d+(?:\.\d+)?)$/);
+            const addM  = s.match(/^([+-]?\d+(?:\.\d+)?)$/);
+            if (powM)  return Math.round(Math.pow(val, parseFloat(powM[1])));
+            if (multM) return Math.round(val * parseFloat(multM[1]));
+            if (divM)  return Math.round(val / parseFloat(divM[1]));
+            if (addM)  return Math.round(val + parseFloat(addM[1]));
+            return val;
+        };
+
+        const potP = applyDeltas(pot, readDeltas('pot'));
+        const agiP = applyDeltas(agi, readDeltas('agi'));
+        const ctlP = applyDeltas(ctl, readDeltas('ctl'));
+
+        const pacProj  = potP + agiP + ctlP;
+        const tierProj = calcTier(potP, agiP, ctlP).tier;
+        const pvProj   = calcPVMax(potP, agiP, ctlP);
+
+        const tierColors = { 5:'#9b59b6', 4:'#f39c12', 3:'#8e44ad', 2:'#2980b9', 1:'#27ae60' };
+
+        const set = (id, val, color) => {
+            const el = document.getElementById(id);
+            if (el) { el.textContent = val; if (color) el.style.color = color; }
+        };
+
+        set('live-pac-base',  pacBase,              '#555');
+        set('live-pac-proj',  pacProj,              pacProj > pacBase ? 'var(--fp-dark)' : pacProj < pacBase ? '#c0392b' : 'var(--fp-dark)');
+        set('live-tier-base', `T${tierBase}`,       tierColors[tierBase]);
+        set('live-tier-proj', `T${tierProj}`,       tierColors[tierProj]);
+        set('live-pv-base',   pvBase,               '#555');
+        set('live-pv-proj',   pvProj,               pvProj > pvBase ? 'var(--fp-dark)' : pvProj < pvBase ? '#c0392b' : '#555');
     };
 
     window._opGuardarStats = async (nombreGrupo) => {
