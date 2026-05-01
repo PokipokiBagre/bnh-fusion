@@ -414,6 +414,16 @@ function _exponerGlobales() {
         portState.abierto = !portState.abierto;
         if (portState.abierto) {
             renderPanel();
+            // Al reabrir: resetear posición a la esquina por defecto (evita panel perdido por zoom)
+            const panel = document.getElementById('bnh-port-panel');
+            if (panel) {
+                panel.style.right  = '80px';
+                panel.style.bottom = '22px';
+                panel.style.left   = '';
+                panel.style.top    = '';
+                // Limpiar posición guardada para que no vuelva a la posición problemática
+                try { localStorage.removeItem('bnh_port_pos'); } catch(_) {}
+            }
             // Re-montar el AC en el nuevo textarea tras renderPanel
             requestAnimationFrame(() => {
                 const ta = document.getElementById('bnh-port-input');
