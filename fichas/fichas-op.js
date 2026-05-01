@@ -265,8 +265,11 @@ export async function abrirPanelOP(nombreGrupo, tabInicial = 0) {
     abrirModal(`⚙️ ${g.nombre_refinado}`, html);
 
     // Calcular barra live inicial
-    setTimeout(() => {
-        window._opFusionOpts = (await import('./fichas-data.js').then(m => m.opcionesFusion).catch(() => {})) || {};
+    setTimeout(async () => {
+        try {
+            const { opcionesFusion } = await import('./fichas-data.js');
+            window._opFusionOpts = opcionesFusion || {};
+        } catch(_) { window._opFusionOpts = {}; }
         window._opStatsLive();
     }, 60);
 
@@ -983,7 +986,7 @@ export function exponerGlobalesOP() {
             const MULT        = f.rendimiento > 100 ? 1.5 : 1;
 
             // Modo stats de las opciones (usa las mismas opciones que el lente)
-            const opts = (await Promise.resolve(null), window._opFusionOpts || {});
+            const opts = window._opFusionOpts || {};
             const modo = opts.modo_stats || 'suma';
             const calcStat = (a, b) => {
                 if (modo === 'promedio') return Math.ceil((a + b) / 2);
