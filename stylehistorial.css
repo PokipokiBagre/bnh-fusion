@@ -421,7 +421,51 @@ body {
     .hide-sm      { display: none; }
     .form-row     { flex-direction: column; }
     .form-row .inp { width: 100%; }
-    .header-top   { flex-wrap: wrap; }
-    .hilo-badge   { max-width: 100%; }
     .app-main     { padding: 16px 12px; }
+
+    /* ── Header móvil ────────────────────────────── */
+    .app-header { padding: 0 12px; overflow: hidden; }
+
+    /* Fila 1: logo + badge (ocupan todo el ancho) */
+    .header-top {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 0 4px;
+        /* No hay justify-content: space-between en móvil */
+        justify-content: flex-start;
+    }
+    .header-logo { font-size: 1.1em; flex-shrink: 0; }
+    .hilo-badge {
+        flex: 1;
+        min-width: 0;       /* permite que se encoja */
+        max-width: 100%;
+        font-size: 0.78em;
+        padding: 4px 10px;
+    }
+
+    /* El div de botones pasa a ocupar toda la fila 2 */
+    .header-btns {
+        flex-basis: 100%;   /* ocupa toda la fila */
+        width: 100%;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 5px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;           /* Firefox */
+        padding-bottom: 4px;
+        justify-content: flex-start;
+    }
+    .header-btns::-webkit-scrollbar { display: none; }
+
+    /* Botones más compactos en la barra scrolleable */
+    .header-btns .btn-sm {
+        padding: 5px 9px;
+        font-size: 0.76em;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    /* Dropdowns: abren hacia abajo con ancho auto */
+    .dropdown-menu { min-width: 160px; font-size: 0.82em; }
 }
