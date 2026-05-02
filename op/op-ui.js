@@ -348,6 +348,29 @@ function _setConvMeta(id, patch) {
 }
 
 // ── Panel de mensajes ─────────────────────────────────────────
+// ── Helper compartido: HTML de un mensaje ──────────────────────
+function _renderMsgHTML(msg, propio, hora, mismoGrupo, avatarHtml) {
+    return `
+<div class="op-msg ${propio?'propio':'ajeno'}" data-id="${msg.id}">
+    ${!propio ? avatarHtml : ''}
+    <div class="op-msg-bubble">
+        ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
+        ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
+        ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
+        ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
+        ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
+        ${_renderContenidoConLinks(msg)}
+        <div class="op-msg-meta">
+            <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
+            <button class="op-msg-del" onclick="window._opCitar(${msg.id})" title="Responder">↩</button>
+            ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
+            <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
+        </div>
+    </div>
+    ${propio ? avatarHtml : ''}
+</div>`;
+}
+
 export function renderMensajes() {
     const wrap = $('op-messages-list');
     if (!wrap) return;
@@ -391,30 +414,78 @@ export function renderMensajes() {
                 flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;"
                 onerror="this.style.visibility='hidden'">`;
 
-        html += `
-<div class="op-msg ${propio?'propio':'ajeno'}" data-id="${msg.id}">
-    ${!propio ? avatarHtml : ''}
-    <div class="op-msg-bubble">
-        ${!mismoGrupo ? `<div class="op-msg-autor" style="${propio?'text-align:right;':''}">${esc(msg.autor_nombre)}</div>` : ''}
-        ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
-        ${msg.video_path  ? _renderVideo(msg.video_path)  : ''}
-        ${msg.audio_path  ? _renderAudio(msg.audio_path)  : ''}
-        ${msg.link_url    ? _renderLink(msg.link_url)     : ''}
-        ${_renderContenidoConLinks(msg)}
-        <div class="op-msg-meta">
-            <span class="op-msg-hora">${hora}${msg.editado_en ? ' <span style="opacity:0.55;font-style:italic;font-size:0.85em;">(editado)</span>' : ''}</span>
-            <button class="op-msg-del" onclick="window._opCitar(${msg.id})" title="Responder">↩</button>
-            ${msg.contenido ? `<button class="op-msg-del" onclick="window._opEditarMsg(${msg.id})" title="Editar">✏</button>` : ''}
-            <button class="op-msg-del" onclick="window._opEliminarMsg(${msg.id})" title="Eliminar">✕</button>
-        </div>
-    </div>
-    ${propio ? avatarHtml : ''}
-</div>`;
+        html += _renderMsgHTML(msg, propio, hora, mismoGrupo, avatarHtml);
     });
 
-    wrap.innerHTML = html;
+    // Indicador de "hay más mensajes arriba" si aplica
+    const indicator = opState._hayMasMensajes
+        ? `<div id="op-load-more-indicator" style="text-align:center;padding:8px;font-size:0.75em;color:var(--gray-500);opacity:0.7;">↑ Subir para ver más</div>`
+        : '';
+    wrap.innerHTML = indicator + html;
     _mountSwipeToReply(wrap);
     requestAnimationFrame(() => { wrap.scrollTop = wrap.scrollHeight; });
+}
+
+// ── Prepend mensajes anteriores al inicio (paginación hacia arriba) ──
+export function prependMensajes(msgs) {
+    const wrap = $('op-messages-list');
+    if (!wrap || !msgs.length) return;
+
+    // Eliminar indicador de carga si existe
+    wrap.querySelector('#op-load-more-indicator')?.remove();
+
+    const esPropio = id => id === opState.perfil?.id;
+    const GROUP_GAP_MS = 5 * 60 * 1000;
+
+    // Construir HTML de los mensajes anteriores
+    let html = '';
+    let ultimaFecha = '';
+    let ultimoAutorId = null;
+    let ultimaHora = null;
+
+    msgs.forEach((msg) => {
+        const fecha    = new Date(msg.creado_en);
+        const fechaStr = fecha.toLocaleDateString('es', { day:'numeric', month:'short' });
+        if (fechaStr !== ultimaFecha) {
+            ultimaFecha = fechaStr;
+            ultimoAutorId = null;
+            ultimaHora = null;
+            html += `<div class="op-date-sep">${fechaStr}</div>`;
+        }
+
+        const propio   = esPropio(msg.autor_id);
+        const hora     = fecha.toLocaleTimeString('es', { hour:'2-digit', minute:'2-digit' });
+        const msPrev   = ultimaHora ? fecha - ultimaHora : Infinity;
+        const mismoGrupo = ultimoAutorId === msg.autor_id && msPrev < GROUP_GAP_MS;
+        ultimoAutorId  = msg.autor_id;
+        ultimaHora     = fecha;
+
+        const perfil   = opState.perfiles?.[msg.autor_id];
+        const avSrc    = perfil?.avatar_path ? `${STORAGE_URL}/${perfil.avatar_path}` : '';
+        const avatarHtml = mismoGrupo
+            ? `<div style="width:36px;flex-shrink:0;"></div>`
+            : `<img src="${esc(avSrc)}" alt="" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;align-self:flex-start;margin-top:2px;border:2px solid rgba(192,57,43,0.2);background:#f8f9fa;" onerror="this.style.visibility='hidden'">`;
+
+        html += _renderMsgHTML(msg, propio, hora, mismoGrupo, avatarHtml);
+    });
+
+    // Insertar antes del primer hijo actual
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    // Insertar en orden inverso para mantener el orden correcto al prepend
+    const nodes = [...temp.childNodes];
+    const firstChild = wrap.firstChild;
+    nodes.forEach(node => wrap.insertBefore(node, firstChild));
+
+    // Actualizar indicador de carga al inicio
+    wrap.querySelector('#op-load-more-indicator')?.remove();
+    if (opState._hayMasMensajes) {
+        const ind = document.createElement('div');
+        ind.id = 'op-load-more-indicator';
+        ind.style.cssText = 'text-align:center;padding:8px;font-size:0.75em;color:var(--gray-500);opacity:0.7;';
+        ind.textContent = '↑ Subir para ver más';
+        wrap.insertBefore(ind, wrap.firstChild);
+    }
 }
 
 export function appendMensaje(msg) {
@@ -470,10 +541,6 @@ ${propio ? avatarHtml : ''}`;
 // Aplica a todos los .op-msg dentro del contenedor dado.
 // Umbral: 60 px hacia la derecha dispara _opCitar(id).
 function _mountSwipeToReply(container) {
-    // Guard: only mount once per container
-    if (container._swipeListenerMounted) return;
-    container._swipeListenerMounted = true;
-
     const THRESHOLD   = 60;   // px necesarios para confirmar la cita
     const MAX_DRAG    = 80;   // límite visual del desplazamiento
     const ICON_SHOW   = 40;   // px a partir de los que aparece el ícono
