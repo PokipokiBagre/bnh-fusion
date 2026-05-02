@@ -8,7 +8,7 @@ import { supabase } from './bnh-auth.js';
 import { portState, guardarConv, cargarConv } from './bnh-port-state.js';
 import {
     renderBurbuja, renderPanel,
-    refreshMsgs, appendMsg, refreshPending,
+    refreshMsgs, appendMsg, prependMsgs, refreshPending,
     switchTab,
     verImagen, showLightboxCarousel,
     abrirYTModal, abrirTikTokModal,
@@ -121,12 +121,43 @@ async function _cargarConvs() {
     if (convInicial) await _selConv(convInicial);
 }
 
+async function _cargarMasMsgs() {
+    if (!portState.convActual || !portState._hayMas || portState._cargandoMas) return;
+    portState._cargandoMas = true;
+    const first = portState.mensajes[0];
+    if (!first) { portState._cargandoMas = false; return; }
+    const wrap = document.getElementById('bnh-port-msgs');
+    const scrollHeightAntes = wrap ? wrap.scrollHeight : 0;
+
+    const { data } = await supabase.from('op_mensajes')
+        .select('*')
+        .eq('conversacion_id', portState.convActual)
+        .lt('id', first.id)
+        .order('creado_en', { ascending: false })
+        .limit(60);
+    const mas = (data || []).reverse();
+
+    if (!mas.length || mas.length < 60) portState._hayMas = false;
+    if (!mas.length) { portState._cargandoMas = false; return; }
+
+    portState.mensajes = [...mas, ...portState.mensajes];
+    prependMsgs(mas);
+
+    if (wrap) {
+        const scrollHeightDespues = wrap.scrollHeight;
+        wrap.scrollTop += (scrollHeightDespues - scrollHeightAntes);
+    }
+    portState._cargandoMas = false;
+}
+
 async function _selConv(id) {
     if (portState.realtimeSub) {
         supabase.removeChannel(portState.realtimeSub);
         portState.realtimeSub = null;
     }
     portState.convActual = id;
+    portState._hayMas      = true;
+    portState._cargandoMas = false;
     guardarConv(id);
 
     const { data } = await supabase.from('op_mensajes')
@@ -135,11 +166,24 @@ async function _selConv(id) {
         .order('creado_en', { ascending: false })
         .limit(60);
     portState.mensajes = (data || []).reverse();
+    if (portState.mensajes.length < 60) portState._hayMas = false;
 
     // Actualizar selector si el panel está visible
     const sel = document.getElementById('bnh-port-conv-sel');
     if (sel) sel.value = String(id);
     refreshMsgs();
+    // Mount scroll-up listener for pagination
+    setTimeout(() => {
+        const wrap = document.getElementById('bnh-port-msgs');
+        if (wrap && !wrap._paginationMounted) {
+            wrap._paginationMounted = true;
+            wrap.addEventListener('scroll', () => {
+                if (wrap.scrollTop < 80 && portState._hayMas && !portState._cargandoMas) {
+                    _cargarMasMsgs();
+                }
+            }, { passive: true });
+        }
+    }, 100);
 
     // Realtime
     const canal = supabase.channel(`bnh-port-${id}`);
