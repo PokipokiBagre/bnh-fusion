@@ -86,8 +86,16 @@
         </div>
 
         <!-- ══ PANEL: AJUSTES ══════════════════════ -->
-        <div id="op-panel-ajustes" class="op-panel" style="display:none;flex-direction:column;align-items:center;padding:40px 24px;">
-            <div id="op-ajustes-content" style="width:100%;max-width:480px;"></div>
+        <div id="op-panel-ajustes" class="op-panel" style="display:none;flex-direction:column;">
+            <div class="op-panel-topbar">
+                <button class="op-menu-btn" onclick="window._opToggleSidebar()" title="Menú">☰</button>
+                <a href="../index.html" class="op-back">◀ BNH</a>
+                <span class="op-panel-title">Ajustes</span>
+                <button class="op-btn op-btn-outline" style="font-size:0.78em;padding:5px 10px;" onclick="window._opTab('chat')">← Chat</button>
+            </div>
+            <div style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 20px;display:flex;flex-direction:column;align-items:center;">
+                <div id="op-ajustes-content" style="width:100%;max-width:480px;"></div>
+            </div>
         </div>
 
     </main>
