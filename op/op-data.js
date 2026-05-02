@@ -79,12 +79,19 @@ export async function limpiarConversacion(id) {
 }
 
 // ── Mensajes ──────────────────────────────────────────────────
-export async function cargarMensajes(convId, limit = 60) {
-    const { data } = await supabase.from('op_mensajes')
+export async function cargarMensajes(convId, limit = 60, beforeId = null) {
+    let query = supabase.from('op_mensajes')
         .select('*')
         .eq('conversacion_id', convId)
         .order('creado_en', { ascending: false })
         .limit(limit);
+
+    // Paginación: cargar mensajes anteriores a un id dado
+    if (beforeId != null) {
+        query = query.lt('id', beforeId);
+    }
+
+    const { data } = await query;
     return (data || []).reverse();
 }
 
