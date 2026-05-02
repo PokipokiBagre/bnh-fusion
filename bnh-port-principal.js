@@ -152,6 +152,7 @@ async function _selConv(id) {
     portState.convActual = id;
     portState._hayMas      = true;
     portState._cargandoMas = false;
+    portState._citaPendiente = null;
     guardarConv(id);
 
     const { data } = await supabase.from('op_mensajes')
@@ -216,7 +217,19 @@ async function _cargarGaleria() {
 async function _enviar() {
     if (!portState.convActual || !portState.perfil) return;
     const ta       = document.getElementById('bnh-port-input');
-    const contenido = ta?.value.trim() || '';
+    const textoRaw = ta?.value.trim() || '';
+
+    // Prefijar cita pendiente si existe
+    const cita = portState._citaPendiente;
+    const citaStr = cita ? `> [${cita.id}] ${cita.autor}: ${cita.preview}\n` : '';
+    const contenido = citaStr + textoRaw || '';
+
+    // Limpiar cita visual
+    if (cita) {
+        portState._citaPendiente = null;
+        const qp = document.getElementById('bnh-port-quote-preview');
+        if (qp) qp.style.display = 'none';
+    }
 
     // Imagen/video desde galería
     if (portState.pendingImgId !== null) {
@@ -658,22 +671,35 @@ function _exponerGlobales() {
     window._bnhPortCitar = (id) => {
         const msg = portState.mensajes.find(m => m.id === id);
         if (!msg) return;
-        const ta = document.getElementById('bnh-port-input');
-        if (!ta) return;
         const autor = msg.autor_nombre || 'OP';
         const preview = msg.contenido
-            ? msg.contenido.replace(/\n/g,' ').slice(0, 60) + (msg.contenido.length > 60 ? '…' : '')
+            ? msg.contenido.replace(/^> [^\n]*\n?/, '').replace(/\n/g,' ').trim().slice(0, 80) + (msg.contenido.replace(/^> [^\n]*\n?/, '').length > 80 ? '…' : '')
             : msg.imagen_path ? '📎 imagen'
             : msg.video_path  ? '🎬 video'
             : msg.audio_path  ? '🎵 audio'
             : '📎 adjunto';
-        const cita = `> [${id}] ${autor}: ${preview}\n`;
-        // Insertar al principio del texto actual
-        ta.value = cita + ta.value;
-        ta.style.height = 'auto';
-        ta.style.height = Math.min(ta.scrollHeight, 80) + 'px';
-        ta.focus();
-        ta.setSelectionRange(ta.value.length, ta.value.length);
+
+        // Guardar en estado para inyectar al enviar
+        portState._citaPendiente = { id, autor, preview };
+
+        // Mostrar preview visual
+        const qp = document.getElementById('bnh-port-quote-preview');
+        if (qp) {
+            qp.style.display = 'flex';
+            const autorEl  = document.getElementById('bnh-port-quote-autor');
+            const textoEl  = document.getElementById('bnh-port-quote-texto');
+            if (autorEl) autorEl.textContent = autor;
+            if (textoEl) textoEl.textContent = preview;
+        }
+
+        const ta = document.getElementById('bnh-port-input');
+        if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    };
+
+    window._bnhPortBorrarCita = () => {
+        portState._citaPendiente = null;
+        const qp = document.getElementById('bnh-port-quote-preview');
+        if (qp) qp.style.display = 'none';
     };
 
     window._bnhPortEnviar    = _enviar;
