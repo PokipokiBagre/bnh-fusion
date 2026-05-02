@@ -248,7 +248,6 @@ function _renderContenidoConLinks(msg) {
     if (!texto) return '';
 
     // ── Detectar bloque de cita (línea "> [id] Autor: texto") ────────
-    // Soporta formato nuevo "> [123] Autor: texto" y legacy "> Autor: texto"
     const citaMatch = texto.match(/^> (?:\[(\d+)\] )?(.+?): (.*)\n?([\s\S]*)$/);
     if (citaMatch) {
         const [, citaMsgId, citaAutor, citaTexto, resto] = citaMatch;
@@ -266,6 +265,7 @@ function _renderContenidoConLinks(msg) {
         return citaHTML + restoHtml;
     }
 
+    // URL_RE: soporta & y &amp; (no cortar en & dentro de query strings)
     const URL_RE = /https?:\/\/[^\s<>"']+/gi;
 
     // Si hay video o audio adjunto, suprimir URLs del texto (ya tienen su reproductor)
@@ -276,15 +276,19 @@ function _renderContenidoConLinks(msg) {
             : '';
     }
 
+    // A) Si ya hay link_url en el mensaje, el embed se renderizó arriba → solo mostrar texto limpio
+    if (msg.link_url) {
+        const URL_RE2 = /https?:\/\/[^\s<>"']+/gi;
+        const textoLimpio = texto.replace(URL_RE2, '').trim();
+        return textoLimpio
+            ? `<div class="op-msg-texto">${renderMsgMarkup(textoLimpio)}</div>`
+            : '';
+    }
+
     // Detectar todos los links en el texto (hasta 10)
     const links = [...texto.matchAll(URL_RE)].map(m => m[0]).slice(0, 10);
     if (!links.length) {
         return `<div class="op-msg-texto">${renderMsgMarkup(texto)}</div>`;
-    }
-
-    // Si hay link_url guardado, asegurarse que esté en la lista
-    if (msg.link_url && !links.includes(msg.link_url)) {
-        links.unshift(msg.link_url);
     }
 
     // Quitar todas las URLs del texto para mostrarlo limpio
