@@ -384,7 +384,7 @@ export function _htmlMensaje(msg, mismoGrupo) {
 
     return `
 <div class="bnh-port-msg" data-msg-id="${msg.id}"
-    style="display:flex;gap:5px;align-items:flex-end;${propio?'flex-direction:row-reverse;':''}margin-bottom:1px;">
+    style="display:flex;gap:5px;align-items:flex-end;max-width:100%;box-sizing:border-box;${propio?'flex-direction:row-reverse;':''}margin-bottom:1px;">
     ${!propio ? avatarHtml : ''}
     <div style="max-width:82%;min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:2px;${propio?'align-items:flex-end;':''}">
         ${!mismoGrupo ? `<div style="font-size:0.64em;color:rgba(255,255,255,0.32);padding:0 3px;">${esc(msg.autor_nombre)}</div>` : ''}
@@ -559,7 +559,7 @@ function _renderTabChat() {
                 color:rgba(255,255,255,0.4);border-radius:6px;padding:3px 7px;
                 cursor:pointer;font-size:0.72em;flex-shrink:0;" title="Opciones">⚙</button>
         </div>
-        <div id="bnh-port-msgs" style="flex:1;overflow-y:auto;padding:8px 9px;
+        <div id="bnh-port-msgs" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px 9px;
             display:flex;flex-direction:column;gap:1px;min-height:0;
             scrollbar-width:thin;scrollbar-color:rgba(192,57,43,0.3) transparent;"></div>
         <div id="bnh-port-pending" style="flex-shrink:0;"></div>
