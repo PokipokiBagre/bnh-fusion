@@ -30,8 +30,9 @@ function _renderImgGrid(imagen_path, msgId) {
     if (!urls.length) return '';
 
     if (urls.length === 1) {
+        const urlEsc = esc(urls[0]).replace(/'/g, '&#39;');
         return `<img src="${esc(urls[0])}"
-            onclick="window._bnhPortVerGaleriaMensaje('${esc(String(msgId))}',0)"
+            onclick="window._bnhPortAbrirImgDirecta('${urlEsc}')"
             style="max-width:200px;max-height:160px;border-radius:8px;cursor:pointer;object-fit:cover;display:block;">`;
     }
 
@@ -316,11 +317,11 @@ function _renderContenidoConLinks(msg) {
             style="border-left:3px solid rgba(156,89,182,0.9);
             background:rgba(108,52,131,0.22);border-radius:0 6px 6px 0;
             padding:5px 8px;margin-bottom:5px;cursor:pointer;display:flex;
-            align-items:center;gap:6px;min-width:0;overflow:hidden;">
+            align-items:center;gap:6px;min-width:0;max-width:100%;overflow:hidden;box-sizing:border-box;">
             ${citaThumb}
             <div style="flex:1;min-width:0;overflow:hidden;">
                 <div style="font-weight:700;color:#d7bde2;font-size:0.78em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaAutor)}</div>
-                <div style="font-size:0.76em;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaTextoMostrar)}</div>
+                <div style="font-size:0.76em;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${esc(citaTextoMostrar)}</div>
             </div>
         </div>`;
         const restoHtml = resto
@@ -562,6 +563,17 @@ function _renderTabChat() {
             display:flex;flex-direction:column;gap:1px;min-height:0;
             scrollbar-width:thin;scrollbar-color:rgba(192,57,43,0.3) transparent;"></div>
         <div id="bnh-port-pending" style="flex-shrink:0;"></div>
+        <div id="bnh-port-quote-preview" style="flex-shrink:0;
+            border-top:1px solid rgba(156,89,182,0.35);
+            background:rgba(108,52,131,0.13);padding:5px 9px;
+            display:none;align-items:center;gap:7px;">
+            <div style="border-left:3px solid rgba(156,89,182,0.9);padding:3px 7px;flex:1;min-width:0;overflow:hidden;">
+                <div id="bnh-port-quote-autor" style="font-size:0.68em;font-weight:700;color:#d7bde2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+                <div id="bnh-port-quote-texto" style="font-size:0.72em;color:rgba(255,255,255,0.6);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+            </div>
+            <button onclick="window._bnhPortBorrarCita()"
+                style="background:none;border:none;color:rgba(255,255,255,0.35);cursor:pointer;font-size:1em;padding:0 3px;flex-shrink:0;line-height:1;">✕</button>
+        </div>
         <div style="padding:7px 9px;border-top:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
             <div style="display:flex;gap:5px;align-items:flex-end;">
                 <button onclick="window._bnhPortFileInput()" title="Adjuntar archivo"
@@ -935,6 +947,9 @@ export function showLightboxCarousel(urls, startIdx = 0) {
 }
 
 export function verImagen(url) { showLightboxCarousel([url], 0); }
+
+// Global para imagen simple (realtime y mensajes sin grid)
+window._bnhPortAbrirImgDirecta = (url) => showLightboxCarousel([url], 0);
 
 // Scroll al mensaje citado dentro del panel
 window._bnhPortVerGaleriaMensaje = (msgId, idx) => {
