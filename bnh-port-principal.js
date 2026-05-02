@@ -128,7 +128,6 @@ async function _cargarMasMsgs() {
     if (!first) { portState._cargandoMas = false; return; }
     const wrap = document.getElementById('bnh-port-msgs');
     const scrollHeightAntes = wrap ? wrap.scrollHeight : 0;
-
     const { data } = await supabase.from('op_mensajes')
         .select('*')
         .eq('conversacion_id', portState.convActual)
@@ -136,16 +135,11 @@ async function _cargarMasMsgs() {
         .order('creado_en', { ascending: false })
         .limit(60);
     const mas = (data || []).reverse();
-
     if (!mas.length || mas.length < 60) portState._hayMas = false;
-    if (!mas.length) { portState._cargandoMas = false; return; }
-
-    portState.mensajes = [...mas, ...portState.mensajes];
-    prependMsgs(mas);
-
-    if (wrap) {
-        const scrollHeightDespues = wrap.scrollHeight;
-        wrap.scrollTop += (scrollHeightDespues - scrollHeightAntes);
+    if (mas.length) {
+        portState.mensajes = [...mas, ...portState.mensajes];
+        prependMsgs(mas);
+        if (wrap) wrap.scrollTop += wrap.scrollHeight - scrollHeightAntes;
     }
     portState._cargandoMas = false;
 }
@@ -172,18 +166,16 @@ async function _selConv(id) {
     const sel = document.getElementById('bnh-port-conv-sel');
     if (sel) sel.value = String(id);
     refreshMsgs();
-    // Mount scroll-up listener for pagination
+    // Montar listener de scroll para paginación hacia arriba
     setTimeout(() => {
         const wrap = document.getElementById('bnh-port-msgs');
         if (wrap && !wrap._paginationMounted) {
             wrap._paginationMounted = true;
             wrap.addEventListener('scroll', () => {
-                if (wrap.scrollTop < 80 && portState._hayMas && !portState._cargandoMas) {
-                    _cargarMasMsgs();
-                }
+                if (wrap.scrollTop < 80 && portState._hayMas && !portState._cargandoMas) _cargarMasMsgs();
             }, { passive: true });
         }
-    }, 100);
+    }, 150);
 
     // Realtime
     const canal = supabase.channel(`bnh-port-${id}`);
