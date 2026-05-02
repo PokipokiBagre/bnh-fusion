@@ -45,17 +45,41 @@ export function extraerLinks(texto) {
 }
 
 export function esYouTube(url) {
-    return /(?:youtube\.com\/watch|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/|youtube\.com\/playlist)/i.test(url);
+    // Detecta cualquier dominio de YouTube, incluyendo youtu.be, music.youtube.com,
+    // m.youtube.com, youtube-nocookie.com, etc.
+    return /(?:youtu\.be|youtube(?:-nocookie)?\.com)/i.test(url);
 }
 
-// Devuelve { tipo, videoId, playlistId, shortId }
+// Devuelve { tipo, videoId, playlistId }
 export function youTubeInfo(url) {
-    // Playlist
-    const pl = url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
-    const v  = url.match(/(?:[?&]v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    // Normalizar: decodificar percent-encoding si el browser lo produjo (%3F → ?, %3D → =)
+    let u = url;
+    try { u = decodeURIComponent(url); } catch (_) {}
+
+    // Extraer playlist ID
+    const pl = u.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+
+    // Todos los patrones conocidos para extraer el video ID (11 chars alfanuméricos + _ -)
+    // Orden de prioridad: primero los más específicos
+    const videoPatterns = [
+        /[?&]v=([a-zA-Z0-9_-]{11})/,          // watch?v=ID  /  &v=ID
+        /youtu\.be\/([a-zA-Z0-9_-]{11})/,      // youtu.be/ID
+        /\/embed\/([a-zA-Z0-9_-]{11})/,        // /embed/ID
+        /\/shorts\/([a-zA-Z0-9_-]{11})/,       // /shorts/ID
+        /\/live\/([a-zA-Z0-9_-]{11})/,         // /live/ID  (streams en directo)
+        /\/v\/([a-zA-Z0-9_-]{11})/,            // /v/ID  (formato antiguo)
+        /\/watch\/([a-zA-Z0-9_-]{11})/,        // /watch/ID  (raro pero existe)
+    ];
+
+    let videoId = null;
+    for (const pat of videoPatterns) {
+        const m = u.match(pat);
+        if (m && m[1]) { videoId = m[1]; break; }
+    }
+
     return {
-        tipo:       pl && !v ? 'playlist' : v ? 'video' : 'unknown',
-        videoId:    v  ? v[1]  : null,
+        tipo:       pl && !videoId ? 'playlist' : videoId ? 'video' : 'unknown',
+        videoId,
         playlistId: pl ? pl[1] : null,
     };
 }
