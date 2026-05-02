@@ -30,6 +30,9 @@ export const portState = {
     pendingFiles:   [],     // [{ file, url, source, id }]
     pendingImgId:   null,   // id de galería seleccionada
 
+    // Cita pendiente de envío
+    _citaPendiente: null,   // { id, autor, preview }
+
     // Tab activa del panel
     tab: 'chat',            // 'chat' | 'galeria' | 'perfil'
 };
