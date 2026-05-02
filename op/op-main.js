@@ -12,7 +12,7 @@ import {
     subirAvatarOP, suscribirMensajes, diagnosticarDB
 } from './op-data.js';
 import {
-    renderConvList, renderMensajes, appendMensaje,
+    renderConvList, renderMensajes, appendMensaje, prependMensajes,
     renderGaleria, renderAjustes, renderSelectorImagenes, showLightbox
 } from './op-ui.js';
 import { mountMarkupAC, renderMsgMarkup } from './op-markup.js';
@@ -269,6 +269,36 @@ async function _cargarGaleria() {
 }
 
 // ── Seleccionar conversación ──────────────────────────────────
+// ── Cargar página anterior de mensajes (scroll hacia arriba) ──
+async function _cargarMasMensajes() {
+    if (!opState.convActual || !opState._hayMasMensajes || opState._cargandoMas) return;
+    opState._cargandoMas = true;
+
+    const wrap = document.getElementById('op-messages-list');
+    const firstMsg = opState.mensajes[0];
+    if (!firstMsg) { opState._cargandoMas = false; return; }
+
+    // Guardar scroll position para restaurar después de prepend
+    const scrollHeightAntes = wrap.scrollHeight;
+
+    const mas = await cargarMensajes(opState.convActual, 60, firstMsg.id);
+
+    if (!mas.length || mas.length < 60) opState._hayMasMensajes = false;
+    if (!mas.length) { opState._cargandoMas = false; return; }
+
+    // Prepend al estado
+    opState.mensajes = [...mas, ...opState.mensajes];
+
+    // Re-renderizar solo los mensajes nuevos al inicio
+    prependMensajes(mas);
+
+    // Restaurar scroll: mantener la posición visual
+    const scrollHeightDespues = wrap.scrollHeight;
+    wrap.scrollTop += (scrollHeightDespues - scrollHeightAntes);
+
+    opState._cargandoMas = false;
+}
+
 async function _selConv(id) {
     // Actualizar URL sin recargar la página
     const url = new URL(window.location.href);
@@ -281,7 +311,11 @@ async function _selConv(id) {
         opState.realtimeSub = null;
     }
     opState.convActual = id;
-    opState.mensajes   = await cargarMensajes(id);
+    opState._hayMasMensajes = true;   // asumir que hay más hasta saber
+    opState._cargandoMas    = false;
+    opState.mensajes = await cargarMensajes(id);
+    // Si devolvió menos de 60, no hay más páginas
+    if (opState.mensajes.length < 60) opState._hayMasMensajes = false;
     renderMensajes();
 
     opState.realtimeSub = suscribirMensajes(id, msg => {
@@ -291,10 +325,6 @@ async function _selConv(id) {
                 supabase.from('op_perfiles').select('id, nombre, avatar_path')
                     .eq('id', msg.autor_id).maybeSingle()
                     .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
-            }
-            // BUGFIX: añadir el mensaje al estado para que _opCitar lo encuentre
-            if (!opState.mensajes.some(m => String(m.id) === String(msg.id))) {
-                opState.mensajes.push(msg);
             }
             appendMensaje(msg);
         }
@@ -745,6 +775,16 @@ function _exponerGlobales() {
         document.getElementById('op-cita-bar')?.remove();
     };
     window._opGetPerfil  = () => opState.perfil;
+
+    // ── Scroll infinito hacia arriba (cargar más mensajes) ────────
+    const msgsList = document.getElementById('op-messages-list');
+    if (msgsList) {
+        msgsList.addEventListener('scroll', () => {
+            if (msgsList.scrollTop < 80 && opState._hayMasMensajes && !opState._cargandoMas) {
+                _cargarMasMensajes();
+            }
+        }, { passive: true });
+    }
 
     window._opNuevaConv = async () => {
         // Auto-name: "Nuevo chat N"
