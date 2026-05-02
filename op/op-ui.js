@@ -470,6 +470,10 @@ ${propio ? avatarHtml : ''}`;
 // Aplica a todos los .op-msg dentro del contenedor dado.
 // Umbral: 60 px hacia la derecha dispara _opCitar(id).
 function _mountSwipeToReply(container) {
+    // Guard: only mount once per container
+    if (container._swipeListenerMounted) return;
+    container._swipeListenerMounted = true;
+
     const THRESHOLD   = 60;   // px necesarios para confirmar la cita
     const MAX_DRAG    = 80;   // límite visual del desplazamiento
     const ICON_SHOW   = 40;   // px a partir de los que aparece el ícono
