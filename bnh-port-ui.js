@@ -386,9 +386,9 @@ export function _htmlMensaje(msg, mismoGrupo) {
 <div class="bnh-port-msg" data-msg-id="${msg.id}"
     style="display:flex;gap:5px;align-items:flex-end;${propio?'flex-direction:row-reverse;':''}margin-bottom:1px;">
     ${!propio ? avatarHtml : ''}
-    <div style="max-width:82%;min-width:0;display:flex;flex-direction:column;gap:2px;${propio?'align-items:flex-end;':''}">
+    <div style="max-width:82%;min-width:0;overflow:hidden;display:flex;flex-direction:column;gap:2px;${propio?'align-items:flex-end;':''}">
         ${!mismoGrupo ? `<div style="font-size:0.64em;color:rgba(255,255,255,0.32);padding:0 3px;">${esc(msg.autor_nombre)}</div>` : ''}
-        <div style="border:1px solid;${radius}padding:6px 9px;${bubbleBg}display:flex;flex-direction:column;gap:4px;min-width:0;overflow:hidden;">
+        <div style="border:1px solid;${radius}padding:6px 9px;${bubbleBg}display:flex;flex-direction:column;gap:4px;min-width:0;max-width:100%;box-sizing:border-box;word-break:break-word;overflow-wrap:anywhere;">
             ${msg.imagen_path ? _renderImgGrid(msg.imagen_path, msg.id) : ''}
             ${msg.video_path  ? _renderVideo(msg.video_path)            : ''}
             ${msg.audio_path  ? _renderAudio(msg.audio_path)            : ''}
