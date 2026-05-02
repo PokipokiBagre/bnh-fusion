@@ -301,28 +301,26 @@ function _renderContenidoConLinks(msg) {
         // El resto es el mensaje propio (sin la línea de cita)
         const resto = texto.split('\n').slice(1).join('\n').trim();
         const idAttr = esc(citaMsgId || '');
-        // Buscar el mensaje citado para mostrar preview de imagen si tiene
+        // Buscar mensaje citado para preview de imagen
         const msgCitado = portState?.mensajes?.find(m => String(m.id) === String(citaMsgId));
-        let citaPreviewExtra = '';
+        let citaThumb = '';
         if (msgCitado?.imagen_path) {
             let imgUrl = '';
             try { const p = JSON.parse(msgCitado.imagen_path); imgUrl = Array.isArray(p) ? _imageUrl(p[0]) : _imageUrl(msgCitado.imagen_path); }
             catch(_) { imgUrl = _imageUrl(msgCitado.imagen_path); }
-            if (imgUrl) citaPreviewExtra = `<img src="${esc(imgUrl)}" style="width:32px;height:32px;object-fit:cover;border-radius:3px;flex-shrink:0;">`;
+            if (imgUrl) citaThumb = `<img src="${esc(imgUrl)}" style="width:34px;height:34px;object-fit:cover;border-radius:3px;flex-shrink:0;">`;
         }
-        // Texto preview: si hay imagen y no hay texto, mostrar 📷
         const citaTextoMostrar = citaTexto || (msgCitado?.imagen_path ? '📷 imagen' : msgCitado?.video_path ? '🎬 video' : msgCitado?.audio_path ? '🎵 audio' : '📎 adjunto');
         const citaHTML = `<div class="bp-cita-block" data-cita-id="${idAttr}"
             onclick="window._bnhPortScrollACita(this)"
             style="border-left:3px solid rgba(156,89,182,0.9);
             background:rgba(108,52,131,0.22);border-radius:0 6px 6px 0;
-            padding:5px 8px;margin-bottom:5px;font-size:0.78em;
-            color:rgba(255,255,255,0.88);cursor:pointer;display:flex;
-            align-items:center;gap:6px;min-width:0;">
-            ${citaPreviewExtra}
+            padding:5px 8px;margin-bottom:5px;cursor:pointer;display:flex;
+            align-items:center;gap:6px;min-width:0;overflow:hidden;">
+            ${citaThumb}
             <div style="flex:1;min-width:0;overflow:hidden;">
-                <div style="font-weight:700;color:#d7bde2;font-size:0.85em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaAutor)}</div>
-                <div style="opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaTextoMostrar)}</div>
+                <div style="font-weight:700;color:#d7bde2;font-size:0.78em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaAutor)}</div>
+                <div style="font-size:0.76em;color:rgba(255,255,255,0.75);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(citaTextoMostrar)}</div>
             </div>
         </div>`;
         const restoHtml = resto
@@ -761,13 +759,11 @@ function _mountPortSwipeToReply(container) {
     }, { passive: true });
 }
 
-// ── Prepend mensajes anteriores al tope (scroll infinito ↑) ──
 export function prependMsgs(msgs) {
     const wrap = document.getElementById('bnh-port-msgs');
     if (!wrap || !msgs.length) return;
     wrap.querySelector('#bp-load-indicator')?.remove();
 
-    // Build HTML respecting group logic (mismoGrupo)
     let html = '';
     let prevAutor = null, prevHora = null;
     const GROUP_GAP_MS = 5 * 60 * 1000;
@@ -779,13 +775,14 @@ export function prependMsgs(msgs) {
         prevHora = fecha;
         html += _htmlMensaje(msg, mismoGrupo);
     });
+
     const temp = document.createElement('div');
     temp.innerHTML = html;
     const nodes = [...temp.childNodes];
     const first = wrap.firstChild;
     nodes.forEach(n => wrap.insertBefore(n, first));
 
-    // Indicador arriba si hay más
+    wrap.querySelector('#bp-load-indicator')?.remove();
     if (portState._hayMas) {
         const ind = document.createElement('div');
         ind.id = 'bp-load-indicator';
@@ -797,7 +794,6 @@ export function prependMsgs(msgs) {
 
 export function refreshMsgs() {
     const wrap = $('bnh-port-msgs');
-    if (!wrap) return;
     if (!wrap) return;
 
     const msgs = portState.mensajes;
@@ -941,7 +937,6 @@ export function showLightboxCarousel(urls, startIdx = 0) {
 export function verImagen(url) { showLightboxCarousel([url], 0); }
 
 // Scroll al mensaje citado dentro del panel
-// ── Lightbox de imagen de mensaje ─────────────────────────────
 window._bnhPortVerGaleriaMensaje = (msgId, idx) => {
     const msgs = portState?.mensajes || [];
     const msg = msgs.find(m => String(m.id) === String(msgId));
@@ -950,42 +945,45 @@ window._bnhPortVerGaleriaMensaje = (msgId, idx) => {
         try { const p = JSON.parse(msg.imagen_path); urls = Array.isArray(p) ? p.map(_imageUrl) : [_imageUrl(msg.imagen_path)]; }
         catch(_) { urls = [_imageUrl(msg.imagen_path)]; }
     }
-    // Fallback: buscar en el DOM la imagen clickeada
+    // Fallback DOM: buscar imgs del mensaje en pantalla
     if (!urls.length) {
-        const msgEl = document.querySelector(`.bnh-port-msg[data-id="${msgId}"]`);
-        if (msgEl) {
-            msgEl.querySelectorAll('img[src]').forEach(img => {
-                if (!img.src.includes('avatar') && !img.src.includes('icon')) urls.push(img.src);
-            });
-        }
+        const msgEl = document.querySelector(`.bnh-port-msg[data-msg-id="${msgId}"]`);
+        if (msgEl) msgEl.querySelectorAll('img[src]').forEach(img => {
+            if (!img.src.includes('avatar') && !img.src.includes('icon') && !img.src.includes('perfil')) urls.push(img.src);
+        });
     }
     if (!urls.length) return;
-    let current = Number(idx) || 0;
+    let cur = Math.min(Number(idx) || 0, urls.length - 1);
 
-    let lb = document.getElementById('bnh-port-lightbox');
-    if (lb) lb.remove();
-    lb = document.createElement('div');
+    document.getElementById('bnh-port-lightbox')?.remove();
+    const lb = document.createElement('div');
     lb.id = 'bnh-port-lightbox';
-    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out;';
+    lb.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:999999;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:zoom-out;';
 
-    const _render = () => {
+    const _show = () => {
         lb.innerHTML = `
             <button onclick="document.getElementById('bnh-port-lightbox').remove()"
-                style="position:absolute;top:14px;right:18px;background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.6em;cursor:pointer;border-radius:50%;width:38px;height:38px;display:flex;align-items:center;justify-content:center;z-index:2;">✕</button>
-            ${urls.length > 1 ? `<div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);color:rgba(255,255,255,0.6);font-size:0.82em;">${current+1} / ${urls.length}</div>` : ''}
-            <img src="${urls[current]}" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.6);cursor:default;" onclick="event.stopPropagation()">
-            ${urls.length > 1 ? `
-            <div style="display:flex;gap:14px;margin-top:14px;">
-                <button onclick="event.stopPropagation();window._bnhPortLbNav(-1)"
-                    style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.4em;cursor:pointer;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;">‹</button>
-                <button onclick="event.stopPropagation();window._bnhPortLbNav(1)"
-                    style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.4em;cursor:pointer;border-radius:50%;width:42px;height:42px;display:flex;align-items:center;justify-content:center;">›</button>
+                style="position:absolute;top:12px;right:16px;background:rgba(255,255,255,0.12);border:none;
+                color:white;font-size:1.5em;cursor:pointer;border-radius:50%;width:36px;height:36px;
+                display:flex;align-items:center;justify-content:center;z-index:2;">✕</button>
+            ${urls.length > 1 ? `<div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);
+                color:rgba(255,255,255,0.55);font-size:0.8em;">${cur+1} / ${urls.length}</div>` : ''}
+            <img src="${urls[cur]}" onclick="event.stopPropagation()"
+                style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:8px;
+                box-shadow:0 8px 40px rgba(0,0,0,0.7);cursor:default;">
+            ${urls.length > 1 ? `<div style="display:flex;gap:12px;margin-top:12px;">
+                <button onclick="event.stopPropagation();window._bnhLbNav(-1)"
+                    style="background:rgba(255,255,255,0.13);border:none;color:white;font-size:1.3em;
+                    cursor:pointer;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">‹</button>
+                <button onclick="event.stopPropagation();window._bnhLbNav(1)"
+                    style="background:rgba(255,255,255,0.13);border:none;color:white;font-size:1.3em;
+                    cursor:pointer;border-radius:50%;width:40px;height:40px;display:flex;align-items:center;justify-content:center;">›</button>
             </div>` : ''}`;
     };
-    window._bnhPortLbNav = (dir) => { current = (current + dir + urls.length) % urls.length; _render(); };
+    window._bnhLbNav = dir => { cur = (cur + dir + urls.length) % urls.length; _show(); };
     lb.addEventListener('click', () => lb.remove());
     document.body.appendChild(lb);
-    _render();
+    _show();
 };
 
 window._bnhPortScrollACita = (el) => {
