@@ -292,6 +292,10 @@ async function _selConv(id) {
                     .eq('id', msg.autor_id).maybeSingle()
                     .then(({ data }) => { if (data) opState.perfiles[data.id] = data; });
             }
+            // BUGFIX: añadir el mensaje al estado para que _opCitar lo encuentre
+            if (!opState.mensajes.some(m => String(m.id) === String(msg.id))) {
+                opState.mensajes.push(msg);
+            }
             appendMensaje(msg);
         }
     });
